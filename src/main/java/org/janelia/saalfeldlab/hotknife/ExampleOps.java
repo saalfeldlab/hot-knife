@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 
+import org.janelia.saalfeldlab.hotknife.ops.UnaryOpLoader;
+
 import bdv.img.cache.CreateInvalidVolatileCell;
 import bdv.img.cache.VolatileCachedCellImg;
 import bdv.util.Bdv;
@@ -162,7 +164,7 @@ public class ExampleOps
 		final BlockingFetchQueues< Callable< ? > > queue = new BlockingFetchQueues<>( maxNumLevels );
 		new FetcherThreads( queue, numFetcherThreads );
 
-		final Pair< Img< UnsignedShortType >, Img< VolatileUnsignedShortType > > erode = createCF(
+		final Pair< Img< UnsignedShortType >, Img< VolatileUnsignedShortType > > snoothed = createCF(
 				img,
 				ij.op(),
 				opClass,
@@ -170,6 +172,6 @@ public class ExampleOps
 				grid,
 				queue );
 
-		BdvFunctions.show( erode.getB(), "Feature", BdvOptions.options().addTo( bdv ) );
+		BdvFunctions.show( snoothed.getB(), "Feature", BdvOptions.options().addTo( bdv ) );
 	}
 }
