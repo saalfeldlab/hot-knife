@@ -23,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import bdv.util.BdvFunctions;
@@ -93,7 +94,7 @@ public class ConvertTiffSeriesToN5 {
 		final IntervalView<UnsignedByteType> crop = Views.interval(source, new long[]{0, yMin, 0}, new long[]{width - 1, yMax, depth - 1});
 //		final RandomAccessibleInterval<UnsignedByteType> crop = source;
 
-		final N5 n5 = new N5(n5Path);
+		final N5Writer n5 = N5.openFSWriter(n5Path);
 
 		final ExecutorService exec = Executors.newFixedThreadPool( 24 );
 

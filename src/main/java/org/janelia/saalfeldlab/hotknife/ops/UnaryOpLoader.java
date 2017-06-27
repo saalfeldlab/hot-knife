@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.hotknife;
+package org.janelia.saalfeldlab.hotknife.ops;
 
 import java.util.Arrays;
 import java.util.function.Function;
@@ -64,7 +64,7 @@ public class UnaryOpLoader<T, S extends NativeType<S>, A extends VolatileAccess 
 		final int[] outputDimensions = new int[source.numDimensions()];
 		Arrays.fill(outputDimensions, 1);
 
-		final Img<S> output = new ArrayImgFactory<S>().create(targetTypeSupplier, outputDimensions);
+		final Img<S> output = new ArrayImgFactory<S>().create(outputDimensions, targetTypeSupplier.get());
 
 		op = Computers.unary(
 				opService,
