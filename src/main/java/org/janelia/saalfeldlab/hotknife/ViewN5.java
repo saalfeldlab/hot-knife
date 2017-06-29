@@ -33,6 +33,7 @@ import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.volatiles.VolatileUnsignedByteType;
 
 /**
  *
@@ -105,7 +106,7 @@ public class ViewN5 {
 		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType> source = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, options.getDatasetName());
 
-		BdvFunctions.show(
+		BdvFunctions.<VolatileUnsignedByteType>show(
 				VolatileViews.wrapAsVolatile(
 						source,
 						queue),

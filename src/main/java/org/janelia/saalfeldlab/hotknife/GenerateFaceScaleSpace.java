@@ -42,10 +42,10 @@ import net.imagej.ops.OpService;
 import net.imagej.ops.Ops.Filter.Gauss;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.Volatile;
 import net.imglib2.converter.Converters;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.type.volatiles.VolatileFloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;
@@ -238,7 +238,7 @@ public class GenerateFaceScaleSpace {
 
 //		final SharedQueue queue = new SharedQueue(Math.max(1, numProc / 2));
 //
-		final BdvStackSource<Volatile<FloatType>> stackSource = BdvFunctions.show(
+		final BdvStackSource<VolatileFloatType> stackSource = BdvFunctions.<VolatileFloatType>show(
 				VolatileViews.wrapAsVolatile(
 						(RandomAccessibleInterval<FloatType>)N5Utils.openVolatile(n5, topScaleSpaceDatasetName + "/s4-face"),
 						queue),

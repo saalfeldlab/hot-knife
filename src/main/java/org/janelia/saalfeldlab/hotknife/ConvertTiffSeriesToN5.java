@@ -107,7 +107,7 @@ public class ConvertTiffSeriesToN5 {
 
 		BdvFunctions.show(
 				VolatileViews.wrapAsVolatile(
-						(RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, datasetName),
+						(RandomAccessibleInterval)N5Utils.openVolatile(n5, datasetName),
 						queue),
 				"crop");
 	}

@@ -52,7 +52,7 @@ import net.imglib2.view.Views;
 public class SparkConvertTiffSeriesToN5 {
 
 	@SuppressWarnings("serial")
-	public static class Options implements Serializable {
+	public static class Options extends AbstractOptions implements Serializable {
 
 		@Option(name = "--urlFormat", required = true, usage = "Input URL format for tiff series, e.g. /nrs/flyem/data/Z0115-22_Sec26/flatten/flattened/zcorr.%05d-flattened.tif")
 		private final String urlFormat = null;
@@ -63,11 +63,11 @@ public class SparkConvertTiffSeriesToN5 {
 		@Option(name = "--n5Dataset", required = true, usage = "N5 dataset, e.g. /Sec26")
 		final String datasetName = null;
 
-		@Option(name = "--min", required = false, usage = "Min coordinate of the output volume, e.g. 0,0,0, a number < 0 for any dimensions indicates default 0")
+		@Option(name = "--min", required = false, usage = "Min coordinate of the output volume, e.g. 0,0,0")
 		private final String minString = null;
 		private final long[] min;
 
-		@Option(name = "--size", required = false, usage = "Size of the output volume, e.g. 10000,20000,30000, a number < 0 for any dimensions indicates default sourceSize - min")
+		@Option(name = "--size", required = false, usage = "Size of the output volume, e.g. 10000,20000,30000, a number <= 0 for any dimensions indicates default sourceSize - min")
 		private final String sizeString = null;
 		private final long[] size;
 
@@ -76,38 +76,6 @@ public class SparkConvertTiffSeriesToN5 {
 		private final int[] blockSize;
 
 		private final long[] sourceSize;
-
-		private boolean parsedSuccessfully = false;
-
-		final static private boolean parseCSLongArray(final String csv, final long[] array) {
-
-			final String[] stringValues = csv.split(",");
-			if (stringValues.length != array.length)
-				return false;
-			try {
-				for (int i = 0; i < array.length; ++i)
-					array[i] = Long.parseLong(stringValues[i]);
-			} catch (final NumberFormatException e) {
-				e.printStackTrace(System.err);
-				return false;
-			}
-			return true;
-		}
-
-		final static private boolean parseCSIntArray(final String csv, final int[] array) {
-
-			final String[] stringValues = csv.split(",");
-			if (stringValues.length != array.length)
-				return false;
-			try {
-				for (int i = 0; i < array.length; ++i)
-					array[i] = Integer.parseInt(stringValues[i]);
-			} catch (final NumberFormatException e) {
-				e.printStackTrace(System.err);
-				return false;
-			}
-			return true;
-		}
 
 		public Options(final String[] args) {
 
@@ -143,8 +111,8 @@ public class SparkConvertTiffSeriesToN5 {
 
 				/* default min and size for -1 fields */
 				for (int i = 0; i < size.length; ++i) {
-					if (min[i] < 0) min[i] = 0;
-					if (size[i] < 0) size[i] = sourceSize[i] - min[i];
+					if (min[i] <= 0) min[i] = 0;
+					if (size[i] <= 0) size[i] = sourceSize[i] - min[i];
 				}
 
 				if (blockSizeString == null)
@@ -157,10 +125,6 @@ public class SparkConvertTiffSeriesToN5 {
 				System.err.println(e.getMessage());
 				parser.printUsage(System.err);
 			}
-		}
-
-		public boolean isParsedSuccessfully() {
-			return parsedSuccessfully;
 		}
 
 		/**
@@ -210,13 +174,6 @@ public class SparkConvertTiffSeriesToN5 {
 		 */
 		public long[] getSourceSize() {
 			return sourceSize;
-		}
-
-		/**
-		 * @param parsedSuccessfully the parsedSuccessfully to set
-		 */
-		public void setParsedSuccessfully(final boolean parsedSuccessfully) {
-			this.parsedSuccessfully = parsedSuccessfully;
 		}
 	}
 
@@ -313,30 +270,12 @@ public class SparkConvertTiffSeriesToN5 {
 		final int[] gridBlockSize = new int[outBlockSize.length];
 		Arrays.setAll(gridBlockSize, i -> Math.max(blockSize[i], outBlockSize[i]));
 
-		final ArrayList<long[][]> gridBlocks = new ArrayList<>();
-
-		final long[] offset = new long[n];
-		final long[] gridPosition = new long[n];
-		final long[] longCroppedGridBlockSize = new long[n];
-		for (int d = 0; d < n;) {
-			Util.cropBlockDimensions(attributes.getDimensions(), offset, outBlockSize, gridBlockSize, longCroppedGridBlockSize, gridPosition);
-			gridBlocks.add(
-					new long[][]{
-						offset.clone(),
-						longCroppedGridBlockSize.clone(),
-						gridPosition.clone()
-					});
-
-			for (d = 0; d < n; ++d) {
-				offset[d] += gridBlockSize[d];
-				if (offset[d] < attributes.getDimensions()[d])
-					break;
-				else
-					offset[d] = 0;
-			}
-		}
-
-		final JavaRDD<long[][]> rdd = sc.parallelize(gridBlocks);
+		final JavaRDD<long[][]> rdd =
+				sc.parallelize(
+						Util.createGrid(
+								attributes.getDimensions(),
+								gridBlockSize,
+								outBlockSize));
 
 		rdd.foreach(
 				gridBlock -> {

@@ -29,6 +29,7 @@ import org.janelia.saalfeldlab.n5.DataBlock;
 import ij.process.FloatProcessor;
 import net.imagej.ops.Op;
 import net.imagej.ops.OpService;
+import net.imagej.ops.special.computer.UnaryComputerOp;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
@@ -148,6 +149,23 @@ public class Util {
 		return gridBlocks;
 	}
 
+	/**
+	 * Create a {@link List} of grid blocks that, for each grid cell, contains
+	 * the world coordinate offset, the size of the grid block, and the
+	 * grid-coordinate offset.
+	 *
+	 * @param dimensions
+	 * @param blockSize
+	 * @return
+	 */
+	public static List<long[][]> createGrid(
+			final long[] dimensions,
+			final int[] blockSize) {
+
+		return createGrid(dimensions, blockSize, blockSize);
+	}
+
+
 	public static <O extends Op> RandomAccessibleInterval<UnsignedByteType> lazyProcessVolatileUnsignedByte(
 			final RandomAccessibleInterval<UnsignedByteType> source,
 			final int[] blockSize,
@@ -233,6 +251,26 @@ public class Util {
 				opService,
 				opClass,
 				opArgs);
+
+		final FloatType type = new FloatType();
+		final Cache<Long, Cell<FloatArray>> cache = new SoftRefLoaderCache<Long, Cell<FloatArray>>()
+				.withLoader(LoadedCellCacheLoader.get(grid, loader, type));
+		final CachedCellImg<FloatType, FloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT));
+		return img;
+	}
+
+	public static RandomAccessibleInterval<FloatType> lazyProcessFloat(
+			final RandomAccessible<FloatType> source,
+			final Interval sourceInterval,
+			final int[] blockSize,
+			final UnaryComputerOp<RandomAccessible<FloatType>, RandomAccessibleInterval<FloatType>> op) {
+
+		final long[] dimensions = Intervals.dimensionsAsLongArray(sourceInterval);
+		final CellGrid grid = new CellGrid(dimensions, blockSize);
+		final UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>> loader =
+				new UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>>(
+					source,
+					op);
 
 		final FloatType type = new FloatType();
 		final Cache<Long, Cell<FloatArray>> cache = new SoftRefLoaderCache<Long, Cell<FloatArray>>()
