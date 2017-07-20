@@ -1,0 +1,503 @@
+/**
+ * License: GPL
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License 2
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ */
+package org.janelia.saalfeldlab.hotknife.util;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.janelia.saalfeldlab.PositionFieldTransform;
+import org.janelia.saalfeldlab.RealPositionRealRandomAccessible;
+import org.janelia.saalfeldlab.n5.CompressionType;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+
+import mpicbg.models.Affine2D;
+import mpicbg.models.InterpolatedAffineModel2D;
+import mpicbg.models.InterpolatedModel;
+import mpicbg.models.Model;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccess;
+import net.imglib2.RealRandomAccessible;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.InvertibleRealTransform;
+import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformRandomAccessible;
+import net.imglib2.realtransform.RealTransformRealRandomAccessible;
+import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.Scale;
+import net.imglib2.realtransform.Scale2D;
+import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.view.Views;
+
+/**
+ *
+ *
+ * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
+ */
+public class Transform {
+
+	private Transform() {}
+
+	@SuppressWarnings("serial")
+	public static abstract class AbstractInterpolatedModelSupplier<A extends Model<A>, B extends Model<B>, C extends InterpolatedModel<A, B, C>> implements Supplier<C>, Serializable {
+
+		protected final Supplier<A> aSupplier;
+		protected final Supplier<B> bSupplier;
+		protected final double lambda;
+
+		public <SA extends Supplier<A> & Serializable, SB extends Supplier<B> & Serializable> AbstractInterpolatedModelSupplier(
+				final SA aSupplier,
+				final SB bSupplier,
+				final double lambda) {
+
+			this.aSupplier = aSupplier;
+			this.bSupplier = bSupplier;
+			this.lambda = lambda;
+		}
+	}
+
+	@SuppressWarnings("serial")
+	public static class InterpolatedModelSupplier<A extends Model<A>, B extends Model<B>, C extends InterpolatedModel<A, B, C>> extends AbstractInterpolatedModelSupplier<A, B, C>{
+
+		public <SA extends Supplier<A> & Serializable, SB extends Supplier<B> & Serializable> InterpolatedModelSupplier(
+				final SA aSupplier,
+				final SB bSupplier,
+				final double lambda) {
+
+			super(aSupplier, bSupplier, lambda);
+		}
+
+		@SuppressWarnings("unchecked")
+		@Override
+		public C get() {
+
+			return (C)new InterpolatedModel<>(aSupplier.get(), bSupplier.get(), lambda);
+		}
+	}
+
+	@SuppressWarnings("serial")
+	public static class InterpolatedAffineModel2DSupplier<A extends Model<A> & Affine2D<A>, B extends Model<B> & Affine2D<B>> extends AbstractInterpolatedModelSupplier<A, B, InterpolatedAffineModel2D<A, B>> {
+
+		public <SA extends Supplier<A> & Serializable, SB extends Supplier<B> & Serializable> InterpolatedAffineModel2DSupplier(
+				final SA aSupplier,
+				final SB bSupplier,
+				final double lambda) {
+
+			super(aSupplier, bSupplier, lambda);
+		}
+
+		@Override
+		public InterpolatedAffineModel2D<A, B> get() {
+
+			return new InterpolatedAffineModel2D<>(aSupplier.get(), bSupplier.get(), lambda);
+		}
+	}
+
+	/**
+	 * Create a {@link RandomAccessibleInterval} from a source
+	 * {@link RandomAccessibleInterval} and a {@link RealTransform} mapping
+	 * coordinates from target space into source space (inverse transform).
+	 *
+	 * @param source
+	 * @param targetInterval
+	 * @param transformFromSource
+	 * @return
+	 */
+	public static <T extends NumericType<T>> RandomAccessibleInterval<T> createTransformedInterval(
+			final RandomAccessibleInterval<T> source,
+			final Interval targetInterval,
+			final RealTransform transformFromSource,
+			final T background) {
+
+		return Views.interval(
+				new RealTransformRandomAccessible<>(
+						Views.interpolate(
+								Views.extendValue(source, background),
+								new NLinearInterpolatorFactory<>()),
+						transformFromSource),
+				targetInterval);
+	}
+
+	/**
+	 * Creates an affine transform from a world scale affine transform to be
+	 * used in downscaled space.
+	 *
+	 * @param affine
+	 * @param scaleIndex
+	 * @return
+	 */
+	static public AffineTransform2D createScaledAffine2D(
+			final AffineTransform2D affine,
+			final double scaleFactor) {
+
+		final Scale2D scale = new Scale2D(scaleFactor, scaleFactor);
+		final AffineTransform2D targetTransform = new AffineTransform2D();
+		targetTransform.concatenate(scale.inverse());
+		targetTransform.concatenate(affine);
+		targetTransform.concatenate(scale);
+
+		return targetTransform;
+	}
+
+	/**
+	 * Creates a scaled RealTransform.
+	 *
+	 * @param affine
+	 * @param scaleIndex
+	 * @return
+	 */
+	static public RealTransform createScaledRealTransform(
+			final RealTransform transform,
+			final double scaleFactor) {
+
+		if (AffineTransform2D.class.isInstance(transform))
+			return createScaledAffine2D((AffineTransform2D)transform, scaleFactor);
+
+		final double[] scaleUp = new double[transform.numSourceDimensions()];
+		final double[] scaleDown = new double[transform.numTargetDimensions()];
+		Arrays.fill(scaleUp, scaleFactor);
+		Arrays.fill(scaleDown, 1.0 / scaleFactor);
+		final RealTransformSequence targetTransform = new RealTransformSequence();
+		targetTransform.add(new Scale(scaleUp));
+		targetTransform.add(transform);
+		targetTransform.add(new Scale(scaleDown));
+
+		return targetTransform;
+	}
+
+	/**
+	 * Creates an affine transform from a world scale affine transform to be
+	 * used in downscaled space.
+	 *
+	 * @param affine
+	 * @param scaleIndex
+	 * @return
+	 */
+	static public AffineTransform2D createScaledAffine2D(
+			final AffineTransform2D affine,
+			final int scaleIndex) {
+
+		final int scaleFactor = 1 << scaleIndex;
+		return createScaledAffine2D(affine, (double)scaleFactor);
+	}
+
+	/**
+	 * Creates a scaled RealTransform.
+	 *
+	 * @param affine
+	 * @param scaleIndex
+	 * @return
+	 */
+	static public RealTransform createScaledRealTransform(
+			final RealTransform transform,
+			final int scaleIndex) {
+
+		final int scaleFactor = 1 << scaleIndex;
+
+		if (AffineTransform2D.class.isInstance(transform))
+			return createScaledAffine2D((AffineTransform2D)transform, (double)scaleFactor);
+
+		return createScaledRealTransform(transform, (double)scaleFactor);
+	}
+
+	/**
+	 * Creates a virtual position field for a single dimension <em>d</em>
+	 * transferred by a {@link RealTransform}.
+	 *
+	 * @param transform
+	 * @param d
+	 * @return
+	 */
+	public static RealRandomAccessible<DoubleType> createRealPositions(
+			final RealTransform transform,
+			final int d) {
+
+		return new RealTransformRealRandomAccessible<>(
+				new RealPositionRealRandomAccessible(transform.numTargetDimensions(), d),
+				transform);
+	}
+
+	/**
+	 * Creates a virtual position raster for all dimensions.  The size of the
+	 * raster is [sizeof(interval),interval.numDimensions()].
+	 *
+	 * @param transform
+	 * @param interval
+	 * @return
+	 */
+	public static RandomAccessibleInterval<DoubleType> createPositionField(
+			final RealTransform transform,
+			final Interval interval) {
+
+		final ArrayList<RandomAccessibleInterval<DoubleType>> dFields = new ArrayList<>();
+		for (int d = 0; d < interval.numDimensions(); ++d) {
+				final RandomAccessibleInterval< DoubleType > dField =
+						Views.interval(
+							Views.raster(createRealPositions(transform, d)),
+							interval);
+				dFields.add(dField);
+		}
+		return Views.stack(dFields);
+	}
+
+	/**
+	 * Creates a {@link RealTransform} from a positionFiled raster.  The last
+	 * dimension of the input raster enumerates the dimensions. i.e. its size
+	 * must be
+	 * {@link RandomAccessibleInterval#numDimensions() positionField.numDimensions()} - 1
+	 * which is also the source and target dimensionality of the
+	 * {@link RealTransform}.
+	 *
+	 * @param positionField
+	 * @return
+	 */
+	public static <T extends RealType<T>> PositionFieldTransform<T> createPositionFieldTransform(final RandomAccessibleInterval<T> positionField) {
+
+		final int n = positionField.numDimensions() - 1;
+
+		@SuppressWarnings("unchecked")
+		final RealRandomAccess<T>[] positionAccesses = (RealRandomAccess<T>[])new RealRandomAccess[(int)positionField.dimension(n)];
+		Arrays.setAll(
+				positionAccesses,
+				d -> Views.interpolate(
+						Views.extendBorder(
+								Views.hyperSlice(positionField, n, d)),
+						new NLinearInterpolatorFactory<>()).realRandomAccess());
+
+		return new PositionFieldTransform<>(positionAccesses);
+	}
+
+	/**
+	 * 2D boundaries approximated by only testing transformed corner coordinates.
+	 *
+	 * @param min
+	 * @param max
+	 * @param scaleIndex
+	 * @param transform
+	 * @return
+	 */
+	public static double[][] bounds(
+			final double[] max,
+			final InvertibleRealTransform transform) {
+
+		final double[] c00 = new double[]{0, 0};
+		final double[] c01 = new double[]{0, max[1]};
+		final double[] c10 = new double[]{max[0], 0};
+		final double[] c11 = new double[]{max[0], max[1]};
+
+		transform.applyInverse(c00, c00);
+		transform.applyInverse(c01, c01);
+		transform.applyInverse(c10, c10);
+		transform.applyInverse(c11, c11);
+
+		final double[] boundsMin = c00.clone();
+		boundsMin[0] = Math.min(boundsMin[0], c01[0]);
+		boundsMin[0] = Math.min(boundsMin[0], c10[0]);
+		boundsMin[0] = Math.min(boundsMin[0], c11[0]);
+
+		boundsMin[1] = Math.min(boundsMin[1], c01[1]);
+		boundsMin[1] = Math.min(boundsMin[1], c10[1]);
+		boundsMin[1] = Math.min(boundsMin[1], c11[1]);
+
+		final double[] boundsMax = c00.clone();
+		boundsMax[0] = Math.max(boundsMax[0], c01[0]);
+		boundsMax[0] = Math.max(boundsMax[0], c10[0]);
+		boundsMax[0] = Math.max(boundsMax[0], c11[0]);
+
+		boundsMax[1] = Math.max(boundsMax[1], c01[1]);
+		boundsMax[1] = Math.max(boundsMax[1], c10[1]);
+		boundsMax[1] = Math.max(boundsMax[1], c11[1]);
+
+		return new double[][]{boundsMin, boundsMax};
+	}
+
+	/**
+	 * 2D boundaries approximated by only testing transformed corner coordinates.
+	 *
+	 * @param n5Path
+	 * @param datasetNames
+	 * @param scaleIndex
+	 * @param transforms
+	 * @return
+	 * @throws IOException
+	 */
+	public static double[][] bounds(
+			final String n5Path,
+			final List<String> datasetNames,
+			final int scaleIndex,
+			final List<? extends InvertibleRealTransform> transforms) throws IOException {
+
+		final N5Reader n5Reader = N5.openFSReader(n5Path);
+
+		final double[] min = new double[2];
+		final double[] max = new double[2];
+		Arrays.fill(min, Double.MAX_VALUE);
+		Arrays.fill(max, -Double.MAX_VALUE);
+
+		for (int i = 0; i < datasetNames.size(); ++i) {
+			final DatasetAttributes attributes = n5Reader.getDatasetAttributes(datasetNames.get(i) + "/s" + scaleIndex);
+			final double[] datasetMax = new double[2];
+			datasetMax[0] = attributes.getDimensions()[0];
+			datasetMax[1] = attributes.getDimensions()[1];
+
+			final double[][] datasetBounds = bounds(datasetMax, transforms.get(i));
+			min[0] = Math.min(min[0], datasetBounds[0][0]);
+			min[1] = Math.min(min[1], datasetBounds[0][1]);
+			max[0] = Math.max(max[0], datasetBounds[1][0]);
+			max[1] = Math.max(max[1], datasetBounds[1][1]);
+		}
+
+		return new double[][]{min, max};
+	}
+
+	public static RealTransform loadScaledTransform(
+			final N5Reader n5,
+			final String datasetName,
+			final double transformScale,
+			final double[] boundsMin,
+			final double[] boundsMax) throws IOException {
+
+		final RandomAccessibleInterval<DoubleType> positionField = N5Utils.open(n5, datasetName);
+		final int n = positionField.numDimensions() - 1;
+		final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMin, transformScale), n + 1);
+		final PositionFieldTransform<DoubleType> transform = Transform.createPositionFieldTransform(
+				Views.translate(positionField, translation));
+		return createScaledRealTransform(transform, transformScale);
+	}
+
+	/**
+	 * Saves a transform as a position field in an N5 dataset
+	 *
+	 * @param n5
+	 * @param datasetName
+	 * @param transform
+	 * @param transformScale
+	 * @param boundsMin
+	 * @param boundsMax
+	 * @throws IOException
+	 */
+	public static void saveScaledTransform(
+			final N5Writer n5,
+			final String datasetName,
+			final RealTransform transform,
+			final double transformScale,
+			final double[] boundsMin,
+			final double[] boundsMax) throws IOException {
+
+		final int n = transform.numSourceDimensions();
+		final RealTransform scaledTransform = Transform.createScaledRealTransform(transform, 1.0 / transformScale);
+		final RandomAccessibleInterval<DoubleType> positionField =
+				Transform.createPositionField(
+						scaledTransform,
+						new FinalInterval(
+								Grid.floorScaled(boundsMin, transformScale),
+								Grid.ceilScaled(boundsMax, transformScale)));
+		final int[] blockSize = new int[n + 1];
+		Arrays.fill(blockSize, 1024);
+		blockSize[n] = n;
+		N5Utils.save(positionField, n5, datasetName, blockSize, CompressionType.GZIP);
+	}
+
+	/**
+	 * Saves a single 2x2x... block of a transform as a position field in an N5
+	 * dataset.  The N5 dataset covers the full expected range, but only the
+	 * block cells covering the block are stored.
+	 *
+	 * @param n5
+	 * @param datasetName
+	 * @param transform
+	 * @param transformScale
+	 * @param boundsMin
+	 * @param boundsMax
+	 * @throws IOException
+	 */
+	public static void saveScaledTransformBlock(
+			final N5Writer n5,
+			final String datasetName,
+			final RealTransform transform,
+			final double transformScale,
+			final double[] boundsMin,
+			final double[] boundsMax,
+			final long[] gridOffset,
+			final int[] gridSize) throws IOException {
+
+		final int n = boundsMin.length;
+
+		final long[] floorScaledMin = Grid.floorScaled(boundsMin, transformScale);
+		final long[] ceilScaledMax = Grid.ceilScaled(boundsMax, transformScale);
+		final long[] dimensions = new long[ceilScaledMax.length];
+		Arrays.setAll(dimensions, i -> ceilScaledMax[i] - floorScaledMin[i] + 1);
+
+		final DatasetAttributes attributes = new DatasetAttributes(
+				dimensions,
+				gridSize,
+				DataType.FLOAT64,
+				CompressionType.GZIP);
+		n5.createDataset(datasetName, attributes);
+
+		final RealTransform scaledTransform = Transform.createScaledRealTransform(transform, 1.0 / transformScale);
+
+		final long[] intervalMin = new long[floorScaledMin.length];
+		Arrays.setAll(intervalMin, i -> gridOffset[i] * gridSize[i]);
+		final long[] intervalMax = new long[ceilScaledMax.length];
+		Arrays.setAll(intervalMax, i -> intervalMin[i] + gridSize[i] * 2);
+
+		final RandomAccessibleInterval<DoubleType> positionField =
+				Transform.createPositionField(
+						scaledTransform,
+						new FinalInterval(
+								new long[]{
+										(long)Math.floor(boundsMin[0] * transformScale),
+										(long)Math.floor(boundsMin[1] * transformScale)
+								},
+								new long[]{
+										(long)Math.ceil(boundsMax[0] * transformScale),
+										(long)Math.ceil(boundsMax[1] * transformScale)
+								}));
+		N5Utils.save(positionField, n5, datasetName, new int[]{1024, 1024, 2}, CompressionType.GZIP);
+	}
+
+
+	/**
+	 * Convert and invert
+	 * @param affine2D
+	 * @return
+	 */
+	public static <M extends Affine2D<M>> AffineTransform2D convertAndInvertAffine2DtoAffineTransform2D(final M affine2D) {
+
+		final double[] a = new double[6];
+		affine2D.toArray(a);
+		final AffineTransform2D transform = new AffineTransform2D();
+		transform.set(
+				a[0], a[2], a[4],
+				a[1], a[3], a[5]);
+		return transform.inverse();
+	}
+}

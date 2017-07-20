@@ -25,6 +25,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.ops.SimpleGaussRA;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -204,7 +206,7 @@ public class SparkGenerateFaceScaleSpace {
 
 		final JavaRDD<long[][]> rdd =
 				sc.parallelize(
-						Util.createGrid(
+						Grid.create(
 								outDimensions,
 								outBlockSize));
 
@@ -244,7 +246,7 @@ public class SparkGenerateFaceScaleSpace {
 					final RandomAccessibleInterval<FloatType> zeroMin = Views.zeroMin(roi);
 
 					final SimpleGaussRA<FloatType> gauss = new SimpleGaussRA<>(sigmas);
-					final RandomAccessibleInterval<FloatType> filtered = Util.lazyProcessFloat(
+					final RandomAccessibleInterval<FloatType> filtered = Lazy.processFloat(
 							Views.extendMirrorSingle(zeroMin),
 							zeroMin,
 							outBlockSize,
@@ -294,7 +296,7 @@ public class SparkGenerateFaceScaleSpace {
 
 		final JavaRDD<long[][]> rdd =
 				sc.parallelize(
-						Util.createGrid(
+						Grid.create(
 								outDimensions,
 								outBlockSize));
 

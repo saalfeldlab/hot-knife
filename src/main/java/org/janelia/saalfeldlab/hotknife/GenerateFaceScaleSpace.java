@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -105,7 +106,7 @@ public class GenerateFaceScaleSpace {
 		final Class<Gauss> opClass = Gauss.class;
 		final double[] sigmas = new double[] { sigma, sigma, sigma };
 
-		final RandomAccessibleInterval<FloatType> filtered = Util.lazyProcessFloat(
+		final RandomAccessibleInterval<FloatType> filtered = Lazy.processFloat(
 				Views.extendMirrorSingle(zeroMinSource),
 				zeroMinSource,
 				blockSize,
