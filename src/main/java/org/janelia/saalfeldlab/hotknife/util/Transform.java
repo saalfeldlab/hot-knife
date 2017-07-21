@@ -425,10 +425,38 @@ public class Transform {
 		N5Utils.save(positionField, n5, datasetName, blockSize, CompressionType.GZIP);
 	}
 
+	public static DatasetAttributes createScaledTransformDataset(
+			final N5Writer n5,
+			final String datasetName,
+			final double[] boundsMin,
+			final double[] boundsMax,
+			final double transformScale,
+			final int[] gridSize) throws IOException {
+
+		final int n = boundsMin.length;
+
+		final long[] floorScaledMin = Grid.floorScaled(boundsMin, transformScale);
+		final long[] ceilScaledMax = Grid.ceilScaled(boundsMax, transformScale);
+		final long[] dimensions = new long[n + 1];
+		for (int d = 0; d < n; ++d)
+			dimensions[d] = ceilScaledMax[d] - floorScaledMin[d] + 1;
+		dimensions[n] = n;
+		final int[] blockSize = Arrays.copyOf(gridSize, n + 1);
+		blockSize[n] = n;
+
+		final DatasetAttributes attributes = new DatasetAttributes(
+				dimensions,
+				blockSize,
+				DataType.FLOAT64,
+				CompressionType.GZIP);
+		n5.createDataset(datasetName, attributes);
+		return attributes;
+	}
+
 	/**
-	 * Saves a single 2x2x... block of a transform as a position field in an N5
-	 * dataset.  The N5 dataset covers the full expected range, but only the
-	 * block cells covering the block are stored.
+	 * Saves a single 2x2x... gridSize block of a transform as a position field
+	 * in an N5 dataset.  The N5 dataset's size is the full expected range, but
+	 * only the block cells covering the block are stored.
 	 *
 	 * @param n5
 	 * @param datasetName
@@ -436,6 +464,8 @@ public class Transform {
 	 * @param transformScale
 	 * @param boundsMin
 	 * @param boundsMax
+	 * @param gridOffset
+	 * @param gridSize
 	 * @throws IOException
 	 */
 	public static void saveScaledTransformBlock(
@@ -448,16 +478,20 @@ public class Transform {
 			final long[] gridOffset,
 			final int[] gridSize) throws IOException {
 
-		final int n = boundsMin.length;
+		final int n = transform.numSourceDimensions();
 
 		final long[] floorScaledMin = Grid.floorScaled(boundsMin, transformScale);
 		final long[] ceilScaledMax = Grid.ceilScaled(boundsMax, transformScale);
-		final long[] dimensions = new long[ceilScaledMax.length];
-		Arrays.setAll(dimensions, i -> ceilScaledMax[i] - floorScaledMin[i] + 1);
+		final long[] dimensions = new long[n + 1];
+		for (int d = 0; d < n; ++d)
+			dimensions[d] = ceilScaledMax[d] - floorScaledMin[d] + 1;
+		dimensions[n] = n;
+		final int[] blockSize = Arrays.copyOf(gridSize, n + 1);
+		blockSize[n] = n;
 
 		final DatasetAttributes attributes = new DatasetAttributes(
 				dimensions,
-				gridSize,
+				blockSize,
 				DataType.FLOAT64,
 				CompressionType.GZIP);
 		n5.createDataset(datasetName, attributes);
@@ -465,28 +499,24 @@ public class Transform {
 		final RealTransform scaledTransform = Transform.createScaledRealTransform(transform, 1.0 / transformScale);
 
 		final long[] intervalMin = new long[floorScaledMin.length];
-		Arrays.setAll(intervalMin, i -> gridOffset[i] * gridSize[i]);
+		Arrays.setAll(intervalMin, i -> gridOffset[i] * gridSize[i] + floorScaledMin[i]);
 		final long[] intervalMax = new long[ceilScaledMax.length];
-		Arrays.setAll(intervalMax, i -> intervalMin[i] + gridSize[i] * 2);
+		Arrays.setAll(intervalMax, i -> Math.min(dimensions[i] + floorScaledMin[i], intervalMin[i] + gridSize[i] * 2) - 1);
 
 		final RandomAccessibleInterval<DoubleType> positionField =
 				Transform.createPositionField(
 						scaledTransform,
 						new FinalInterval(
-								new long[]{
-										(long)Math.floor(boundsMin[0] * transformScale),
-										(long)Math.floor(boundsMin[1] * transformScale)
-								},
-								new long[]{
-										(long)Math.ceil(boundsMax[0] * transformScale),
-										(long)Math.ceil(boundsMax[1] * transformScale)
-								}));
-		N5Utils.save(positionField, n5, datasetName, new int[]{1024, 1024, 2}, CompressionType.GZIP);
+								intervalMin,
+								intervalMax));
+
+		N5Utils.saveBlock(positionField, n5, datasetName, attributes, Arrays.copyOf(gridOffset, n + 1));
 	}
 
-
 	/**
-	 * Convert and invert
+	 * Convert and invert an mpicbg {@link Affine2D} into an ImgLib2
+	 * {@link AffineTransform2D}.
+	 *
 	 * @param affine2D
 	 * @return
 	 */
