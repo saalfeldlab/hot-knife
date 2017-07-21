@@ -99,4 +99,29 @@ public class Show {
 		return stackSource;
 	}
 
+	/**
+	 * Quickly visualize a source as transformed by a target to source transform.
+	 * @throws IOException
+	 */
+	public static Bdv transformed(
+			final String n5Path,
+			final String datasetName,
+			final int scaleIndex,
+			final RealTransform transforms,
+			final Interval targetInterval,
+			final Bdv bdv) throws IOException {
+
+		final N5Reader n5Reader = N5.openFSReader(n5Path);
+		final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Reader, datasetName + "/s" + scaleIndex);
+		final RandomAccessibleInterval<FloatType> transformedInterval = Transform.createTransformedInterval(
+				source,
+				targetInterval,
+				Transform.createScaledRealTransform(transforms, scaleIndex),
+				new FloatType(255));
+
+		final BdvOptions options = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
+		final BdvStackSource<?> stackSource = BdvFunctions.show(transformedInterval, "transformed", options);
+		stackSource.setDisplayRange(0, 255);
+		return stackSource;
+	}
 }
