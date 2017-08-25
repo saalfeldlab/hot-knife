@@ -381,8 +381,7 @@ public class Transform {
 			final N5Reader n5,
 			final String datasetName,
 			final double transformScale,
-			final double[] boundsMin,
-			final double[] boundsMax) throws IOException {
+			final double[] boundsMin) throws IOException {
 
 		final RandomAccessibleInterval<DoubleType> positionField = N5Utils.open(n5, datasetName);
 		final int n = positionField.numDimensions() - 1;
@@ -391,6 +390,16 @@ public class Transform {
 				Views.translate(positionField, translation));
 		return createScaledRealTransform(transform, transformScale);
 	}
+
+	public static RealTransform loadScaledTransform(
+			final N5Reader n5,
+			final String datasetName) throws IOException {
+
+		final double[] boundsMin = n5.getAttribute(datasetName, "boundsMin", double[].class);
+		final double transformScale = n5.getAttribute(datasetName, "scale", double.class);
+		return loadScaledTransform(n5, datasetName, transformScale, boundsMin);
+	}
+
 
 	/**
 	 * Saves a transform as a position field in an N5 dataset
@@ -423,6 +432,9 @@ public class Transform {
 		Arrays.fill(blockSize, 1024);
 		blockSize[n] = n;
 		N5Utils.save(positionField, n5, datasetName, blockSize, CompressionType.GZIP);
+		n5.setAttribute(datasetName, "boundsMin", boundsMin);
+		n5.setAttribute(datasetName, "boundsMax", boundsMax);
+		n5.setAttribute(datasetName, "scale", transformScale);
 	}
 
 	public static DatasetAttributes createScaledTransformDataset(
@@ -450,6 +462,9 @@ public class Transform {
 				DataType.FLOAT64,
 				CompressionType.GZIP);
 		n5.createDataset(datasetName, attributes);
+		n5.setAttribute(datasetName, "boundsMin", boundsMin);
+		n5.setAttribute(datasetName, "boundsMax", boundsMax);
+		n5.setAttribute(datasetName, "scale", transformScale);
 		return attributes;
 	}
 
@@ -495,6 +510,9 @@ public class Transform {
 				DataType.FLOAT64,
 				CompressionType.GZIP);
 		n5.createDataset(datasetName, attributes);
+		n5.setAttribute(datasetName, "boundsMin", boundsMin);
+		n5.setAttribute(datasetName, "boundsMax", boundsMax);
+		n5.setAttribute(datasetName, "scale", transformScale);
 
 		final RealTransform scaledTransform = Transform.createScaledRealTransform(transform, 1.0 / transformScale);
 

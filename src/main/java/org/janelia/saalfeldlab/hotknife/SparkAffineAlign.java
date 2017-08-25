@@ -199,7 +199,6 @@ public class SparkAffineAlign {
 
 
 	static public <SA extends Supplier<? extends Model<?>> & Serializable> JavaPairRDD<String[], ArrayList<PointMatch>> filterBlockFaceMatches(
-			final JavaSparkContext sc,
 			final JavaPairRDD<String[], ArrayList<PointMatch>> candidateMatches,
 			final SA modelSupplier,
 			final int numIterations,
@@ -262,7 +261,6 @@ public class SparkAffineAlign {
 	}
 
 	public static void saveAffines(
-			final JavaSparkContext sc,
 			final String n5Path,
 			final String outGroup,
 			final double[] min,
@@ -316,7 +314,6 @@ public class SparkAffineAlign {
 				});
 
 		final JavaPairRDD<String[], ArrayList<PointMatch>> filteredMatches = filterBlockFaceMatches(
-				sc,
 				scaledMatches,
 				new Transform.InterpolatedAffineModel2DSupplier<>(
 						(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
@@ -411,14 +408,12 @@ public class SparkAffineAlign {
 		}
 
 		saveAffines(
-				sc,
 				options.getN5Path(),
 				options.getOutGroup(),
 				bounds[0],
 				bounds[1],
 				options.getScaleIndex(),
 				sc.parallelizePairs(transformTuples));
-
 
 
 
@@ -447,6 +442,8 @@ public class SparkAffineAlign {
 		sc.close();
 
 
+
+
 		/* test and inspect */
 
 		new ImageJ();
@@ -460,16 +457,11 @@ public class SparkAffineAlign {
 		final int showScaleIndex = options.getScaleIndex();
 		final double showScale = 1.0 / (1 << showScaleIndex);
 
-		final double transformScale = 1.0 / (1 << transformScaleIndex);
-
 		final ArrayList<RealTransform> realTransforms = new ArrayList<>();
 		for (int i = 0; i < datasetNames.length; ++i) {
 			final RealTransform transform = Transform.loadScaledTransform(
 					n5Reader,
-					options.getOutGroup() + "/" + i,
-					transformScale,
-					boundsMin,
-					boundsMax);
+					options.getOutGroup() + "/" + i);
 			realTransforms.add(transform);
 		}
 
