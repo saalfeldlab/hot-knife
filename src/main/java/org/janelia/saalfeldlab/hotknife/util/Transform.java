@@ -264,12 +264,14 @@ public class Transform {
 	}
 
 	/**
-	 * Creates a {@link RealTransform} from a positionFiled raster.  The last
-	 * dimension of the input raster enumerates the dimensions. i.e. its size
-	 * must be
+	 * Creates a {@link RealTransform} from a positionField raster.  The last
+	 * dimension of the input raster enumerates the dimensions, i.e. the input
+	 * raster is a stack of position lookups, one slice for each dimension.
+	 *
+	 * Accordingly, the source and target dimensionality of the resulting
+	 * {@link RealTransform} is
 	 * {@link RandomAccessibleInterval#numDimensions() positionField.numDimensions()} - 1
-	 * which is also the source and target dimensionality of the
-	 * {@link RealTransform}.
+	 * .
 	 *
 	 * @param positionField
 	 * @return
