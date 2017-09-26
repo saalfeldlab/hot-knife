@@ -170,7 +170,7 @@ public class Transform {
 	 * Creates a scaled RealTransform.
 	 *
 	 * @param affine
-	 * @param scaleIndex
+	 * @param scaleFactor
 	 * @return
 	 */
 	static public RealTransform createScaledRealTransform(
