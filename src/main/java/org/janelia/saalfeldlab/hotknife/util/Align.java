@@ -17,18 +17,21 @@
 package org.janelia.saalfeldlab.hotknife.util;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.janelia.saalfeldlab.PositionFieldTransform;
 import org.janelia.saalfeldlab.hotknife.ConsensusFilter;
 
 import ij.process.FloatProcessor;
 import ini.trakem2.imaging.filters.ValueToNoise;
 import mpicbg.ij.FeatureTransform;
 import mpicbg.ij.SIFT;
+import mpicbg.ij.plugin.PMCCScaleSpaceBlockFlow;
 import mpicbg.imagefeatures.Feature;
 import mpicbg.imagefeatures.FloatArray2DSIFT;
 import mpicbg.models.IllDefinedDataPointsException;
@@ -38,7 +41,12 @@ import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.Translation2D;
+import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 
 /**
  *
@@ -228,5 +236,42 @@ public class Align {
 		}
 
 		return tiles;
+	}
+
+	/**
+	 * Align two images with block matching.  Returns the inverse transform
+	 * of mapping a into b which is, well, the forward transform for mapping
+	 * b into a.
+	 *
+	 * @param a
+	 * @param b
+	 * @param radius
+	 * @param scale
+	 * @return
+	 */
+	static public RealTransform alignFlow(
+			final RandomAccessibleInterval<FloatType> a,
+			final RandomAccessibleInterval<FloatType> b,
+			final short radius,
+			final double sigma,
+			final int numIterations) {
+
+		final Pair<PositionFieldTransform<DoubleType>, FloatProcessor> transformAndWeights = PMCCScaleSpaceBlockFlow.scaleSpaceOpticFlow(
+				Util.materialize(b),
+				Util.materialize(a),
+				radius,
+				sigma,
+				numIterations);
+
+		final double[] offset = Intervals.minAsDoubleArray(a);
+		final double[] inverseOffset = new double[offset.length];
+		Arrays.setAll(inverseOffset, i -> -offset[i]);
+
+		final RealTransformSequence transform = new RealTransformSequence();
+		transform.add(new Translation2D(inverseOffset));
+		transform.add(transformAndWeights.getA());
+		transform.add(new Translation2D(offset));
+
+		return transform;
 	}
 }
