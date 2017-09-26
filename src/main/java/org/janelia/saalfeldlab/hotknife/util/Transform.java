@@ -220,10 +220,6 @@ public class Transform {
 			final int scaleIndex) {
 
 		final int scaleFactor = 1 << scaleIndex;
-
-		if (AffineTransform2D.class.isInstance(transform))
-			return createScaledAffine2D((AffineTransform2D)transform, (double)scaleFactor);
-
 		return createScaledRealTransform(transform, (double)scaleFactor);
 	}
 
