@@ -32,7 +32,6 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.view.Views;
 
 /**
  *
@@ -71,6 +70,22 @@ public class Show {
 	 * @throws IOException
 	 */
 	public static Bdv transformedStack(
+			final RandomAccessibleInterval<FloatType> stack,
+			final Bdv bdv) throws IOException {
+
+		final BdvOptions options = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
+		options.numRenderingThreads(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+		final BdvStackSource<?> stackSource = BdvFunctions.show(stack, "transformed", options);
+		stackSource.setDisplayRange(0, 255);
+		return stackSource;
+	}
+
+	/**
+	 * Quickly visualize the slab-face series as transformed by a corresponding
+	 * list of target to source transforms.
+	 * @throws IOException
+	 */
+	public static Bdv transformedStack(
 			final String n5Path,
 			final List<String> datasetNames,
 			final int scaleIndex,
@@ -78,25 +93,8 @@ public class Show {
 			final Interval targetInterval,
 			final Bdv bdv) throws IOException {
 
-		final ArrayList<RandomAccessibleInterval<FloatType>> transformedIntervals = new ArrayList<>();
-		final N5Reader n5Reader = N5.openFSReader(n5Path);
-
-		for (int i = 0; i < transforms.size(); ++i) {
-
-			final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Reader, datasetNames.get(i) + "/s" + scaleIndex);
-
-			transformedIntervals.add(
-					Transform.createTransformedInterval(
-							source,
-							targetInterval,
-							Transform.createScaledRealTransform(transforms.get(i), scaleIndex),
-							new FloatType(255)));
-		}
-
-		final BdvOptions options = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
-		final BdvStackSource<?> stackSource = BdvFunctions.show(Views.stack(transformedIntervals), "transformed", options);
-		stackSource.setDisplayRange(0, 255);
-		return stackSource;
+		final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(n5Path, datasetNames, scaleIndex, transforms, targetInterval);
+		return transformedStack(stack, bdv);
 	}
 
 	/**
