@@ -30,7 +30,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
-import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -43,7 +42,6 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import bdv.util.Bdv;
 import mpicbg.models.AffineModel2D;
 import mpicbg.models.InterpolatedAffineModel2D;
 import mpicbg.models.RigidModel2D;
@@ -67,7 +65,7 @@ import scala.Tuple2;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
-public class SparkPairAlign {
+public class SparkPairAlignSIFT {
 
 	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
@@ -75,10 +73,10 @@ public class SparkPairAlign {
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 		private final String n5Path = null;
 
-		@Option(name = "-i", aliases = {"--n5InputGroup"}, required = true, usage = "N5 input group, e.g. /align")
+		@Option(name = "-i", aliases = {"--n5GroupInput"}, required = true, usage = "N5 input group, e.g. /align")
 		private final String inGroup = null;
 
-		@Option(name = "-o", aliases = {"--n5OutputGroup"}, required = true, usage = "N5 output group, e.g. /align")
+		@Option(name = "-o", aliases = {"--n5GroupOutput"}, required = true, usage = "N5 output group, e.g. /align")
 		private final String outGroup = null;
 
 		@Option(name = "--scaleIndex", required = true, usage = "scale index for the output transform, e.g. 4 (means scale = 1.0 / 2^4)")
@@ -93,7 +91,7 @@ public class SparkPairAlign {
 		@Option(name = "--lambdaFilter", required = false, usage = "lambda for rigid regularizer in filter")
 		private double lambdaFilter = 0.1;
 
-		@Option(name = "--maxEpsilon", required = false, usage = "residual threshold for filter in world pixels")
+		@Option(name = "--maxEpsilon", required = true, usage = "residual threshold for filter in world pixels")
 		private double maxFilterEpsilon = 50.0;
 
 		public Options(final String[] args) {
@@ -167,7 +165,28 @@ public class SparkPairAlign {
 		}
 	}
 
-	static public JavaPairRDD<long[], double[]> align(
+	/**
+	 *
+	 * @param sc Spark context
+	 * @param n5Path
+	 * @param datasetA multi-scale dataset group, dataset path is datasetA + "/s" + scaleIndex
+	 * @param datasetB multi-scale dataset group, dataset path is datasetA + "/s" + scaleIndex
+	 * @param scaleIndex
+	 * @param transformADataset scaled transform dataset A, scale is resolved from scale property
+	 * @param transformBDataset scaled transform dataset B, scale is resolved from scale property
+	 * @param boundsMin min coordinates of bounding box in world coordinates (not scaled)
+	 * @param boundsMax max coordinates of bounding box in world coordinates (not scaled)
+	 * @param scaledFloorMin scaled (according to scaleIndex above) and floor rounded min coordinates of bounding box
+	 * @param scaledCeilMax scaled (according to scaleIndex above) and ceil rounded max coordinates of bounding box
+	 * @param gridCellWidth
+	 * @param gridOffsets
+	 * @param lambdaModel
+	 * @param lambdaFilter
+	 * @param maxFilterEpsilon
+	 * @return
+	 * @throws IOException
+	 */
+	public static JavaPairRDD<long[], double[]> alignSIFT(
 			final JavaSparkContext sc,
 			final String n5Path,
 			final String datasetA,
@@ -418,6 +437,7 @@ public class SparkPairAlign {
 		return mappedGridCells;
 	}
 
+
 	public static void deleteGridCells(
 			final JavaRDD<long[]> gridCells,
 			final String n5Path,
@@ -437,6 +457,7 @@ public class SparkPairAlign {
 					n5.remove(transformDatasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1]);
 				});
 	}
+
 
 	public static void reSaveTransforms(
 			final JavaSparkContext sc,
@@ -468,7 +489,32 @@ public class SparkPairAlign {
 	}
 
 
-	public static void alignPair(
+	/**
+	 * Align a pair of transformed N5 sections usign SIFT and affine models on
+	 * a grid of 50% overlapping cells.  The resulting alignment is the
+	 * composition of the prior transform and the interpolant over the grid.
+	 * For grid cells, that do not return an alignment model, the prior
+	 * transformation is used.
+	 *
+	 * @param sc
+	 * @param n5Path
+	 * @param inGroupName
+	 * @param outGroupName
+	 * @param datasetNames
+	 * @param indexA
+	 * @param indexB
+	 * @param priorTransformScaleIndex
+	 * @param transformScaleIndex
+	 * @param boundsMin
+	 * @param boundsMax
+	 * @param stepSize
+	 * @param gridOffsets
+	 * @param lambdaModel
+	 * @param lambdaFilter
+	 * @param maxFilterEpsilon
+	 * @throws IOException
+	 */
+	public static void alignPairSIFT(
 			final JavaSparkContext sc,
 			final String n5Path,
 			final String inGroupName,
@@ -491,7 +537,7 @@ public class SparkPairAlign {
 		final long[] floorScaledMin = Grid.floorScaled(boundsMin, scale);
 		final long[] ceilScaledMax = Grid.ceilScaled(boundsMax, scale);
 
-		final JavaPairRDD<long[], double[]> affines = align(
+		final JavaPairRDD<long[], double[]> affines = alignSIFT(
 				sc,
 				n5Path,
 				datasetNames[indexA],
@@ -546,7 +592,6 @@ public class SparkPairAlign {
 				boundsMax,
 				stepSize);
 	}
-
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
@@ -609,7 +654,7 @@ public class SparkPairAlign {
 					gridOffsets.size());
 			System.out.println();
 
-			alignPair(
+			alignPairSIFT(
 					sc,
 					options.getN5Path(),
 					options.getInGroup(),
@@ -629,58 +674,5 @@ public class SparkPairAlign {
 		}
 
 		sc.close();
-
-		final int showScaleIndex = options.getTransformScaleIndex();
-		final double showScale = 1.0 / (1 << showScaleIndex);
-
-		final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
-		for (int i = 0; i < datasetNames.length; ++i) {
-			realTransforms[i] = Transform.loadScaledTransform(
-					n5,
-					options.getOutGroup() + "/" + i);
-		}
-
-		final RealTransform[] affines = new RealTransform[datasetNames.length];
-		for (int i = 0; i < datasetNames.length; ++i) {
-			affines[i] = Transform.loadScaledTransform(
-					n5,
-					"align/" + i);
-		}
-
-//		realTransforms[2] = Transform.loadScaledTransform(
-//				n5,
-//				options.getOutGroup() + "/2");
-//
-//		realTransforms[4] = Transform.loadScaledTransform(
-//				n5,
-//				options.getOutGroup() + "/4");
-
-//		realTransforms[options.getIndexB()] = Transform.loadScaledTransform(
-//				n5,
-//				options.getOutGroup() + "/" + options.getIndexB());
-
-		final Bdv bdv = Show.transformedStack(
-				options.getN5Path(),
-				Arrays.asList(datasetNames),
-				showScaleIndex,
-				Arrays.asList(realTransforms),
-//				new FinalInterval(new long[]{-512, -512}, new long[]{1535, 1535}));
-				new FinalInterval(
-						Grid.floorScaled(boundsMin, showScale),
-						Grid.ceilScaled(boundsMax, showScale)),
-				null);
-
-		Show.transformedStack(
-				options.getN5Path(),
-				Arrays.asList(datasetNames),
-				showScaleIndex,
-				Arrays.asList(affines),
-//				new FinalInterval(new long[]{-512, -512}, new long[]{1535, 1535}));
-				new FinalInterval(
-						Grid.floorScaled(boundsMin, showScale),
-						Grid.ceilScaled(boundsMax, showScale)),
-				bdv);
-
-
 	}
 }
