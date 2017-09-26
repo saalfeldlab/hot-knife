@@ -54,6 +54,7 @@ import net.imglib2.realtransform.Scale2D;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 
 /**
@@ -545,5 +546,43 @@ public class Transform {
 				a[0], a[2], a[4],
 				a[1], a[3], a[5]);
 		return transform.inverse();
+	}
+
+	/**
+	 * Create a list of scaled datasets as transformed by a corresponding list
+	 * of target to source transforms.
+	 *
+	 * @param n5Path
+	 * @param datasetNames
+	 * @param scaleIndex
+	 * @param transforms
+	 * @param targetInterval
+	 * @return
+	 *
+	 * @throws IOException
+	 */
+	public static RandomAccessibleInterval<FloatType> createTransformedStack(
+			final String n5Path,
+			final List<String> datasetNames,
+			final int scaleIndex,
+			final List<? extends RealTransform> transforms,
+			final Interval targetInterval) throws IOException {
+
+		final ArrayList<RandomAccessibleInterval<FloatType>> transformedIntervals = new ArrayList<>();
+		final N5Reader n5Reader = N5.openFSReader(n5Path);
+
+		for (int i = 0; i < transforms.size(); ++i) {
+
+			final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Reader, datasetNames.get(i) + "/s" + scaleIndex);
+
+			transformedIntervals.add(
+					Transform.createTransformedInterval(
+							source,
+							targetInterval,
+							Transform.createScaledRealTransform(transforms.get(i), scaleIndex),
+							new FloatType(255)));
+		}
+
+		return Views.stack(transformedIntervals);
 	}
 }
