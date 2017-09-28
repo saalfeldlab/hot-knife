@@ -31,6 +31,7 @@ import bdv.util.BdvStackSource;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.real.FloatType;
 
 /**
@@ -69,13 +70,13 @@ public class Show {
 	 * list of target to source transforms.
 	 * @throws IOException
 	 */
-	public static Bdv transformedStack(
-			final RandomAccessibleInterval<FloatType> stack,
+	public static <T extends NumericType<T>> BdvStackSource<T> transformedStack(
+			final RandomAccessibleInterval<T> stack,
 			final Bdv bdv) throws IOException {
 
 		final BdvOptions options = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
 		options.numRenderingThreads(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
-		final BdvStackSource<?> stackSource = BdvFunctions.show(stack, "transformed", options);
+		final BdvStackSource<T> stackSource = BdvFunctions.show(stack, "transformed", options);
 		stackSource.setDisplayRange(0, 255);
 		return stackSource;
 	}
