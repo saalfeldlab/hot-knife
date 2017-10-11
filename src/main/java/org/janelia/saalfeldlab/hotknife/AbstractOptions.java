@@ -58,6 +58,34 @@ public class AbstractOptions implements Serializable {
 		return true;
 	}
 
+	protected static final long[] parseCSLongArray(final String csv) {
+
+		final String[] stringValues = csv.split(",");
+		final long[] array = new long[stringValues.length];
+		try {
+			for (int i = 0; i < array.length; ++i)
+				array[i] = Long.parseLong(stringValues[i]);
+		} catch (final NumberFormatException e) {
+			e.printStackTrace(System.err);
+			return null;
+		}
+		return array;
+	}
+
+	protected static final int[] parseCSIntArray(final String csv) {
+
+		final String[] stringValues = csv.split(",");
+		final int[] array = new int[stringValues.length];
+		try {
+			for (int i = 0; i < array.length; ++i)
+				array[i] = Integer.parseInt(stringValues[i]);
+		} catch (final NumberFormatException e) {
+			e.printStackTrace(System.err);
+			return null;
+		}
+		return array;
+	}
+
 	public boolean isParsedSuccessfully() {
 
 		return parsedSuccessfully;
