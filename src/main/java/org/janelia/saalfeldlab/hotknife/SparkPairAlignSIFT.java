@@ -503,7 +503,6 @@ public class SparkPairAlignSIFT {
 	 * @param datasetNames
 	 * @param indexA
 	 * @param indexB
-	 * @param priorTransformScaleIndex
 	 * @param transformScaleIndex
 	 * @param boundsMin
 	 * @param boundsMax
@@ -519,10 +518,10 @@ public class SparkPairAlignSIFT {
 			final String n5Path,
 			final String inGroupName,
 			final String outGroupName,
-			final String[] datasetNames,
-			final int indexA,
-			final int indexB,
-			final int priorTransformScaleIndex,
+			final String datasetNameA,
+			final String datasetNameB,
+			final String transformDatasetNameA,
+			final String transformDatasetNameB,
 			final int transformScaleIndex,
 			final double[] boundsMin,
 			final double[] boundsMax,
@@ -540,11 +539,11 @@ public class SparkPairAlignSIFT {
 		final JavaPairRDD<long[], double[]> affines = alignSIFT(
 				sc,
 				n5Path,
-				datasetNames[indexA],
-				datasetNames[indexB],
+				datasetNameA,
+				datasetNameB,
 				transformScaleIndex,
-				inGroupName + "/" + indexA,
-				inGroupName + "/" + indexB,
+				inGroupName + "/" + transformDatasetNameA,
+				inGroupName + "/" + transformDatasetNameB,
 				boundsMin,
 				boundsMax,
 				floorScaledMin,
@@ -561,8 +560,8 @@ public class SparkPairAlignSIFT {
 		final JavaRDD<long[]> gridCells = saveAccumulatedAffineGridCells(
 				affines,
 				n5Path,
-				inGroupName + "/" + indexB,
-				outGroupName + "/" + indexB,
+				inGroupName + "/" + transformDatasetNameB,
+				outGroupName + "/" + transformDatasetNameB,
 				boundsMin,
 				boundsMax,
 				stepSize,
@@ -574,7 +573,7 @@ public class SparkPairAlignSIFT {
 		final JavaRDD<long[]> composedGridCells = composeOverlappingTransformGridCells(
 				gridCells,
 				n5Path,
-				outGroupName + "/" + indexB,
+				outGroupName + "/" + transformDatasetNameB,
 				scale,
 				boundsMin,
 				boundsMax,
@@ -586,7 +585,7 @@ public class SparkPairAlignSIFT {
 		deleteGridCells(
 				composedGridCells,
 				n5Path,
-				outGroupName + "/" + indexB,
+				outGroupName + "/" + transformDatasetNameB,
 				scale,
 				boundsMin,
 				boundsMax,
@@ -602,12 +601,13 @@ public class SparkPairAlignSIFT {
 
 		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
 		final String[] datasetNames = n5.getAttribute(options.getInGroup(), "datasets", String[].class);
-		final int priorTransformScaleIndex = n5.getAttribute(options.getInGroup(), "scaleIndex", int.class);
+		final String[] transformDatasetNames = n5.getAttribute(options.getInGroup(), "transforms", String[].class);
 		final double[] boundsMin = n5.getAttribute(options.getInGroup(), "boundsMin", double[].class);
 		final double[] boundsMax = n5.getAttribute(options.getInGroup(), "boundsMax", double[].class);
 
 		n5.createGroup(options.getOutGroup());
 		n5.setAttribute(options.getOutGroup(), "datasets", datasetNames);
+		n5.setAttribute(options.getOutGroup(), "transforms", transformDatasetNames);
 		n5.setAttribute(options.getOutGroup(), "scaleIndex", options.getTransformScaleIndex());
 		n5.setAttribute(options.getOutGroup(), "boundsMin", boundsMin);
 		n5.setAttribute(options.getOutGroup(), "boundsMax", boundsMax);
@@ -623,18 +623,18 @@ public class SparkPairAlignSIFT {
 
 		System.out.println(Arrays.deepToString(gridOffsets.toArray()));
 
-		final SparkConf conf = new SparkConf().setAppName("SparkPairAlign");
+		final SparkConf conf = new SparkConf().setAppName("SparkPairAlignSIFT");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
 		/* re-save the old transforms */
 		final ArrayList<String> inPriorTransformDatasetNames = new ArrayList<>();
 		final ArrayList<String> outPriorTransformDatasetNames = new ArrayList<>();
-		inPriorTransformDatasetNames.add(options.getInGroup() + "/" + 0);
-		outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + 0);
+		inPriorTransformDatasetNames.add(options.getInGroup() + "/" + transformDatasetNames[0]);
+		outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + transformDatasetNames[0]);
 		for (int i = 1; i < datasetNames.length; i += 2) {
-			inPriorTransformDatasetNames.add(options.getInGroup() + "/" + i);
-			outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + i);
+			inPriorTransformDatasetNames.add(options.getInGroup() + "/" + transformDatasetNames[i]);
+			outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + transformDatasetNames[i]);
 		}
 
 		reSaveTransforms(
@@ -654,15 +654,20 @@ public class SparkPairAlignSIFT {
 					gridOffsets.size());
 			System.out.println();
 
+			final String datasetNameA = datasetNames[i];
+			final String datasetNameB = datasetNames[i + 1];
+			final String transformDatasetNameA = transformDatasetNames[i];
+			final String transformDatasetNameB = transformDatasetNames[i + 1];
+
 			alignPairSIFT(
 					sc,
 					options.getN5Path(),
 					options.getInGroup(),
 					options.getOutGroup(),
-					datasetNames,
-					i,
-					i + 1,
-					priorTransformScaleIndex,
+					datasetNameA,
+					datasetNameB,
+					transformDatasetNameA,
+					transformDatasetNameB,
 					options.getTransformScaleIndex(),
 					boundsMin,
 					boundsMax,

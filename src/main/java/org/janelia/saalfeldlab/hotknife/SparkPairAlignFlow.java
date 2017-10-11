@@ -70,10 +70,10 @@ public class SparkPairAlignFlow {
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 		private final String n5Path = null;
 
-		@Option(name = "-i", aliases = {"--n5GroupInput"}, required = true, usage = "N5 input group, e.g. /align")
+		@Option(name = "-i", aliases = {"--n5GroupInput"}, required = true, usage = "N5 input group, e.g. /align-0")
 		private final String inGroup = null;
 
-		@Option(name = "-o", aliases = {"--n5GroupOutput"}, required = true, usage = "N5 output group, e.g. /align")
+		@Option(name = "-o", aliases = {"--n5GroupOutput"}, required = true, usage = "N5 output group, e.g. /align-1")
 		private final String outGroup = null;
 
 		@Option(name = "--scaleIndex", required = true, usage = "scale index for the output transform, e.g. 4 (means scale = 1.0 / 2^4)")
@@ -448,7 +448,6 @@ public class SparkPairAlignFlow {
 	 * @param datasetNames
 	 * @param indexA
 	 * @param indexB
-	 * @param priorTransformScaleIndex
 	 * @param transformScaleIndex
 	 * @param boundsMin
 	 * @param boundsMax
@@ -464,10 +463,10 @@ public class SparkPairAlignFlow {
 			final String n5Path,
 			final String inGroupName,
 			final String outGroupName,
-			final String[] datasetNames,
-			final int indexA,
-			final int indexB,
-			final int priorTransformScaleIndex,
+			final String datasetNameA,
+			final String datasetNameB,
+			final String transformDatasetNameA,
+			final String transformDatasetNameB,
 			final int transformScaleIndex,
 			final double[] boundsMin,
 			final double[] boundsMax,
@@ -485,12 +484,12 @@ public class SparkPairAlignFlow {
 		final JavaRDD<long[]> gridCells = alignAndSaveAccumulatedGridCells(
 				sc,
 				n5Path,
-				datasetNames[indexA],
-				datasetNames[indexB],
+				datasetNameA,
+				datasetNameB,
 				transformScaleIndex,
-				inGroupName + "/" + indexA,
-				inGroupName + "/" + indexB,
-				outGroupName + "/" + indexB,
+				inGroupName + "/" + transformDatasetNameA,
+				inGroupName + "/" + transformDatasetNameB,
+				outGroupName + "/" + transformDatasetNameB,
 				boundsMin,
 				boundsMax,
 				floorScaledMin,
@@ -507,7 +506,7 @@ public class SparkPairAlignFlow {
 		final JavaRDD<long[]> composedGridCells = composeOverlappingTransformGridCells(
 				gridCells,
 				n5Path,
-				outGroupName + "/" + indexB,
+				outGroupName + "/" + transformDatasetNameB,
 				scale,
 				boundsMin,
 				boundsMax,
@@ -519,7 +518,7 @@ public class SparkPairAlignFlow {
 		deleteGridCells(
 				composedGridCells,
 				n5Path,
-				outGroupName + "/" + indexB,
+				outGroupName + "/" + transformDatasetNameB,
 				scale,
 				boundsMin,
 				boundsMax,
@@ -536,12 +535,13 @@ public class SparkPairAlignFlow {
 
 		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
 		final String[] datasetNames = n5.getAttribute(options.getInGroup(), "datasets", String[].class);
-		final int priorTransformScaleIndex = n5.getAttribute(options.getInGroup(), "scaleIndex", int.class);
+		final String[] transformDatasetNames = n5.getAttribute(options.getInGroup(), "transforms", String[].class);
 		final double[] boundsMin = n5.getAttribute(options.getInGroup(), "boundsMin", double[].class);
 		final double[] boundsMax = n5.getAttribute(options.getInGroup(), "boundsMax", double[].class);
 
 		n5.createGroup(options.getOutGroup());
 		n5.setAttribute(options.getOutGroup(), "datasets", datasetNames);
+		n5.setAttribute(options.getOutGroup(), "transforms", transformDatasetNames);
 		n5.setAttribute(options.getOutGroup(), "scaleIndex", options.getTransformScaleIndex());
 		n5.setAttribute(options.getOutGroup(), "boundsMin", boundsMin);
 		n5.setAttribute(options.getOutGroup(), "boundsMax", boundsMax);
@@ -557,18 +557,18 @@ public class SparkPairAlignFlow {
 
 		System.out.println(Arrays.deepToString(gridOffsets.toArray()));
 
-		final SparkConf conf = new SparkConf().setAppName("SparkPairAlign");
+		final SparkConf conf = new SparkConf().setAppName("SparkPairAlignFlow");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
 		/* re-save the old transforms */
 		final ArrayList<String> inPriorTransformDatasetNames = new ArrayList<>();
 		final ArrayList<String> outPriorTransformDatasetNames = new ArrayList<>();
-		inPriorTransformDatasetNames.add(options.getInGroup() + "/" + 0);
-		outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + 0);
+		inPriorTransformDatasetNames.add(options.getInGroup() + "/" + transformDatasetNames[0]);
+		outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + transformDatasetNames[0]);
 		for (int i = 1; i < datasetNames.length; i += 2) {
-			inPriorTransformDatasetNames.add(options.getInGroup() + "/" + i);
-			outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + i);
+			inPriorTransformDatasetNames.add(options.getInGroup() + "/" + transformDatasetNames[i]);
+			outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + transformDatasetNames[i]);
 		}
 
 		Spark.copyTransforms(
@@ -593,10 +593,10 @@ public class SparkPairAlignFlow {
 					options.getN5Path(),
 					options.getInGroup(),
 					options.getOutGroup(),
-					datasetNames,
-					i,
-					i + 1,
-					priorTransformScaleIndex,
+					datasetNames[i],
+					datasetNames[i + 1],
+					transformDatasetNames[i],
+					transformDatasetNames[i + 1],
 					options.getTransformScaleIndex(),
 					boundsMin,
 					boundsMax,
