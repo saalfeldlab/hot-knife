@@ -62,4 +62,24 @@ public class Util {
 				array,
 				i -> array[i] * scale);
 	}
+
+	/**
+	 * Flatten a group name.
+	 *
+	 * Removes optional leading <code>separator</code> and replaces all others by <code>replacement</code>.
+	 *
+	 * @param groupName
+	 * @param separator
+	 * @param replacement
+	 * @return
+	 */
+	public static String flattenGroupName(final String groupName, final String separator, final String replacement) {
+
+		return groupName.replaceAll("^" + separator, "").replaceAll(separator, replacement);
+	}
+
+	public static String flattenGroupName(final String groupName) {
+
+		return flattenGroupName(groupName, "/", ".");
+	}
 }
