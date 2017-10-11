@@ -115,6 +115,7 @@ public class ViewAlignment {
 		for (final String group : options.getGroups()) {
 
 			final String[] datasetNames = n5.getAttribute(group, "datasets", String[].class);
+			final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);
 			final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
 			final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
@@ -122,7 +123,7 @@ public class ViewAlignment {
 			for (int i = 0; i < datasetNames.length; ++i) {
 				realTransforms[i] = Transform.loadScaledTransform(
 						n5,
-						group + "/" + i);
+						group + "/" + transformDatasetNames[i]);
 			}
 
 			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
