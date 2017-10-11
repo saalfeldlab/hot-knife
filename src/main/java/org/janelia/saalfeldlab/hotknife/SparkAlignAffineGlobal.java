@@ -25,15 +25,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
-import org.janelia.saalfeldlab.hotknife.util.Grid;
-import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -42,7 +42,6 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import bdv.util.Bdv;
 import mpicbg.imagefeatures.Feature;
 import mpicbg.models.Affine2D;
 import mpicbg.models.AffineModel2D;
@@ -54,11 +53,8 @@ import mpicbg.models.PointMatch;
 import mpicbg.models.RigidModel2D;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
-import net.imagej.ImageJ;
-import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import scala.Tuple2;
@@ -68,7 +64,7 @@ import scala.Tuple2;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
-public class SparkAffineAlign {
+public class SparkAlignAffineGlobal {
 
 	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
@@ -79,7 +75,7 @@ public class SparkAffineAlign {
 		@Option(name = "-d", aliases = {"--n5Dataset"}, required = true, usage = "List of N5 datasets, alternating top and bottom block faces e.g. -d /slab-24/top -d slab-24/bot -d slab-25/top ...")
 		private final List<String> datasetNames = null;
 
-		@Option(name = "-o", aliases = {"--n5OutputGroup"}, required = true, usage = "N5 output group, e.g. /align")
+		@Option(name = "-o", aliases = {"--n5GroupOutput"}, required = true, usage = "N5 output group, e.g. /align-0")
 		private final String outGroup = null;
 
 		@Option(name = "--scaleIndex", required = true, usage = "scale index, e.g. 4 (means scale = 1.0 / 2^4)")
@@ -210,7 +206,7 @@ public class SparkAffineAlign {
 				tuple -> {
 					@SuppressWarnings("unchecked")
 					final ArrayList<PointMatch> inliers =
-							new MultiConsensusFilter(
+							new MultiConsensusFilter<>(
 									(Supplier<Model<?>>)modelSupplier,
 									numIterations,
 									maxEpsilon,
@@ -266,7 +262,7 @@ public class SparkAffineAlign {
 			final double[] min,
 			final double[] max,
 			final int scaleIndex,
-			final JavaPairRDD<Integer, double[]> transforms) {
+			final JavaPairRDD<String, double[]> transforms) {
 
 		final double scale = 1.0 / (1 << scaleIndex);
 
@@ -293,18 +289,24 @@ public class SparkAffineAlign {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final SparkConf conf = new SparkConf().setAppName("SparkGenerateFaceScaleSpace");
+		final List<String> datasetNames = options.getDatasetNames();
+		final List<String> transformDatasetNames = datasetNames
+				.stream()
+				.map(datasetName -> Util.flattenGroupName(datasetName))
+				.collect(Collectors.toList());
+
+		final SparkConf conf = new SparkConf().setAppName("SparkAlignAffineGlobal");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
 		final JavaPairRDD<String, ArrayList<Feature>> features = extractFeatures(
 				sc,
 				options.getN5Path(),
-				options.getDatasetNames(),
+				datasetNames,
 				options.getScaleIndex());
 
 		final JavaPairRDD<String[], ArrayList<PointMatch>> matches = matchBlockFaces(
 				sc,
-				options.getDatasetNames(),
+				datasetNames,
 				features);
 
 		final JavaPairRDD<String[], ArrayList<PointMatch>> scaledMatches = matches.mapToPair(
@@ -325,7 +327,7 @@ public class SparkAffineAlign {
 
 
 		final ArrayList<Tile<?>> tiles = createConnectedTiles(
-				options.getDatasetNames(),
+				datasetNames,
 				filteredMatches);
 
 
@@ -387,7 +389,7 @@ public class SparkAffineAlign {
 
 		final double[][] bounds = Transform.bounds(
 				options.getN5Path(),
-				options.getDatasetNames(),
+				datasetNames,
 				0,
 				topBotTransforms);
 
@@ -396,15 +398,22 @@ public class SparkAffineAlign {
 		/* save transforms */
 		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
 		n5.createGroup(options.getOutGroup());
-		n5.setAttribute(options.getOutGroup(), "datasets", options.getDatasetNames());
+		n5.setAttribute(options.getOutGroup(), "datasets", datasetNames);
+		n5.setAttribute(options.getOutGroup(), "transforms", transformDatasetNames);
 		n5.setAttribute(options.getOutGroup(), "scaleIndex", options.getScaleIndex());
 		n5.setAttribute(options.getOutGroup(), "boundsMin", bounds[0]);
 		n5.setAttribute(options.getOutGroup(), "boundsMax", bounds[1]);
 
-		final ArrayList<Tuple2<Integer, double[]>> transformTuples = new ArrayList<>();
+		final ArrayList<Tuple2<String, double[]>> transformTuples = new ArrayList<>();
 		for (int i = 0; i < transforms.size(); ++i) {
-			transformTuples.add(new Tuple2<>(2 * i, transforms.get(i).getRowPackedCopy()));
-			transformTuples.add(new Tuple2<>(2 * i + 1, transforms.get(i).getRowPackedCopy()));
+			transformTuples.add(
+					new Tuple2<>(
+							transformDatasetNames.get(2 * i),
+							transforms.get(i).getRowPackedCopy()));
+			transformTuples.add(
+					new Tuple2<>(
+							transformDatasetNames.get(2 * i + 1),
+							transforms.get(i).getRowPackedCopy()));
 		}
 
 		saveAffines(
@@ -416,75 +425,6 @@ public class SparkAffineAlign {
 				sc.parallelizePairs(transformTuples));
 
 
-
-
-		/* pairwise transforms second to first */
-		final ArrayList<RealTransform> pairTransforms = new ArrayList<>();
-		AffineTransform2D t1 = ((AffineTransform2D)transforms.get(0)).inverse().copy();
-		pairTransforms.add(new AffineTransform2D());
-		for (int i = 1; i < transforms.size(); ++i) {
-			final AffineTransform2D t2 = ((AffineTransform2D)transforms.get(i)).inverse().copy();
-			final AffineTransform2D t2Copy = t2.copy();
-			t2.preConcatenate(t1.inverse());
-			t1 = t2Copy;
-			pairTransforms.add(t2.inverse());
-		}
-
-		/* interleaved pairwise transforms */
-		final ArrayList<RealTransform> interleavedPairTransforms = new ArrayList<>();
-		pairTransforms.forEach(
-				t -> {
-					interleavedPairTransforms.add(t);
-					interleavedPairTransforms.add(new AffineTransform2D());
-				});
-
-
 		sc.close();
-
-
-
-
-		/* test and inspect */
-
-		new ImageJ();
-
-		final N5Reader n5Reader = N5.openFSReader(options.getN5Path());
-		final String[] datasetNames = n5Reader.getAttribute(options.getOutGroup(), "datasets", String[].class);
-		final int transformScaleIndex = n5Reader.getAttribute(options.getOutGroup(), "scaleIndex", int.class);
-		final double[] boundsMin = n5Reader.getAttribute(options.getOutGroup(), "boundsMin", double[].class);
-		final double[] boundsMax = n5Reader.getAttribute(options.getOutGroup(), "boundsMax", double[].class);
-
-		final int showScaleIndex = options.getScaleIndex();
-		final double showScale = 1.0 / (1 << showScaleIndex);
-
-		final ArrayList<RealTransform> realTransforms = new ArrayList<>();
-		for (int i = 0; i < datasetNames.length; ++i) {
-			final RealTransform transform = Transform.loadScaledTransform(
-					n5Reader,
-					options.getOutGroup() + "/" + i);
-			realTransforms.add(transform);
-		}
-
-		final Bdv bdv = Show.transformedStack(
-				options.getN5Path(),
-				options.getDatasetNames(),
-				showScaleIndex,
-				realTransforms,
-//				new FinalInterval(new long[]{-512, -512}, new long[]{1535, 1535}));
-				new FinalInterval(
-						Grid.floorScaled(boundsMin, showScale),
-						Grid.ceilScaled(boundsMax, showScale)),
-				null);
-
-		Show.transformedStack(
-				options.getN5Path(),
-				options.getDatasetNames(),
-				showScaleIndex,
-				topBotTransforms,
-//				new FinalInterval(new long[]{-512, -512}, new long[]{1535, 1535}));
-				new FinalInterval(
-						Grid.floorScaled(boundsMin, showScale),
-						Grid.ceilScaled(boundsMax, showScale)),
-				bdv);
 	}
 }
