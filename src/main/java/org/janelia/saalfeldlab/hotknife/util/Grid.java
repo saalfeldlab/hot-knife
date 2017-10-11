@@ -196,7 +196,7 @@ public class Grid {
 	public static long[] ceilScaled(final double[] doubles, final double scale) {
 
 		final long[] ceilScaled = new long[doubles.length];
-		Arrays.setAll(ceilScaled, i -> (long)Math.ceil(doubles[0] * scale));
+		Arrays.setAll(ceilScaled, i -> (long)Math.ceil(doubles[i] * scale));
 		return ceilScaled;
 	}
 }
