@@ -9,9 +9,9 @@ CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace
 N_NODES=20
 
 N5PATH='/nrs/flyem/data/tmp/Z0115-22.n5'
-N5DATASETINPUT='/slab-22/raw'
+N5DATASETINPUT='/slab-22/raw/s0'
 N5GROUPOUTPUT='/slab-22/top'
-MIN='0,13,0'
+MIN='0,23,0'
 SIZE='0,512,0'
 BLOCKSIZE='1024,1024'
 
