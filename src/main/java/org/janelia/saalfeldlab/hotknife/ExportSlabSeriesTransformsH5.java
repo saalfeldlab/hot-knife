@@ -336,8 +336,8 @@ public class ExportSlabSeriesTransformsH5 {
 		final IHDF5Writer hdf5Writer = HDF5Factory.open(hdf5Path);
 
 		final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);
-		final double[] boundsMin = reorder(n5.getAttribute(group, "boundsMin", double[].class));
-		final double[] boundsMax = reorder(n5.getAttribute(group, "boundsMax", double[].class));
+		final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
+		final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
 		hdf5Writer.object().createGroup(group);
 		H5Utils.saveAttribute(boundsMin, hdf5Writer, group, "boundsMin");
@@ -345,26 +345,30 @@ public class ExportSlabSeriesTransformsH5 {
 
 		for (int i = 0; i < topOffsets.size(); ++i) {
 
-			final String topDataset = group + "/" + transformDatasetNames[i * 2];
-			final String botDataset = group + "/" + transformDatasetNames[i * 2 + 1];
+			final String topDatasetName = group + "/" + transformDatasetNames[i * 2];
+			final String botDatasetName = group + "/" + transformDatasetNames[i * 2 + 1];
 
-			final RandomAccessibleInterval<DoubleType> topPositionField = N5Utils.open(n5, topDataset);
-			final RandomAccessibleInterval<DoubleType> botPositionField = N5Utils.open(n5, botDataset);
+			System.out.printf( "Exporting '%s' and '%s'.", topDatasetName, botDatasetName );
 
-			final DatasetAttributes topAttributes = n5.getDatasetAttributes(topDataset);
-			final DatasetAttributes botAttributes = n5.getDatasetAttributes(botDataset);
+			final RandomAccessibleInterval<DoubleType> topPositionField = N5Utils.open(n5, topDatasetName);
+			final RandomAccessibleInterval<DoubleType> botPositionField = N5Utils.open(n5, botDatasetName);
 
-			saveDouble(topPositionField, hdf5Writer, topDataset, Util.reorder(topAttributes.getBlockSize()));
-			saveDouble(botPositionField, hdf5Writer, botDataset, Util.reorder(botAttributes.getBlockSize()));
+			final DatasetAttributes topAttributes = n5.getDatasetAttributes(topDatasetName);
+			final DatasetAttributes botAttributes = n5.getDatasetAttributes(botDatasetName);
 
-			saveUint64Attribute(topOffsets.get(i), hdf5Writer, topDataset, "faceOffset");
-			saveUint64Attribute(botOffsets.get(i), hdf5Writer, botDataset, "faceOffset");
+			saveDouble(topPositionField, hdf5Writer, topDatasetName, topAttributes.getBlockSize());
+			saveDouble(botPositionField, hdf5Writer, botDatasetName, botAttributes.getBlockSize());
 
-			final double topScale = n5.getAttribute(topDataset, "scale", double.class);
-			final double botScale = n5.getAttribute(botDataset, "scale", double.class);
+			saveUint64Attribute(topOffsets.get(i), hdf5Writer, topDatasetName, "faceOffset");
+			saveUint64Attribute(botOffsets.get(i), hdf5Writer, botDatasetName, "faceOffset");
 
-			saveFloat64Attribute(topScale, hdf5Writer, topDataset, "scale");
-			saveFloat64Attribute(botScale, hdf5Writer, botDataset, "scale");
+			final double topScale = n5.getAttribute(topDatasetName, "scale", double.class);
+			final double botScale = n5.getAttribute(botDatasetName, "scale", double.class);
+
+			saveFloat64Attribute(topScale, hdf5Writer, topDatasetName, "scale");
+			saveFloat64Attribute(botScale, hdf5Writer, botDatasetName, "scale");
 		}
+
+		hdf5Writer.close();
 	}
 }
