@@ -345,10 +345,12 @@ public class ExportSlabSeriesTransformsH5 {
 
 		for (int i = 0; i < topOffsets.size(); ++i) {
 
+			final long t = System.nanoTime();
+
 			final String topDatasetName = group + "/" + transformDatasetNames[i * 2];
 			final String botDatasetName = group + "/" + transformDatasetNames[i * 2 + 1];
 
-			System.out.printf( "Exporting '%s' and '%s'.", topDatasetName, botDatasetName );
+			System.out.printf( "Exporting '%s' and '%s' ...", topDatasetName, botDatasetName );
 
 			final RandomAccessibleInterval<DoubleType> topPositionField = N5Utils.open(n5, topDatasetName);
 			final RandomAccessibleInterval<DoubleType> botPositionField = N5Utils.open(n5, botDatasetName);
@@ -367,6 +369,9 @@ public class ExportSlabSeriesTransformsH5 {
 
 			saveFloat64Attribute(topScale, hdf5Writer, topDatasetName, "scale");
 			saveFloat64Attribute(botScale, hdf5Writer, botDatasetName, "scale");
+
+			System.out.printf( " took %.2fs.", (System.nanoTime() - t) / 1000000000.0 );
+			System.out.println();
 		}
 
 		hdf5Writer.close();
