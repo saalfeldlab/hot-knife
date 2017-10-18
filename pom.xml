@@ -38,11 +38,6 @@
 			<artifactId>gson</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>mpicbg</groupId>
-			<artifactId>saalfeld_experiments</artifactId>
-			<version>0.1.0-SNAPSHOT</version>
-		</dependency>
-		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>bigdataviewer-core</artifactId>
 			<version>4.3.0</version>

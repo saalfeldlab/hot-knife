@@ -25,12 +25,12 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.janelia.saalfeldlab.hotknife.ConsensusFilter;
+import org.janelia.saalfeldlab.hotknife.PMCCScaleSpaceBlockFlow;
+import org.janelia.saalfeldlab.hotknife.ValueToNoise;
 
 import ij.process.FloatProcessor;
-import ini.trakem2.imaging.filters.ValueToNoise;
 import mpicbg.ij.FeatureTransform;
 import mpicbg.ij.SIFT;
-import mpicbg.ij.plugin.PMCCScaleSpaceBlockFlow;
 import mpicbg.imagefeatures.Feature;
 import mpicbg.imagefeatures.FloatArray2DSIFT;
 import mpicbg.models.IllDefinedDataPointsException;
