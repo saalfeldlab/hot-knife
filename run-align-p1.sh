@@ -6,7 +6,7 @@ ABS_DIR=`readlink -f "$OWN_DIR"`
 FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh
 JAR=$PWD/hot-knife-0.0.2-SNAPSHOT.jar
 CLASS=org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFT
-N_NODES=20
+N_NODES=10
 
 N5_PATH='/nrs/flyem/data/tmp/Z0115-22.n5'
 N5_GROUP_INPUT='/align-0'
