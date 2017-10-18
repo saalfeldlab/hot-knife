@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.janelia.saalfeldlab.PositionFieldTransform;
 import org.janelia.saalfeldlab.hotknife.ConsensusFilter;
 
 import ij.process.FloatProcessor;
@@ -40,6 +39,7 @@ import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.realtransform.PositionFieldTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Translation2D;
