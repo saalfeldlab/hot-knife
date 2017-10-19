@@ -534,7 +534,7 @@ public class RenderSlab {
 //		}
 //		System.out.println("Done.");
 
-	private static double getLambda(double current, double first, double last) {
+	private static double getLambda(final double current, final double first, final double last) {
 		return Math.min(1.0, Math.max(0.0, 1.0 - (current - first) / (last - first)));
 	}
 }
