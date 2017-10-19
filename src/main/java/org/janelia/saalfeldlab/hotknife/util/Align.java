@@ -24,14 +24,13 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.janelia.saalfeldlab.PositionFieldTransform;
 import org.janelia.saalfeldlab.hotknife.ConsensusFilter;
+import org.janelia.saalfeldlab.hotknife.PMCCScaleSpaceBlockFlow;
+import org.janelia.saalfeldlab.hotknife.ValueToNoise;
 
 import ij.process.FloatProcessor;
-import ini.trakem2.imaging.filters.ValueToNoise;
 import mpicbg.ij.FeatureTransform;
 import mpicbg.ij.SIFT;
-import mpicbg.ij.plugin.PMCCScaleSpaceBlockFlow;
 import mpicbg.imagefeatures.Feature;
 import mpicbg.imagefeatures.FloatArray2DSIFT;
 import mpicbg.models.IllDefinedDataPointsException;
@@ -40,6 +39,7 @@ import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.realtransform.PositionFieldTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Translation2D;
