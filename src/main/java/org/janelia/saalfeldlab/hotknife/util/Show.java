@@ -27,6 +27,7 @@ import static net.imglib2.cache.img.PrimitiveType.SHORT;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.janelia.saalfeldlab.n5.N5;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -47,11 +48,17 @@ import net.imglib2.cache.img.LoadedCellCacheLoader;
 import net.imglib2.cache.img.RandomAccessibleCacheLoader;
 import net.imglib2.cache.img.ReadOnlyCachedCellImgFactory;
 import net.imglib2.cache.ref.SoftRefLoaderCache;
+import net.imglib2.converter.Converter;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.array.ArrayDataAccess;
 import net.imglib2.img.cell.Cell;
 import net.imglib2.img.cell.CellGrid;
+import net.imglib2.position.RealPositionRealRandomAccessible;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformRealRandomAccessible;
 import net.imglib2.type.NativeType;
+import net.imglib2.type.Type;
+import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.integer.GenericByteType;
 import net.imglib2.type.numeric.integer.GenericIntType;
@@ -62,6 +69,7 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
+import net.imglib2.view.composite.RealComposite;
 
 /**
  *
@@ -210,7 +218,7 @@ public class Show {
 
 		final CachedCellImg<T, ?> img;
 		final Cache<Long, Cell<?>> cache =
-				(Cache)new SoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, VOLATILE));
+				new SoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, VOLATILE));
 
 		if (GenericByteType.class.isInstance(type)) {
 			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(BYTE, VOLATILE));
@@ -229,5 +237,95 @@ public class Show {
 		}
 
 		return img;
+	}
+
+	public static final int algebraic2ARGB(final double xs, final double ys) {
+
+		final double a = Math.sqrt(xs * xs + ys * ys);
+		if (a == 0.0)
+			return 0;
+
+		double o = (Math.atan2(xs / a, ys / a) + Math.PI) / Math.PI * 3;
+
+		final double r, g, b;
+
+		if (o < 3) r = Math.min(1.0, Math.max(0.0, 2.0 - o)) * a;
+		else r = Math.min(1.0, Math.max(0.0, o - 4.0)) * a;
+
+		o += 2;
+		if (o >= 6) o -= 6;
+
+		if (o < 3) g = Math.min(1.0, Math.max(0.0, 2.0 - o)) * a;
+		else g = Math.min(1.0, Math.max(0.0, o - 4.0)) * a;
+
+		o += 2;
+		if (o >= 6) o -= 6;
+
+		if (o < 3) b = Math.min(1.0, Math.max(0.0, 2.0 - o)) * a;
+		else b = Math.min(1.0, Math.max(0.0, o - 4.0)) * a;
+
+		return ((((int) (r * 255) << 8) | (int) (g * 255)) << 8) | (int) (b * 255);
+	}
+
+	/**
+	 * Compare two {@link RealTransform RealTransforms} over an
+	 * {@link Interval}.  Evaluation into a target {@link Type T} is calculated
+	 * by a {@link Converter} whose input is a {@link RealComposite} of
+	 * {@link DoubleType} that contains the interleaved transformed positions
+	 * at the raster location, i.e. (t<sub>1</sub>(x)<sub>0</sub>,
+	 * t<sub>2</sub>(x)<sub>0</sub>, t<sub>1</sub>(x)<sub>1</sub>,
+	 * t<sub>2</sub>(x)<sub>1</sub>, t<sub>1</sub>(x)<sub>2</sub>,
+	 * t<sub>2</sub>(x)<sub>2</sub>, ...)
+	 *
+	 * @param transform1
+	 * @param transform2
+	 * @param interval
+	 * @param converter
+	 * @param typeSupplier
+	 * @return
+	 */
+	public static final <T extends Type<T>> RandomAccessibleInterval<T> compareTransforms(
+			final RealTransform transform1,
+			final RealTransform transform2,
+			final Interval interval,
+			final Converter<? super RealComposite<DoubleType>, ? super T> converter,
+			final Supplier<T> typeSupplier) {
+
+		final int n = interval.numDimensions();
+
+		final ArrayList<RandomAccessibleInterval<DoubleType>> axes = new ArrayList<>();
+		for (int d = 0; d < n; ++d) {
+
+			RealPositionRealRandomAccessible realPositions = new RealPositionRealRandomAccessible(n, d);
+			RealTransformRealRandomAccessible<DoubleType, ?> transformedRealPositions1 = new RealTransformRealRandomAccessible<>(realPositions, transform1);
+			RealTransformRealRandomAccessible<DoubleType, ?> transformedRealPositions2 = new RealTransformRealRandomAccessible<>(realPositions, transform2);
+
+			axes.add(Views.interval(Views.raster(transformedRealPositions1), interval));
+			axes.add(Views.interval(Views.raster(transformedRealPositions2), interval));
+		}
+
+		return Converters.convert(
+				Views.collapseReal(Views.stack(axes)),
+				converter,
+				typeSupplier.get());
+	}
+
+	public static final RandomAccessibleInterval<ARGBType> compare2DTransforms(
+			final RealTransform transform1,
+			final RealTransform transform2,
+			final Interval interval,
+			final double max) {
+
+		final double maxFactor = 1.0 / max;
+		return compareTransforms(
+				transform1,
+				transform2,
+				interval,
+				(a, b) -> {
+					final double dx = (a.get(0).get() - a.get(1).get()) * maxFactor;
+					final double dy = (a.get(2).get() - a.get(3).get()) * maxFactor;
+					b.set(algebraic2ARGB(dx, dy));
+				},
+				ARGBType::new);
 	}
 }
