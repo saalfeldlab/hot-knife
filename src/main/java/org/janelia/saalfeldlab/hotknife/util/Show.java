@@ -239,7 +239,7 @@ public class Show {
 		return img;
 	}
 
-	public static final int algebraic2ARGB(final double xs, final double ys) {
+	public static final int algebraic2ARGB(final double xs, final double ys, final double lambda) {
 
 		final double a = Math.sqrt(xs * xs + ys * ys);
 		if (a == 0.0)
@@ -264,7 +264,10 @@ public class Show {
 		if (o < 3) b = Math.min(1.0, Math.max(0.0, 2.0 - o)) * a;
 		else b = Math.min(1.0, Math.max(0.0, o - 4.0)) * a;
 
-		return ((((int) (r * 255) << 8) | (int) (g * 255)) << 8) | (int) (b * 255);
+		return (((
+				(int)(Math.pow(r, lambda) * 255) << 8) |
+				(int)(Math.pow(g, lambda) * 255)) << 8) |
+				(int)(Math.pow(b, lambda) * 255);
 	}
 
 	/**
@@ -296,9 +299,9 @@ public class Show {
 		final ArrayList<RandomAccessibleInterval<DoubleType>> axes = new ArrayList<>();
 		for (int d = 0; d < n; ++d) {
 
-			RealPositionRealRandomAccessible realPositions = new RealPositionRealRandomAccessible(n, d);
-			RealTransformRealRandomAccessible<DoubleType, ?> transformedRealPositions1 = new RealTransformRealRandomAccessible<>(realPositions, transform1);
-			RealTransformRealRandomAccessible<DoubleType, ?> transformedRealPositions2 = new RealTransformRealRandomAccessible<>(realPositions, transform2);
+			final RealPositionRealRandomAccessible realPositions = new RealPositionRealRandomAccessible(n, d);
+			final RealTransformRealRandomAccessible<DoubleType, ?> transformedRealPositions1 = new RealTransformRealRandomAccessible<>(realPositions, transform1);
+			final RealTransformRealRandomAccessible<DoubleType, ?> transformedRealPositions2 = new RealTransformRealRandomAccessible<>(realPositions, transform2);
 
 			axes.add(Views.interval(Views.raster(transformedRealPositions1), interval));
 			axes.add(Views.interval(Views.raster(transformedRealPositions2), interval));
@@ -314,7 +317,8 @@ public class Show {
 			final RealTransform transform1,
 			final RealTransform transform2,
 			final Interval interval,
-			final double max) {
+			final double max,
+			final double lambda) {
 
 		final double maxFactor = 1.0 / max;
 		return compareTransforms(
@@ -324,8 +328,31 @@ public class Show {
 				(a, b) -> {
 					final double dx = (a.get(0).get() - a.get(1).get()) * maxFactor;
 					final double dy = (a.get(2).get() - a.get(3).get()) * maxFactor;
-					b.set(algebraic2ARGB(dx, dy));
+					b.set(algebraic2ARGB(dx, dy, lambda));
 				},
 				ARGBType::new);
+	}
+
+	public static final RandomAccessibleInterval<ARGBType> compareTransformStack(
+			final List<? extends RealTransform> transforms1,
+			final List<? extends RealTransform> transforms2,
+			final Interval targetInterval,
+			final double max,
+			final double lambda,
+			final int scaleIndex) throws IOException {
+
+		final ArrayList<RandomAccessibleInterval<ARGBType>> comparisonIntervals = new ArrayList<>();
+		for (int i = 0; i < transforms1.size(); ++i) {
+
+			comparisonIntervals.add(
+					compare2DTransforms(
+							Transform.createScaledRealTransform(transforms1.get(i), scaleIndex),
+							Transform.createScaledRealTransform(transforms2.get(i), scaleIndex),
+							targetInterval,
+							max / (1 << scaleIndex),
+							lambda));
+		}
+
+		return Views.stack(comparisonIntervals);
 	}
 }
