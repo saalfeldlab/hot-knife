@@ -76,6 +76,9 @@ public class SparkConvertTiffSeriesToN5 {
 		private final String blockSizeString = null;
 		private final int[] blockSize;
 
+		@Option(name = "--firstSlice", required = false, usage = "first slice index (if not 0)")
+		private long firstSliceIndex = 0;
+
 		private final long[] sourceSize;
 
 		public Options(final String[] args) {
@@ -88,8 +91,13 @@ public class SparkConvertTiffSeriesToN5 {
 			try {
 				parser.parseArgument(args);
 
+				if (minString == null)
+					Arrays.fill(min, 0);
+				else
+					parseCSLongArray(minString, min);
+
 				/* width and height */
-				final ImagePlus firstSlice = new Opener().openImage(String.format(urlFormat, 0));
+				final ImagePlus firstSlice = new Opener().openImage(String.format(urlFormat, firstSliceIndex + min[2]));
 				sourceSize[0] = firstSlice.getWidth();
 				sourceSize[1] = firstSlice.getHeight();
 
@@ -97,11 +105,6 @@ public class SparkConvertTiffSeriesToN5 {
 				final File[] tiffs = new File(urlFormat).getParentFile().listFiles(
 						(dir, file) -> file.endsWith(".tif"));
 				sourceSize[2] = tiffs.length;
-
-				if (minString == null)
-					Arrays.fill(min, 0);
-				else
-					parseCSLongArray(minString, min);
 
 				if (sizeString == null) {
 					size[0] = sourceSize[0] - min[0];
@@ -176,6 +179,13 @@ public class SparkConvertTiffSeriesToN5 {
 		public long[] getSourceSize() {
 			return sourceSize;
 		}
+
+		/**
+		 * @return the firstSlice
+		 */
+		public long getFirstSliceIndex() {
+			return firstSliceIndex;
+		}
 	}
 
 
@@ -186,7 +196,8 @@ public class SparkConvertTiffSeriesToN5 {
 			final String datasetName,
 			final long[] min,
 			final long[] size,
-			final int[] blockSize) throws IOException {
+			final int[] blockSize,
+			final long firstSliceIndex) throws IOException {
 
 		final N5Writer n5 = N5.openFSWriter(n5Path);
 
@@ -208,7 +219,7 @@ public class SparkConvertTiffSeriesToN5 {
 
 		rddSlices.foreach(sliceIndex -> {
 
-			final ImagePlus imp = IJ.openImage(String.format(urlFormat, sliceIndex));
+			final ImagePlus imp = IJ.openImage(String.format(urlFormat, sliceIndex + firstSliceIndex));
 			if (imp == null)
 				return;
 
@@ -308,7 +319,8 @@ public class SparkConvertTiffSeriesToN5 {
         		slicesDatasetName,
         		options.getMin(),
         		options.getSize(),
-        		options.getBlockSize());
+        		options.getBlockSize(),
+        		options.getFirstSliceIndex());
 
 		/* re-block */
 		reSave(

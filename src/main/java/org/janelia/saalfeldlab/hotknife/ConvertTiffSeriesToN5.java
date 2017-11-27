@@ -79,7 +79,7 @@ public class ConvertTiffSeriesToN5 {
 				(dir, file) -> file.endsWith(".tif"));
 		final int depth = tiffs.length;
 
-		final IJTiffImageLoader sourceLoader = new IJTiffImageLoader(
+		final IJImageLoader sourceLoader = new IJImageLoader(
 				width,
 				height,
 				depth,
@@ -87,7 +87,8 @@ public class ConvertTiffSeriesToN5 {
 				1,
 				urlFormat,
 				width,
-				height);
+				height,
+				0);
 
 		final RandomAccessibleInterval<UnsignedByteType> source = sourceLoader.getImage(0);
 
