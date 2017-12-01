@@ -29,6 +29,7 @@ import org.kohsuke.args4j.Option;
 
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
+import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import net.imglib2.RandomAccessibleInterval;
@@ -106,11 +107,13 @@ public class ViewN5 {
 		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType> source = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, options.getDatasetName());
 
-		BdvFunctions.<VolatileUnsignedByteType>show(
+		final BdvStackSource<VolatileUnsignedByteType> bdv = BdvFunctions.<VolatileUnsignedByteType>show(
 				VolatileViews.wrapAsVolatile(
 						source,
 						queue),
 				options.getN5Path(),
 				source.numDimensions() == 2 ? Bdv.options().is2D() : Bdv.options());
+
+		bdv.setDisplayRange(0,  255);
 	}
 }
