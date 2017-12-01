@@ -1,6 +1,5 @@
 package org.janelia.saalfeldlab.hotknife;
 
-import java.util.Map;
 import java.util.Random;
 
 import ij.process.ColorProcessor;
@@ -59,7 +58,6 @@ public class ValueToNoise
 		}
 	}
 
-
 	protected double value = Double.NaN, min = 0, max = 255;
 
 	public ValueToNoise() {}
@@ -80,17 +78,6 @@ public class ValueToNoise
 		this.max = max;
 	}
 
-	public ValueToNoise(final Map<String,String> params) {
-		try {
-			set(
-					Double.parseDouble(params.get("value")),
-					Double.parseDouble(params.get("min")),
-					Double.parseDouble(params.get("max")));
-		} catch (final NumberFormatException nfe) {
-			throw new IllegalArgumentException("Could not create ValueToNoise filter!", nfe);
-		}
-	}
-
 	public ImageProcessor process(final ImageProcessor ip) {
 		try {
 			if (FloatProcessor.class.isInstance(ip)) {
@@ -108,18 +95,5 @@ public class ValueToNoise
 			e.printStackTrace();
 		}
 		return ip;
-	}
-
-	@Override
-	public boolean equals(final Object o) {
-		if (null == o) return false;
-		if (o.getClass() == ValueToNoise.class) {
-			final ValueToNoise c = (ValueToNoise)o;
-			return
-					(Double.isNaN(value) && Double.isNaN(c.value) || value == c.value) &&
-					min == c.min &&
-					max == c.max;
-		}
-		return false;
 	}
 }
