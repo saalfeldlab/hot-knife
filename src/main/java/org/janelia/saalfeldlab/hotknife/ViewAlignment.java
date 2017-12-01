@@ -33,8 +33,12 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import bdv.util.Bdv;
+import bdv.util.volatiles.SharedQueue;
+import bdv.util.volatiles.VolatileViews;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.cache.volatiles.CacheHints;
+import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
 
@@ -112,6 +116,10 @@ public class ViewAlignment {
 
 		Bdv bdv = null;
 
+		final int numProc = Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 );
+		final SharedQueue queue = new SharedQueue( numProc );
+		final CacheHints cacheHints = new CacheHints( LoadingStrategy.VOLATILE, 0, true );
+
 		for (final String group : options.getGroups()) {
 
 			final String[] datasetNames = n5.getAttribute(group, "datasets", String[].class);
@@ -125,8 +133,8 @@ public class ViewAlignment {
 						n5,
 						group + "/" + transformDatasetNames[i]);
 			}
-
 			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
+					
 					options.getN5Path(),
 					Arrays.asList(datasetNames),
 					showScaleIndex,
@@ -136,7 +144,10 @@ public class ViewAlignment {
 							Grid.ceilScaled(boundsMax, showScale)));
 
 			bdv = Show.transformedStack(
-					stack,
+					(RandomAccessibleInterval)VolatileViews.wrapAsVolatile(
+							Show.wrapAsVolatileCachedCellImg(stack, new int[]{256, 256, 26}),
+							queue,
+							cacheHints),
 					bdv);
 
 //			ImageJFunctions.show(stack, group);
