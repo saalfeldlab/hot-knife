@@ -6,15 +6,14 @@ ABS_DIR=`readlink -f "$OWN_DIR"`
 FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh
 JAR=$PWD/hot-knife-0.0.2-SNAPSHOT.jar # this jar must be accessible from the cluster
 CLASS=org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeriesToN5
-N_NODES=20
+N_NODES=10
 
-URLFORMAT='/nrs/saalfeld/sample_E/%04d.jpg'
-N5PATH='/nrs/saalfeld/sample_E/sample_E.n5'
-N5DATASET='/volumes/raw'
-MIN='0,0,0'
-SIZE='-1,-1,1875'
-BLOCKSIZE='128,128,13'
-FIRSTSLICE='3955'
+URLFORMAT='/nrs/flyem/data/Z0115-22_Sec30/flatten/flattened/zcorr.%05d-flattened.tif'
+N5PATH='/nrs/flyem/data/tmp/Z0115-22.n5'
+N5DATASET='slab-30/raw/s0'
+MIN='0,1147,0'
+SIZE='0,2668,0'
+BLOCKSIZE='128,128,128'
 
 ARGV="\
 --urlFormat '$URLFORMAT' \
@@ -22,7 +21,6 @@ ARGV="\
 --n5Dataset '$N5DATASET' \
 --min '$MIN' \
 --size '$SIZE' \
---blockSize '$BLOCKSIZE' \
---firstSlice '$FIRSTSLICE'"
+--blockSize '$BLOCKSIZE'"
 
 TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
