@@ -177,8 +177,8 @@ public class ViewAlignedSlabSeries {
 					new ClippedTransitionRealTransform(
 							top,
 							bot,
-							0,
-							botOffsets.get(i) - topOffsets.get(i));
+							topOffsets.get(i),
+							botOffsets.get(i));
 
 			final FinalInterval cropInterval = new FinalInterval(
 					new long[] {fMin[0], fMin[1], topOffsets.get(i)},
