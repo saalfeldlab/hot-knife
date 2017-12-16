@@ -25,6 +25,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.janelia.saalfeldlab.hotknife.ConsensusFilter;
+import org.janelia.saalfeldlab.hotknife.NormalizeLocalContrast;
 import org.janelia.saalfeldlab.hotknife.PMCCScaleSpaceBlockFlow;
 import org.janelia.saalfeldlab.hotknife.ValueToNoise;
 
@@ -75,9 +76,12 @@ public class Align {
 
 		final ValueToNoise filter1 = new ValueToNoise(0, 0, 255);
 		final ValueToNoise filter2 = new ValueToNoise(255, 0, 255);
+		final NormalizeLocalContrast filter3 = new NormalizeLocalContrast(256, 256, 3, true, true);
 
 		ip = filter1.process(ip).convertToFloatProcessor();
 		ip = filter2.process(ip).convertToFloatProcessor();
+		ip.setMinAndMax(0, 255);
+		ip = filter3.process(ip).convertToFloatProcessor();
 
 		return ip;
 	}
