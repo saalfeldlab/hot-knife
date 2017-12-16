@@ -40,6 +40,7 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.position.RealPositionRealRandomAccessible;
 import net.imglib2.realtransform.AffineTransform2D;
@@ -141,7 +142,7 @@ public class Transform {
 				new RealTransformRandomAccessible<>(
 						Views.interpolate(
 								Views.extendValue(source, background),
-								new NLinearInterpolatorFactory<>()),
+								new ClampingNLinearInterpolatorFactory<>()),
 						transformFromSource),
 				targetInterval);
 	}
