@@ -5,16 +5,17 @@ ABS_DIR=`readlink -f "$OWN_DIR"`
 
 FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh
 JAR=$PWD/hot-knife-0.0.2-SNAPSHOT.jar
-CLASS=org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow
+CLASS=org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFT
 N_NODES=60
 
 N5_PATH='/nrs/flyem/data/tmp/Z0115-22.n5'
 N5_GROUP_INPUT='/align-5'
 N5_GROUP_OUTPUT='/align-6'
 SCALE_INDEX='2'
-STEP_SIZE='256'
-MAX_EPSILON='3'
-SIGMA='30'
+STEP_SIZE='512'
+LAMBDA_FILTER='0.25'
+LAMBDA_MODEL='0.01'
+MAX_EPSILON='20'
 
 ARGV="\
 --n5Path '$N5_PATH' \
@@ -22,8 +23,9 @@ ARGV="\
 --n5GroupOutput '$N5_GROUP_OUTPUT' \
 --scaleIndex '$SCALE_INDEX' \
 --stepSize '$STEP_SIZE' \
---maxEpsilon '$MAX_EPSILON' \
---sigma '$SIGMA'"
+--lambdaFilter '$LAMBDA_FILTER' \
+--lambdaModel '$LAMBDA_MODEL' \
+--maxEpsilon '$MAX_EPSILON'"
 
 TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
 

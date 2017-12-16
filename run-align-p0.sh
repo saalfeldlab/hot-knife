@@ -31,7 +31,17 @@ ARGV="\
 -d '/slab-28/top/face' \
 -d '/slab-28/bot/face' \
 -d '/slab-29/top/face' \
--d '/slab-29/bot/face'"
+-d '/slab-29/bot/face' \
+-d '/slab-30/top/face' \
+-d '/slab-30/bot/face' \
+-d '/slab-31/top/face' \
+-d '/slab-31/bot/face' \
+-d '/slab-32/top/face' \
+-d '/slab-32/bot/face' \
+-d '/slab-33/top/face' \
+-d '/slab-33/bot/face' \
+-d '/slab-34/top/face' \
+-d '/slab-34/bot/face'"
 
 TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
 
