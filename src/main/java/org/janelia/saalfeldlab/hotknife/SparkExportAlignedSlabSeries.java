@@ -182,53 +182,52 @@ public class SparkExportAlignedSlabSeries {
 		long zOffset = 0;
 		for (int i = 0; i < datasetNames.size(); ++i) {
 
-			final RealTransform top = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2]);
-			final RealTransform bot = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2 + 1]);
-			final RealTransform transition =
-					new ClippedTransitionRealTransform(
-							top,
-							bot,
-							topOffsets.get(i),
-							botOffsets.get(i));
+			final long topOffset = topOffsets.get(i);
+			final long botOffset = botOffsets.get(i);
+			final long depth = botOffset - topOffset + 1;
 
-			final long[] cropMin = new long[] {min[0], min[1], topOffsets.get(i)};
-			final long[] cropMax = new long[] {max[0], max[1], botOffsets.get(i)};
+			/* do not include blocks that do not intersect with the gridBlock */
+			if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
 
-			final FinalInterval cropInterval = new FinalInterval(
-					cropMin,
-					cropMax);
+				final RealTransform top = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2]);
+				final RealTransform bot = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2 + 1]);
+				final RealTransform transition =
+						new ClippedTransitionRealTransform(
+								top,
+								bot,
+								topOffsets.get(i),
+								botOffsets.get(i));
 
-			final String datasetName = datasetNames.get(i);
-			final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Input, datasetName);
+				final long[] cropMin = new long[] {min[0], min[1], topOffset};
+				final long[] cropMax = new long[] {max[0], max[1], botOffset};
 
-			final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
-				Views.permute(source, 1, 2),
-				cropInterval,
-				transition,
-				new UnsignedByteType(0));
+				final FinalInterval cropInterval = new FinalInterval(
+						cropMin,
+						cropMax);
 
-			final IntervalView<UnsignedByteType> extendedTransformedSource =
-					Views.interval(
-						Views.extendValue(
-								Views.translate(
-										Views.zeroMin(transformedSource),
-										0, 0, zOffset),
-								new UnsignedByteType(0)),
-						new FinalInterval(min, max));
+				final String datasetName = datasetNames.get(i);
+				final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Input, datasetName);
 
-			sources.add(extendedTransformedSource);
+				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
+					Views.permute(source, 1, 2),
+					cropInterval,
+					transition,
+					new UnsignedByteType(0));
 
-			zOffset += botOffsets.get(i) - topOffsets.get(i) + 1;
+				final IntervalView<UnsignedByteType> extendedTransformedSource =
+						Views.interval(
+							Views.extendValue(
+									Views.translate(
+											Views.zeroMin(transformedSource),
+											0, 0, zOffset),
+									new UnsignedByteType(0)),
+							new FinalInterval(min, max));
+
+				sources.add(extendedTransformedSource);
+			}
+
+			zOffset += depth;
 		}
-
-		final RandomAccessibleInterval<UnsignedByteType> composite = Converters.<UnsignedByteType, UnsignedByteType>composeReal(
-				sources,
-				(c, target) -> {
-					target.set(0);
-					for (int i = 0; i < sources.size(); ++i)
-						target.add(c.get(i));
-				},
-				UnsignedByteType::new);
 
 		final FinalInterval gridBlockInterval = Intervals.createMinSize(
 				gridBlock[0][0],
@@ -239,14 +238,38 @@ public class SparkExportAlignedSlabSeries {
 				gridBlock[1][1],
 				gridBlock[1][2]);
 
-		N5Utils.saveBlock(
-				Views.interval(
-						composite,
-						gridBlockInterval),
-				n5Output,
-				datasetNameOutput,
-				new DatasetAttributes(dimensions, blockSize, DataType.UINT8, CompressionType.GZIP),
-				gridBlock[2]);
+		switch (sources.size()) {
+		case 0:
+			break;
+		case 1:
+			N5Utils.saveBlock(
+					Views.interval(
+							sources.get(0),
+							gridBlockInterval),
+					n5Output,
+					datasetNameOutput,
+					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, CompressionType.GZIP),
+					gridBlock[2]);
+			break;
+		default:
+			final RandomAccessibleInterval<UnsignedByteType> composite = Converters.<UnsignedByteType, UnsignedByteType>composeReal(
+					sources,
+					(c, target) -> {
+						target.set(0);
+						for (int i = 0; i < sources.size(); ++i)
+							target.add(c.get(i));
+					},
+					UnsignedByteType::new);
+			N5Utils.saveBlock(
+					Views.interval(
+							composite,
+							gridBlockInterval),
+					n5Output,
+					datasetNameOutput,
+					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, CompressionType.GZIP),
+					gridBlock[2]);
+			break;
+		}
 	}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
