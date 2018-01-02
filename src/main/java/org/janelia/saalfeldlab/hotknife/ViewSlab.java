@@ -120,7 +120,8 @@ public class ViewSlab {
 						new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
 						group);
 
-		final BdvOptions bdvOptions = Bdv.options().screenScales(new double[] {1, 0.5}).numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors() / 4));
+		final BdvOptions bdvOptions = Bdv.options().screenScales(new double[] {1, 0.5}).numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors() / 5));
+		//final BdvOptions bdvOptions = Bdv.options().numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors() / 5));
 
 		bdv = Show.mipmapSource(mipmapSource.asVolatile(queue), bdv, bdvOptions);
 	}
