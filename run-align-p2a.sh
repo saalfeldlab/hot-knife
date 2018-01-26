@@ -10,7 +10,7 @@ N_NODES=20
 
 N5_PATH='/nrs/flyem/data/tmp/Z0115-22.n5'
 N5_GROUP_INPUT='/align-1'
-N5_GROUP_OUTPUT='/align-2'
+N5_GROUP_OUTPUT='/align-2a'
 SCALE_INDEX='4'
 STEP_SIZE='400'
 LAMBDA_FILTER='0.1'

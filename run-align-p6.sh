@@ -4,8 +4,8 @@ OWN_DIR=`dirname "${BASH_SOURCE[0]}"`
 ABS_DIR=`readlink -f "$OWN_DIR"`
 
 FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh
-JAR=$PWD/hot-knife-0.0.2-SNAPSHOT.jar
-CLASS=org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFT
+JAR=$PWD/hot-knife-0.0.3-SNAPSHOT.jar
+CLASS=org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage
 N_NODES=60
 
 N5_PATH='/nrs/flyem/data/tmp/Z0115-22.n5'
