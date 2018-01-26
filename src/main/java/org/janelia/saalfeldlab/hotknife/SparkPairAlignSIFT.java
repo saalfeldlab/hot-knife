@@ -31,10 +31,11 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -211,7 +212,7 @@ public class SparkPairAlignSIFT {
 		final JavaPairRDD<long[], double[]> affines =
 				offsets.mapToPair(offset -> {
 
-					final N5Reader n5Reader = N5.openFSReader(n5Path);
+					final N5Reader n5Reader = new N5FSReader(n5Path);
 					final RandomAccessibleInterval<FloatType> a = N5Utils.open(n5Reader, datasetA + "/s" + scaleIndex);
 					final RandomAccessibleInterval<FloatType> b = N5Utils.open(n5Reader, datasetB + "/s" + scaleIndex);
 
@@ -302,7 +303,7 @@ public class SparkPairAlignSIFT {
 
 		final JavaRDD<long[]> gridCells = affines.map(
 				t -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final RealTransform priorTransform = Transform.loadScaledTransform(
 							n5,
 							priorTransformDatasetName);
@@ -336,7 +337,7 @@ public class SparkPairAlignSIFT {
 
 
 	/**
-	 * This is fo 2D transformation fields only
+	 * This is for 2D transformation fields only
 	 *
 	 * @param affines
 	 * @param n5Path
@@ -357,7 +358,7 @@ public class SparkPairAlignSIFT {
 			final int stepSize) throws IOException {
 
 		final DatasetAttributes attributes = Transform.createScaledTransformDataset(
-				N5.openFSWriter(n5Path),
+				new N5FSWriter(n5Path),
 				transformDatasetBaseName,
 				boundsMin,
 				boundsMax,
@@ -368,7 +369,7 @@ public class SparkPairAlignSIFT {
 
 		final JavaRDD<long[]> mappedGridCells = gridCells.map(
 				cell -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final long[] gridOffset = Grid.gridCell(
 							cell,
 							Grid.floorScaled(boundsMin, transformScale),
@@ -428,7 +429,7 @@ public class SparkPairAlignSIFT {
 							dimensions,
 							new int[]{stepSize, stepSize, 2},
 							DataType.FLOAT64,
-							CompressionType.GZIP);
+							new GzipCompression());
 					N5Utils.saveBlock(tt, n5, transformDatasetBaseName, targetAttributes, Arrays.copyOf(gridOffset, 3));
 
 					return cell;
@@ -449,7 +450,7 @@ public class SparkPairAlignSIFT {
 
 		gridCells.foreach(
 				cell -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final long[] gridOffset = Grid.gridCell(
 							cell,
 							Grid.floorScaled(boundsMin, transformScale),
@@ -473,7 +474,7 @@ public class SparkPairAlignSIFT {
 
 		rddDatasetNames.foreach(
 				tuple -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final RealTransform transform = Transform.loadScaledTransform(n5, tuple._1());
 					final double[] boundsMin = n5.getAttribute(tuple._1(), "boundsMin", double[].class);
 					final double[] boundsMax = n5.getAttribute(tuple._1(), "boundsMax", double[].class);
@@ -490,7 +491,7 @@ public class SparkPairAlignSIFT {
 
 
 	/**
-	 * Align a pair of transformed N5 sections usign SIFT and affine models on
+	 * Align a pair of transformed N5 sections using SIFT and affine models on
 	 * a grid of 50% overlapping cells.  The resulting alignment is the
 	 * composition of the prior transform and the interpolant over the grid.
 	 * For grid cells, that do not return an alignment model, the prior
@@ -599,7 +600,7 @@ public class SparkPairAlignSIFT {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
+		final N5Writer n5 = new N5FSWriter(options.getN5Path());
 		final String[] datasetNames = n5.getAttribute(options.getInGroup(), "datasets", String[].class);
 		final String[] transformDatasetNames = n5.getAttribute(options.getInGroup(), "transforms", String[].class);
 		final double[] boundsMin = n5.getAttribute(options.getInGroup(), "boundsMin", double[].class);

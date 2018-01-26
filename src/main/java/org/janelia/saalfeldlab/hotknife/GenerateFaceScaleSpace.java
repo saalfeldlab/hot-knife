@@ -25,11 +25,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
@@ -121,7 +121,7 @@ public class GenerateFaceScaleSpace {
 		final long[] max = Intervals.maxAsLongArray(subsampled);
 		final long[] offset = new long[n];
 
-		n5.createDataset(dataset, Intervals.dimensionsAsLongArray(subsampled), blockSize, DataType.FLOAT32, CompressionType.GZIP);
+		n5.createDataset(dataset, Intervals.dimensionsAsLongArray(subsampled), blockSize, DataType.FLOAT32, new GzipCompression());
 		final DatasetAttributes attributes = n5.getDatasetAttributes(dataset);
 
 		final ArrayList<Future<?>> futures = new ArrayList<>();
@@ -173,7 +173,7 @@ public class GenerateFaceScaleSpace {
 
 		final ImageJ ij = new ImageJ();
 
-		final N5Writer n5 = N5.openFSWriter(n5Path);
+		final N5Writer n5 = new N5FSWriter(n5Path);
 		n5.createGroup(topScaleSpaceDatasetName);
 		final DatasetAttributes attributes = n5.getDatasetAttributes(datasetName);
 		final long[] topMin = new long[] {0, 8, 0};
@@ -208,7 +208,7 @@ public class GenerateFaceScaleSpace {
 				n5,
 				topScaleSpaceDatasetName + "/s0",
 				new int[] {128, 128},
-				CompressionType.GZIP,
+				new GzipCompression(),
 				exec);
 
 		/* downsample */
@@ -230,7 +230,7 @@ public class GenerateFaceScaleSpace {
 					n5,
 					topScaleSpaceFaceDatasetName,
 					new int[] {128, 128},
-					CompressionType.GZIP,
+					new GzipCompression(),
 					exec);
 			n5.remove(scaleSpaceDataSetName);
 		}

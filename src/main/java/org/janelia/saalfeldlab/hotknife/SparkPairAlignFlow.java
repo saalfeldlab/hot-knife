@@ -31,10 +31,11 @@ import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Spark;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -179,7 +180,7 @@ public class SparkPairAlignFlow {
 
 		final JavaRDD<long[]> gridCells = affines.map(
 				t -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final RealTransform priorTransform = Transform.loadScaledTransform(
 							n5,
 							priorTransformDatasetName);
@@ -234,7 +235,7 @@ public class SparkPairAlignFlow {
 			final int stepSize) throws IOException {
 
 		final DatasetAttributes attributes = Transform.createScaledTransformDataset(
-				N5.openFSWriter(n5Path),
+				new N5FSWriter(n5Path),
 				transformDatasetBaseName,
 				boundsMin,
 				boundsMax,
@@ -245,7 +246,7 @@ public class SparkPairAlignFlow {
 
 		final JavaRDD<long[]> mappedGridCells = gridCells.map(
 				cell -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final long[] gridOffset = Grid.gridCell(
 							cell,
 							Grid.floorScaled(boundsMin, transformScale),
@@ -305,7 +306,7 @@ public class SparkPairAlignFlow {
 							dimensions,
 							new int[]{stepSize, stepSize, 2},
 							DataType.FLOAT64,
-							CompressionType.GZIP);
+							new GzipCompression());
 					N5Utils.saveBlock(tt, n5, transformDatasetBaseName, targetAttributes, Arrays.copyOf(gridOffset, 3));
 
 					return cell;
@@ -326,7 +327,7 @@ public class SparkPairAlignFlow {
 
 		gridCells.foreach(
 				cell -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final long[] gridOffset = Grid.gridCell(
 							cell,
 							Grid.floorScaled(boundsMin, transformScale),
@@ -363,7 +364,7 @@ public class SparkPairAlignFlow {
 		final JavaRDD<long[]> gridCells =
 				offsets.map(offset -> {
 
-					final N5Reader n5Reader = N5.openFSReader(n5Path);
+					final N5Reader n5Reader = new N5FSReader(n5Path);
 					final RandomAccessibleInterval<FloatType> a = N5Utils.open(n5Reader, datasetA + "/s" + scaleIndex);
 					final RandomAccessibleInterval<FloatType> b = N5Utils.open(n5Reader, datasetB + "/s" + scaleIndex);
 
@@ -401,7 +402,7 @@ public class SparkPairAlignFlow {
 							sigma,
 							numIterations);
 
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final long[] gridOffset = Grid.gridCell(
 							offset,
 							Grid.floorScaled(boundsMin, scale),
@@ -533,7 +534,7 @@ public class SparkPairAlignFlow {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
+		final N5Writer n5 = new N5FSWriter(options.getN5Path());
 		final String[] datasetNames = n5.getAttribute(options.getInGroup(), "datasets", String[].class);
 		final String[] transformDatasetNames = n5.getAttribute(options.getInGroup(), "transforms", String[].class);
 		final double[] boundsMin = n5.getAttribute(options.getInGroup(), "boundsMin", double[].class);

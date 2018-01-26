@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.imglib2.RandomAccessibleLoader;
@@ -177,7 +177,7 @@ public class Show {
 			final Interval targetInterval,
 			final Bdv bdv) throws IOException {
 
-		final N5Reader n5Reader = N5.openFSReader(n5Path);
+		final N5Reader n5Reader = new N5FSReader(n5Path);
 		final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Reader, datasetName + "/s" + scaleIndex);
 		final RandomAccessibleInterval<FloatType> transformedInterval = Transform.createTransformedInterval(
 				source,

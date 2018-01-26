@@ -27,9 +27,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -248,7 +248,7 @@ public class SparkExportAlignedSlabSeries {
 							gridBlockInterval),
 					n5Output,
 					datasetNameOutput,
-					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, CompressionType.GZIP),
+					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
 					gridBlock[2]);
 			break;
 		default:
@@ -266,7 +266,7 @@ public class SparkExportAlignedSlabSeries {
 							gridBlockInterval),
 					n5Output,
 					datasetNameOutput,
-					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, CompressionType.GZIP),
+					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
 					gridBlock[2]);
 			break;
 		}
@@ -328,7 +328,7 @@ public class SparkExportAlignedSlabSeries {
 
 		/* create output dataset */
 		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
-		n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, CompressionType.GZIP);
+		n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
 		final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 

@@ -27,10 +27,10 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
@@ -199,7 +199,7 @@ public class SparkConvertTiffSeriesToN5 {
 			final int[] blockSize,
 			final long firstSliceIndex) throws IOException {
 
-		final N5Writer n5 = N5.openFSWriter(n5Path);
+		final N5Writer n5 = new N5FSWriter(n5Path);
 
         final int[] slicesDatasetBlockSize = new int[]{
         		blockSize[0] * 8,
@@ -210,7 +210,7 @@ public class SparkConvertTiffSeriesToN5 {
         		size,
         		slicesDatasetBlockSize,
         		DataType.UINT8,
-        		CompressionType.GZIP);
+        		new GzipCompression());
 		final ArrayList<Long> slices = new ArrayList<>();
 		for (long z = min[2]; z < min[2] + size[2]; ++z)
 			slices.add(z);
@@ -233,7 +233,7 @@ public class SparkConvertTiffSeriesToN5 {
 							new long[]{
 									size[0],
 									size[1]});
-			final N5Writer n5Local = N5.openFSWriter(n5Path);
+			final N5Writer n5Local = new N5FSWriter(n5Path);
 			N5Utils.saveBlock(
 					Views.addDimension(slice, 0, 0),
 					n5Local,
@@ -265,7 +265,7 @@ public class SparkConvertTiffSeriesToN5 {
 			final String outDatasetName,
 			final int[] outBlockSize) throws IOException {
 
-		final N5Writer n5 = N5.openFSWriter(n5Path);
+		final N5Writer n5 = new N5FSWriter(n5Path);
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(datasetName);
 		final int n = attributes.getNumDimensions();
@@ -276,7 +276,7 @@ public class SparkConvertTiffSeriesToN5 {
 				attributes.getDimensions(),
 				outBlockSize,
 				attributes.getDataType(),
-				attributes.getCompressionType());
+				attributes.getCompression());
 
 		/* grid block size for parallelization to minimize double loading of blocks */
 		final int[] gridBlockSize = new int[outBlockSize.length];
@@ -291,7 +291,7 @@ public class SparkConvertTiffSeriesToN5 {
 
 		rdd.foreach(
 				gridBlock -> {
-					final N5Writer n5Writer = N5.openFSWriter(n5Path);
+					final N5Writer n5Writer = new N5FSWriter(n5Path);
 					final RandomAccessibleInterval<?> source = N5Utils.open(n5Writer, datasetName);
 					@SuppressWarnings("rawtypes")
 					final RandomAccessibleInterval sourceGridBlock = Views.offsetInterval(source, gridBlock[0], gridBlock[1]);

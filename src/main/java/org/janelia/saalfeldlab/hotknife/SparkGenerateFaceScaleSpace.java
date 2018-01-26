@@ -27,10 +27,11 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.ops.SimpleGaussRA;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -96,7 +97,7 @@ public class SparkGenerateFaceScaleSpace {
 				else
 					parseCSLongArray(minString, min);
 
-				final N5Reader n5 = N5.openFSReader(n5Path);
+				final N5Reader n5 = new N5FSReader(n5Path);
 				final DatasetAttributes attributes = n5.getDatasetAttributes(inDatasetName);
 				final long[] sourceSize = attributes.getDimensions();
 
@@ -186,7 +187,7 @@ public class SparkGenerateFaceScaleSpace {
 			final String outDatasetName,
 			final int[] outBlockSize) throws IOException {
 
-		final N5Writer n5 = N5.openFSWriter(n5Path);
+		final N5Writer n5 = new N5FSWriter(n5Path);
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(inDatasetName);
 		final DataType inType = attributes.getDataType();
@@ -202,7 +203,7 @@ public class SparkGenerateFaceScaleSpace {
 				outDimensions,
 				outBlockSize,
 				DataType.FLOAT32,
-				CompressionType.GZIP);
+				new GzipCompression());
 
 		final JavaRDD<long[][]> rdd =
 				sc.parallelize(
@@ -213,7 +214,7 @@ public class SparkGenerateFaceScaleSpace {
 		rdd.foreach(
 				gridBlock -> {
 					System.out.println(Arrays.deepToString(gridBlock));
-					final N5Writer n5Writer = N5.openFSWriter(n5Path);
+					final N5Writer n5Writer = new N5FSWriter(n5Path);
 					@SuppressWarnings("unchecked")
 					final RandomAccessibleInterval<RealType<?>> source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
 					@SuppressWarnings({ "rawtypes", "unchecked" })
@@ -267,7 +268,7 @@ public class SparkGenerateFaceScaleSpace {
 			final String outDatasetName,
 			final int[] outBlockSize) throws IOException {
 
-		final N5Writer n5 = N5.openFSWriter(n5Path);
+		final N5Writer n5 = new N5FSWriter(n5Path);
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(inDatasetName);
 		final DataType inType = attributes.getDataType();
@@ -292,7 +293,7 @@ public class SparkGenerateFaceScaleSpace {
 				outDimensions,
 				outBlockSize,
 				DataType.FLOAT32,
-				CompressionType.GZIP);
+				new GzipCompression());
 
 		final JavaRDD<long[][]> rdd =
 				sc.parallelize(
@@ -303,7 +304,7 @@ public class SparkGenerateFaceScaleSpace {
 		rdd.foreach(
 				gridBlock -> {
 					System.out.println(Arrays.deepToString(gridBlock));
-					final N5Writer n5Writer = N5.openFSWriter(n5Path);
+					final N5Writer n5Writer = new N5FSWriter(n5Path);
 					@SuppressWarnings("unchecked")
 					final RandomAccessibleInterval<RealType<?>> source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
 					@SuppressWarnings({ "rawtypes", "unchecked" })
@@ -335,7 +336,7 @@ public class SparkGenerateFaceScaleSpace {
 		final SparkConf conf = new SparkConf().setAppName( "SparkGenerateFaceScaleSpace" );
         final JavaSparkContext sc = new JavaSparkContext(conf);
 
-		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
+		final N5Writer n5 = new N5FSWriter(options.getN5Path());
 		n5.createGroup(options.getOutputGroupName());
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(options.getInputDatasetName());

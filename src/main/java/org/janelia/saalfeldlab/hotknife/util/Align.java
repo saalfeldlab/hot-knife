@@ -158,6 +158,85 @@ public class Align {
 	}
 
 	/**
+	 * Match two images with SIFT features.
+	 *
+	 * @param a
+	 * @param b
+	 * @param maxScale
+	 * @param minScale
+	 * @param fdSize
+	 * @param rod
+	 * @param scale
+	 * @param filter
+	 * @param modelSupplier
+	 * @param modelTransformConverter
+	 * @return
+	 */
+	static public ArrayList<PointMatch> matchSIFT(
+			final RandomAccessibleInterval<FloatType> a,
+			final RandomAccessibleInterval<FloatType> b,
+			final double maxScale,
+			final double minScale,
+			final int fdSize,
+			final double rod,
+			final double scale) {
+
+		final ArrayList<Feature> fs1 = extractFeatures(a, maxScale, minScale, fdSize);
+		final ArrayList<Feature> fs2 = extractFeatures(b, maxScale, minScale, fdSize);
+		fs1.forEach(
+				feature -> {
+					feature.location[0] *= scale;
+					feature.location[1] *= scale;
+				});
+		fs2.forEach(
+				feature -> {
+					feature.location[0] *= scale;
+					feature.location[1] *= scale;
+				});
+
+		System.out.printf("%d and %d features extracted.", fs1.size(), fs2.size());
+		System.out.println();
+
+		final ArrayList<PointMatch> candidates = matchFeatures(fs1, fs2, rod);
+
+		return candidates;
+	}
+
+	/**
+	 * Match and filter two images with SIFT features and a filter model.
+	 *
+	 * @param a
+	 * @param b
+	 * @param maxScale
+	 * @param minScale
+	 * @param fdSize
+	 * @param rod
+	 * @param scale
+	 * @param filter
+	 * @param modelSupplier
+	 * @param modelTransformConverter
+	 * @return
+	 */
+	static public ArrayList<PointMatch> filterMatchSIFT(
+			final RandomAccessibleInterval<FloatType> a,
+			final RandomAccessibleInterval<FloatType> b,
+			final double maxScale,
+			final double minScale,
+			final int fdSize,
+			final double rod,
+			final double scale,
+			final ConsensusFilter filter) {
+
+		final ArrayList<PointMatch> candidates = matchSIFT(a, b, maxScale, minScale, fdSize, rod, scale);
+		final ArrayList<PointMatch> matches = filter.filter(candidates);
+
+		System.out.printf("%d of %d matches found.", matches.size(), candidates.size());
+		System.out.println();
+
+		return matches;
+	}
+
+	/**
 	 * Align two images with SIFT features.  Returns the inverse transform
 	 * of mapping a into b which is, well, the forward transform for mapping
 	 * b into a.
@@ -186,24 +265,7 @@ public class Align {
 			final Supplier<M> modelSupplier,
 			final Function<M, R> modelTransformConverter) {
 
-		final ArrayList<Feature> fs1 = extractFeatures(a, maxScale, minScale, fdSize);
-		final ArrayList<Feature> fs2 = extractFeatures(b, maxScale, minScale, fdSize);
-		fs1.forEach(
-				feature -> {
-					feature.location[0] *= scale;
-					feature.location[1] *= scale;
-				});
-		fs2.forEach(
-				feature -> {
-					feature.location[0] *= scale;
-					feature.location[1] *= scale;
-				});
-
-		final ArrayList<PointMatch> candidates = matchFeatures(fs1, fs2, rod);
-		final ArrayList<PointMatch> matches = filter.filter(candidates);
-
-		System.out.printf("%d and %d features extracted.  %d of %d matches found.", fs1.size(), fs2.size(), matches.size(), candidates.size());
-		System.out.println();
+		final ArrayList<PointMatch> matches = filterMatchSIFT(a, b, maxScale, minScale, fdSize, rod, scale, filter);
 
 		final M model = modelSupplier.get();
 		try {

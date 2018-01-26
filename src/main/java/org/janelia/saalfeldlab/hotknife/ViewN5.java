@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.ExecutionException;
 
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
@@ -98,7 +98,7 @@ public class ViewN5 {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final N5Reader n5 = N5.openFSReader(options.getN5Path());
+		final N5Reader n5 = new N5FSReader(options.getN5Path());
 
 		final int numProc = Runtime.getRuntime().availableProcessors();
 		final SharedQueue queue = new SharedQueue(Math.max(1, numProc / 2));
