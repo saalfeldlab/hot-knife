@@ -30,7 +30,7 @@ import java.util.concurrent.Future;
 
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
@@ -197,7 +197,7 @@ public class ExportAlignedSlabSeriesTiff {
 			final long[] size,
 			final boolean useVolatile) throws IOException {
 
-		final N5Reader n5 = N5.openFSReader(n5Path);
+		final N5Reader n5 = new N5FSReader(n5Path);
 
 		Files.createDirectories(Paths.get(outPath));
 
