@@ -18,7 +18,8 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 
@@ -27,7 +28,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -38,9 +38,15 @@ import org.kohsuke.args4j.Option;
 
 import ij.IJ;
 import ij.ImagePlus;
-import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.Cursor;
+import net.imglib2.IterableInterval;
+import net.imglib2.RandomAccessible;
+import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 /**
@@ -53,7 +59,7 @@ public class SparkConvertCATMAIDStackToN5 {
 	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
 
-		@Option(name = "--urlFormat", required = true, usage = "Input URL format for CATMAID stack, e.g. /nrs/saalfeld/FAFB00/v14_align_tps_20170818_dmg/%6$dx%7$d/%2$d/%5$d/%5$d.%2$d.%8$d.%9$d.png")
+		@Option(name = "--urlFormat", required = true, usage = "Input URL format for CATMAID stack, e.g. /nrs/saalfeld/FAFB00/v14_align_tps_20170818_dmg/%6$dx%7$d/%1$d/%5$d/%5$d.%1$d.%8$d.%9$d.png")
 		private String urlFormat = null;
 
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
@@ -164,8 +170,7 @@ public class SparkConvertCATMAIDStackToN5 {
 		}
 	}
 
-
-	public static final void saveTIFFSeries(
+	public static final void saveCATMAIDStack(
 			final JavaSparkContext sc,
 			final String urlFormat,
 			final int[] tileSize,
@@ -178,103 +183,78 @@ public class SparkConvertCATMAIDStackToN5 {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
-        final int[] slicesDatasetBlockSize = new int[]{
-        		blockSize[0] * 8,
-        		blockSize[1] * 8,
-        		1};
-        n5.createDataset(
-        		datasetName,
-        		size,
-        		slicesDatasetBlockSize,
-        		DataType.UINT8,
-        		new GzipCompression());
-		final ArrayList<Long> slices = new ArrayList<>();
-		for (long z = min[2]; z < min[2] + size[2]; ++z)
-			slices.add(z);
-
-		final JavaRDD<Long> rddSlices = sc.parallelize(slices);
-
-		rddSlices.foreach(sliceIndex -> {
-
-			final ImagePlus imp = IJ.openImage(String.format(urlFormat, sliceIndex + firstSliceIndex));
-
-			if (imp == null)
-				return;
-
-			@SuppressWarnings({ "unchecked", "rawtypes" })
-			final RandomAccessibleInterval<UnsignedByteType> slice =
-					Views.offsetInterval(
-							(RandomAccessibleInterval)ImagePlusImgs.from(imp),
-							new long[]{
-									min[0],
-									min[1]},
-							new long[]{
-									size[0],
-									size[1]});
-			final N5Writer n5Local = new N5FSWriter(n5Path);
-			N5Utils.saveBlock(
-					Views.addDimension(slice, 0, 0),
-					n5Local,
-					datasetName,
-					new long[]{0, 0, sliceIndex - min[2]});
-		});
-	}
-
-
-	/**
-	 * Copy an existing N5 dataset into another with a different blockSize.
-	 *
-	 * Parallelizes over blocks of [max(input, output)] to reduce redundant
-	 * loading.  If blockSizes are integer multiples of each other, no
-	 * redundant loading will happen.
-	 *
-	 * @param sc
-	 * @param n5Path
-	 * @param datasetName
-	 * @param outDatasetName
-	 * @param outBlockSize
-	 * @throws IOException
-	 */
-	@SuppressWarnings("unchecked")
-	public static final void reSave(
-			final JavaSparkContext sc,
-			final String n5Path,
-			final String datasetName,
-			final String outDatasetName,
-			final int[] outBlockSize) throws IOException {
-
-		final N5Writer n5 = new N5FSWriter(n5Path);
-
-		final DatasetAttributes attributes = n5.getDatasetAttributes(datasetName);
-		final int n = attributes.getNumDimensions();
-		final int[] blockSize = attributes.getBlockSize();
-
 		n5.createDataset(
-				outDatasetName,
-				attributes.getDimensions(),
-				outBlockSize,
-				attributes.getDataType(),
-				attributes.getCompression());
+				datasetName,
+				size,
+				blockSize,
+				DataType.UINT8,
+				new GzipCompression());
 
-		/* grid block size for parallelization to minimize double loading of blocks */
-		final int[] gridBlockSize = new int[outBlockSize.length];
-		Arrays.setAll(gridBlockSize, i -> Math.max(blockSize[i], outBlockSize[i]));
+		/*
+		 * grid block size for parallelization to minimize double loading of
+		 * blocks
+		 */
+		final int[] gridBlockSize = new int[] {
+				Math.max(blockSize[0], tileSize[0]),
+				Math.max(blockSize[1], tileSize[1]),
+				blockSize[2] };
 
-		final JavaRDD<long[][]> rdd =
-				sc.parallelize(
-						Grid.create(
-								attributes.getDimensions(),
-								gridBlockSize,
-								outBlockSize));
+		final JavaRDD<long[][]> rdd = sc.parallelize(
+				Grid.create(
+						new long[] {
+								size[0],
+								size[1],
+								size[2] },
+						gridBlockSize,
+						blockSize));
 
-		rdd.foreach(
-				gridBlock -> {
-					final N5Writer n5Writer = new N5FSWriter(n5Path);
-					final RandomAccessibleInterval<?> source = N5Utils.open(n5Writer, datasetName);
-					@SuppressWarnings("rawtypes")
-					final RandomAccessibleInterval sourceGridBlock = Views.offsetInterval(source, gridBlock[0], gridBlock[1]);
-					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
-				});
+		rdd.foreach(gridBlock -> {
+
+			/* tile coordinates */
+			final long col = (gridBlock[0][0] + min[0]) / tileSize[0];
+			final long row = (gridBlock[0][1] + min[1]) / tileSize[1];
+
+			/* assume we can fit it in an array */
+			final ArrayImg<UnsignedByteType, ByteArray> block = ArrayImgs.unsignedBytes(gridBlock[1]);
+			boolean hasData = false;
+			for (int z = 0; z < block.dimension(2); ++z) {
+
+				final String urlString = String.format(
+						urlFormat,
+						0,
+						1,
+						gridBlock[0][0] + min[0],
+						gridBlock[0][1] + min[1],
+						gridBlock[0][2] + min[2] + firstSliceIndex + z,
+						tileSize[0],
+						tileSize[1],
+						row,
+						col);
+
+				if (Files.exists(Paths.get(urlString))) {
+
+					final ImagePlus imp = IJ.openImage(urlString);
+					if (imp == null)
+						continue;
+					hasData = true;
+
+					final IntervalView<UnsignedByteType> outSlice = Views.hyperSlice(block, 2, z);
+					@SuppressWarnings({ "unchecked" })
+					final IterableInterval<UnsignedByteType> inSlice = Views
+							.flatIterable(Views.interval((RandomAccessible<UnsignedByteType>) (Object) ImagePlusImgs.from(imp), outSlice));
+
+					final Cursor<UnsignedByteType> in = inSlice.cursor();
+					final Cursor<UnsignedByteType> out = outSlice.cursor();
+					while (out.hasNext())
+						out.next().set(in.next());
+				}
+			}
+
+			if (hasData) {
+				final N5FSWriter n5Writer = new N5FSWriter(n5Path);
+				N5Utils.saveNonEmptyBlock(block, n5Writer, datasetName, gridBlock[2], new UnsignedByteType(0));
+			}
+		});
 	}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -284,44 +264,36 @@ public class SparkConvertCATMAIDStackToN5 {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final SparkConf conf = new SparkConf().setAppName( "SparkConvertTiffSeriesToN5" );
-        final JavaSparkContext sc = new JavaSparkContext(conf);
-
-        final String slicesDatasetName = options.getDatasetName() + "-slices";
+		final SparkConf conf = new SparkConf().setAppName("SparkConvertCATMAIDStackToN5");
+		final JavaSparkContext sc = new JavaSparkContext(conf);
 
 		/* parallelize over slices */
-        saveTIFFSeries(
-        		sc,
-        		options.getUrlFormat(),
-        		options.getN5Path(),
-        		slicesDatasetName,
-        		options.getMin(),
-        		options.getSize(),
-        		options.getBlockSize(),
-        		options.getFirstSliceIndex());
-
-		/* re-block */
-		reSave(
+		saveCATMAIDStack(
 				sc,
+				options.getUrlFormat(),
+				options.getTileSize(),
 				options.getN5Path(),
-				slicesDatasetName,
 				options.getDatasetName(),
-				options.getBlockSize());
+				options.getMin(),
+				options.getSize(),
+				options.getBlockSize(),
+				options.getFirstSliceIndex());
 
 		sc.close();
 
-//		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
+		// final N5Writer n5 = N5.openFSWriter(options.getN5Path());
 
 		/* remove should be parallelized */
-//		n5.remove(slicesDatasetName);
+		// n5.remove(slicesDatasetName);
 
-//		final int numProc = Runtime.getRuntime().availableProcessors();
-//		final SharedQueue queue = new SharedQueue(Math.max(1, numProc / 2));
-//
-//		BdvFunctions.show(
-//				VolatileViews.wrapAsVolatile(
-//						(RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, options.datasetName),
-//						queue),
-//				"export");
+		// final int numProc = Runtime.getRuntime().availableProcessors();
+		// final SharedQueue queue = new SharedQueue(Math.max(1, numProc / 2));
+		//
+		// BdvFunctions.show(
+		// VolatileViews.wrapAsVolatile(
+		// (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5,
+		// options.datasetName),
+		// queue),
+		// "export");
 	}
 }

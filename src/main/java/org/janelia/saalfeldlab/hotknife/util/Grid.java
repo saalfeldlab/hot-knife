@@ -67,7 +67,7 @@ public class Grid {
 	 * grid-coordinate offset.  The spacing for input grid and output grid
 	 * are independent, i.e. world coordinate offsets and cropped block-sizes
 	 * depend on the input grid, and the grid coordinates of the block are
-	 * specified on an independent output grid.  Its is assumed that
+	 * specified on an independent output grid.  It is assumed that
 	 * gridBlockSize is an integer multiple of outBlockSize.
 	 *
 	 * @param dimensions
