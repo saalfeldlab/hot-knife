@@ -101,7 +101,7 @@ public class ViewN5 {
 		final N5Reader n5 = new N5FSReader(options.getN5Path());
 
 		final int numProc = Runtime.getRuntime().availableProcessors();
-		final SharedQueue queue = new SharedQueue(Math.max(1, numProc / 2));
+		final SharedQueue queue = new SharedQueue(Math.min(8, Math.max(1, numProc / 2)));
 
 		BdvStackSource bdv = null;
 
