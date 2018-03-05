@@ -41,8 +41,10 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.io.Opener;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.type.numeric.integer.UnsignedIntType;
 import net.imglib2.view.Views;
 
 /**
@@ -223,10 +225,16 @@ public class SparkConvertTiffSeriesToN5 {
 			if (imp == null)
 				return;
 
+			final RandomAccessibleInterval<ARGBType> raiSlice = (RandomAccessibleInterval)ImagePlusImgs.from(imp);
+			final RandomAccessibleInterval<UnsignedIntType> raiSliceConverted = Converters.convert(
+					raiSlice,
+					(a, b) -> b.setInteger(a.get()),
+					new UnsignedIntType());
+
 			@SuppressWarnings({ "unchecked", "rawtypes" })
-			final RandomAccessibleInterval<UnsignedByteType> slice =
+			final RandomAccessibleInterval<UnsignedIntType> slice =
 					Views.offsetInterval(
-							(RandomAccessibleInterval)ImagePlusImgs.from(imp),
+							raiSliceConverted,
 							new long[]{
 									min[0],
 									min[1]},
