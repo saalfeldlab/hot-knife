@@ -33,7 +33,9 @@ import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
+import bdv.viewer.Source;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 
@@ -89,11 +91,20 @@ public class ViewSlab {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final N5Reader n5 = new N5FSReader(options.getN5Path());
-		final String group = options.getGroup();
+		run(options.getN5Path(), options.getGroup(), new FinalVoxelDimensions("px", new double[]{1, 1, 1}), true);
+	}
+
+	public static BdvStackSource<?> run(
+			final String n5Path,
+			final String n5Group,
+			final VoxelDimensions voxelDimensions,
+			final boolean useVolatile) throws IOException {
+
+		final N5Reader n5 = new N5FSReader(n5Path);
+		final String group = n5Group;
 
 		BdvStackSource<?> bdv = null;
-		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+		final SharedQueue queue = new SharedQueue(Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() / 2)));
 
 		final int numScales = n5.list(group).length;
 
@@ -117,12 +128,22 @@ public class ViewSlab {
 						mipmaps,
 						new UnsignedByteType(),
 						scales,
-						new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
+						voxelDimensions,
 						group);
 
 		final BdvOptions bdvOptions = Bdv.options().screenScales(new double[] {1, 0.5}).numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors() / 5));
 		//final BdvOptions bdvOptions = Bdv.options().numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors() / 5));
 
-		bdv = Show.mipmapSource(mipmapSource.asVolatile(queue), bdv, bdvOptions);
+		final Source<?> volatileMipmapSource;
+		if (useVolatile)
+			volatileMipmapSource = mipmapSource.asVolatile(queue);
+		else
+			volatileMipmapSource = mipmapSource;
+
+		bdv = Show.mipmapSource(volatileMipmapSource, bdv, bdvOptions);
+
+		bdv.getBdvHandle().getViewerPanel().getTopLevelAncestor().setSize(1280 - 32, 720 - 48 - 16);
+
+		return bdv;
 	}
 }
