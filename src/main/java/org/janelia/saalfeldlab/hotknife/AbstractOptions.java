@@ -58,6 +58,21 @@ public class AbstractOptions implements Serializable {
 		return true;
 	}
 
+	protected static final boolean parseCSDoubleArray(final String csv, final double[] array) {
+
+		final String[] stringValues = csv.split(",");
+		if (stringValues.length != array.length)
+			return false;
+		try {
+			for (int i = 0; i < array.length; ++i)
+				array[i] = Double.parseDouble(stringValues[i]);
+		} catch (final NumberFormatException e) {
+			e.printStackTrace(System.err);
+			return false;
+		}
+		return true;
+	}
+
 	protected static final long[] parseCSLongArray(final String csv) {
 
 		final String[] stringValues = csv.split(",");
@@ -79,6 +94,20 @@ public class AbstractOptions implements Serializable {
 		try {
 			for (int i = 0; i < array.length; ++i)
 				array[i] = Integer.parseInt(stringValues[i]);
+		} catch (final NumberFormatException e) {
+			e.printStackTrace(System.err);
+			return null;
+		}
+		return array;
+	}
+
+	protected static final double[] parseCSDoubleArray(final String csv) {
+
+		final String[] stringValues = csv.split(",");
+		final double[] array = new double[stringValues.length];
+		try {
+			for (int i = 0; i < array.length; ++i)
+				array[i] = Double.parseDouble(stringValues[i]);
 		} catch (final NumberFormatException e) {
 			e.printStackTrace(System.err);
 			return null;
