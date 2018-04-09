@@ -44,13 +44,16 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.morphology.distance.DistanceTransform;
 import net.imglib2.algorithm.morphology.distance.DistanceTransform.DISTANCE_TYPE;
 import net.imglib2.converter.Converters;
-import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.NativeImg;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.DoubleArray;
+import net.imglib2.img.basictypeaccess.array.FloatArray;
+import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.type.Type;
+import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.integer.UnsignedLongType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
-import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Fraction;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;
@@ -96,9 +99,9 @@ public class SparkDistanceTransform {
 			blockSize = new int[3];
 			try {
 				parser.parseArgument(args);
-				parseCSIntArray(blockSizeString, blockSize);
-				parseCSDoubleArray(resolutionString, resolution);
-				parseCSLongArray(paddingString, padding);
+				blockSize = parseCSIntArray(blockSizeString);
+				resolution = parseCSDoubleArray(resolutionString);
+				padding = parseCSLongArray(paddingString);
 				parsedSuccessfully = true;
 			} catch (final CmdLineException e) {
 				System.err.println(e.getMessage());
@@ -156,20 +159,29 @@ public class SparkDistanceTransform {
 		}
 	}
 
-	public static <T extends Type<T>> ArrayImg<DoubleType, DoubleArray> createBoundaries(
+	public static <T extends Type<T>> NativeImg<FloatType, FloatArray> createBoundaries(
 			final RandomAccessibleInterval<T> source,
-			final double maxSquareDistance) {
+			final float maxSquareDistance,
+			final T mask) {
 
 		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
 		final int n = dimensions.length;
 		final long[] dimensionsMinus1 = new long[n];
 		final long[] outputDimensions = new long[n];
 		Arrays.setAll(dimensionsMinus1, i -> dimensions[i] - 1);
-		Arrays.setAll(outputDimensions, i -> dimensions[i] * 2 - 4);
+		Arrays.setAll(outputDimensions, i -> dimensions[i] * 2 - 2);
 
-		/* padded output block, assume we can fit it in an array */
-		final ArrayImg<DoubleType, DoubleArray> targetBlock = ArrayImgs.doubles(outputDimensions);
-		targetBlock.forEach(t -> t.set(1.0));
+		final long numPixels = Arrays.stream(outputDimensions).reduce(1, (a, b) -> a * b);
+
+		final NativeImg<FloatType, FloatArray> targetBlock;
+		if (numPixels < Integer.MAX_VALUE)
+			targetBlock = ArrayImgs.floats(outputDimensions);
+		else {
+			final int[] cellDimensions = new int[n];
+			Arrays.fill(cellDimensions, (int)Math.pow(Integer.MAX_VALUE, 1.0 / n));
+			targetBlock = new CellImgFactory<FloatType>(cellDimensions).createFloatInstance(outputDimensions, new Fraction());
+		}
+		targetBlock.forEach(t -> t.set(maxSquareDistance));
 
 		final long[] minA = new long[n];
 		for (int d = 0; d < n; ++d) {
@@ -182,8 +194,17 @@ public class SparkDistanceTransform {
 			final long[] subsampleSteps = new long[n];
 			Arrays.fill(subsampleSteps, 1);
 			subsampleSteps[d] = 2;
-			final SubsampleIntervalView<DoubleType> target = Views.subsample(targetBlock, subsampleSteps);
-			final RandomAccess<DoubleType> rat = target.randomAccess(target);
+			final long[] offset = new long[n];
+			Arrays.fill(offset, 0);
+			offset[d] = 0;
+			final long[] size = new long[n];
+			Arrays.setAll(size, i -> targetBlock.dimension(i));
+			size[d] = targetBlock.dimension(d) - 1;
+			final SubsampleIntervalView<FloatType> target =
+					Views.subsample(
+							Views.offsetInterval(targetBlock, offset, size),
+							subsampleSteps);
+			final RandomAccess<FloatType> rat = target.randomAccess(target);
 
 			final Cursor<T> ca = Views.flatIterable(a).localizingCursor();
 			final Cursor<T> cb = Views.flatIterable(b).localizingCursor();
@@ -191,9 +212,26 @@ public class SparkDistanceTransform {
 			while (ca.hasNext()) {
 				final T cav = ca.next();
 				final T cbv = cb.next();
-				if (!cav.valueEquals(cbv)) {
-					rat.setPosition(ca);
-					rat.get().set(0);
+				if (!cav.valueEquals(cbv) || cav.valueEquals(mask)) {
+
+					for (int e = 0; e < n; ++e)
+						rat.setPosition(ca.getLongPosition(e) * 2, e);
+
+					rat.setPosition(ca.getLongPosition(d), d);
+
+					for (int e = 0; e < n;) {
+						rat.get().set(0);
+
+						for (e = 0; e < n; ++e) {
+							if (d == e) continue;
+							rat.fwd(e);
+							final long pe = ca.getLongPosition(e) * 2 + 1;
+							if (rat.getLongPosition(e) > pe)
+								rat.setPosition(pe - 1, e);
+							else
+								break;
+						}
+					}
 				}
 			}
 		}
@@ -212,7 +250,6 @@ public class SparkDistanceTransform {
 			final double[] resolution) throws IOException {
 
 		final N5Reader n5Reader = new N5FSReader(n5Path);
-		final N5Writer n5Writer = new N5FSWriter(n5OutputPath);
 
 		final DatasetAttributes attributes = n5Reader.getDatasetAttributes(datasetName);
 		final long[] dimensions = attributes.getDimensions();
@@ -221,6 +258,7 @@ public class SparkDistanceTransform {
 		final double[] squareHalfResolution = new double[n];
 		Arrays.setAll(squareHalfResolution, i -> 0.25 * resolution[i] * resolution[i]);
 
+		final N5Writer n5Writer = new N5FSWriter(n5OutputPath);
 		n5Writer.createDataset(
 				outputDatasetName,
 				dimensions,
@@ -240,30 +278,40 @@ public class SparkDistanceTransform {
 
 		rdd.foreach(gridBlock -> {
 
+			final N5Reader n5BlockReader = new N5FSReader(n5Path);
+			final DatasetAttributes datasetAttributes = n5BlockReader.getDatasetAttributes(datasetName);
+			final RandomAccessibleInterval<UnsignedLongType> source;
+			if (datasetAttributes.getDataType() == DataType.UINT64)
+				source = N5Utils.open(n5BlockReader, datasetName);
+			else
+				source = Converters.convert(
+						// for OpenJDK 8, Eclipse could do without the intermediate raw cast...
+						(RandomAccessibleInterval<IntegerType<?>>)(RandomAccessibleInterval)N5Utils.open(n5BlockReader, datasetName),
+						(a, b) -> b.set(a.getIntegerLong()),
+						new UnsignedLongType());
+
 			final long[] padding = initialPadding.clone();
-A:			for (boolean paddingIsTooSmall = true; paddingIsTooSmall; Arrays.setAll(padding, i -> padding[i] * 2)) {
+A:			for (boolean paddingIsTooSmall = true; paddingIsTooSmall; Arrays.setAll(padding, i -> padding[i] + initialPadding[i])) {
 
 				paddingIsTooSmall = false;
 
 				final double[] scaledPadding = new double[n];
 				Arrays.setAll(scaledPadding, i -> resolution[i] * padding[i]);
 				final double maxScaledPadding =  Arrays.stream(scaledPadding).max().getAsDouble();
-				final double squareHalfMaxScaledPadding = 0.25 * maxScaledPadding * maxScaledPadding;
+				final double squareMaxScaledPadding = maxScaledPadding * maxScaledPadding;
 
 				final long[] paddedBlockMin = new long[n];
 				final long[] paddedBlockSize = new long[n];
-				final long[] paddedBlockSizeMinus1 = new long[n];
-				final long[] paddedOutputBlockSize = new long[n];
+				final double[] scaledPaddedBlockSize = new double[n];
 				Arrays.setAll(paddedBlockMin, i -> gridBlock[0][i] - padding[i]);
 				Arrays.setAll(paddedBlockSize, i -> gridBlock[1][i] + 2 * padding[i]);
-				Arrays.setAll(paddedBlockSizeMinus1, i -> paddedBlockSize[i] - 1);
-				Arrays.setAll(paddedOutputBlockSize, i -> paddedBlockSize[i] * 2 - 4);
+				Arrays.setAll(scaledPaddedBlockSize, i -> paddedBlockSize[i] * resolution[i]);
 
-				final long maxBlockSize = Arrays.stream(paddedBlockSize).max().getAsLong();
-				final double squareMaxBlockSize = maxBlockSize * maxBlockSize;
+				System.out.println(Arrays.toString(gridBlock[0]) + ", padding = " + Arrays.toString(padding) + ", padded blocksize = " + Arrays.toString(paddedBlockSize));
 
-				final N5Reader n5BlockReader = new N5FSReader(n5Path);
-				final RandomAccessibleInterval<UnsignedLongType> source = N5Utils.open(n5BlockReader, datasetName);
+				final double maxScaledBlockSize = Arrays.stream(scaledPaddedBlockSize).max().getAsDouble();
+				final double squareMaxScaledBlockSize = maxScaledBlockSize * maxScaledBlockSize;
+
 				final IntervalView<UnsignedLongType> sourceBlock =
 						Views.offsetInterval(
 								Views.extendValue(
@@ -272,46 +320,47 @@ A:			for (boolean paddingIsTooSmall = true; paddingIsTooSmall; Arrays.setAll(pad
 								paddedBlockMin,
 								paddedBlockSize);
 
-				/* padded output block, assume we can fit it in an array */
-				final ArrayImg<DoubleType, DoubleArray> block = createBoundaries(sourceBlock, squareMaxBlockSize);
+				final NativeImg<FloatType, FloatArray> target = createBoundaries(sourceBlock, (float)squareMaxScaledBlockSize, new UnsignedLongType(0));
 
 				/* make distance transform */
-				DistanceTransform.transform(block, DISTANCE_TYPE.EUCLIDIAN, squareHalfResolution);
+				DistanceTransform.transform(target, DISTANCE_TYPE.EUCLIDIAN, squareHalfResolution);
 
 				final long[] minInside = new long[n];
 				final long[] dimensionsInside = new long[n];
-				Arrays.setAll(minInside, i -> padding[i] * 2 - 1);
+				Arrays.setAll(minInside, i -> padding[i] * 2 + 1);
 				Arrays.setAll(dimensionsInside, i -> gridBlock[1][i] * 2 - 1);
 
-				final IntervalView<DoubleType> insideBlock = Views.offsetInterval(block, minInside, dimensionsInside);
+				final IntervalView<FloatType> insideBlock = Views.offsetInterval(target, minInside, dimensionsInside);
 
 				/* test whether distances at inside boundary are smaller than padding */
 				for (int d = 0; d < n; ++d) {
 
-					final IntervalView<DoubleType> topSlice = Views.hyperSlice(insideBlock, d, 0);
-					for (final DoubleType t : topSlice)
-						if (t.get() >= squareHalfMaxScaledPadding) {
+					final IntervalView<FloatType> topSlice = Views.hyperSlice(insideBlock, d, 0);
+					for (final FloatType t : topSlice)
+						if (t.get() >= squareMaxScaledPadding) {
 							paddingIsTooSmall = true;
+							System.out.println("padding too small");
 							continue A;
 						}
 
-					final IntervalView<DoubleType> botSlice = Views.hyperSlice(insideBlock, d, insideBlock.max(d));
-					for (final DoubleType t : botSlice)
-						if (t.get() >= squareHalfMaxScaledPadding) {
+					final IntervalView<FloatType> botSlice = Views.hyperSlice(insideBlock, d, insideBlock.max(d));
+					for (final FloatType t : botSlice)
+						if (t.get() >= squareMaxScaledPadding) {
 							paddingIsTooSmall = true;
+							System.out.println("padding too small");
 							continue A;
 						}
 				}
 
 				/* padding was sufficient, save */
-				final SubsampleIntervalView<DoubleType> outputBlock = Views.subsample(insideBlock, 2);
+				final SubsampleIntervalView<FloatType> outputBlock = Views.subsample(insideBlock, 2);
 				final RandomAccessibleInterval<UnsignedShortType> convertedOutputBlock = Converters.convert(
 						outputBlock,
-						(a, b) -> b.set(Math.min(65535, (int)Math.round(a.get()))),
+						(a, b) -> b.set(Math.min(65535, (int)Math.round(Math.sqrt(a.get())))),
 						new UnsignedShortType());
 
-				final N5FSWriter n5BlockWriter = new N5FSWriter(n5Path);
-				N5Utils.saveNonEmptyBlock(convertedOutputBlock, n5BlockWriter, datasetName, gridBlock[2], new UnsignedShortType(0));
+				final N5FSWriter n5BlockWriter = new N5FSWriter(n5OutputPath);
+				N5Utils.saveNonEmptyBlock(convertedOutputBlock, n5BlockWriter, outputDatasetName, gridBlock[2], new UnsignedShortType(2));
 			}
 		});
 	}
