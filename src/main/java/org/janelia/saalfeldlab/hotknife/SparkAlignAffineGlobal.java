@@ -34,7 +34,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Util;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -137,7 +138,7 @@ public class SparkAlignAffineGlobal {
 		final JavaPairRDD<String, ArrayList<Feature>> features =
 				rdd.mapToPair(inDatasetName -> {
 
-					final N5Reader n5Reader = N5.openFSReader(n5Path);
+					final N5Reader n5Reader = new N5FSReader(n5Path);
 					final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Reader, inDatasetName + "/s" + scaleIndex);
 
 					System.out.println(inDatasetName + " : " + Arrays.toString(Intervals.dimensionsAsLongArray(source)) + " extracting features...");
@@ -268,7 +269,7 @@ public class SparkAlignAffineGlobal {
 
 		transforms.foreach(
 				tuple -> {
-					final N5Writer n5Writer = N5.openFSWriter(n5Path);
+					final N5Writer n5Writer = new N5FSWriter(n5Path);
 					final AffineTransform2D affine = new AffineTransform2D();
 					affine.set(tuple._2());
 					Transform.saveScaledTransform(
@@ -396,7 +397,7 @@ public class SparkAlignAffineGlobal {
 		System.out.println("Bounds : " + Arrays.deepToString(bounds));
 
 		/* save transforms */
-		final N5Writer n5 = N5.openFSWriter(options.getN5Path());
+		final N5Writer n5 = new N5FSWriter(options.getN5Path());
 		n5.createGroup(options.getOutGroup());
 		n5.setAttribute(options.getOutGroup(), "datasets", datasetNames);
 		n5.setAttribute(options.getOutGroup(), "transforms", transformDatasetNames);

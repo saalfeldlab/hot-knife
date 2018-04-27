@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
@@ -332,7 +332,7 @@ public class ExportSlabSeriesTransformsH5 {
 			final List<Long> botOffsets,
 			final String hdf5Path) throws IOException {
 
-		final N5Reader n5 = N5.openFSReader(n5Path);
+		final N5Reader n5 = new N5FSReader(n5Path);
 		final IHDF5Writer hdf5Writer = HDF5Factory.open(hdf5Path);
 
 		final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);

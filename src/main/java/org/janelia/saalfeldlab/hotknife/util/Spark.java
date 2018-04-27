@@ -21,7 +21,7 @@ import java.util.List;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 
 import net.imglib2.realtransform.RealTransform;
@@ -61,7 +61,7 @@ public class Spark {
 
 		rddDatasetNames.foreach(
 				tuple -> {
-					final N5Writer n5 = N5.openFSWriter(n5Path);
+					final N5Writer n5 = new N5FSWriter(n5Path);
 					final RealTransform transform = Transform.loadScaledTransform(n5, tuple._1());
 					final double[] boundsMin = n5.getAttribute(tuple._1(), "boundsMin", double[].class);
 					final double[] boundsMax = n5.getAttribute(tuple._1(), "boundsMax", double[].class);

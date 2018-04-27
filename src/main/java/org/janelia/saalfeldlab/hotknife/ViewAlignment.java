@@ -26,15 +26,19 @@ import java.util.concurrent.ExecutionException;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import bdv.util.Bdv;
+import bdv.util.volatiles.SharedQueue;
+import bdv.util.volatiles.VolatileViews;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.cache.volatiles.CacheHints;
+import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
 
@@ -105,12 +109,16 @@ public class ViewAlignment {
 
 //		new ImageJ();
 
-		final N5Reader n5 = N5.openFSReader(options.getN5Path());
+		final N5Reader n5 = new N5FSReader(options.getN5Path());
 
 		final int showScaleIndex = options.getScaleIndex();
 		final double showScale = 1.0 / (1 << showScaleIndex);
 
 		Bdv bdv = null;
+
+		final int numProc = Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 );
+		final SharedQueue queue = new SharedQueue( numProc );
+		final CacheHints cacheHints = new CacheHints( LoadingStrategy.VOLATILE, 0, true );
 
 		for (final String group : options.getGroups()) {
 
@@ -125,8 +133,8 @@ public class ViewAlignment {
 						n5,
 						group + "/" + transformDatasetNames[i]);
 			}
-
 			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
+
 					options.getN5Path(),
 					Arrays.asList(datasetNames),
 					showScaleIndex,
@@ -136,7 +144,10 @@ public class ViewAlignment {
 							Grid.ceilScaled(boundsMax, showScale)));
 
 			bdv = Show.transformedStack(
-					stack,
+					(RandomAccessibleInterval)VolatileViews.wrapAsVolatile(
+							Show.wrapAsVolatileCachedCellImg(stack, new int[]{256, 256, 26}),
+							queue,
+							cacheHints),
 					bdv);
 
 //			ImageJFunctions.show(stack, group);

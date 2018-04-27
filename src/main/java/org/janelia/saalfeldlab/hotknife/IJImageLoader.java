@@ -47,7 +47,7 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.volatiles.VolatileARGBType;
 import net.imglib2.type.volatiles.VolatileUnsignedByteType;
 
-public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByteType, VolatileUnsignedByteType> implements ViewerImgLoader
+public class IJImageLoader extends AbstractViewerSetupImgLoader<UnsignedByteType, VolatileUnsignedByteType> implements ViewerImgLoader
 {
 	private final int numScales;
 
@@ -61,7 +61,7 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 
 	private VolatileGlobalCellCache cache;
 
-	private final IJTiffVolatileByteArrayLoader loader;
+	private final IJVolatileByteArrayLoader loader;
 
 	final static private int[][] blockDimensions(
 			final int tileWidth,
@@ -75,7 +75,7 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 		return blockDimensions;
 	}
 
-	public IJTiffImageLoader(
+	public IJImageLoader(
 			final long width,
 			final long height,
 			final long depth,
@@ -84,7 +84,8 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 			final int tileWidth,
 			final int tileHeight,
 			final int[][] blockDimensions,
-			final boolean topLeft)
+			final boolean topLeft,
+			final long firstSlice)
 	{
 		super( new UnsignedByteType(), new VolatileUnsignedByteType() );
 		this.numScales = blockDimensions.length;
@@ -120,11 +121,11 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 			mipmapTransforms[ l ] = mipmapTransform;
 		}
 
-		loader = new IJTiffVolatileByteArrayLoader(urlFormat, tileWidth, tileHeight);
+		loader = new IJVolatileByteArrayLoader(urlFormat, tileWidth, tileHeight, firstSlice);
 		cache = new VolatileGlobalCellCache( numScales, 10 );
 	}
 
-	public IJTiffImageLoader(
+	public IJImageLoader(
 			final long width,
 			final long height,
 			final long depth,
@@ -132,12 +133,13 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 			final String urlFormat,
 			final int tileWidth,
 			final int tileHeight,
-			final int[][] blockDimensions )
-	{
-		this( width, height, depth, zScale, urlFormat, tileWidth, tileHeight, blockDimensions, true );
+			final int[][] blockDimensions,
+			final long firstSlice) {
+
+		this(width, height, depth, zScale, urlFormat, tileWidth, tileHeight, blockDimensions, true, firstSlice);
 	}
 
-	public IJTiffImageLoader(
+	public IJImageLoader(
 			final long width,
 			final long height,
 			final long depth,
@@ -148,12 +150,13 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 			final int tileHeight,
 			final int blockWidth,
 			final int blockHeight,
-			final boolean topLeft )
-	{
-		this( width, height, depth, zScale, urlFormat, tileWidth, tileHeight, blockDimensions( blockWidth, blockHeight, numScales ), topLeft );
+			final boolean topLeft,
+			final long firstSlice) {
+
+		this(width, height, depth, zScale, urlFormat, tileWidth, tileHeight, blockDimensions(blockWidth, blockHeight, numScales), topLeft, firstSlice);
 	}
 
-	public IJTiffImageLoader(
+	public IJImageLoader(
 			final long width,
 			final long height,
 			final long depth,
@@ -163,12 +166,13 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 			final int tileWidth,
 			final int tileHeight,
 			final int blockWidth,
-			final int blockHeight )
+			final int blockHeight,
+			final long firstSlice)
 	{
-		this( width, height, depth, zScale, urlFormat, tileWidth, tileHeight, blockDimensions( blockWidth, blockHeight, numScales ), true );
+		this( width, height, depth, zScale, urlFormat, tileWidth, tileHeight, blockDimensions( blockWidth, blockHeight, numScales ), true, firstSlice );
 	}
 
-	public IJTiffImageLoader(
+	public IJImageLoader(
 			final long width,
 			final long height,
 			final long depth,
@@ -177,12 +181,13 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 			final String urlFormat,
 			final int tileWidth,
 			final int tileHeight,
-			final boolean topLeft )
+			final boolean topLeft,
+			final long firstSlice)
 	{
-		this( width, height, depth, zScale, numScales, urlFormat, tileWidth, tileHeight, tileWidth, tileHeight, topLeft );
+		this( width, height, depth, zScale, numScales, urlFormat, tileWidth, tileHeight, tileWidth, tileHeight, topLeft, firstSlice );
 	}
 
-	public IJTiffImageLoader(
+	public IJImageLoader(
 			final long width,
 			final long height,
 			final long depth,
@@ -190,9 +195,10 @@ public class IJTiffImageLoader extends AbstractViewerSetupImgLoader<UnsignedByte
 			final int numScales,
 			final String urlFormat,
 			final int tileWidth,
-			final int tileHeight )
+			final int tileHeight,
+			final long firstSlice)
 	{
-		this( width, height, depth, zScale, numScales, urlFormat, tileWidth, tileHeight, true );
+		this( width, height, depth, zScale, numScales, urlFormat, tileWidth, tileHeight, true, firstSlice );
 	}
 
 	final static public int getNumScales( long width, long height, final long tileWidth, final long tileHeight )

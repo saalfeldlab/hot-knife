@@ -34,13 +34,15 @@ import ij.ImagePlus;
 import ij.io.Opener;
 import net.imglib2.img.basictypeaccess.volatiles.array.VolatileByteArray;
 
-public class IJTiffVolatileByteArrayLoader implements CacheArrayLoader< VolatileByteArray >
+public class IJVolatileByteArrayLoader implements CacheArrayLoader< VolatileByteArray >
 {
 	private final String urlFormat;
 
 	private final int tileWidth;
 
 	private final int tileHeight;
+
+	private final long firstSlice;
 
 	/**
 	 * <p>Create a {@link CacheArrayLoader} for a CATMAID source.  Tiles are
@@ -72,10 +74,11 @@ public class IJTiffVolatileByteArrayLoader implements CacheArrayLoader< Volatile
 	 * @param tileWidth
 	 * @param tileHeight
 	 */
-	public IJTiffVolatileByteArrayLoader(final String urlFormat, final int tileWidth, final int tileHeight) {
+	public IJVolatileByteArrayLoader(final String urlFormat, final int tileWidth, final int tileHeight, final long firstSlice) {
 		this.urlFormat = urlFormat;
 		this.tileWidth = tileWidth;
 		this.tileHeight = tileHeight;
+		this.firstSlice = firstSlice;
 	}
 
 	@Override
@@ -98,7 +101,7 @@ public class IJTiffVolatileByteArrayLoader implements CacheArrayLoader< Volatile
 		final long x0 = c0 * tileWidth;
 		final long y0 = r0 * tileHeight;
 
-		final String urlString = String.format( urlFormat, level, scale, x0, y0, min[2], tileWidth, tileHeight, r0, c0);
+		final String urlString = String.format( urlFormat, level, scale, x0, y0, min[2] + firstSlice, tileWidth, tileHeight, r0, c0);
 		final ImagePlus imp = new Opener().openImage(urlString);
 
 		return new VolatileByteArray((byte[])imp.getProcessor().convertToByteProcessor().getPixels(), true);

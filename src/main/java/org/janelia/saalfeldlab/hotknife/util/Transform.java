@@ -23,10 +23,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
-import org.janelia.saalfeldlab.n5.CompressionType;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -40,6 +40,7 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.position.RealPositionRealRandomAccessible;
 import net.imglib2.realtransform.AffineTransform2D;
@@ -141,7 +142,7 @@ public class Transform {
 				new RealTransformRandomAccessible<>(
 						Views.interpolate(
 								Views.extendValue(source, background),
-								new NLinearInterpolatorFactory<>()),
+								new ClampingNLinearInterpolatorFactory<>()),
 						transformFromSource),
 				targetInterval);
 	}
@@ -353,7 +354,7 @@ public class Transform {
 			final int scaleIndex,
 			final List<? extends InvertibleRealTransform> transforms) throws IOException {
 
-		final N5Reader n5Reader = N5.openFSReader(n5Path);
+		final N5Reader n5Reader = new N5FSReader(n5Path);
 
 		final double[] min = new double[2];
 		final double[] max = new double[2];
@@ -430,7 +431,7 @@ public class Transform {
 		final int[] blockSize = new int[n + 1];
 		Arrays.fill(blockSize, 1024);
 		blockSize[n] = n;
-		N5Utils.save(positionField, n5, datasetName, blockSize, CompressionType.GZIP);
+		N5Utils.save(positionField, n5, datasetName, blockSize, new GzipCompression());
 		n5.setAttribute(datasetName, "boundsMin", boundsMin);
 		n5.setAttribute(datasetName, "boundsMax", boundsMax);
 		n5.setAttribute(datasetName, "scale", transformScale);
@@ -459,7 +460,7 @@ public class Transform {
 				dimensions,
 				blockSize,
 				DataType.FLOAT64,
-				CompressionType.GZIP);
+				new GzipCompression());
 		n5.createDataset(datasetName, attributes);
 		n5.setAttribute(datasetName, "boundsMin", boundsMin);
 		n5.setAttribute(datasetName, "boundsMax", boundsMax);
@@ -507,7 +508,7 @@ public class Transform {
 				dimensions,
 				blockSize,
 				DataType.FLOAT64,
-				CompressionType.GZIP);
+				new GzipCompression());
 		n5.createDataset(datasetName, attributes);
 		n5.setAttribute(datasetName, "boundsMin", boundsMin);
 		n5.setAttribute(datasetName, "boundsMax", boundsMax);
@@ -569,7 +570,7 @@ public class Transform {
 			final Interval targetInterval) throws IOException {
 
 		final ArrayList<RandomAccessibleInterval<FloatType>> transformedIntervals = new ArrayList<>();
-		final N5Reader n5Reader = N5.openFSReader(n5Path);
+		final N5Reader n5Reader = new N5FSReader(n5Path);
 
 		for (int i = 0; i < transforms.size(); ++i) {
 

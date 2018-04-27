@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.ExecutionException;
 
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
@@ -29,11 +29,11 @@ import org.kohsuke.args4j.Option;
 
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
+import bdv.util.BdvOptions;
+import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.type.volatiles.VolatileUnsignedByteType;
 
 /**
  *
@@ -49,7 +49,7 @@ public class ViewN5 {
 		private final String n5Path = null;
 
 		@Option(name = "--n5Dataset", required = true, usage = "N5 dataset, e.g. /Sec26")
-		final String datasetName = null;
+		final String[] datasetNames = null;
 
 		private boolean parsedSuccessfully = false;
 
@@ -79,8 +79,8 @@ public class ViewN5 {
 		/**
 		 * @return the datasetName
 		 */
-		public String getDatasetName() {
-			return datasetName;
+		public String[] getDatasetNames() {
+			return datasetNames;
 		}
 
 		/**
@@ -98,19 +98,28 @@ public class ViewN5 {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final N5Reader n5 = N5.openFSReader(options.getN5Path());
+		final N5Reader n5 = new N5FSReader(options.getN5Path());
 
 		final int numProc = Runtime.getRuntime().availableProcessors();
-		final SharedQueue queue = new SharedQueue(Math.max(1, numProc / 2));
+		final SharedQueue queue = new SharedQueue(Math.min(8, Math.max(1, numProc / 2)));
 
-		@SuppressWarnings("unchecked")
-		final RandomAccessibleInterval<UnsignedByteType> source = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, options.getDatasetName());
+		BdvStackSource bdv = null;
 
-		BdvFunctions.<VolatileUnsignedByteType>show(
-				VolatileViews.wrapAsVolatile(
-						source,
-						queue),
-				options.getN5Path(),
-				source.numDimensions() == 2 ? Bdv.options().is2D() : Bdv.options());
+		final String[] datasetNames = options.getDatasetNames();
+		for (int i = 0; i < datasetNames.length; ++i) {
+			@SuppressWarnings("unchecked")
+			final RandomAccessibleInterval source = N5Utils.openVolatile(n5, datasetNames[i]);
+
+			final BdvOptions bdvOptions = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
+
+			bdv = BdvFunctions.show(
+					VolatileViews.wrapAsVolatile(
+							source,
+							queue),
+					datasetNames[i],
+					source.numDimensions() == 2 ? bdvOptions.is2D() : bdvOptions);
+
+			bdv.setDisplayRange(0,  255);
+		}
 	}
 }

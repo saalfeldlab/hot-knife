@@ -30,7 +30,7 @@ import java.util.concurrent.Future;
 
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
@@ -41,9 +41,7 @@ import ij.IJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalInterval;
-import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.converter.Converters;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
@@ -53,8 +51,6 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
-import net.imglib2.view.composite.CompositeIntervalView;
-import net.imglib2.view.composite.RealComposite;
 
 /**
  *
@@ -201,7 +197,7 @@ public class ExportAlignedSlabSeriesTiff {
 			final long[] size,
 			final boolean useVolatile) throws IOException {
 
-		final N5Reader n5 = N5.openFSReader(n5Path);
+		final N5Reader n5 = new N5FSReader(n5Path);
 
 		Files.createDirectories(Paths.get(outPath));
 
@@ -222,7 +218,7 @@ public class ExportAlignedSlabSeriesTiff {
 
 		long zOffset = 0;
 
-		final ArrayList<RandomAccessible<UnsignedByteType>> sources = new ArrayList<>();
+		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> sources = new ArrayList<>();
 
 		for (int i = 0; i < datasetNames.size(); ++i) {
 
@@ -261,56 +257,50 @@ public class ExportAlignedSlabSeriesTiff {
 				transformSequence,
 				new UnsignedByteType(0));
 
-			sources.add(Views.extendValue(transformedSource, new UnsignedByteType()));
+			sources.add(transformedSource);
 
 			zOffset += botOffsets.get(i) - topOffsets.get(i) + 1;
 		}
 
+
+
+		/* export sequentially */
 		final FinalInterval sourceCropInterval = new FinalInterval(
 				fMin,
 				new long[] {fMax[0], fMax[1], Math.max(fMin[2] - 1, Math.min(zOffset - 1, fMax[2]))});
 
+		final int zeroPadding = Long.toString(sourceCropInterval.max(2)).length();
+
 		System.out.println(Util.printInterval(sourceCropInterval));
 
-		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> stackSources = new ArrayList<>();
-		for (final RandomAccessible<UnsignedByteType> source : sources)
-			stackSources.add(Views.offsetInterval(source, sourceCropInterval));
+		long z = Math.max(sources.get(0).min(2), sourceCropInterval.min(2));
+		for (final RandomAccessibleInterval<UnsignedByteType> source : sources) {
 
-		final RandomAccessibleInterval<UnsignedByteType> stack = Views.stack(stackSources);
-		final CompositeIntervalView<UnsignedByteType, RealComposite<UnsignedByteType>> compositeStackSources = Views.collapseReal(stack);
-		final RandomAccessibleInterval<UnsignedByteType> accumulatedStackSources = Converters.convert(
-				compositeStackSources,
-				(a, b) -> {
-					b.setZero();
-					for (int i = 0; i < stackSources.size(); ++i)
-						b.add(a.get(i));
-				},
-				new UnsignedByteType());
-
-		final ExecutorService exec = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 1);
-		final ArrayList<Future<?>> futures = new ArrayList<>();
-		final int zeroPadding = Long.toString(accumulatedStackSources.dimension(2)).length();
-		for (int z = 0; z < accumulatedStackSources.dimension(2); ++z) {
-			final int fz = z;
-			futures.add(
-					exec.submit(() -> {
-						final IntervalView<UnsignedByteType> slice = Views.hyperSlice(accumulatedStackSources, 2, fz);
-						final String fileName = String.format("%s/%0" + zeroPadding + "d.tif", outPath, fz);
-						System.out.println(fileName);
-						IJ.saveAsTiff(ImageJFunctions.wrap(slice, ""), fileName);
-					}));
-		}
-
-		futures.forEach(f -> {
-			try {
-				f.get();
-			} catch (final InterruptedException e) {
-				e.printStackTrace();
-			} catch (final ExecutionException e) {
-				e.printStackTrace();
+			final ExecutorService exec = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 1);
+			final ArrayList<Future<?>> futures = new ArrayList<>();
+			System.out.println(Util.printInterval(source));
+			for (; z <= Math.min(source.max(2), sourceCropInterval.max(2)); ++z) {
+				final long fz = z;
+				futures.add(
+						exec.submit(() -> {
+							final IntervalView<UnsignedByteType> slice = Views.hyperSlice(source, 2, fz);
+							final String fileName = String.format("%s/%0" + zeroPadding + "d.tif", outPath, fz);
+							System.out.println(fileName);
+							IJ.saveAsTiff(ImageJFunctions.wrap(slice, ""), fileName);
+						}));
 			}
-		});
 
-		exec.shutdown();
+			futures.forEach(f -> {
+				try {
+					f.get();
+				} catch (final InterruptedException e) {
+					e.printStackTrace();
+				} catch (final ExecutionException e) {
+					e.printStackTrace();
+				}
+			});
+
+			exec.shutdown();
+		}
 	}
 }
