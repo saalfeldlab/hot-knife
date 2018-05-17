@@ -384,20 +384,5 @@ public class SparkConvertRenderStackToN5 {
 					options.getBlockSize());
 
 		sc.close();
-
-		// final N5Writer n5 = N5.openFSWriter(options.getN5Path());
-
-		/* remove should be parallelized */
-		// n5.remove(slicesDatasetName);
-
-		// final int numProc = Runtime.getRuntime().availableProcessors();
-		// final SharedQueue queue = new SharedQueue(Math.max(1, numProc / 2));
-		//
-		// BdvFunctions.show(
-		// VolatileViews.wrapAsVolatile(
-		// (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5,
-		// options.datasetName),
-		// queue),
-		// "export");
 	}
 }
