@@ -260,7 +260,7 @@ public class PMCCScaleSpaceBlockFlow
 	}
 
 
-	private static final DeformationFieldTransform< DoubleType > createDeformationFieldTransform(
+	public static final DeformationFieldTransform< DoubleType > createDeformationFieldTransform(
 			final FloatProcessor shiftX,
 			final FloatProcessor shiftY )
 	{
@@ -307,7 +307,7 @@ public class PMCCScaleSpaceBlockFlow
 							ip2,
 							new FinalInterval( ip2.getWidth(), ip2.getHeight() ),
 							new PositionFieldTransform<>(
-									( RealRandomAccessible< DoubleType >[] )new RealRandomAccessible[]{
+									new RealRandomAccessible[]{
 										xPositions,
 										yPositions } ) ) );
 
