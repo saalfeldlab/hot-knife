@@ -224,7 +224,7 @@ public class SparkConvertJaneliaOctreeToN5 {
 
 		try (Stream<String> stream = Files.lines(Paths.get(path + "/" + transformFile))) {
 
-			Iterator<String> it = stream.iterator();
+			final Iterator<String> it = stream.iterator();
 			return new Transforms(
 					Long.parseLong(it.next().substring(4)),
 					Long.parseLong(it.next().substring(4)),
@@ -250,8 +250,8 @@ public class SparkConvertJaneliaOctreeToN5 {
 		final int nPixels = blockSize[0] * blockSize[1] * blockSize[2];
 
 		/* get transforms data */
-		Transforms transforms = getTransforms(path);
-		long scale = 1 << (transforms.nl - 1);
+		final Transforms transforms = getTransforms(path);
+		final long scale = 1 << (transforms.nl - 1);
 		final long[] dimensions = new long[] {
 				blockSize[0] * scale,
 				blockSize[1] * scale,
@@ -281,7 +281,7 @@ public class SparkConvertJaneliaOctreeToN5 {
 		/* do it */
 		final JavaRDD<String> rddPaths = sc.parallelize(paths);
 		final JavaRDD<long[]> rddGridCoordinates = sc.parallelize(gridCoordinates);
-		JavaPairRDD<String, long[]> zipped = rddPaths.zip(rddGridCoordinates);
+		final JavaPairRDD<String, long[]> zipped = rddPaths.zip(rddGridCoordinates);
 
 		zipped.foreach(block -> {
 
@@ -292,8 +292,8 @@ public class SparkConvertJaneliaOctreeToN5 {
 
 			for (int c = 0; c < nChannels; ++c) {
 				final ImagePlus imp = IJ.openImage(block._1() + "/" + String.format(tifNameFormat, c));
-				Cursor<UnsignedShortType> cSource = (Cursor<UnsignedShortType>)ImagePlusImgs.from(imp).cursor();
-				ArrayCursor<UnsignedShortType> cTarget = img.cursor();
+				final Cursor<UnsignedShortType> cSource = (Cursor<UnsignedShortType>)(Cursor)ImagePlusImgs.from(imp).cursor();
+				final ArrayCursor<UnsignedShortType> cTarget = img.cursor();
 				boolean isEmpty = true;
 				while (cTarget.hasNext()) {
 					final short value = cSource.next().getShort();
