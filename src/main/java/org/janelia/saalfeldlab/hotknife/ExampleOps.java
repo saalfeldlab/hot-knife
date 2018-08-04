@@ -1,9 +1,9 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import static bdv.viewer.DisplayMode.SINGLE;
-import static net.imglib2.cache.img.AccessFlags.DIRTY;
-import static net.imglib2.cache.img.AccessFlags.VOLATILE;
-import static net.imglib2.cache.img.PrimitiveType.SHORT;
+import static net.imglib2.img.basictypeaccess.AccessFlags.DIRTY;
+import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
+import static net.imglib2.type.PrimitiveType.SHORT;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -39,6 +39,7 @@ import net.imglib2.cache.volatiles.CreateInvalid;
 import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.cache.volatiles.VolatileCache;
 import net.imglib2.img.Img;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.basictypeaccess.array.DirtyShortArray;
 import net.imglib2.img.basictypeaccess.volatiles.array.VolatileShortArray;
 import net.imglib2.img.cell.Cell;
@@ -109,7 +110,7 @@ public class ExampleOps
 						opService,
 						opClass,
 						opArgs ),
-				AccessIo.get( SHORT, VOLATILE ),
+				AccessIo.get( SHORT, AccessFlags.setOf( VOLATILE ) ),
 				type.getEntitiesPerPixel() );
 		final IoSync< Long, Cell< VolatileShortArray > > iosync = new IoSync<>( diskcache );
 		final Cache< Long, Cell< VolatileShortArray > > cache = new GuardedStrongRefLoaderRemoverCache< Long, Cell< VolatileShortArray > >( 1000 )
@@ -117,7 +118,7 @@ public class ExampleOps
 				.withLoader( iosync );
 		final Img< UnsignedShortType > gauss = new LazyCellImg<>( grid, type, cache.unchecked()::get );
 
-		final CreateInvalid< Long, Cell< VolatileShortArray > > createInvalid = CreateInvalidVolatileCell.get( grid, type );
+		final CreateInvalid< Long, Cell< VolatileShortArray > > createInvalid = CreateInvalidVolatileCell.get( grid, type, false );
 		final VolatileCache< Long, Cell< VolatileShortArray > > volatileCache = new WeakRefVolatileCache<>( cache, queue, createInvalid );
 
 		final CacheHints hints = new CacheHints( LoadingStrategy.VOLATILE, 0, false );
@@ -144,7 +145,7 @@ public class ExampleOps
 				blockcache,
 				grid,
 				new CheckerboardLoader( grid ),
-				AccessIo.get( SHORT, DIRTY ),
+				AccessIo.get( SHORT, AccessFlags.setOf( DIRTY ) ),
 				type.getEntitiesPerPixel() );
 		final IoSync< Long, Cell< DirtyShortArray > > iosync = new IoSync<>( diskcache );
 		final UncheckedCache< Long, Cell< DirtyShortArray > > cache = new GuardedStrongRefLoaderRemoverCache< Long, Cell< DirtyShortArray > >( 1000 )

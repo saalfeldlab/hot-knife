@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -59,7 +60,7 @@ import net.imglib2.type.numeric.integer.UnsignedShortType;
  */
 public class SparkConvertJaneliaOctreeToN5 {
 
-	final static public String transformFile = "transforms.txt";
+	final static public String transformFile = "transform.txt";
 	final static public String tifNameFormat = "default.%d.tif";
 
 	@SuppressWarnings("serial")
@@ -161,8 +162,9 @@ public class SparkConvertJaneliaOctreeToN5 {
 
 		if (!Files.exists(Paths.get(path)))
 			return;
-		--depth;
+
 		if (depth > 0) {
+			--depth;
 			final int step = 1 << depth;
 			listOctreeBlocks(
 					path + "/1",
@@ -261,7 +263,7 @@ public class SparkConvertJaneliaOctreeToN5 {
 		final N5Writer n5 = new N5FSWriter(n5Path);
 		for (int c = 0; c < nChannels; ++c) {
 			n5.createDataset(
-					groupName + "/c" + c,
+					groupName + "/c" + c + "/s0",
 					dimensions,
 					blockSize,
 					DataType.UINT16,
@@ -300,11 +302,13 @@ public class SparkConvertJaneliaOctreeToN5 {
 					isEmpty &= value == 0;
 					cTarget.next().set(value);
 				}
-				if (!isEmpty)
+				if (!isEmpty) {
+					System.out.println(c + ": " + block._1() + " -> " + Arrays.toString(block._2()));
 					n5Writer.writeBlock(
-							path + "/c" + c,
+							groupName + "/c" + c + "/s0",
 							datasetAttributes,
 							new ShortArrayDataBlock(blockSize, block._2(), data));
+				}
 			}
 		});
 	}

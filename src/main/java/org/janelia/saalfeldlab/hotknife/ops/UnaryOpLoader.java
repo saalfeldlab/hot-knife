@@ -17,7 +17,6 @@ import net.imglib2.img.basictypeaccess.array.ArrayDataAccess;
 import net.imglib2.img.basictypeaccess.volatiles.VolatileAccess;
 import net.imglib2.img.cell.Cell;
 import net.imglib2.img.cell.CellGrid;
-import net.imglib2.img.cell.LazyCellImg;
 import net.imglib2.type.NativeType;
 import net.imglib2.util.Fraction;
 import net.imglib2.util.Intervals;
@@ -64,7 +63,7 @@ public class UnaryOpLoader<T, S extends NativeType<S>, A extends VolatileAccess 
 		final int[] outputDimensions = new int[source.numDimensions()];
 		Arrays.fill(outputDimensions, 1);
 
-		final Img<S> output = new ArrayImgFactory<S>().create(outputDimensions, targetTypeSupplier.get());
+		final Img<S> output = new ArrayImgFactory<S>(targetTypeSupplier.get()).create(outputDimensions);
 
 		op = Computers.unary(
 				opService,
@@ -88,7 +87,7 @@ public class UnaryOpLoader<T, S extends NativeType<S>, A extends VolatileAccess 
 
 		final A access = accessSupplier.apply((int)Math.ceil(Intervals.numElements(cellDims) * entitiesPerPixel.getRatio()));
 		final ArrayImg<S, A> img = new ArrayImg<>(access, Util.int2long(cellDims), entitiesPerPixel);
-		LazyCellImg.linkType(targetType, img);
+		img.setLinkedType(targetType);
 		final IntervalView<S> output = Views.translate(img, cellMin);
 
 		op.compute(source, output);

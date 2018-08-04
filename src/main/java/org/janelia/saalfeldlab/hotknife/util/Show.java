@@ -16,13 +16,14 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
-import static net.imglib2.cache.img.AccessFlags.VOLATILE;
-import static net.imglib2.cache.img.PrimitiveType.BYTE;
-import static net.imglib2.cache.img.PrimitiveType.DOUBLE;
-import static net.imglib2.cache.img.PrimitiveType.FLOAT;
-import static net.imglib2.cache.img.PrimitiveType.INT;
-import static net.imglib2.cache.img.PrimitiveType.LONG;
-import static net.imglib2.cache.img.PrimitiveType.SHORT;
+
+import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
+import static net.imglib2.type.PrimitiveType.BYTE;
+import static net.imglib2.type.PrimitiveType.DOUBLE;
+import static net.imglib2.type.PrimitiveType.FLOAT;
+import static net.imglib2.type.PrimitiveType.INT;
+import static net.imglib2.type.PrimitiveType.LONG;
+import static net.imglib2.type.PrimitiveType.SHORT;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,7 +43,6 @@ import bdv.viewer.Source;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.Cache;
-import net.imglib2.cache.img.ArrayDataAccessFactory;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.cache.img.LoadedCellCacheLoader;
 import net.imglib2.cache.img.RandomAccessibleCacheLoader;
@@ -50,6 +50,8 @@ import net.imglib2.cache.img.ReadOnlyCachedCellImgFactory;
 import net.imglib2.cache.ref.SoftRefLoaderCache;
 import net.imglib2.converter.Converter;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.img.basictypeaccess.ArrayDataAccessFactory;
 import net.imglib2.img.basictypeaccess.array.ArrayDataAccess;
 import net.imglib2.img.cell.Cell;
 import net.imglib2.img.cell.CellGrid;
@@ -199,7 +201,7 @@ public class Show {
 		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
 		final CellGrid grid = new CellGrid(dimensions, blockSize);
 
-		final RandomAccessibleCacheLoader<T, A, CA> loader = RandomAccessibleCacheLoader.get(grid, Views.zeroMin(source));
+		final RandomAccessibleCacheLoader<T, A, CA> loader = RandomAccessibleCacheLoader.get(grid, Views.zeroMin(source), AccessFlags.setOf());
 		return new ReadOnlyCachedCellImgFactory().createWithCacheLoader(dimensions, source.randomAccess().get(), loader);
 	}
 
@@ -218,20 +220,20 @@ public class Show {
 
 		final CachedCellImg<T, ?> img;
 		final Cache<Long, Cell<?>> cache =
-				new SoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, VOLATILE));
+				new SoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf(VOLATILE)));
 
 		if (GenericByteType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(BYTE, VOLATILE));
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(BYTE, AccessFlags.setOf(VOLATILE)));
 		} else if (GenericShortType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(SHORT, VOLATILE));
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(SHORT, AccessFlags.setOf(VOLATILE)));
 		} else if (GenericIntType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(INT, VOLATILE));
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(INT, AccessFlags.setOf(VOLATILE)));
 		} else if (GenericLongType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(LONG, VOLATILE));
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(LONG, AccessFlags.setOf(VOLATILE)));
 		} else if (FloatType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, VOLATILE));
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, AccessFlags.setOf(VOLATILE)));
 		} else if (DoubleType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(DOUBLE, VOLATILE));
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(DOUBLE, AccessFlags.setOf(VOLATILE)));
 		} else {
 			img = null;
 		}

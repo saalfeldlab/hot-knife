@@ -16,9 +16,9 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
-import static net.imglib2.cache.img.AccessFlags.VOLATILE;
-import static net.imglib2.cache.img.PrimitiveType.BYTE;
-import static net.imglib2.cache.img.PrimitiveType.FLOAT;
+import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
+import static net.imglib2.type.PrimitiveType.BYTE;
+import static net.imglib2.type.PrimitiveType.FLOAT;
 
 import org.janelia.saalfeldlab.hotknife.ops.UnaryComputerOpCellLoader;
 
@@ -29,10 +29,11 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.Cache;
-import net.imglib2.cache.img.ArrayDataAccessFactory;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.cache.img.LoadedCellCacheLoader;
 import net.imglib2.cache.ref.SoftRefLoaderCache;
+import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.img.basictypeaccess.ArrayDataAccessFactory;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.basictypeaccess.volatiles.array.VolatileByteArray;
@@ -70,8 +71,8 @@ public class Lazy {
 
 		final UnsignedByteType type = new UnsignedByteType();
 		final Cache<Long, Cell<VolatileByteArray>> cache = new SoftRefLoaderCache<Long, Cell<VolatileByteArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, VOLATILE));
-		final CachedCellImg<UnsignedByteType, VolatileByteArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(BYTE, VOLATILE));
+				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf(VOLATILE)));
+		final CachedCellImg<UnsignedByteType, VolatileByteArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(BYTE, AccessFlags.setOf(VOLATILE)));
 		return img;
 	}
 
@@ -93,8 +94,8 @@ public class Lazy {
 
 		final UnsignedByteType type = new UnsignedByteType();
 		final Cache<Long, Cell<ByteArray>> cache = new SoftRefLoaderCache<Long, Cell<ByteArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type));
-		final CachedCellImg<UnsignedByteType, ByteArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(BYTE));
+				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf()));
+		final CachedCellImg<UnsignedByteType, ByteArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(BYTE, AccessFlags.setOf()));
 		return img;
 	}
 
@@ -116,8 +117,8 @@ public class Lazy {
 
 		final FloatType type = new FloatType();
 		final Cache<Long, Cell<VolatileFloatArray>> cache = new SoftRefLoaderCache<Long, Cell<VolatileFloatArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, VOLATILE));
-		final CachedCellImg<FloatType, VolatileFloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, VOLATILE));
+				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf(VOLATILE)));
+		final CachedCellImg<FloatType, VolatileFloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, AccessFlags.setOf(VOLATILE)));
 		return img;
 	}
 
@@ -140,8 +141,8 @@ public class Lazy {
 
 		final FloatType type = new FloatType();
 		final Cache<Long, Cell<FloatArray>> cache = new SoftRefLoaderCache<Long, Cell<FloatArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type));
-		final CachedCellImg<FloatType, FloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT));
+				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf()));
+		final CachedCellImg<FloatType, FloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, AccessFlags.setOf()));
 		return img;
 	}
 
@@ -160,8 +161,8 @@ public class Lazy {
 
 		final FloatType type = new FloatType();
 		final Cache<Long, Cell<FloatArray>> cache = new SoftRefLoaderCache<Long, Cell<FloatArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type));
-		final CachedCellImg<FloatType, FloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT));
+				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf()));
+		final CachedCellImg<FloatType, FloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, AccessFlags.setOf()));
 		return img;
 	}
 }

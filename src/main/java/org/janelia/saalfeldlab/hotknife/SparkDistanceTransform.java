@@ -46,14 +46,12 @@ import net.imglib2.algorithm.morphology.distance.DistanceTransform.DISTANCE_TYPE
 import net.imglib2.converter.Converters;
 import net.imglib2.img.NativeImg;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.type.Type;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.integer.UnsignedLongType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Fraction;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;
@@ -159,7 +157,7 @@ public class SparkDistanceTransform {
 		}
 	}
 
-	public static <T extends Type<T>> NativeImg<FloatType, FloatArray> createBoundaries(
+	public static <T extends Type<T>> NativeImg<FloatType, ?> createBoundaries(
 			final RandomAccessibleInterval<T> source,
 			final float maxSquareDistance,
 			final T mask) {
@@ -173,13 +171,13 @@ public class SparkDistanceTransform {
 
 		final long numPixels = Arrays.stream(outputDimensions).reduce(1, (a, b) -> a * b);
 
-		final NativeImg<FloatType, FloatArray> targetBlock;
+		final NativeImg<FloatType, ?> targetBlock;
 		if (numPixels < Integer.MAX_VALUE)
 			targetBlock = ArrayImgs.floats(outputDimensions);
 		else {
 			final int[] cellDimensions = new int[n];
 			Arrays.fill(cellDimensions, (int)Math.pow(Integer.MAX_VALUE, 1.0 / n));
-			targetBlock = new CellImgFactory<FloatType>(cellDimensions).createFloatInstance(outputDimensions, new Fraction());
+			targetBlock = new CellImgFactory<FloatType>(new FloatType(), cellDimensions).create(outputDimensions);
 		}
 		targetBlock.forEach(t -> t.set(maxSquareDistance));
 
@@ -320,7 +318,7 @@ A:			for (boolean paddingIsTooSmall = true; paddingIsTooSmall; Arrays.setAll(pad
 								paddedBlockMin,
 								paddedBlockSize);
 
-				final NativeImg<FloatType, FloatArray> target = createBoundaries(sourceBlock, (float)squareMaxScaledBlockSize, new UnsignedLongType(0));
+				final NativeImg<FloatType, ?> target = createBoundaries(sourceBlock, (float)squareMaxScaledBlockSize, new UnsignedLongType(0));
 
 				/* make distance transform */
 				DistanceTransform.transform(target, DISTANCE_TYPE.EUCLIDIAN, squareHalfResolution);
