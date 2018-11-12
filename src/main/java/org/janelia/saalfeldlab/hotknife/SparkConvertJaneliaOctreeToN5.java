@@ -219,7 +219,6 @@ public class SparkConvertJaneliaOctreeToN5 {
 			paths.add(path);
 			gridCoordinates.add(offset);
 		}
-
 	}
 
 	private static Transforms getTransforms(final String path) throws IOException {
