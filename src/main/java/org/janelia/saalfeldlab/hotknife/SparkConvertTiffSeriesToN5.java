@@ -96,6 +96,8 @@ public class SparkConvertTiffSeriesToN5 {
 				else
 					parseCSLongArray(minString, min);
 
+				System.out.println(String.format(urlFormat, firstSliceIndex + min[2]));
+
 				/* width and height */
 				final ImagePlus firstSlice = new Opener().openImage(String.format(urlFormat, firstSliceIndex + min[2]));
 				sourceSize[0] = firstSlice.getWidth();
@@ -109,7 +111,8 @@ public class SparkConvertTiffSeriesToN5 {
 				if (sizeString == null) {
 					size[0] = sourceSize[0] - min[0];
 					size[1] = sourceSize[1] - min[1];
-					size[2] = sourceSize[2] - min[2];
+//					size[2] = sourceSize[2] - min[2];
+					size[2] = sourceSize[2];
 				} else
 					parseCSLongArray(sizeString, size);
 

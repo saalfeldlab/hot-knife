@@ -6,13 +6,13 @@ ABS_DIR=`readlink -f "$OWN_DIR"`
 FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh
 JAR=$PWD/hot-knife-0.0.4-SNAPSHOT.jar # this jar must be accessible from the cluster
 CLASS=org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeriesToN5
-N_NODES=10
+N_NODES=6
 
-URLFORMAT='/nrs/flyem/alignment/Z1217-19m/VNC/Sec22/flatten/flattened/zcorr.%05d-flattened.tif'
+URLFORMAT='/nrs/flyem/alignment/Z1217-19m/VNC/Sec20/flatten/flattened/zcorr.%05d-flattened.tif'
 N5PATH='/nrs/flyem/data/tmp/Z1217-19m/VNC.n5'
-N5DATASET='slab-22/raw/s0'
-MIN='0,840,1'
-SIZE='0,3354,0'
+N5DATASET='slab-20/raw/s0'
+MIN='0,720,1'
+SIZE='0,3483,0'
 BLOCKSIZE='128,128,128'
 
 ARGV="\

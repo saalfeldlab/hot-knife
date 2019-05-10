@@ -3,14 +3,15 @@
 # ./create-convert-jobs 22 24 25 26 27
 
 VERSION="0.0.4-SNAPSHOT"
-VOLUME="Z0115-22"
+VOLUME="Z1217-19m/VNC"
+PREFIX="/nrs/flyem/alignment"
 padding=20
 faceOffset=6
 
 
 for slabId in "$@"
 do
-	topBot=(`cat /nrs/flyem/data/$VOLUME_Sec$slabId/flatten/tmp-flattening-level200/logs/amira-flattenTwoSidesBatchwise_0.log | grep "Avg low" | sed s/^[^1-9]*//g | sed s/[^1-9]*$//g`)
+	topBot=(`cat $PREFIX/$VOLUME/Sec$slabId/flatten/tmp-flattening-level200/logs/amira-flattenTwoSidesBatchwise_0.log | grep "Avg low" | sed s/^[^1-9]*//g | sed s/[^1-9]*$//g`)
 	top=`echo ${topBot[0]} | awk '{print int($1+0.5)}'`
 	bot=`echo ${topBot[1]} | awk '{print int($1+0.5)}'`
 	echo "top $top, bot $bot"
@@ -25,12 +26,12 @@ do
 	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh' >> $convertScript
 	echo "JAR=\$PWD/hot-knife-$VERSION.jar # this jar must be accessible from the cluster" >> $convertScript
 	echo 'CLASS=org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeriesToN5' >> $convertScript
-	echo 'N_NODES=10' >> $convertScript
+	echo 'N_NODES=6' >> $convertScript
 	echo >> $convertScript
-	echo "URLFORMAT='/nrs/flyem/data/$VOLUME_Sec$slabId/flatten/flattened/zcorr.%05d-flattened.tif'" >> $convertScript
+	echo "URLFORMAT='$PREFIX/$VOLUME/Sec$slabId/flatten/flattened/zcorr.%05d-flattened.tif'" >> $convertScript
 	echo "N5PATH='/nrs/flyem/data/tmp/$VOLUME.n5'" >> $convertScript
 	echo "N5DATASET='slab-$slabId/raw/s0'" >> $convertScript
-	echo "MIN='0,$(($top-$padding)),0'" >> $convertScript
+	echo "MIN='0,$(($top-$padding)),1'" >> $convertScript
 	echo "SIZE='0,$(($bot-$top+$padding+$padding)),0'" >> $convertScript
 	echo "BLOCKSIZE='128,128,128'" >> $convertScript
 	echo >> $convertScript

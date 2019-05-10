@@ -3,19 +3,19 @@
 OWN_DIR=`dirname "${BASH_SOURCE[0]}"`
 ABS_DIR=`readlink -f "$OWN_DIR"`
 
-FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh
-JAR=$PWD/hot-knife-0.0.4-SNAPSHOT.jar
+FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh
+JAR=$PWD/hot-knife-0.0.3-SNAPSHOT.jar
 CLASS=org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage
-N_NODES=10
+N_NODES=60
 
-N5_PATH='/nrs/flyem/data/tmp/Z1217-19m/VNC.n5'
-N5_GROUP_INPUT='/align-0'
-N5_GROUP_OUTPUT='/align-1'
-SCALE_INDEX='4'
+N5_PATH='/nrs/flyem/data/tmp/Z0115-22.n5'
+N5_GROUP_INPUT='/align-6'
+N5_GROUP_OUTPUT='/align-7'
+SCALE_INDEX='2'
 STEP_SIZE='512'
-LAMBDA_FILTER='0.01'
+LAMBDA_FILTER='0.25'
 LAMBDA_MODEL='0.01'
-MAX_EPSILON='100'
+MAX_EPSILON='20'
 
 ARGV="\
 --n5Path '$N5_PATH' \
