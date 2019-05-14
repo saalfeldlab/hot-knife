@@ -242,14 +242,15 @@ public class SparkExportAlignedSlabSeries {
 		case 0:
 			break;
 		case 1:
-			N5Utils.saveBlock(
+			N5Utils.saveNonEmptyBlock(
 					Views.interval(
 							sources.get(0),
 							gridBlockInterval),
 					n5Output,
 					datasetNameOutput,
 					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
-					gridBlock[2]);
+					gridBlock[2],
+					new UnsignedByteType());
 			break;
 		default:
 			final RandomAccessibleInterval<UnsignedByteType> composite = Converters.<UnsignedByteType, UnsignedByteType>composeReal(
@@ -260,14 +261,15 @@ public class SparkExportAlignedSlabSeries {
 							target.add(c.get(i));
 					},
 					UnsignedByteType::new);
-			N5Utils.saveBlock(
+			N5Utils.saveNonEmptyBlock(
 					Views.interval(
 							composite,
 							gridBlockInterval),
 					n5Output,
 					datasetNameOutput,
 					new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
-					gridBlock[2]);
+					gridBlock[2],
+					new UnsignedByteType());
 			break;
 		}
 	}
