@@ -30,6 +30,8 @@
 
 package org.janelia.saalfeldlab.hotknife.ops;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 import net.imglib2.Cursor;
@@ -44,31 +46,34 @@ import net.imglib2.view.Views;
  *
  * @author Stephan Saalfeld
  */
-public class GradientCenter<T extends RealType<T> & NativeType<T>> implements Consumer<RandomAccessibleInterval<T>> {
+public class Max<T extends RealType<T> & NativeType<T>> implements Consumer<RandomAccessibleInterval<T>> {
 
-	final private RandomAccessible<T> sourceA;
-	final private RandomAccessible<T> sourceB;
-	final double norm;
+	private final ArrayList<RandomAccessible<T>> sources;
 
-	public GradientCenter(final RandomAccessible<T> source, final int axis, final double sigma) {
+	public Max(final List<? extends RandomAccessible<T>> sources) {
 
-		final long[] offset = new long[source.numDimensions()];
-		offset[axis] = -1;
-		sourceA = Views.offset(source, offset);
-		sourceB = Views.translate(source, offset);
-		norm = 2.0 / sigma;
+		this.sources = new ArrayList<>(sources);
 	}
 
 	@Override
 	public void accept(final RandomAccessibleInterval<T> output) {
 
-		final Cursor<T> a = Views.flatIterable(Views.interval(sourceA, output)).cursor();
-		final Cursor<T> b = Views.flatIterable(Views.interval(sourceB, output)).cursor();
+		final ArrayList<Cursor<T>> cursors = new ArrayList<>();
+		for (final RandomAccessible<T> source : sources) {
+			cursors.add(Views.flatIterable(Views.interval(source, output)).cursor());
+		}
+
 		final Cursor<T> c = Views.flatIterable(output).cursor();
 
 		while (c.hasNext()) {
+
 			final T t = c.next();
-			t.setReal((b.next().getRealDouble() - a.next().getRealDouble()) * norm);
+			for (final Cursor<T> a : cursors) {
+				final T ta = a.next();
+				if (t.compareTo(ta) < 0) {
+					t.set(ta);
+				}
+			}
 		}
 	}
 }

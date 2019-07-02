@@ -36,39 +36,36 @@ import net.imglib2.Cursor;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.NumericType;
 import net.imglib2.view.Views;
 
 /**
- * Gradient
+ * Multiply
  *
  * @author Stephan Saalfeld
  */
-public class GradientCenter<T extends RealType<T> & NativeType<T>> implements Consumer<RandomAccessibleInterval<T>> {
+public class Multiply<T extends NumericType<T> & NativeType<T>> implements Consumer<RandomAccessibleInterval<T>> {
 
-	final private RandomAccessible<T> sourceA;
-	final private RandomAccessible<T> sourceB;
-	final double norm;
+	final private RandomAccessible<? extends T> sourceA;
+	final private RandomAccessible<? extends T> sourceB;
 
-	public GradientCenter(final RandomAccessible<T> source, final int axis, final double sigma) {
+	public Multiply(final RandomAccessible<T> sourceA, final RandomAccessible<T> sourceB) {
 
-		final long[] offset = new long[source.numDimensions()];
-		offset[axis] = -1;
-		sourceA = Views.offset(source, offset);
-		sourceB = Views.translate(source, offset);
-		norm = 2.0 / sigma;
+		this.sourceA = sourceA;
+		this.sourceB = sourceB;
 	}
 
 	@Override
 	public void accept(final RandomAccessibleInterval<T> output) {
 
-		final Cursor<T> a = Views.flatIterable(Views.interval(sourceA, output)).cursor();
-		final Cursor<T> b = Views.flatIterable(Views.interval(sourceB, output)).cursor();
+		final Cursor<? extends T> a = Views.flatIterable(Views.interval(sourceA, output)).cursor();
+		final Cursor<? extends T> b = Views.flatIterable(Views.interval(sourceB, output)).cursor();
 		final Cursor<T> c = Views.flatIterable(output).cursor();
 
 		while (c.hasNext()) {
 			final T t = c.next();
-			t.setReal((b.next().getRealDouble() - a.next().getRealDouble()) * norm);
+			t.set(a.next());
+			t.mul(b.next());
 		}
 	}
 }

@@ -16,7 +16,6 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
-import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
 import static net.imglib2.type.PrimitiveType.BYTE;
 import static net.imglib2.type.PrimitiveType.DOUBLE;
 import static net.imglib2.type.PrimitiveType.FLOAT;
@@ -50,13 +49,12 @@ import net.imglib2.type.numeric.integer.GenericByteType;
 import net.imglib2.type.numeric.integer.GenericIntType;
 import net.imglib2.type.numeric.integer.GenericLongType;
 import net.imglib2.type.numeric.integer.GenericShortType;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 
 /**
- *
+ * Convenience methods to create lazy evaluated cached cell images with ops or consumers.
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
@@ -65,189 +63,16 @@ public class Lazy {
 	private Lazy() {}
 
 	/**
-	 * @deprecated Use the generic {@link #process(RandomAccessible, Interval, int[], NativeType, Set, OpService, Class, Object...)} directly
-	 * @param source
-	 * @param blockSize
-	 * @param opService
-	 * @param opClass
-	 * @param opArgs
-	 * @return
-	 */
-	@Deprecated
-	public static <O extends Op> RandomAccessibleInterval<UnsignedByteType> processVolatileUnsignedByte(
-			final RandomAccessibleInterval<UnsignedByteType> source,
-			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
-
-		return process(
-				source,
-				source,
-				blockSize,
-				new UnsignedByteType(),
-				AccessFlags.setOf(VOLATILE),
-				opService,
-				opClass,
-				opArgs);
-	}
-
-	/**
-	 * @deprecated Use the generic {@link #process(RandomAccessible, Interval, int[], NativeType, Set, OpService, Class, Object...)} directly
+	 * Create a memory {@link CachedCellImg} with a cell {@link Cache}.
 	 *
-	 * @param source
-	 * @param blockSize
-	 * @param opService
-	 * @param opClass
-	 * @param opArgs
+	 * @param grid
+	 * @param cache
+	 * @param type
+	 * @param accessFlags
 	 * @return
 	 */
-	@Deprecated
-	public static <O extends Op> RandomAccessibleInterval<UnsignedByteType> processUnsignedByte(
-			final RandomAccessibleInterval<UnsignedByteType> source,
-			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
-
-		return process(
-				source,
-				source,
-				blockSize,
-				new UnsignedByteType(),
-				AccessFlags.setOf(),
-				opService,
-				opClass,
-				opArgs);
-	}
-
-	/**
-	 * @deprecated USe the generic {@link #process(RandomAccessible, Interval, int[], NativeType, Set, OpService, Class, Object...)} directly
-	 * @param source
-	 * @param blockSize
-	 * @param opService
-	 * @param opClass
-	 * @param opArgs
-	 * @return
-	 */
-	@Deprecated
-	public static <O extends Op> RandomAccessibleInterval<FloatType> processVolatileFloat(
-			final RandomAccessibleInterval<FloatType> source,
-			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
-
-		return process(
-				source,
-				source,
-				blockSize,
-				new FloatType(),
-				AccessFlags.setOf(VOLATILE),
-				opService,
-				opClass,
-				opArgs);
-	}
-
-	/**
-	 * @deprecated Use the generic {@link #process(RandomAccessible, Interval, int[], NativeType, Set, OpService, Class, Object...)} directly.
-	 *
-	 * @param source
-	 * @param sourceInterval
-	 * @param blockSize
-	 * @param opService
-	 * @param opClass
-	 * @param opArgs
-	 * @return
-	 */
-	@Deprecated
-	public static <O extends Op> RandomAccessibleInterval<FloatType> processFloat(
-			final RandomAccessible<FloatType> source,
-			final Interval sourceInterval,
-			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
-
-		return process(
-				source,
-				sourceInterval,
-				blockSize,
-				new FloatType(),
-				AccessFlags.setOf(),
-				opService,
-				opClass,
-				opArgs);
-	}
-
-	/**
-	 * @deprecated Use the generic {@link #process(RandomAccessible, Interval, int[], UnaryComputerOp, NativeType, Set)} directly.
-	 *
-	 * @param source
-	 * @param sourceInterval
-	 * @param blockSize
-	 * @param op
-	 * @return
-	 */
-	@Deprecated
-	public static RandomAccessibleInterval<FloatType> processFloat(
-			final RandomAccessible<FloatType> source,
-			final Interval sourceInterval,
-			final int[] blockSize,
-			final UnaryComputerOp<RandomAccessible<FloatType>, RandomAccessibleInterval<FloatType>> op) {
-
-		return process(
-				source,
-				sourceInterval,
-				blockSize,
-				new FloatType(),
-				AccessFlags.setOf(),
-				op);
-	}
-
-
-	public static <I, O extends NativeType<O>> RandomAccessibleInterval<O> process(
-			final RandomAccessible<I> source,
-			final Interval sourceInterval,
-			final int[] blockSize,
-			final O type,
-			final Set<AccessFlags> accessFlags,
-			final UnaryComputerOp<RandomAccessible<I>, RandomAccessibleInterval<O>> op) {
-
-		return createImg(
-				sourceInterval,
-				blockSize,
-				type,
-				accessFlags,
-				new UnaryComputerOpCellLoader<I, O, RandomAccessible<I>>(
-					source,
-					op));
-	}
-
-	public static <I, O extends NativeType<O>, P extends Op> RandomAccessibleInterval<O> process(
-			final RandomAccessible<I> source,
-			final Interval sourceInterval,
-			final int[] blockSize,
-			final O type,
-			final Set<AccessFlags> accessFlags,
-			final OpService opService,
-			final Class<P> opClass,
-			final Object... opArgs) {
-
-		return createImg(
-				sourceInterval,
-				blockSize,
-				type,
-				accessFlags,
-				new UnaryComputerOpCellLoader<I, O, RandomAccessible<I>>(
-					source,
-					opService,
-					opClass,
-					opArgs));
-	}
-
 	@SuppressWarnings({"unchecked", "rawtypes"})
-	public static <T extends NativeType<T>> RandomAccessibleInterval<T> createImg(
+	public static <T extends NativeType<T>> CachedCellImg<T, ?> createImg(
 			final CellGrid grid,
 			final Cache<Long, Cell<?>> cache,
 			final T type,
@@ -273,15 +98,24 @@ public class Lazy {
 		return img;
 	}
 
-
-	public static <T extends NativeType<T>> RandomAccessibleInterval<T> createImg(
-			final Interval sourceInterval,
+	/**
+	 * Create a memory {@link CachedCellImg} with a {@link CellLoader}.
+	 *
+	 * @param targetInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param loader
+	 * @return
+	 */
+	public static <T extends NativeType<T>> CachedCellImg<T, ?> createImg(
+			final Interval targetInterval,
 			final int[] blockSize,
 			final T type,
 			final Set<AccessFlags> accessFlags,
 			final CellLoader<T> loader) {
 
-		final long[] dimensions = Intervals.dimensionsAsLongArray(sourceInterval);
+		final long[] dimensions = Intervals.dimensionsAsLongArray(targetInterval);
 		final CellGrid grid = new CellGrid(dimensions, blockSize);
 
 		@SuppressWarnings({"unchecked", "rawtypes"})
@@ -291,18 +125,93 @@ public class Lazy {
 		return createImg(grid, cache, type, accessFlags);
 	}
 
-	public static <T extends NativeType<T>> RandomAccessibleInterval<T> process(
-			final Interval sourceInterval,
+	/**
+	 * Create a memory {@link CachedCellImg} with a cell generator {@link Consumer}.
+	 *
+	 * @param targetInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param op
+	 * @return
+	 */
+	public static <T extends NativeType<T>> CachedCellImg<T, ?> process(
+			final Interval targetInterval,
 			final int[] blockSize,
 			final T type,
 			final Set<AccessFlags> accessFlags,
 			final Consumer<RandomAccessibleInterval<T>> op) {
 
 		return createImg(
-				sourceInterval,
+				targetInterval,
 				blockSize,
 				type,
 				accessFlags,
 				new ConsumerCellLoader<T>(op));
+	}
+
+	/**
+	 * Create a memory {@link CachedCellImg} with a cell generator {@link UnaryComputerOp}.
+	 *
+	 * @param source
+	 * @param sourceInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param op
+	 * @return
+	 */
+	public static <I, O extends NativeType<O>> CachedCellImg<O, ?> process(
+			final RandomAccessible<I> source,
+			final Interval sourceInterval,
+			final int[] blockSize,
+			final O type,
+			final Set<AccessFlags> accessFlags,
+			final UnaryComputerOp<RandomAccessible<I>, RandomAccessibleInterval<O>> op) {
+
+		return createImg(
+				sourceInterval,
+				blockSize,
+				type,
+				accessFlags,
+				new UnaryComputerOpCellLoader<I, O, RandomAccessible<I>>(
+					source,
+					op));
+	}
+
+	/**
+	 * Create a memory {@link CachedCellImg} with a cell generator
+	 * {@link UnaryComputerOp} provided by an {@link OpService}.
+	 *
+	 * @param source
+	 * @param sourceInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param opService
+	 * @param opClass
+	 * @param opArgs
+	 * @return
+	 */
+	public static <I, O extends NativeType<O>, P extends Op> CachedCellImg<O, ?> process(
+			final RandomAccessible<I> source,
+			final Interval sourceInterval,
+			final int[] blockSize,
+			final O type,
+			final Set<AccessFlags> accessFlags,
+			final OpService opService,
+			final Class<P> opClass,
+			final Object... opArgs) {
+
+		return createImg(
+				sourceInterval,
+				blockSize,
+				type,
+				accessFlags,
+				new UnaryComputerOpCellLoader<I, O, RandomAccessible<I>>(
+					source,
+					opService,
+					opClass,
+					opArgs));
 	}
 }
