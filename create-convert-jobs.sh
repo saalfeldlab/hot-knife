@@ -23,10 +23,10 @@ do
 	echo 'OWN_DIR=`dirname "${BASH_SOURCE[0]}"`' >> $convertScript
 	echo 'ABS_DIR=`readlink -f "$OWN_DIR"`' >> $convertScript
 	echo >> $convertScript
-	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh' >> $convertScript
+	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh' >> $convertScript
 	echo "JAR=\$PWD/hot-knife-$VERSION.jar # this jar must be accessible from the cluster" >> $convertScript
 	echo 'CLASS=org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeriesToN5' >> $convertScript
-	echo 'N_NODES=6' >> $convertScript
+	echo 'N_NODES=20' >> $convertScript
 	echo >> $convertScript
 	echo "URLFORMAT='$PREFIX/$VOLUME/Sec$slabId/flatten/flattened/zcorr.%05d-flattened.tif'" >> $convertScript
 	echo "N5PATH='/nrs/flyem/data/tmp/$VOLUME.n5'" >> $convertScript
@@ -54,10 +54,10 @@ do
 	echo 'OWN_DIR=`dirname "${BASH_SOURCE[0]}"`' >> $topFaceScript
 	echo 'ABS_DIR=`readlink -f "$OWN_DIR"`' >> $topFaceScript
 	echo >> $topFaceScript
-	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh' >> $topFaceScript
+	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh' >> $topFaceScript
 	echo "JAR=\$PWD/hot-knife-$VERSION.jar" >> $topFaceScript
 	echo 'CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace' >> $topFaceScript
-	echo 'N_NODES=10' >> $topFaceScript
+	echo 'N_NODES=20' >> $topFaceScript
 	echo >> $topFaceScript
 	echo "N5PATH='/nrs/flyem/data/tmp/$VOLUME.n5'" >> $topFaceScript
 	echo "N5DATASETINPUT='/slab-$slabId/raw/s0'" >> $topFaceScript
@@ -85,10 +85,10 @@ do
 	echo 'OWN_DIR=`dirname "${BASH_SOURCE[0]}"`' >> $botFaceScript
 	echo 'ABS_DIR=`readlink -f "$OWN_DIR"`' >> $botFaceScript
 	echo >> $botFaceScript
-	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone.sh' >> $botFaceScript
-	echo "JAR=$PWD/hot-knife-$VERSION.jar" >> $botFaceScript
+	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh' >> $botFaceScript
+	echo "JAR=\$PWD/hot-knife-$VERSION.jar" >> $botFaceScript
 	echo 'CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace' >> $botFaceScript
-	echo 'N_NODES=10' >> $botFaceScript
+	echo 'N_NODES=20' >> $botFaceScript
 	echo >> $botFaceScript
 	echo "N5PATH='/nrs/flyem/data/tmp/$VOLUME.n5'" >> $botFaceScript
 	echo "N5DATASETINPUT='/slab-$slabId/raw/s0'" >> $botFaceScript
