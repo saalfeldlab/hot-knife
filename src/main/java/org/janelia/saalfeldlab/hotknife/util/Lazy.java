@@ -26,7 +26,6 @@ import static net.imglib2.type.PrimitiveType.SHORT;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import org.janelia.saalfeldlab.hotknife.ops.ConsumerCellLoader;
 import org.janelia.saalfeldlab.hotknife.ops.UnaryComputerOpCellLoader;
 
 import net.imagej.ops.Op;
@@ -147,7 +146,7 @@ public class Lazy {
 				blockSize,
 				type,
 				accessFlags,
-				new ConsumerCellLoader<T>(op));
+				op::accept);
 	}
 
 	/**
