@@ -105,7 +105,7 @@ public class SparkConvertTiffSeriesToN5 {
 
 				/* depth */
 				final File[] tiffs = new File(urlFormat).getParentFile().listFiles(
-						(dir, file) -> file.endsWith(".tif"));
+						(dir, file) -> file.endsWith(urlFormat.substring(urlFormat.lastIndexOf('.'))));
 				sourceSize[2] = tiffs.length;
 
 				if (sizeString == null) {
