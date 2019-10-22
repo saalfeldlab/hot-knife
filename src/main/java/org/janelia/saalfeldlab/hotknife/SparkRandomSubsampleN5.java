@@ -46,7 +46,7 @@ import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 
 /**
- * Export a render stack to N5.
+ * Subsample an N5 dataset such that each pixel is sampled once but in random combinations
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
