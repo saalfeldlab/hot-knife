@@ -19,6 +19,7 @@ package org.janelia.saalfeldlab.hotknife.util;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -158,6 +159,31 @@ public class Align {
 	}
 
 	/**
+	 * Match and filter two feature sets.
+	 *
+	 * @param fs1
+	 * @param fs2
+	 * @param rod
+	 * @param filter
+	 * @return
+	 */
+	static public ArrayList<PointMatch> filterMatchFeatures(
+			final List<Feature> fs1,
+			final List<Feature> fs2,
+			final double rod,
+			final ConsensusFilter filter) {
+
+		final ArrayList<PointMatch> candidates = matchFeatures(fs1, fs2, rod);
+		final int nCandidates = candidates.size();
+		final ArrayList<PointMatch> matches = filter.filter(candidates);
+
+		System.out.printf("%d of %d matches found.", matches.size(), nCandidates);
+		System.out.println();
+
+		return matches;
+	}
+
+	/**
 	 * Match two images with SIFT features.
 	 *
 	 * @param a
@@ -167,9 +193,7 @@ public class Align {
 	 * @param fdSize
 	 * @param rod
 	 * @param scale
-	 * @param filter
-	 * @param modelSupplier
-	 * @param modelTransformConverter
+	 *
 	 * @return
 	 */
 	static public ArrayList<PointMatch> matchSIFT(
@@ -213,8 +237,7 @@ public class Align {
 	 * @param rod
 	 * @param scale
 	 * @param filter
-	 * @param modelSupplier
-	 * @param modelTransformConverter
+	 *
 	 * @return
 	 */
 	static public ArrayList<PointMatch> filterMatchSIFT(
@@ -339,5 +362,18 @@ public class Align {
 		transform.add(new Translation2D(offset));
 
 		return transform;
+	}
+
+	/**
+	 * Create a random sample set from a list of matches.
+	 *
+	 * @param matches
+	 * @param nSamples
+	 * @return
+	 */
+	static public List<PointMatch> sampleRandomly(final List<PointMatch> matches, final int nSamples) {
+
+		Collections.shuffle(matches);
+		return matches.subList(0, Math.min(matches.size(), nSamples));
 	}
 }
