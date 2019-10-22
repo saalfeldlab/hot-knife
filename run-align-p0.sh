@@ -16,6 +16,8 @@ ARGV="\
 --n5Path '$N5_PATH' \
 --n5GroupOutput '$N5_GROUP_OUTPUT' \
 --scaleIndex '$SCALE_INDEX' \
+-d '/slab-19/top/face' \
+-d '/slab-19/bot/face' \
 -d '/slab-20/top/face' \
 -d '/slab-20/bot/face' \
 -d '/slab-21/top/face' \
@@ -27,7 +29,9 @@ ARGV="\
 -d '/slab-24/top/face' \
 -d '/slab-24/bot/face' \
 -d '/slab-25/top/face' \
--d '/slab-25/bot/face'"
+-d '/slab-25/bot/face' \
+-d '/slab-26/top/face' \
+-d '/slab-26/bot/face'"
 
 TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
 

@@ -8,7 +8,6 @@ PREFIX="/nrs/flyem/alignment"
 padding=20
 faceOffset=6
 
-
 for slabId in "$@"
 do
 	topBot=(`cat $PREFIX/$VOLUME/Sec$slabId/flatten/tmp-flattening-level200/logs/amira-flattenTwoSidesBatchwise_0.log | grep "Avg low" | sed s/^[^1-9]*//g | sed s/[^1-9]*$//g`)
@@ -28,7 +27,8 @@ do
 	echo 'CLASS=org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeriesToN5' >> $convertScript
 	echo 'N_NODES=20' >> $convertScript
 	echo >> $convertScript
-	echo "URLFORMAT='$PREFIX/$VOLUME/Sec$slabId/flatten/flattened/zcorr.%05d-flattened.tif'" >> $convertScript
+#	echo "URLFORMAT='$PREFIX/$VOLUME/Sec$slabId/flatten/flattened/zcorr.%05d-flattened.tif'" >> $convertScript
+	echo "URLFORMAT='$PREFIX/reflat/Sec$slabId/flatten.%05d.png'" >> $convertScript
 	echo "N5PATH='/nrs/flyem/data/tmp/$VOLUME.n5'" >> $convertScript
 	echo "N5DATASET='slab-$slabId/raw/s0'" >> $convertScript
 	echo "MIN='0,$(($top-$padding)),1'" >> $convertScript
