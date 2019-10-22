@@ -31,6 +31,7 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
+import bdv.util.ConstantRandomAccessible;
 import mpicbg.models.Affine2D;
 import mpicbg.models.InterpolatedAffineModel2D;
 import mpicbg.models.InterpolatedModel;
@@ -42,7 +43,10 @@ import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.position.RealPositionRealRandomAccessible;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineTransform;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.PositionFieldTransform;
@@ -50,10 +54,12 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
 import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale;
 import net.imglib2.realtransform.Scale2D;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
@@ -120,6 +126,59 @@ public class Transform {
 
 			return new InterpolatedAffineModel2D<>(aSupplier.get(), bSupplier.get(), lambda);
 		}
+	}
+
+	/**
+	 * Create a {@link RandomAccessibleInterval} from a source
+	 * {@link RandomAccessibleInterval} and an {@link AffineTransform} mapping
+	 * coordinates from source space into target space (forward transform).
+	 *
+	 * @param source
+	 * @param targetInterval
+	 * @param transform
+	 * @return
+	 */
+	public static <T extends NumericType<T>> RandomAccessibleInterval<T> createAffineTransformedInterval(
+			final RandomAccessibleInterval<T> source,
+			final Interval targetInterval,
+			final AffineGet transform,
+			final T background) {
+
+		return Views.interval(
+				RealViews.affine(
+						Views.interpolate(
+								Views.extendValue(source, background),
+								new ClampingNLinearInterpolatorFactory<>()),
+						transform),
+				targetInterval);
+	}
+
+	/**
+	 * Create a {@link RandomAccessibleInterval} binary mask for an
+	 * {@link Interval} transformed by an {@link AffineTransform}
+	 * (forward transform).
+	 *
+	 * @param sourceInterval
+	 * @param targetInterval
+	 * @param transform
+	 * @return
+	 */
+	public static RandomAccessibleInterval<UnsignedByteType> createAffineTransformedMask(
+			final Interval sourceInterval,
+			final Interval targetInterval,
+			final AffineGet transform) {
+
+		return Views.interval(
+				RealViews.affine(
+						Views.interpolate(
+								Views.extendValue(
+										Views.interval(
+												new ConstantRandomAccessible<>(new UnsignedByteType(1), 2),
+												sourceInterval),
+										new UnsignedByteType(0)),
+								new NearestNeighborInterpolatorFactory<>()),
+						transform),
+				targetInterval);
 	}
 
 	/**
@@ -532,6 +591,24 @@ public class Transform {
 	}
 
 	/**
+	 * Convert an mpicbg {@link Affine2D} into an ImgLib2
+	 * {@link AffineTransform2D}.
+	 *
+	 * @param affine2D
+	 * @return
+	 */
+	public static <M extends Affine2D<M>> AffineTransform2D convertAffine2DtoAffineTransform2D(final M affine2D) {
+
+		final double[] a = new double[6];
+		affine2D.toArray(a);
+		final AffineTransform2D transform = new AffineTransform2D();
+		transform.set(
+				a[0], a[2], a[4],
+				a[1], a[3], a[5]);
+		return transform;
+	}
+
+	/**
 	 * Convert and invert an mpicbg {@link Affine2D} into an ImgLib2
 	 * {@link AffineTransform2D}.
 	 *
@@ -540,13 +617,7 @@ public class Transform {
 	 */
 	public static <M extends Affine2D<M>> AffineTransform2D convertAndInvertAffine2DtoAffineTransform2D(final M affine2D) {
 
-		final double[] a = new double[6];
-		affine2D.toArray(a);
-		final AffineTransform2D transform = new AffineTransform2D();
-		transform.set(
-				a[0], a[2], a[4],
-				a[1], a[3], a[5]);
-		return transform.inverse();
+		return convertAffine2DtoAffineTransform2D(affine2D).inverse();
 	}
 
 	/**
