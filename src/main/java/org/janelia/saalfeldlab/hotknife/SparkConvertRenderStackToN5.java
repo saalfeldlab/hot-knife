@@ -16,12 +16,16 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.Arrays;
-import java.util.concurrent.ExecutionException;
-
+import ij.process.ColorProcessor;
+import net.imglib2.Cursor;
+import net.imglib2.IterableInterval;
+import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.basictypeaccess.array.ByteArray;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.view.IntervalView;
+import net.imglib2.view.Views;
+import org.apache.commons.io.FileUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -34,19 +38,21 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.process.ColorProcessor;
-import net.imglib2.Cursor;
-import net.imglib2.IterableInterval;
-import net.imglib2.img.array.ArrayImg;
-import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.ByteArray;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.view.IntervalView;
-import net.imglib2.view.Views;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.Serializable;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.concurrent.ExecutionException;
+
+import static org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark.DOWNSAMPLING_FACTORS_ATTRIBUTE_KEY;
+import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
 
 /**
  * Export a render stack to N5.
@@ -106,6 +112,10 @@ public class SparkConvertRenderStackToN5 {
 		private String blockSizeString = null;
 		private int[] blockSize;
 
+		@Option(name = "--factors", required = false, usage = "Specifies generates a scale pyramid with given factors with relative scaling between factors, e.g. 2,2,2")
+		private String downsamplingFactorsString = null;
+		private int[] downsamplingFactors;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -114,6 +124,7 @@ public class SparkConvertRenderStackToN5 {
 			tileSize = new int[2];
 			tempTileSize = null;
 			blockSize = new int[3];
+			downsamplingFactors = null;
 			try {
 				parser.parseArgument(args);
 
@@ -125,6 +136,12 @@ public class SparkConvertRenderStackToN5 {
 				parseCSLongArray(sizeString, size);
 				parseCSIntArray(blockSizeString, blockSize);
 				parseCSIntArray(tileSizeString, tileSize);
+				if (downsamplingFactorsString != null) {
+					int numFactors = 1;
+					for (int idx = 0; (idx = downsamplingFactorsString.indexOf(",", idx)) >= 0; idx++) { numFactors++; }
+					downsamplingFactors = new int[numFactors];
+					parseCSIntArray(downsamplingFactorsString, downsamplingFactors);
+				}
 				if (tempTileSizeString != null) {
 					tempTileSize = new int[2];
 					parseCSIntArray(tempTileSizeString, tempTileSize);
@@ -220,6 +237,12 @@ public class SparkConvertRenderStackToN5 {
 		public int[] getTempTileSize() {
 			return tempTileSize;
 		}
+
+		/**
+		 *
+		 * @return the downsamplingFactors
+		 */
+		public int[] getDownsamplingFactors() { return downsamplingFactors; }
 	}
 
 	final static private BufferedImage renderImage(
@@ -355,13 +378,30 @@ public class SparkConvertRenderStackToN5 {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final SparkConf conf = new SparkConf().setAppName("SparkConvertCATMAIDStackToN5");
+		final SparkConf conf = new SparkConf().setAppName("SparkConvertRenderStackToN5");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
 		final String datasetName = options.getTempTileSize() == null ? options.getDatasetName() : options.getDatasetName() + "-slices";
 		final int[] blockSize = options.getTempTileSize() == null ? options.getBlockSize() : new int[] {options.getTempTileSize()[0], options.getTempTileSize()[1], 1};
 
-		saveRenderStack(
+		if( options.getDownsamplingFactors() == null ) {
+			saveRenderStack(
+					sc,
+					options.getBaseUrl(),
+					options.getOwner(),
+					options.getProject(),
+					options.getStack(),
+					options.getFilter(),
+					options.getTileSize(),
+					options.getN5Path(),
+					datasetName,
+					options.getMin(),
+					options.getSize(),
+					blockSize);
+		} else {
+			String fullScaleName = Paths.get(datasetName, "s" + 0).toString();
+
+			saveRenderStack(
 				sc,
 				options.getBaseUrl(),
 				options.getOwner(),
@@ -370,10 +410,38 @@ public class SparkConvertRenderStackToN5 {
 				options.getFilter(),
 				options.getTileSize(),
 				options.getN5Path(),
-				datasetName,
+				fullScaleName,
 				options.getMin(),
 				options.getSize(),
 				blockSize);
+
+			// Now that the full resolution image is saved into n5, generate the scale pyramid
+			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
+
+			// Put the downsampling factors into the full resolution
+			final N5Writer n5 = new N5FSWriter(options.getN5Path());
+			n5.setAttribute( fullScaleName, DOWNSAMPLING_FACTORS_ATTRIBUTE_KEY, options.getDownsamplingFactors() );
+
+			// Remove previous scales if they exist
+			File datasetDir = new File(Paths.get(options.getN5Path(), datasetName).toString());
+			for(File f : datasetDir.listFiles()) {
+				// try/catch to check for int parse errors which happen if this is not a scale dir
+				try {
+					if (f.isDirectory() && f.getName().startsWith("s") && Integer.parseInt(f.getName().substring(1)) > 0)
+						FileUtils.deleteDirectory(f);
+				} catch( Exception ignored ) {
+				}
+			}
+
+			downsampleScalePyramid(
+					sc,
+					n5Supplier,
+					fullScaleName,
+					datasetName,
+					options.getDownsamplingFactors()
+				);
+		}
+
 
 		if (options.getTempTileSize() != null)
 			SparkConvertTiffSeriesToN5.reSave(
