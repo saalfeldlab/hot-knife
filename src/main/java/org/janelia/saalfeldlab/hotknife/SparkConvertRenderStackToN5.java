@@ -1,4 +1,4 @@
-/**
+/*
  * License: GPL
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,14 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import ij.process.ColorProcessor;
-import net.imglib2.Cursor;
-import net.imglib2.IterableInterval;
-import net.imglib2.img.array.ArrayImg;
-import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.ByteArray;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.view.IntervalView;
-import net.imglib2.view.Views;
-import org.apache.commons.io.FileUtils;
+
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.Serializable;
+import java.nio.file.Paths;
+import java.util.Arrays;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,15 +42,15 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.io.Serializable;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.concurrent.ExecutionException;
+import net.imglib2.Cursor;
+import net.imglib2.IterableInterval;
+import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.basictypeaccess.array.ByteArray;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.view.IntervalView;
+import net.imglib2.view.Views;
 
-import static org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark.DOWNSAMPLING_FACTORS_ATTRIBUTE_KEY;
 import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
 
 /**
@@ -62,13 +61,11 @@ import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePy
 public class SparkConvertRenderStackToN5 {
 
 	final static public String ownerFormat = "%s/owner/%s";
-	final static public String stackListFormat = ownerFormat + "/stacks";
 	final static public String stackFormat = ownerFormat + "/project/%s/stack/%s";
-	final static public String stackBoundsFormat = stackFormat  + "/bounds";
 	final static public String boundingBoxFormat = stackFormat + "/z/%d/box/%d,%d,%d,%d,%f";
 	final static public String renderParametersFormat = boundingBoxFormat + "/render-parameters";
 
-	@SuppressWarnings("serial")
+	@SuppressWarnings({"serial", "FieldCanBeLocal"})
 	public static class Options extends AbstractOptions implements Serializable {
 
 		@Option(name = "--baseUrl", required = true, usage = "Render stack base URL")
@@ -100,7 +97,7 @@ public class SparkConvertRenderStackToN5 {
 		private String tempTileSizeString = null;
 		private int[] tempTileSize;
 
-		@Option(name = "--min", required = false, usage = "Min coordinate of the output volume, e.g. 0,0,0")
+		@Option(name = "--min", usage = "Min coordinate of the output volume, e.g. 0,0,0")
 		private String minString = null;
 		private long[] min;
 
@@ -112,7 +109,7 @@ public class SparkConvertRenderStackToN5 {
 		private String blockSizeString = null;
 		private int[] blockSize;
 
-		@Option(name = "--factors", required = false, usage = "Specifies generates a scale pyramid with given factors with relative scaling between factors, e.g. 2,2,2")
+		@Option(name = "--factors", usage = "Specifies generates a scale pyramid with given factors with relative scaling between factors, e.g. 2,2,2")
 		private String downsamplingFactorsString = null;
 		private int[] downsamplingFactors;
 
@@ -245,7 +242,7 @@ public class SparkConvertRenderStackToN5 {
 		public int[] getDownsamplingFactors() { return downsamplingFactors; }
 	}
 
-	final static private BufferedImage renderImage(
+	static private BufferedImage renderImage(
 			final ImageProcessorCache ipCache,
 			final String baseUrl,
 			final String owner,
@@ -280,7 +277,7 @@ public class SparkConvertRenderStackToN5 {
         return image;
 	}
 
-	public static final void saveRenderStack(
+	public static void saveRenderStack(
 			final JavaSparkContext sc,
 			final String baseUrl,
 			final String owner,
@@ -327,12 +324,12 @@ public class SparkConvertRenderStackToN5 {
 			final ImageProcessorCache ipCache = ImageProcessorCache.DISABLED_CACHE;
 
 			/* tile coordinates */
-			final long col = (gridBlock[0][0] + min[0]) / tileSize[0];
-			final long row = (gridBlock[0][1] + min[1]) / tileSize[1];
+//			final long col = (gridBlock[0][0] + min[0]) / tileSize[0];
+//			final long row = (gridBlock[0][1] + min[1]) / tileSize[1];
 
 			/* assume we can fit it in an array */
 			final ArrayImg<UnsignedByteType, ByteArray> block = ArrayImgs.unsignedBytes(gridBlock[1]);
-			final boolean hasData = false;
+//			final boolean hasData = false;
 			for (int z = 0; z < block.dimension(2); ++z) {
 
 				final BufferedImage image = renderImage(
@@ -350,7 +347,6 @@ public class SparkConvertRenderStackToN5 {
 						filter);
 
 				final IntervalView<UnsignedByteType> outSlice = Views.hyperSlice(block, 2, z);
-				@SuppressWarnings({ "unchecked" })
 				final IterableInterval<UnsignedByteType> inSlice = Views
 						.flatIterable(
 								Views.interval(
@@ -371,7 +367,7 @@ public class SparkConvertRenderStackToN5 {
 		});
 	}
 
-	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static void main(final String... args) throws IOException {
 
 		final Options options = new Options(args);
 
@@ -384,24 +380,22 @@ public class SparkConvertRenderStackToN5 {
 		final String datasetName = options.getTempTileSize() == null ? options.getDatasetName() : options.getDatasetName() + "-slices";
 		final int[] blockSize = options.getTempTileSize() == null ? options.getBlockSize() : new int[] {options.getTempTileSize()[0], options.getTempTileSize()[1], 1};
 
-		if( options.getDownsamplingFactors() == null ) {
-			saveRenderStack(
-					sc,
-					options.getBaseUrl(),
-					options.getOwner(),
-					options.getProject(),
-					options.getStack(),
-					options.getFilter(),
-					options.getTileSize(),
-					options.getN5Path(),
-					datasetName,
-					options.getMin(),
-					options.getSize(),
-					blockSize);
-		} else {
-			String fullScaleName = Paths.get(datasetName, "s" + 0).toString();
+		final boolean downsampleStack = options.getDownsamplingFactors() != null;
+		final String fullScaleName = downsampleStack ? Paths.get(datasetName, "s" + 0).toString() : datasetName;
 
-			saveRenderStack(
+		// TODO: Add option indicating that prior existing data should be removed and then use Spark to
+		//       remove in parallel (running FileUtils.deleteDirectory on the root dataset directory will take
+		//       too long for all but the smallest data sets).  The parallel removal feature should support
+		//       removal of all scale levels (including full scale).
+
+		final File datasetDir = new File(Paths.get(options.getN5Path(), datasetName).toString());
+		if (datasetDir.exists()) {
+			throw new IllegalArgumentException("Dataset " + datasetDir.getAbsolutePath() + " already exists.  " +
+											   "Please move (or remove) the existing dataset before regenerating it.");
+		}
+
+		// save full scale first ...
+		saveRenderStack(
 				sc,
 				options.getBaseUrl(),
 				options.getOwner(),
@@ -415,23 +409,12 @@ public class SparkConvertRenderStackToN5 {
 				options.getSize(),
 				blockSize);
 
+		if (downsampleStack) {
+
 			// Now that the full resolution image is saved into n5, generate the scale pyramid
 			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
 
-			// Put the downsampling factors into the full resolution
-			final N5Writer n5 = new N5FSWriter(options.getN5Path());
-			n5.setAttribute( fullScaleName, DOWNSAMPLING_FACTORS_ATTRIBUTE_KEY, options.getDownsamplingFactors() );
-
-			// Remove previous scales if they exist
-			File datasetDir = new File(Paths.get(options.getN5Path(), datasetName).toString());
-			for(File f : datasetDir.listFiles()) {
-				// try/catch to check for int parse errors which happen if this is not a scale dir
-				try {
-					if (f.isDirectory() && f.getName().startsWith("s") && Integer.parseInt(f.getName().substring(1)) > 0)
-						FileUtils.deleteDirectory(f);
-				} catch( Exception ignored ) {
-				}
-			}
+			// NOTE: no need to write full scale down-sampling factors (default is 1,1,1)
 
 			downsampleScalePyramid(
 					sc,
@@ -442,6 +425,7 @@ public class SparkConvertRenderStackToN5 {
 				);
 		}
 
+		// TODO: find out whether this should behave differently when down-sampling is requested
 
 		if (options.getTempTileSize() != null)
 			SparkConvertTiffSeriesToN5.reSave(
