@@ -10,7 +10,7 @@ N_NODES=10
 
 ARGV="\
 --lambdaFilter 0.25 \
---lambdaModel 0.1 \
+--lambdaModel 0.5 \
 --maxEpsilon 20 \
 --n5Input /groups/cosem/cosem/data/HeLa_Cell2_4x4x4nm/HeLa_Cell2_4x4x4nm_raw.n5 \
 --n5Output /groups/cosem/cosem/saalfelds/HeLa_Cell2_4x4x4nm/HeLa_Cell2_4x4x4nm_raw.n5 \
@@ -19,8 +19,8 @@ ARGV="\
 --minIntensity -1000 \
 --maxIntensity 5000 \
 --n5DatasetInput /volumes/raw/ch0 \
---n5DatasetOutput /volumes/raw/ch0 \
---iterations 1000"
+--n5DatasetOutput /volumes/raw/ch0-translation-0.5 \
+--iterations 200"
 
 TERMINATE=1 RUNTIME='24:00' $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
 
