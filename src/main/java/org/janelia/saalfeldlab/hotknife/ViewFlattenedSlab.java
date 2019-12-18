@@ -26,6 +26,7 @@ import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.hdf5.N5HDF5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
+import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
@@ -70,10 +71,10 @@ public class ViewFlattenedSlab {
 		/*
 		 * transformation
 		 */
-//		final IHDF5Reader hdf5ReaderTop = HDF5Factory.openForReading("/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-top.h5");
-//		final IHDF5Reader hdf5ReaderBot = HDF5Factory.openForReading("/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-bottom.h5");
-		final IHDF5Reader hdf5ReaderTop = HDF5Factory.openForReading("/home/saalfeld/projects/flyem/Sec04-top.h5");
-		final IHDF5Reader hdf5ReaderBot = HDF5Factory.openForReading("/home/saalfeld/projects/flyem/Sec04-bottom.h5");
+		final IHDF5Reader hdf5ReaderTop = HDF5Factory.openForReading("/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-top.h5");
+		final IHDF5Reader hdf5ReaderBot = HDF5Factory.openForReading("/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-bottom.h5");
+//		final IHDF5Reader hdf5ReaderTop = HDF5Factory.openForReading("/home/saalfeld/projects/flyem/Sec04-top.h5");
+//		final IHDF5Reader hdf5ReaderBot = HDF5Factory.openForReading("/home/saalfeld/projects/flyem/Sec04-bottom.h5");
 		final N5HDF5Reader hdf5Top = new N5HDF5Reader(hdf5ReaderTop, new int[] {128, 128, 128});
 		final N5HDF5Reader hdf5Bot = new N5HDF5Reader(hdf5ReaderBot, new int[] {128, 128, 128});
 
@@ -93,7 +94,7 @@ public class ViewFlattenedSlab {
 		 * raw data
 		 */
 		final int numProc = Runtime.getRuntime().availableProcessors();
-		final SharedQueue queue = new SharedQueue(Math.min(8, Math.max(1, numProc / 2)));
+		final SharedQueue queue = new SharedQueue(Math.min(8, Math.max(1, numProc - 2)));
 
 		final N5FSReader n5 = new N5FSReader("/nrs/flyem/render/n5/Z1217_19m/Sec04/stacks");
 
@@ -157,7 +158,7 @@ public class ViewFlattenedSlab {
 		else
 			volatileMipmapSource = mipmapSource;
 
-		bdv = Show.mipmapSource(volatileMipmapSource, bdv);
+		bdv = Show.mipmapSource(volatileMipmapSource, bdv, BdvOptions.options().screenScales(new double[] {0.5}).numRenderingThreads(10));
 
 //		BdvFunctions.show(VolatileViews.wrapAsVolatile(topFloats, queue), "", BdvOptions.options().is2D());
 
