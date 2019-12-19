@@ -49,6 +49,8 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
+import picocli.CommandLine;
+import picocli.CommandLine.Option;
 
 /**
  *
@@ -63,7 +65,9 @@ public class ViewFlattenedSlab implements Callable<Void> {
 
 	private long padding = 2000;
 
+	@Option(names = {"--minFaceFile"}, required = false, description = "HDF5 file with min face, e.g. --minFaceFile /nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-bottom.h5")
 	private String minFaceFile = "/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-bottom.h5";
+
 	private String maxFaceFile = "/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-top.h5";
 	private String rawN5 = "/nrs/flyem/render/n5/Z1217_19m/Sec04/stacks";
 	private String datasetName = "/v1_1_affine_filtered_1_26365___20191217_153959";
@@ -78,7 +82,8 @@ public class ViewFlattenedSlab implements Callable<Void> {
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
-		new ViewFlattenedSlab().call();
+		CommandLine.call(new ViewFlattenedSlab(), args);
+//		new ViewFlattenedSlab().call();
 	}
 
 
