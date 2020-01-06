@@ -19,6 +19,7 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
@@ -33,6 +34,7 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -44,6 +46,8 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.view.Views;
+
+import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
 
 /**
  *
@@ -79,6 +83,10 @@ public class SparkConvertTiffSeriesToN5 {
 		@Option(name = "--firstSlice", required = false, usage = "first slice index (if not 0)")
 		private long firstSliceIndex = 0;
 
+		@Option(name = "--factors", usage = "Specifies generates a scale pyramid with given factors with relative scaling between factors, e.g. 2,2,2")
+		private String downsamplingFactorsString = null;
+		private int[] downsamplingFactors;
+
 		private final long[] sourceSize;
 
 		public Options(final String[] args) {
@@ -88,6 +96,7 @@ public class SparkConvertTiffSeriesToN5 {
 			min = new long[3];
 			size = new long[3];
 			blockSize = new int[3];
+			downsamplingFactors = null;
 			try {
 				parser.parseArgument(args);
 
@@ -126,6 +135,13 @@ public class SparkConvertTiffSeriesToN5 {
 					blockSize[0] = blockSize[1] = blockSize[2] = 128;
 				else
 					parseCSIntArray(blockSizeString, blockSize);
+
+				if (downsamplingFactorsString != null) {
+					int numFactors = 1;
+					for (int idx = 0; (idx = downsamplingFactorsString.indexOf(",", idx)) >= 0; idx++) { numFactors++; }
+					downsamplingFactors = new int[numFactors];
+					parseCSIntArray(downsamplingFactorsString, downsamplingFactors);
+				}
 
 				parsedSuccessfully = true;
 			} catch (final CmdLineException e) {
@@ -189,6 +205,12 @@ public class SparkConvertTiffSeriesToN5 {
 		public long getFirstSliceIndex() {
 			return firstSliceIndex;
 		}
+
+		/**
+		 *
+		 * @return the downsamplingFactors
+		 */
+		public int[] getDownsamplingFactors() { return downsamplingFactors; }
 	}
 
 
@@ -312,7 +334,21 @@ public class SparkConvertTiffSeriesToN5 {
 		final SparkConf conf = new SparkConf().setAppName( "SparkConvertTiffSeriesToN5" );
         final JavaSparkContext sc = new JavaSparkContext(conf);
 
-        final String slicesDatasetName = options.getDatasetName() + "-slices";
+		String datasetName = options.getDatasetName();
+        final String slicesDatasetName = datasetName + "-slices";
+		final boolean downsampleStack = options.getDownsamplingFactors() != null;
+		final String fullScaleName = downsampleStack ? Paths.get(datasetName, "s" + 0).toString() : datasetName;
+
+		// TODO: Add option indicating that prior existing data should be removed and then use Spark to
+		//       remove in parallel (running FileUtils.deleteDirectory on the root dataset directory will take
+		//       too long for all but the smallest data sets).  The parallel removal feature should support
+		//       removal of all scale levels (including full scale).
+
+		final File datasetDir = new File(Paths.get(options.getN5Path(), fullScaleName).toString());
+		if (datasetDir.exists()) {
+			throw new IllegalArgumentException("Dataset " + datasetDir.getAbsolutePath() + " already exists.  " +
+											   "Please move (or remove) the existing dataset before regenerating it.");
+		}
 
 		/* parallelize over slices */
         saveTIFFSeries(
@@ -330,8 +366,24 @@ public class SparkConvertTiffSeriesToN5 {
 				sc,
 				options.getN5Path(),
 				slicesDatasetName,
-				options.getDatasetName(),
+				fullScaleName,
 				options.getBlockSize());
+
+		if (downsampleStack) {
+
+			// Now that the full resolution image is saved into n5, generate the scale pyramid
+			final N5WriterSupplier n5Supplier = () -> new N5FSWriter(options.getN5Path() );
+
+			// NOTE: no need to write full scale down-sampling factors (default is 1,1,1)
+
+			downsampleScalePyramid(
+					sc,
+					n5Supplier,
+					fullScaleName,
+					datasetName,
+					options.getDownsamplingFactors()
+			);
+		}
 
 		sc.close();
 
