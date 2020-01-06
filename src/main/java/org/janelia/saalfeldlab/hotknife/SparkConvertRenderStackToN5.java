@@ -388,7 +388,7 @@ public class SparkConvertRenderStackToN5 {
 		//       too long for all but the smallest data sets).  The parallel removal feature should support
 		//       removal of all scale levels (including full scale).
 
-		final File datasetDir = new File(Paths.get(options.getN5Path(), datasetName).toString());
+		final File datasetDir = new File(Paths.get(options.getN5Path(), fullScaleName).toString());
 		if (datasetDir.exists()) {
 			throw new IllegalArgumentException("Dataset " + datasetDir.getAbsolutePath() + " already exists.  " +
 											   "Please move (or remove) the existing dataset before regenerating it.");
