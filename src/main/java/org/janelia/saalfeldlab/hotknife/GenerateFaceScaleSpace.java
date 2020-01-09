@@ -44,6 +44,7 @@ import net.imagej.ops.Ops.Filter.Gauss;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.type.volatiles.VolatileFloatType;
@@ -106,10 +107,12 @@ public class GenerateFaceScaleSpace {
 		final Class<Gauss> opClass = Gauss.class;
 		final double[] sigmas = new double[] { sigma, sigma, sigma };
 
-		final RandomAccessibleInterval<FloatType> filtered = Lazy.processFloat(
+		final RandomAccessibleInterval<FloatType> filtered = Lazy.process(
 				Views.extendMirrorSingle(zeroMinSource),
 				zeroMinSource,
 				blockSize,
+				new FloatType(),
+				AccessFlags.setOf(),
 				opService,
 				opClass,
 				sigmas);

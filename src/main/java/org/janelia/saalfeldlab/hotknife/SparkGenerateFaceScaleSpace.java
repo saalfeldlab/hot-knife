@@ -41,6 +41,7 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
@@ -247,10 +248,12 @@ public class SparkGenerateFaceScaleSpace {
 					final RandomAccessibleInterval<FloatType> zeroMin = Views.zeroMin(roi);
 
 					final SimpleGaussRA<FloatType> gauss = new SimpleGaussRA<>(sigmas);
-					final RandomAccessibleInterval<FloatType> filtered = Lazy.processFloat(
+					final RandomAccessibleInterval<FloatType> filtered = Lazy.process(
 							Views.extendMirrorSingle(zeroMin),
 							zeroMin,
 							outBlockSize,
+							new FloatType(),
+							AccessFlags.setOf(),
 							gauss);
 					final SubsampleIntervalView<FloatType> subsampled = Views.subsample(filtered, sampleStepSize);
 
