@@ -16,6 +16,7 @@ import bdv.viewer.Source;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.util.Util;
 import picocli.CommandLine.Option;
 
 public class Cost implements Callable<Void>
@@ -50,10 +51,30 @@ public class Cost implements Callable<Void>
 
 		for (int s = 0; s < numScales; ++s)
 		{
-			final int scale = 1 << s;
-			scales[s] = new double[]{scale, scale, scale};
+			final String datasetNameMipMap = datasetName + "/s" + s;
 
-			mipmaps[s] = N5Utils.openVolatile( n5, datasetName + "/s" + s);
+			final long[] dimensions = n5.getAttribute(datasetNameMipMap, "dimensions", long[].class);
+			final long[] downsamplingFactors = n5.getAttribute(datasetNameMipMap, "downsamplingFactors", long[].class);
+			final double[] scale = new double[dimensions.length];
+
+			if (downsamplingFactors == null)
+			{
+				final int si = 1 << s;
+				for (int i = 0; i < scale.length; ++i)
+					scale[i] = si;
+			}
+			else
+			{
+				for (int i = 0; i < scale.length; ++i)
+					scale[i] = downsamplingFactors[i];
+			}
+
+			scales[s] = scale;
+			mipmaps[s] = N5Utils.openVolatile( n5, datasetNameMipMap);
+
+			System.out.println( s + ": " + 
+					", scale: " + Util.printCoordinates( scale ) + 
+					", size: " + Util.printCoordinates( dimensions ) );
 		}
 
 		final int numProc = Runtime.getRuntime().availableProcessors();
