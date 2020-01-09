@@ -16,6 +16,7 @@ import bdv.viewer.Source;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Util;
 import picocli.CommandLine.Option;
@@ -43,39 +44,13 @@ public class Cost implements Callable<Void>
 	{
 		final MipMapData data = new MipMapData( new N5FSReader(rawN5), datasetName );
 
-		final RandomAccessibleInterval< UnsignedByteType > mipmap = data.getMipMap( 6 );
+		final RandomAccessibleInterval< UnsignedByteType > mipmap = data.getMipmap( 6 );
 		ImageJFunctions.show( mipmap );
 
-		displayData( data.openVolatileMipMaps(), data.scales );
+		data.display( useVolatile );
+		//displayData( data.openVolatileMipmaps(), data.mipmapScales() );
 
 		return null;
-	}
-
-	public BdvStackSource<?> displayData( final RandomAccessibleInterval<UnsignedByteType>[] volatilemipmaps, final double[][] scales ) throws IOException
-	{
-		final int numProc = Runtime.getRuntime().availableProcessors();
-		final SharedQueue queue = new SharedQueue(Math.min(8, Math.max(1, numProc / 2)));
-
-		BdvStackSource<?> bdv = null;
-
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource =
-				new RandomAccessibleIntervalMipmapSource<>(
-						volatilemipmaps,
-						new UnsignedByteType(),
-						scales,
-						voxelDimensions,
-						datasetName);
-
-		final Source<?> volatileMipmapSource;
-
-		if (useVolatile)
-			volatileMipmapSource = mipmapSource.asVolatile(queue);
-		else
-			volatileMipmapSource = mipmapSource;
-
-		bdv = Show.mipmapSource(volatileMipmapSource, bdv, BdvOptions.options()./*screenScales(new double[] {0.5}).*/numRenderingThreads(numProc));
-
-		return bdv;
 	}
 
 	public class MipMapData
@@ -84,8 +59,9 @@ public class Cost implements Callable<Void>
 		final String datasetName;
 
 		final int numScales;
-		final double[][] scales;
+		final double[][] mipmapScales;
 		final long[][] dimensions;
+		final AffineTransform3D[] mipmapTransforms;
 
 		final RandomAccessibleInterval<UnsignedByteType>[] volatilemipmaps;
 		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps;
@@ -100,7 +76,8 @@ public class Cost implements Callable<Void>
 			this.volatilemipmaps = new RandomAccessibleInterval[numScales];
 			this.mipmaps = new RandomAccessibleInterval[numScales];
 
-			this.scales = new double[numScales][];
+			this.mipmapScales = new double[numScales][];
+			this.mipmapTransforms = new AffineTransform3D[numScales];
 			this.dimensions = new long[numScales][];
 
 			for (int s = 0; s < numScales; ++s)
@@ -123,19 +100,32 @@ public class Cost implements Callable<Void>
 						scale[i] = downsamplingFactors[i];
 				}
 
-				scales[s] = scale;
+				mipmapScales[s] = scale;
 				dimensions[s] = dims;
+
+				final AffineTransform3D mipmapTransform = new AffineTransform3D();
+				mipmapTransform.set(
+						mipmapScales[ s ][ 0 ], 0, 0, 0.5 * ( mipmapScales[ s ][ 0 ] - 1 ),
+						0, mipmapScales[ s ][ 1 ], 0, 0.5 * ( mipmapScales[ s ][ 1 ] - 1 ),
+						0, 0, mipmapScales[ s ][ 2 ], 0.5 * ( mipmapScales[ s ][ 2 ] - 1 ) );
+				mipmapTransforms[ s ] = mipmapTransform;
 
 				//volatilemipmaps[s] = N5Utils.openVolatile( n5, datasetNameMipMap );
 				//mipmaps[s] = N5Utils.open( n5, datasetNameMipMap );
 
 				System.out.println( s + ": " +
-						", scale: " + Util.printCoordinates( scale ) + 
-						", size: " + Util.printCoordinates( dims ) );
+						", scale: " + Util.printCoordinates( scale ) +
+						", size: " + Util.printCoordinates( dims ) +
+						", t=" + mipmapTransform);
 			}
 		}
 
-		public RandomAccessibleInterval<UnsignedByteType> getMipMap( final int scale ) throws IOException
+		public int numScales() { return numScales; }
+		public double[][] mipmapScales(){ return mipmapScales; }
+		public long[][] dimensions(){ return dimensions; }
+		public AffineTransform3D[] mipmapTransforms(){ return mipmapTransforms; }
+
+		public RandomAccessibleInterval<UnsignedByteType> getMipmap( final int scale ) throws IOException
 		{
 			if ( mipmaps[scale] == null )
 				mipmaps[scale] = N5Utils.open( n5, datasetName + "/s" + scale );
@@ -143,7 +133,7 @@ public class Cost implements Callable<Void>
 			return mipmaps[scale];
 		}
 
-		public RandomAccessibleInterval<UnsignedByteType> getVolatileMipMap( final int scale ) throws IOException
+		public RandomAccessibleInterval<UnsignedByteType> getVolatileMipmap( final int scale ) throws IOException
 		{
 			if ( volatilemipmaps[scale] == null )
 				volatilemipmaps[scale] = N5Utils.openVolatile( n5, datasetName + "/s" + scale );
@@ -151,7 +141,7 @@ public class Cost implements Callable<Void>
 			return volatilemipmaps[scale];
 		}
 
-		public RandomAccessibleInterval<UnsignedByteType>[] openVolatileMipMaps() throws IOException
+		public RandomAccessibleInterval<UnsignedByteType>[] openVolatileMipmaps() throws IOException
 		{
 			for (int s = 0; s < numScales; ++s)
 				if ( volatilemipmaps[s] == null )
@@ -160,13 +150,42 @@ public class Cost implements Callable<Void>
 			return volatilemipmaps;
 		}
 
-		public RandomAccessibleInterval<UnsignedByteType>[] openMipMaps() throws IOException
+		public RandomAccessibleInterval<UnsignedByteType>[] openMipmaps() throws IOException
 		{
 			for (int s = 0; s < numScales; ++s)
 				if ( mipmaps[s] == null )
 					mipmaps[s] = N5Utils.open( n5, datasetName + "/s" + s );
 
 			return mipmaps;
+		}
+
+		public BdvStackSource<?> display( final boolean useVolatile ) throws IOException
+		{
+			openVolatileMipmaps();
+
+			final int numProc = Runtime.getRuntime().availableProcessors();
+			final SharedQueue queue = new SharedQueue(Math.min(8, Math.max(1, numProc / 2)));
+
+			BdvStackSource<?> bdv = null;
+
+			final RandomAccessibleIntervalMipmapSource<?> mipmapSource =
+					new RandomAccessibleIntervalMipmapSource<>(
+							volatilemipmaps,
+							new UnsignedByteType(),
+							mipmapScales,
+							voxelDimensions,
+							datasetName);
+
+			final Source<?> volatileMipmapSource;
+
+			if (useVolatile)
+				volatileMipmapSource = mipmapSource.asVolatile(queue);
+			else
+				volatileMipmapSource = mipmapSource;
+
+			bdv = Show.mipmapSource(volatileMipmapSource, bdv, BdvOptions.options()./*screenScales(new double[] {0.5}).*/numRenderingThreads(numProc));
+
+			return bdv;
 		}
 	}
 }
