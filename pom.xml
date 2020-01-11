@@ -119,6 +119,10 @@
 			<artifactId>n5-hdf5</artifactId>
 			<version>1.0.3</version>
 		</dependency>
+		<dependency>
+			<groupId>info.picocli</groupId>
+			<artifactId>picocli</artifactId>
+		</dependency>
 	</dependencies>
 
 	<repositories>
