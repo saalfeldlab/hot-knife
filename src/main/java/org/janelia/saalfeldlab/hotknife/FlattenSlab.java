@@ -25,6 +25,8 @@ import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.Img;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.*;
 import net.imglib2.type.numeric.integer.IntType;
@@ -83,8 +85,10 @@ public class FlattenSlab implements Callable<Void> {
 	@Option(names = {"--max"}, required = false, description = "Dataset for the max heightmap -f '/flatten/Sec22___20200110_133809/heightmaps/max' or full path to HDF5")
 	private String maxDataset = null;
 
-	private boolean useVolatile = true;
-	private long padding = 2000;
+	// If the heightmaps are already in the N5, then read them instead of computing them
+	private boolean useExistingHeightmaps = false;
+
+    private long padding = 2000;
 	double transformScaleX = 1;
 	double transformScaleY = 1;
 
@@ -107,6 +111,7 @@ public class FlattenSlab implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, SpimDataException {
 		net.imagej.ImageJ imagej = new net.imagej.ImageJ();
+		ij.ImageJ ij1 = new ij.ImageJ();
 		final N5FSReader n5 = new N5FSReader(n5Path);
 
 		// Extract metadata from input
@@ -119,45 +124,14 @@ public class FlattenSlab implements Callable<Void> {
 		minDataset = flattenDataset + minFaceDatasetName;
 		maxDataset = flattenDataset + maxFaceDatasetName;
 
-		// Handle mipmaps here
-		@SuppressWarnings("unchecked")
-		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
-
 		// Read the full resolution scale of the cost function
 		RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, costDataset + "/s0");
 
-		final double[][] scales = new double[numScales][];
-
-		/*
-		 * raw pixels for mipmap level
-		 * can be reused when transformation updates
-		 */
-		for (int s = 0; s < numScales; ++s) {
-			int scale = 1 << s;
-			String scaleDataset = inputDataset + "/s" + s;
-
-			if( s > 0 ) {
-				int[] downsamplingFactors = n5.getAttribute(scaleDataset, "downsamplingFactors", int[].class);
-				scale = downsamplingFactors[0];
-			}
-			double inverseScale = 1.0 / scale;
-
-			rawMipmaps[s] =
-					N5Utils.openVolatile(
-							n5,
-							scaleDataset);
-
-			scales[s] = new double[]{scale, scale, scale};
-		}
-		System.out.println("Done reading rawMipmaps");
-
-		FinalInterval sourceInterval = null;
-        sourceInterval = new FinalInterval(
-            new long[] {0, 0, 0},
-            new long[] {dimensions[0] - 1, dimensions[2] - 1, dimensions[1] -1});
 
         // Convert cost to double **and** swap the Y and Z axis for the FlattenTransform
         RandomAccessibleInterval<DoubleType> fullCost = Views.permute( Converters.convert(cost, (a, b) -> b.setReal(a.getRealDouble()), new DoubleType()), 1, 2 );
+
+        //ImageJFunctions.wrap(fullCost, "fullCost").show();
 
 		/*
 		Algorithm is:
@@ -173,8 +147,15 @@ public class FlattenSlab implements Callable<Void> {
 		RandomAccessibleInterval<DoubleType> flattenedCost = fullCost;
 		for( long samplingFactor : samplingFactors ) {
 			System.out.println("Starting to flatten at sampling factor: " + samplingFactor);
-			generateHeightmaps( flattenedCost, imagej, samplingFactor );
+			// Only compute heightmaps if flag is false, or flag is true and one of the heightmaps is missing
+			if( useExistingHeightmaps && ( n5.exists(getMinDatasetname(samplingFactor)) && n5.exists(getMaxDatasetname(samplingFactor)) ) ) {
+                System.out.println("Heightmaps already exist");
+            } else {
+				generateHeightmaps( flattenedCost, imagej, samplingFactor );
+            }
+			System.out.println("Flattening cost");
 			flattenedCost = applyHeightmaps( fullCost, samplingFactor );
+			ImageJFunctions.wrap(flattenedCost, "flattened_cost_" + samplingFactor).show();
 		}
 
 		return null;
@@ -185,7 +166,6 @@ public class FlattenSlab implements Callable<Void> {
         long[] pos = new long[rai.numDimensions()];
 		Arrays.fill(pos, 0);
         ra.localize(pos);
-        DoubleType avg = new DoubleType();
 
         long count = 0;
         double dAvg = 0;
@@ -200,13 +180,20 @@ public class FlattenSlab implements Callable<Void> {
         return new DoubleType(dAvg / count);
     }
 
+    /**
+     * Apply heightmaps that have been stored in the N5 for sampling factor to the cost image at full scale
+     * @param fullCost
+     * @param samplingFactor
+     * @return
+     * @throws IOException
+     */
 	private RandomAccessibleInterval<DoubleType> applyHeightmaps(RandomAccessibleInterval<DoubleType> fullCost, long samplingFactor) throws IOException {
 		N5FSReader n5 = new N5FSReader(n5Path);
 		RandomAccessibleInterval<DoubleType> minHeightmap = N5Utils.open(n5, getMinDatasetname(samplingFactor));
 		RandomAccessibleInterval<DoubleType> maxHeightmap = N5Utils.open(n5, getMaxDatasetname(samplingFactor));
 
-		DoubleType maxMean = getAvgValue(maxHeightmap);
-		DoubleType minMean = getAvgValue(minHeightmap);
+		double minMean = n5.getAttribute(getMinDatasetname(samplingFactor), "mean", double.class);
+		double maxMean = n5.getAttribute(getMaxDatasetname(samplingFactor), "mean", double.class);
 
 		final Scale2D transformScale = new Scale2D(transformScaleX, transformScaleY);
 
@@ -221,8 +208,8 @@ public class FlattenSlab implements Callable<Void> {
 												Views.extendBorder(maxHeightmap),
 												new NLinearInterpolatorFactory<>()),
 										transformScale),
-								minMean.get(),
-								maxMean.get());
+								minMean,
+								maxMean);
 
 		final int scale = 1 << 1;
 		final double inverseScale = 1.0 / scale;
@@ -236,8 +223,8 @@ public class FlattenSlab implements Callable<Void> {
 		transformSequence.add(scale3D);
 
 		final FinalInterval cropInterval = new FinalInterval(
-				new long[] {0, 0, Math.round(minMean.get()) - padding},
-				new long[] {fullCost.dimension(0) - 1, fullCost.dimension(2) - 1, Math.round(maxMean.get()) + padding});
+				new long[] {0, 0, Math.round(minMean) - padding},
+				new long[] {fullCost.dimension(0) - 1, fullCost.dimension(2) - 1, Math.round(maxMean) + padding});
 
 		final RandomAccessibleInterval<DoubleType> transformedCost =
 				Transform.createTransformedInterval(
@@ -245,7 +232,6 @@ public class FlattenSlab implements Callable<Void> {
 						cropInterval,
 						transformSequence,
 						new DoubleType(0));
-
 
 		return transformedCost;
 	}
@@ -259,7 +245,7 @@ public class FlattenSlab implements Callable<Void> {
 	}
 
 	/**
-	 * This function uses a cost function and a sampling factor to solve for min and max heightmaps that are written to N5
+	 * This function uses a cost function and a sampling factor to solve for min and max heightmaps and write the heightmaps to N5
 	 *
 	 * @param cost
 	 * @param imagej
@@ -269,39 +255,112 @@ public class FlattenSlab implements Callable<Void> {
 	private void generateHeightmaps(RandomAccessibleInterval<DoubleType> cost, ImageJ imagej, long samplingFactor) throws IOException {
 		long startTime = System.nanoTime();
 		System.out.println("Computing heightmaps at sampling factor:" + samplingFactor);
-		RandomAccessibleInterval downsampledCost = sampleCost(cost, samplingFactor);
+
+		RandomAccessibleInterval<DoubleType> downsampledCostMin = sampleCost(cost, samplingFactor, "min");
+		RandomAccessibleInterval<DoubleType> downsampledCostMax = sampleCost(cost, samplingFactor, "max");
+
+		//ImageJFunctions.wrap(downsampledCostMin, "downsampled_cost_min_" + samplingFactor).show();
 
 		N5FSWriter n5 = new N5FSWriter(n5Path);
 		// Make sure costs are stored in the right block dimension (e.g. flat) for efficient fetching
 		System.out.println("Computing min map");
-		RandomAccessibleInterval<IntType> intMin = getScaledSurfaceMap(getBotImg(downsampledCost, imagej.op()), 0, cost.dimension(0), cost.dimension(1), imagej.op());
+		RandomAccessibleInterval<IntType> intMin = getScaledSurfaceMap(downsampledCostMin, 0, cost.dimension(0), cost.dimension(1), imagej.op());
 		RandomAccessibleInterval<DoubleType> minHeightmap = Converters.convert(intMin, (a, x) -> x.setReal(a.getRealDouble()), new DoubleType());
+
 		System.out.println("Writing min map");
 		N5Utils.save( minHeightmap, n5, getMinDatasetname(samplingFactor), new int[]{1024, 1024}, new RawCompression() );
 
+		DoubleType minMean = getAvgValue(minHeightmap);
+		n5.setAttribute(getMinDatasetname(samplingFactor), "mean", minMean.get());
+		System.out.println("Average min height: " + minMean.get());
+
 		System.out.println("Computing max map");
-		RandomAccessibleInterval<IntType> intMax = getScaledSurfaceMap(getTopImg(downsampledCost, imagej.op()), cost.dimension(1) / 2, cost.dimension(0), cost.dimension(1), imagej.op());
+		RandomAccessibleInterval<IntType> intMax = getScaledSurfaceMap(downsampledCostMax, cost.dimension(2) / 2, cost.dimension(0), cost.dimension(1), imagej.op());
 		RandomAccessibleInterval<DoubleType> maxHeightmap = Converters.convert(intMax, (a, x) -> x.setReal(a.getRealDouble()), new DoubleType());
+
 		System.out.println("Writing max map");
 		N5Utils.save( maxHeightmap, n5, getMaxDatasetname(samplingFactor), new int[]{1024, 1024}, new RawCompression() );
 
-		long computeTime = ( System.nanoTime() - startTime ) / 1000000000;
-		System.out.println("Compute time (nanoTime): " + computeTime);
+		DoubleType maxMean = getAvgValue(maxHeightmap);
+		n5.setAttribute(getMaxDatasetname(samplingFactor), "mean", maxMean.get());
+		System.out.println("Average max height: " + maxMean.get());
+
+		double computeTime = ( System.nanoTime() - startTime ) / 1000000000.0;
+		System.out.println("Compute time: " + computeTime);
 	}
 
-	private RandomAccessibleInterval sampleCost(RandomAccessibleInterval<DoubleType> cost, long samplingFactor) {
+    /**
+     * Return a RAI of the cost function that is appropriate for the sampling factor and side
+	 * The key job of this method is to make the smartest View of the cost function for the respective side/samplingFactor
+	 *   to minimize the amount of N5 reading work
+     * @param cost
+     * @param samplingFactor
+     * @param side - "max" or "min"
+     * @return
+     */
+	private RandomAccessibleInterval<DoubleType> sampleCost(RandomAccessibleInterval<DoubleType> cost, long samplingFactor, String side) throws IOException {
+		FinalInterval cropInterval;
+		// This is a silly way of implementing this, but mirrors existing pipeline. Forces half interval per side for 200
+		if( samplingFactor == 200 ) {
+			if( side.equalsIgnoreCase("min") ) {
+				cropInterval = Intervals.createMinMax(0, 0, 0, cost.dimension(0)-1, cost.dimension(1)-1, cost.dimension(2)/2-1);
+			} else {
+				cropInterval = Intervals.createMinMax(0, 0, cost.dimension(2)/2, cost.dimension(0)-1, cost.dimension(1)-1, cost.dimension(2)-1);
+			}
+		} else {
+			// TODO solve for the correct interval after reading a heightmap from disk
+			N5FSReader n5 = new N5FSReader(n5Path);
+			RandomAccessibleInterval<DoubleType> hm;
+
+			long hmSamplingFactor;
+			long intervalWidth;
+			if( samplingFactor == 64 ) {
+				intervalWidth = 1200;
+				hmSamplingFactor = 200;
+			} else if( samplingFactor == 13 ) {
+				intervalWidth = 400;
+				hmSamplingFactor = 64;
+			} else if( samplingFactor == 12 ) {
+				intervalWidth = 200;
+				hmSamplingFactor = 13;
+			} else if( samplingFactor == 11 ) {
+				intervalWidth = 100;
+				hmSamplingFactor = 12;
+			} else if( samplingFactor == 6 ) {
+				intervalWidth = 60;
+				hmSamplingFactor = 11;
+			} else {
+				intervalWidth = 50;
+				hmSamplingFactor = 6;
+			}
+
+			double mean;
+			if( side.equalsIgnoreCase("min") ) {
+				//hm = N5Utils.open(n5, getMinDatasetname(hmSamplingFactor));
+				mean = n5.getAttribute(getMinDatasetname(hmSamplingFactor), "mean", double.class);
+			} else {
+				//hm = N5Utils.open(n5, getMaxDatasetname(hmSamplingFactor));
+				mean = n5.getAttribute(getMaxDatasetname(hmSamplingFactor), "mean", double.class);
+			}
+
+			cropInterval = Intervals.createMinMax(0, 0, (long) Math.round(mean - (float)intervalWidth/2), cost.dimension(0)-1, cost.dimension(1)-1, (long) Math.round(mean + (float)intervalWidth/2));
+		}
+
+		RandomAccessibleInterval<DoubleType> croppedCost = Views.interval(cost, cropInterval);
+
 		long[] sampleSteps;
 
-		sampleSteps = new long[]{100, 50, samplingFactor};
-		// FIXME: at higher resolutions we do not want to subsample, we want to crop
+		if( samplingFactor == 200 )
+			sampleSteps = new long[]{100, 50, samplingFactor};
+		else
+			sampleSteps = new long[]{1, 1, samplingFactor};
 
 		FinalInterval downsampledInterval = Intervals.createMinMax(0, 0, 0,
-				(long) Math.floor((float)cost.dimension(0) / sampleSteps[0]),
-				(long) Math.floor((float)cost.dimension(1) / sampleSteps[1]),
-				(long) Math.floor((float)cost.dimension(2) / sampleSteps[2]));
+				(long) Math.floor((float)croppedCost.dimension(0) / sampleSteps[0]),
+				(long) Math.floor((float)croppedCost.dimension(1) / sampleSteps[1]),
+				(long) Math.floor((float)croppedCost.dimension(2) / sampleSteps[2]));
 
-		//IntervalView<DoubleType> offsetCost = Views.translate(cost, sampleSteps[0] / 2, sampleSteps[1] / 2, 1);
-		RandomAccessible<DoubleType> sampledCost = Views.subsample(cost, sampleSteps[0], sampleSteps[1], sampleSteps[2]);
+		RandomAccessible<DoubleType> sampledCost = Views.subsample(croppedCost, sampleSteps[0], sampleSteps[1], sampleSteps[2]);
 
 		return Views.interval(sampledCost,downsampledInterval);
 	}
