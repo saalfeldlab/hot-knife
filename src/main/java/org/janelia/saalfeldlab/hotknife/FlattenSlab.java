@@ -118,6 +118,8 @@ public class FlattenSlab implements Callable<Void> {
 		final int numScales = n5.list(inputDataset).length;
 		final long[] dimensions = n5.getDatasetAttributes(inputDataset + "/s0").getDimensions();
 
+		System.out.println("Dataset dimensions are: " + dimensions[0] + " " + dimensions[1] + " " + dimensions[2] + " [note that Y and Z will be permuted for flattening]");
+
 		RandomAccessibleInterval<DoubleType> min = null;
 		RandomAccessibleInterval<DoubleType> max = null;
 
