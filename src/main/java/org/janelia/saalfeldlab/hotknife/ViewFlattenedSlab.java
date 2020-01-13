@@ -89,8 +89,10 @@ public class ViewFlattenedSlab implements Callable<Void> {
 		if( args.length == 0 )
 			args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5",
 					"-d", "/zcorr/Sec22___20200106_083252",
-					"--min", "/flatten/Sec22___20200113_kyle001/heightmaps/min",
-					"--max", "/flatten/Sec22___20200113_kyle001/heightmaps/max"
+					"--min", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec22/Sec22-bottom.h5",
+					"--max", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec22/Sec22-top.h5"
+//					"--min", "/flatten/Sec22___20200113_kyle001/heightmaps/min",
+//					"--max", "/flatten/Sec22___20200113_kyle001/heightmaps/max"
 					};
 			//args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5", "-d", "/zcorr/Sec24___20200106_082231", "-f", "/flatten/Sec24___20200106_082231", "-s", "/cost/Sec23___20200110_152920", "-u"};
 		// to regenerate heightmap from HDF5 use these args
@@ -123,7 +125,7 @@ public class ViewFlattenedSlab implements Callable<Void> {
 			System.out.println("Loading min face from HDF5");
 			final IHDF5Reader hdf5Reader = HDF5Factory.openForReading(minDataset);
 			final N5HDF5Reader hdf5 = new N5HDF5Reader(hdf5Reader, new int[]{128, 128, 128});
-			final RandomAccessibleInterval<FloatType> floats = N5Utils.openVolatile(hdf5, "/volume");
+			final RandomAccessibleInterval<FloatType> floats = N5Utils.open(hdf5, "/volume");
 			min = Converters.convert(floats, (a, b) -> b.setReal(a.getRealDouble()), new DoubleType());
 
 			// Using an HDF5 RAI can be slow when computing transforms, write to N5 and use that FIXME
@@ -141,7 +143,7 @@ public class ViewFlattenedSlab implements Callable<Void> {
 			System.out.println("Loading max face from HDF5");
 			final IHDF5Reader hdf5Reader = HDF5Factory.openForReading(maxDataset);
 			final N5HDF5Reader hdf5 = new N5HDF5Reader(hdf5Reader, new int[]{128, 128, 128});
-			final RandomAccessibleInterval<FloatType> floats = N5Utils.openVolatile(hdf5, "/volume");
+			final RandomAccessibleInterval<FloatType> floats = N5Utils.open(hdf5, "/volume");
 			max = Converters.convert(floats, (a, b) -> b.setReal(a.getRealDouble()), new DoubleType());
 
 			// Using an HDF5 RAI can be slow when computing transforms, write to N5 and use that FIXME
@@ -150,9 +152,11 @@ public class ViewFlattenedSlab implements Callable<Void> {
 //			max = N5Utils.open(n5, flattenDataset + BigWarp.maxFaceDatasetName);
 		}
 
-		DoubleType maxMean = getMaxValue(max);
-		DoubleType minMean = getMinValue(min);
-		System.out.println("Done computing average values of heightmap");
+
+
+		DoubleType maxMean = getAvgValue(max);
+		DoubleType minMean = getAvgValue(min);
+		System.out.println("Done computing average values of heightmap. min = " + minMean.getRealDouble() + " max = " + maxMean.getRealDouble());
 
 		final Scale2D transformScale = new Scale2D(transformScaleX, transformScaleY);
 
@@ -285,8 +289,11 @@ public class ViewFlattenedSlab implements Callable<Void> {
         for( pos[0] = 0; pos[0] < rai.dimension(0); pos[0]++ ) {
             for( pos[1] = 0; pos[1] < rai.dimension(1); pos[1]++ ) {
                 ra.setPosition(pos);
-                dAvg += ra.get().getRealDouble();
-                count++;
+                // Apparently some heightmap values can be NaN
+                if( !Double.isNaN(ra.get().getRealDouble()) && !Double.isInfinite(ra.get().getRealDouble()) ) {
+					dAvg += ra.get().getRealDouble();
+					count++;
+				}
             }
         }
 
