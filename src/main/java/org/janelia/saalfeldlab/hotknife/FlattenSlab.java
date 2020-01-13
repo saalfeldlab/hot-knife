@@ -351,12 +351,12 @@ public class FlattenSlab implements Callable<Void> {
 
 		RandomAccessibleInterval<DoubleType> croppedCost = Views.interval(cost, cropInterval);
 
-		long[] sampleSteps;
+		long[] sampleSteps;// If sampleSteps leads to large dimensions, then it can blowup in MinCostZSurface because there the number of graph edges are an integer
 
 		if( samplingFactor == 200 )
 			sampleSteps = new long[]{100, 50, samplingFactor};
 		else
-			sampleSteps = new long[]{1, 1, samplingFactor};
+			sampleSteps = new long[]{10, 5, samplingFactor};
 
 		FinalInterval downsampledInterval = Intervals.createMinMax(0, 0, 0,
 				(long) Math.floor((float)(croppedCost.dimension(0) - 1) / sampleSteps[0]),
@@ -365,7 +365,7 @@ public class FlattenSlab implements Callable<Void> {
 
 		RandomAccessible<DoubleType> sampledCost = Views.subsample(croppedCost, sampleSteps[0], sampleSteps[1], sampleSteps[2]);
 
-		ImageJFunctions.wrap(Views.interval(sampledCost,downsampledInterval), "sampled").show();
+
 
 		return Views.interval(sampledCost,downsampledInterval);
 	}
