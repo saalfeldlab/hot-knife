@@ -86,7 +86,7 @@ public class FlattenSlab implements Callable<Void> {
 	private String maxDataset = null;
 
 	// If the heightmaps are already in the N5, then read them instead of computing them
-	private boolean useExistingHeightmaps = false;
+	private boolean useExistingHeightmaps = true;
 
     private long padding = 2000;
 	double transformScaleX = 1;
@@ -225,8 +225,8 @@ public class FlattenSlab implements Callable<Void> {
 		transformSequence.add(scale3D);
 
 		final FinalInterval cropInterval = new FinalInterval(
-				new long[] {0, 0, Math.round(minMean) - padding},
-				new long[] {fullCost.dimension(0) - 1, fullCost.dimension(2) - 1, Math.round(maxMean) + padding});
+				new long[] {0, 0, Math.max(0, Math.round(minMean) - padding)},
+				new long[] {fullCost.dimension(0) - 1, fullCost.dimension(2) - 1, Math.min( fullCost.dimension(2) - 1, Math.round(maxMean) + padding)});
 
 		final RandomAccessibleInterval<DoubleType> transformedCost =
 				Transform.createTransformedInterval(
@@ -345,7 +345,8 @@ public class FlattenSlab implements Callable<Void> {
 				mean = n5.getAttribute(getMaxDatasetname(hmSamplingFactor), "mean", double.class);
 			}
 
-			cropInterval = Intervals.createMinMax(0, 0, (long) Math.round(mean - (float)intervalWidth/2), cost.dimension(0)-1, cost.dimension(1)-1, (long) Math.round(mean + (float)intervalWidth/2));
+			cropInterval = Intervals.createMinMax(0, 0, (long) Math.max(0, Math.round(mean - (float)intervalWidth/2)),
+					cost.dimension(0)-1, cost.dimension(1)-1, (long) Math.min( cost.dimension(2)-1, Math.round(mean + (float)intervalWidth/2)));
 		}
 
 		RandomAccessibleInterval<DoubleType> croppedCost = Views.interval(cost, cropInterval);
@@ -358,11 +359,13 @@ public class FlattenSlab implements Callable<Void> {
 			sampleSteps = new long[]{1, 1, samplingFactor};
 
 		FinalInterval downsampledInterval = Intervals.createMinMax(0, 0, 0,
-				(long) Math.floor((float)croppedCost.dimension(0) / sampleSteps[0]),
-				(long) Math.floor((float)croppedCost.dimension(1) / sampleSteps[1]),
-				(long) Math.floor((float)croppedCost.dimension(2) / sampleSteps[2]));
+				(long) Math.floor((float)(croppedCost.dimension(0) - 1) / sampleSteps[0]),
+				(long) Math.floor((float)(croppedCost.dimension(1) - 1) / sampleSteps[1]),
+				(long) Math.floor((float)(croppedCost.dimension(2) - 1) / sampleSteps[2]));
 
 		RandomAccessible<DoubleType> sampledCost = Views.subsample(croppedCost, sampleSteps[0], sampleSteps[1], sampleSteps[2]);
+
+		ImageJFunctions.wrap(Views.interval(sampledCost,downsampledInterval), "sampled").show();
 
 		return Views.interval(sampledCost,downsampledInterval);
 	}
