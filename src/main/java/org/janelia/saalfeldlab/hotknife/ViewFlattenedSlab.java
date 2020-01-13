@@ -16,14 +16,18 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import net.imglib2.RandomAccess;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.hdf5.N5HDF5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
@@ -59,18 +63,19 @@ import picocli.CommandLine.Option;
  */
 public class ViewFlattenedSlab implements Callable<Void> {
 
-	/* parameterize with picocli */
-	private double minY = 1189.986083984375;
-	private double maxY = 4233.8876953125;
-
 	private long padding = 2000;
 
-	@Option(names = {"--minFaceFile"}, required = false, description = "HDF5 file with min face, e.g. --minFaceFile /nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-bottom.h5")
-	private String minFaceFile = "/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-bottom.h5";
+	@Option(names = {"-i", "--container"}, required = true, description = "container path, e.g. -i /nrs/flyem/tmp/VNC.n5")
+	private String n5Path = "/nrs/flyem/alignment/kyle/nail_test.n5";
 
-	private String maxFaceFile = "/nrs/flyem/alignment/Z1217-19m/VNC/Sec04/Sec04-top.h5";
-	private String rawN5 = "/nrs/flyem/render/n5/Z1217_19m/Sec04/stacks";
-	private String datasetName = "/v1_1_affine_filtered_1_26365___20191217_153959";
+	@Option(names = {"-d", "--dataset"}, required = true, description = "Input dataset -d '/zcorr/Sec22___20200106_083252'")
+	private String inputDataset = "/volumes/input";
+
+	@Option(names = {"--min"}, required = true, description = "Dataset for the min heightmap -f '/flatten/Sec22___20200110_133809/heightmaps/min' or full path to HDF5")
+	private String minDataset = null;
+
+	@Option(names = {"--max"}, required = true, description = "Dataset for the max heightmap -f '/flatten/Sec22___20200110_133809/heightmaps/max' or full path to HDF5")
+	private String maxDataset = null;
 
 	private double transformScaleX = 1;
 	private double transformScaleY = 1;
@@ -80,7 +85,17 @@ public class ViewFlattenedSlab implements Callable<Void> {
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
 
 
-	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static final void main(String... args) throws IOException, InterruptedException, ExecutionException {
+		if( args.length == 0 )
+			args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5",
+					"-d", "/zcorr/Sec22___20200106_083252",
+					"--min", "/flatten/Sec22___20200113_kyle001/heightmaps/min",
+					"--max", "/flatten/Sec22___20200113_kyle001/heightmaps/max"
+					};
+			//args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5", "-d", "/zcorr/Sec24___20200106_082231", "-f", "/flatten/Sec24___20200106_082231", "-s", "/cost/Sec23___20200110_152920", "-u"};
+		// to regenerate heightmap from HDF5 use these args
+		    //args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5", "-d", "/zcorr/Sec24___20200106_082231", "-f", "/flatten/Sec24___20200106_082231", "--min", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec24/Sec24-bottom.h5", "--max", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec24/Sec24-top.h5"};"--min", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec24/Sec24-bottom.h5", "--max", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec24/Sec24-top.h5"};
+
 
 		CommandLine.call(new ViewFlattenedSlab(), args);
 //		new ViewFlattenedSlab().call();
@@ -90,24 +105,54 @@ public class ViewFlattenedSlab implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		/*
-		 * transformation
-		 */
-		final IHDF5Reader hdf5ReaderMax = HDF5Factory.openForReading(maxFaceFile);
-		final IHDF5Reader hdf5ReaderMin = HDF5Factory.openForReading(minFaceFile);
-//		final IHDF5Reader hdf5ReaderTop = HDF5Factory.openForReading("/home/saalfeld/projects/flyem/Sec04-top.h5");
-//		final IHDF5Reader hdf5ReaderBot = HDF5Factory.openForReading("/home/saalfeld/projects/flyem/Sec04-bottom.h5");
-		final N5HDF5Reader hdf5Max = new N5HDF5Reader(hdf5ReaderMax, new int[] {128, 128, 128});
-		final N5HDF5Reader hdf5Min = new N5HDF5Reader(hdf5ReaderMin, new int[] {128, 128, 128});
+		final N5FSReader n5 = new N5FSReader(n5Path);
 
-		System.out.println(Arrays.toString(hdf5Max.listAttributes("/").keySet().toArray()));
-		System.out.println(hdf5Max.getDatasetAttributes("/volume").getDataType());
+		// Extract metadata from input
+		final int numScales = n5.list(inputDataset).length;
+		final long[] dimensions = n5.getDatasetAttributes(inputDataset + "/s0").getDimensions();
 
-		final RandomAccessibleInterval<FloatType> maxFloats = N5Utils.openVolatile(hdf5Max, "/volume");
-		final RandomAccessibleInterval<FloatType> minFloats = N5Utils.openVolatile(hdf5Min, "/volume");
+		RandomAccessibleInterval<DoubleType> min = null;
+		RandomAccessibleInterval<DoubleType> max = null;
 
-		final RandomAccessibleInterval<DoubleType> max = Converters.convert(maxFloats, (a, b) -> b.setReal(a.getRealDouble()), new DoubleType());
-		final RandomAccessibleInterval<DoubleType> min = Converters.convert(minFloats, (a, b) -> b.setReal(a.getRealDouble()), new DoubleType());
+		// Min heightmap: Load from N5 if possible
+		if( minDataset != null && n5.exists(minDataset) ) {
+			System.out.println("Loading min face from N5 " + minDataset);
+			min = N5Utils.open(n5, minDataset);
+		} else if( minDataset != null && new File(minDataset).exists() ) {
+			// If there is no minDataset, then assume this is an HDF5
+			System.out.println("Loading min face from HDF5");
+			final IHDF5Reader hdf5Reader = HDF5Factory.openForReading(minDataset);
+			final N5HDF5Reader hdf5 = new N5HDF5Reader(hdf5Reader, new int[]{128, 128, 128});
+			final RandomAccessibleInterval<FloatType> floats = N5Utils.openVolatile(hdf5, "/volume");
+			min = Converters.convert(floats, (a, b) -> b.setReal(a.getRealDouble()), new DoubleType());
+
+			// Using an HDF5 RAI can be slow when computing transforms, write to N5 and use that FIXME
+//			N5FSWriter n5w = new N5FSWriter(n5Path);
+//			N5Utils.save(minConv, n5w, flattenDataset + BigWarp.minFaceDatasetName, new int[]{1024, 1024}, new GzipCompression());
+//			min = N5Utils.open(n5, flattenDataset + BigWarp.minFaceDatasetName);
+		}
+
+		// Min heightmap: Load from N5 if possible
+		if( maxDataset != null && n5.exists(maxDataset) ) {
+			System.out.println("Loading max face from N5 " + maxDataset);
+			max = N5Utils.open(n5, maxDataset);
+		} else if(  maxDataset != null && new File(maxDataset).exists() ) {
+			// If there is no maxDataset, then assume this is an HDF5
+			System.out.println("Loading max face from HDF5");
+			final IHDF5Reader hdf5Reader = HDF5Factory.openForReading(maxDataset);
+			final N5HDF5Reader hdf5 = new N5HDF5Reader(hdf5Reader, new int[]{128, 128, 128});
+			final RandomAccessibleInterval<FloatType> floats = N5Utils.openVolatile(hdf5, "/volume");
+			max = Converters.convert(floats, (a, b) -> b.setReal(a.getRealDouble()), new DoubleType());
+
+			// Using an HDF5 RAI can be slow when computing transforms, write to N5 and use that FIXME
+//			N5FSWriter n5w = new N5FSWriter(n5Path);
+//			N5Utils.save(maxConv, n5w, flattenDataset + BigWarp.maxFaceDatasetName, new int[]{1024, 1024}, new GzipCompression());
+//			max = N5Utils.open(n5, flattenDataset + BigWarp.maxFaceDatasetName);
+		}
+
+		DoubleType maxMean = getMaxValue(max);
+		DoubleType minMean = getMinValue(min);
+		System.out.println("Done computing average values of heightmap");
 
 		final Scale2D transformScale = new Scale2D(transformScaleX, transformScaleY);
 
@@ -122,8 +167,8 @@ public class ViewFlattenedSlab implements Callable<Void> {
 								Views.extendBorder(max),
 								new NLinearInterpolatorFactory<>()),
 						transformScale),
-				minY,
-				maxY);
+				minMean.get(),
+				maxMean.get());
 
 		/*
 		 * raw data
@@ -131,15 +176,11 @@ public class ViewFlattenedSlab implements Callable<Void> {
 		final int numProc = Runtime.getRuntime().availableProcessors();
 		final SharedQueue queue = new SharedQueue(Math.min(8, Math.max(1, numProc - 2)));
 
-		final N5FSReader n5 = new N5FSReader(rawN5);
-
-		final long[] dimensions = n5.getDatasetAttributes(datasetName + "/s0").getDimensions();
 
 		final FinalInterval cropInterval = new FinalInterval(
-				new long[] {0, 0, Math.round(minY) - padding},
-				new long[] {dimensions[0] - 1, dimensions[2] - 1, Math.round(maxY) + padding});
+				new long[] {0, 0, Math.round(minMean.get()) - padding},
+				new long[] {dimensions[0] - 1, dimensions[2] - 1, Math.round(maxMean.get()) + padding});
 
-		final int numScales = n5.list(datasetName).length;
 
 		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
@@ -162,7 +203,7 @@ public class ViewFlattenedSlab implements Callable<Void> {
 			rawMipmaps[s] =
 					N5Utils.openVolatile(
 							n5,
-							datasetName + "/s" + s);
+							inputDataset + "/s" + s);
 		}
 
 
@@ -209,7 +250,7 @@ public class ViewFlattenedSlab implements Callable<Void> {
 						new UnsignedByteType(),
 						scales,
 						voxelDimensions,
-						datasetName);
+						inputDataset);
 
 		final Source<?> volatileMipmapSource;
 		if (useVolatile)
@@ -231,4 +272,58 @@ public class ViewFlattenedSlab implements Callable<Void> {
 
 		return null;
 	}
+
+	public static DoubleType getAvgValue(RandomAccessibleInterval<DoubleType> rai) {
+        RandomAccess<DoubleType> ra = rai.randomAccess();
+        long[] pos = new long[rai.numDimensions()];
+        for( int k = 0; k < pos.length; k++ ) pos[k] = 0;
+        ra.localize(pos);
+        DoubleType avg = new DoubleType();
+
+        long count = 0;
+        double dAvg = 0;
+        for( pos[0] = 0; pos[0] < rai.dimension(0); pos[0]++ ) {
+            for( pos[1] = 0; pos[1] < rai.dimension(1); pos[1]++ ) {
+                ra.setPosition(pos);
+                dAvg += ra.get().getRealDouble();
+                count++;
+            }
+        }
+
+        return new DoubleType(dAvg / count);
+    }
+
+    public static DoubleType getMaxValue(RandomAccessibleInterval<DoubleType> rai) {
+        RandomAccess<DoubleType> ra = rai.randomAccess();
+        long[] pos = new long[rai.numDimensions()];
+        for( int k = 0; k < pos.length; k++ ) pos[k] = 0;
+        ra.localize(pos);
+
+        double max = Double.MIN_VALUE;
+        for( pos[0] = 0; pos[0] < rai.dimension(0); pos[0]++ ) {
+            for( pos[1] = 0; pos[1] < rai.dimension(1); pos[1]++ ) {
+                ra.setPosition(pos);
+                max = Math.max( max, ra.get().getRealDouble() );
+            }
+        }
+
+        return new DoubleType(max);
+    }        DoubleType avg = new DoubleType();
+
+    public static DoubleType getMinValue(RandomAccessibleInterval<DoubleType> rai) {
+        RandomAccess<DoubleType> ra = rai.randomAccess();
+        long[] pos = new long[rai.numDimensions()];
+        for( int k = 0; k < pos.length; k++ ) pos[k] = 0;
+        ra.localize(pos);
+
+        double min = Double.MAX_VALUE;
+        for( pos[0] = 0; pos[0] < rai.dimension(0); pos[0]++ ) {
+            for( pos[1] = 0; pos[1] < rai.dimension(1); pos[1]++ ) {
+                ra.setPosition(pos);
+                min = Math.min( min, ra.get().getRealDouble() );
+            }
+        }
+
+        return new DoubleType(min);
+    }
 }

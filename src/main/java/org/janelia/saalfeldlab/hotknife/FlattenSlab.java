@@ -95,14 +95,22 @@ public class FlattenSlab implements Callable<Void> {
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", 1, 1, 1);
 
 	public static final void main(String... args) {
-		if( args.length == 0 )
-			args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5",
-					"-d", "/zcorr/Sec22___20200106_083252",
-					"-f", "/flatten/Sec22___20200110_160724",
-					"-s", "/cost/Sec22___20200110_160724"};
+//		if( args.length == 0 )
+//			args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5",
+//					"-d", "/zcorr/Sec22___20200106_083252",
+//					"-f", "/flatten/Sec22___20200110_160724",
+//					"-s", "/cost/Sec22___20200110_160724"};
+        if( args.length == 0 )
+			args = new String[]{"-i", "/nrs/flyem/alignment/kyle/nail_test.n5",
+					"-d", "/volumes/input",
+					"-f", "/flatten/test_001",
+					"-s", "/volumes/cost"};
+
 			//args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5", "-d", "/zcorr/Sec24___20200106_082231", "-f", "/flatten/Sec24___20200106_082231", "-s", "/cost/Sec23___20200110_152920", "-u"};
 		// to regenerate heightmap from HDF5 use these args
 		    //args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5", "-d", "/zcorr/Sec24___20200106_082231", "-f", "/flatten/Sec24___20200106_082231", "--min", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec24/Sec24-bottom.h5", "--max", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec24/Sec24-top.h5"};
+
+        // TODO: test on synthetic cost
 
 		CommandLine.call(new FlattenSlab(), args);
 		//new NailFlat().call();
@@ -147,6 +155,8 @@ public class FlattenSlab implements Callable<Void> {
 		long[] samplingFactors = new long[]{200, 64};
 
 		RandomAccessibleInterval<DoubleType> flattenedCost = fullCost;
+
+		// Note: flattenedCost always has the latest heightmap, therefore the transform does not need to use stacked heightmaps
 		for( long samplingFactor : samplingFactors ) {
 			System.out.println("Starting to flatten at sampling factor: " + samplingFactor);
 			// Only compute heightmaps if flag is false, or flag is true and one of the heightmaps is missing
