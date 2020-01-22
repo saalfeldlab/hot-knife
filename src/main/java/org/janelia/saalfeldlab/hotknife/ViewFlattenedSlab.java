@@ -22,7 +22,12 @@ import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
-import net.imglib2.RandomAccess;
+import bdv.util.BdvFunctions;
+import net.imglib2.*;
+import net.imglib2.position.FunctionRandomAccessible;
+import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.util.Util;
+import net.imglib2.view.IntervalView;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -39,8 +44,6 @@ import bdv.viewer.Source;
 import ch.systemsx.cisd.hdf5.HDF5Factory;
 import ch.systemsx.cisd.hdf5.IHDF5Reader;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
-import net.imglib2.FinalInterval;
-import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.RealTransformSequence;
@@ -53,6 +56,9 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
+import org.scijava.ui.behaviour.ClickBehaviour;
+import org.scijava.ui.behaviour.io.InputTriggerConfig;
+import org.scijava.ui.behaviour.util.Behaviours;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
@@ -70,6 +76,9 @@ public class ViewFlattenedSlab implements Callable<Void> {
 
 	@Option(names = {"-d", "--dataset"}, required = true, description = "Input dataset -d '/zcorr/Sec22___20200106_083252'")
 	private String inputDataset = "/volumes/input";
+
+	@Option(names = {"-s", "--cost"}, required = false, description = "Cost dataset -d '/cost/Sec22___20200110_133809'")
+	private String costDataset = null;
 
 	@Option(names = {"--min"}, required = true, description = "Dataset for the min heightmap -f '/flatten/Sec22___20200110_133809/heightmaps/min' or full path to HDF5")
 	private String minDataset = null;
@@ -89,6 +98,7 @@ public class ViewFlattenedSlab implements Callable<Void> {
 		if( args.length == 0 )
 			args = new String[]{"-i", "/nrs/flyem/tmp/VNC.n5",
 					"-d", "/zcorr/Sec22___20200106_083252",
+					//"-s", "/cost/Sec22___20200110_133809",
 					"--min", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec22/Sec22-bottom.h5",
 					"--max", "/nrs/flyem/alignment/Z1217-19m/VNC/Sec22/Sec22-top.h5"
 //					"--min", "/flatten/Sec22___20200113_kyle001/heightmaps/min",
@@ -192,6 +202,9 @@ public class ViewFlattenedSlab implements Callable<Void> {
 		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = new RandomAccessibleInterval[numScales];
 
+		@SuppressWarnings("unchecked")
+		final RandomAccessibleInterval<UnsignedByteType>[] costMipmaps = new RandomAccessibleInterval[numScales];
+
 		final double[][] scales = new double[numScales][];
 
 		/*
@@ -199,20 +212,30 @@ public class ViewFlattenedSlab implements Callable<Void> {
 		 * can be reused when transformation updates
 		 */
 		for (int s = 0; s < numScales; ++s) {
+			int scale = 1 << s;
+			String scaleDataset = inputDataset + "/s" + s;
 
-			/* TODO read downsamplingFactors */
-			final int scale = 1 << s;
-			final double inverseScale = 1.0 / scale;
+			if( s > 0 ) {
+				int[] downsamplingFactors = n5.getAttribute(scaleDataset, "downsamplingFactors", int[].class);
+				scale = downsamplingFactors[0];
+			}
+			double inverseScale = 1.0 / scale;
 
 			rawMipmaps[s] =
 					N5Utils.openVolatile(
 							n5,
-							inputDataset + "/s" + s);
-		}
+							scaleDataset);
 
+			if( costDataset != null ) {
+				costMipmaps[s] = N5Utils.openVolatile(n5, costDataset + "/s" + s);
+			}
+
+			scales[s] = new double[]{scale, scale, scale};
+		}
+		System.out.println("Done reading rawMipmaps");
 
 		BdvStackSource<?> bdv = null;
-
+		BdvStackSource<?> flattenedBdv = null;
 
 		/*
 		 * transform, everything below needs update when transform changes
@@ -256,25 +279,70 @@ public class ViewFlattenedSlab implements Callable<Void> {
 						voxelDimensions,
 						inputDataset);
 
+		final RandomAccessibleIntervalMipmapSource<?> rawMipmapSource =
+				new RandomAccessibleIntervalMipmapSource<>(
+						rawMipmaps,
+						new UnsignedByteType(),
+						scales,
+						voxelDimensions,
+						inputDataset);
+
+		// Transformed mipmaps
 		final Source<?> volatileMipmapSource;
 		if (useVolatile)
 			volatileMipmapSource = mipmapSource.asVolatile(queue);
 		else
 			volatileMipmapSource = mipmapSource;
 
-		bdv = Show.mipmapSource(volatileMipmapSource, bdv, BdvOptions.options().screenScales(new double[] {0.5}).numRenderingThreads(10));
+		// Raw mipmaps
+		final Source<?> volatileRawMipmapSource;
+		if (useVolatile)
+			volatileRawMipmapSource = rawMipmapSource.asVolatile(queue);
+		else
+			volatileRawMipmapSource = rawMipmapSource;
 
-//		BdvFunctions.show(VolatileViews.wrapAsVolatile(topFloats, queue), "", BdvOptions.options().is2D());
+		flattenedBdv = Show.mipmapSource(volatileMipmapSource, bdv, BdvOptions.options().screenScales(new double[] {0.5}).numRenderingThreads(10).frameTitle("flattened"));
+		bdv = Show.mipmapSource(volatileRawMipmapSource, bdv, BdvOptions.options().screenScales(new double[] {0.5}).numRenderingThreads(10).frameTitle("original"));
 
+		/* range/heightmap visualization */
+		final IntervalView<DoubleType> zRange = Views.interval(
+				zRange(minMean.get(), maxMean.get(), 255, 1),
+				new long[] {0, 0, Math.round(minMean.get()) - padding},
+				new long[] {rawMipmaps[0].dimension(0), rawMipmaps[0].dimension(2), Math.round(maxMean.get()) + padding});
 
-//		BdvFunctions.show(
-//				VolatileViews.wrapAsVolatile(
-//						imgXZY,
-//						queue),
-//				"img",
-//				BdvOptions.options().addTo(bdv));
+		final Interval zCropInterval = zRange;
+
+		final RandomAccessibleInterval<DoubleType> transformedSource =
+				Transform.createTransformedInterval(
+						zRange,
+						zCropInterval,
+						ft,
+						new DoubleType(0));
+
+		bdv = BdvFunctions.show(Views.permute(transformedSource, 1, 2), "", BdvOptions.options().addTo(bdv));
+		//bdv = BdvFunctions.show(transformedSource, "", BdvOptions.options().addTo(bdv));
+		bdv.setDisplayRangeBounds(0, 255);
+		bdv.setDisplayRange(0, 255);
+		bdv.setColor(new ARGBType(0xff00ff00));
 
 		return null;
+	}
+
+	public static final FunctionRandomAccessible<DoubleType> zRange(
+			final double min,
+			final double max,
+			final double scale,
+			final double stretch) {
+
+		return new FunctionRandomAccessible<>(
+				3,
+				(location, value) -> {
+					final double z = location.getDoublePosition(2);
+					value.set(
+							scale / (stretch * Math.abs(z - min) + 1) +
+							scale / (stretch * Math.abs(z - max) + 1));
+				},
+				DoubleType::new);
 	}
 
 	public static DoubleType getAvgValue(RandomAccessibleInterval<DoubleType> rai) {
