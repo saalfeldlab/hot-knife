@@ -16,6 +16,7 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 
 import gnu.trove.set.hash.TIntHashSet;
@@ -43,8 +44,9 @@ public class InpaintMasked implements Callable<Void> {
 	@Option(
 			names = {"--mask", "-m"},
 			required = true,
-			description = "mask path, e.g. /nrs/flyem/alignment/test_flow/Sec06_24129_mask.tif")
-	private String maskPath;
+			split = ",",
+			description = "mask paths, e.g. /nrs/flyem/alignment/test_flow/Sec06_24129_mask.tif or /nrs/flyem/alignment/test_flow/Sec06_24129_mask1.tif,/nrs/flyem/alignment/test_flow/Sec06_24129_mask2.tif")
+	private String[] maskPaths;
 
 	@Option(
 			names = {"--output", "-o"},
@@ -144,19 +146,26 @@ public class InpaintMasked implements Callable<Void> {
 	public Void call() {
 
 		final ImagePlus imp = IJ.openImage(imgPath);
-		final ImagePlus mask = IJ.openImage(maskPath);
+		final ImagePlus[] masks = new ImagePlus[maskPaths.length];
+		Arrays.setAll(masks, i -> IJ.openImage(maskPaths[i]));
+
+		System.out.println(Arrays.toString(maskPaths));
+		System.out.println(maskPaths.length);
 
 		final ImageProcessor ipImp = imp.getProcessor();
-		final ImageProcessor ipMask = mask.getProcessor();
+		final ImageProcessor[] ipMasks = new ImageProcessor[masks.length];
+		Arrays.setAll(ipMasks, i -> masks[i].getProcessor());
 
 		final FloatProcessor fp = imp.getType() == ImagePlus.GRAY32 ? (FloatProcessor)ipImp
 				: ipImp.convertToFloatProcessor();
 
 		final int n = imp.getWidth() * imp.getHeight();
-		for (int i = 0; i < n; ++i) {
-
-			if (ipMask.getf(i) > 0) {
-				fp.setf(i, Float.NaN);
+		for (int m = 0; m < masks.length; ++m) {
+			final ImageProcessor ipMask = ipMasks[m];
+			for (int i = 0; i < n; ++i) {
+				if (ipMask.getf(i) > 0) {
+					fp.setf(i, Float.NaN);
+				}
 			}
 		}
 
