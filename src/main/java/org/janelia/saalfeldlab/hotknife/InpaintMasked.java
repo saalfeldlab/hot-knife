@@ -146,11 +146,32 @@ public class InpaintMasked implements Callable<Void> {
 	public Void call() {
 
 		final ImagePlus imp = IJ.openImage(imgPath);
+		if (imp == null) {
+			throw new IllegalArgumentException("failed to load image " + imgPath);
+		} else {
+			System.out.println("loaded image " + imgPath);
+		}
+
 		final ImagePlus[] masks = new ImagePlus[maskPaths.length];
 		Arrays.setAll(masks, i -> IJ.openImage(maskPaths[i]));
 
-		System.out.println(Arrays.toString(maskPaths));
-		System.out.println(maskPaths.length);
+		for (int i = 0; i < masks.length; i++) {
+			if (masks[i] == null) {
+				throw new IllegalArgumentException("failed to load mask " + maskPaths[i]);
+			} else {
+				if (masks[i].getWidth() != imp.getWidth()) {
+					throw new IllegalArgumentException(
+							"image width is " + imp.getWidth() + " but mask width is " + masks[i].getWidth() +
+							" for " + maskPaths[i]);
+				}
+				if (masks[i].getHeight() != imp.getHeight()) {
+					throw new IllegalArgumentException(
+							"image height is " + imp.getHeight() + " but mask height is " + masks[i].getHeight() +
+							" for " + maskPaths[i]);
+				}
+				System.out.println("loaded mask " + maskPaths[i]);
+			}
+		}
 
 		final ImageProcessor ipImp = imp.getProcessor();
 		final ImageProcessor[] ipMasks = new ImageProcessor[masks.length];
