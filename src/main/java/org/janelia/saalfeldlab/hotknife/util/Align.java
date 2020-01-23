@@ -30,6 +30,7 @@ import org.janelia.saalfeldlab.hotknife.NormalizeLocalContrast;
 import org.janelia.saalfeldlab.hotknife.PMCCScaleSpaceBlockFlow;
 import org.janelia.saalfeldlab.hotknife.ValueToNoise;
 
+import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
 import mpicbg.ij.FeatureTransform;
 import mpicbg.ij.SIFT;
@@ -73,18 +74,18 @@ public class Align {
 				});
 	}
 
-	public static FloatProcessor addNoise(FloatProcessor ip) {
+	public static FloatProcessor addNoise(final ByteProcessor ip) {
 
 		final ValueToNoise filter1 = new ValueToNoise(0, 0, 255);
 		final ValueToNoise filter2 = new ValueToNoise(255, 0, 255);
 		final NormalizeLocalContrast filter3 = new NormalizeLocalContrast(256, 256, 3, true, true);
 
-		ip = filter1.process(ip).convertToFloatProcessor();
-		ip = filter2.process(ip).convertToFloatProcessor();
-		ip.setMinAndMax(0, 255);
-		ip = filter3.process(ip).convertToFloatProcessor();
+		FloatProcessor fp = filter1.process(ip).convertToFloatProcessor();
+		fp = filter2.process(fp).convertToFloatProcessor();
+		fp.setMinAndMax(0, 255);
+		fp = filter3.process(fp).convertToFloatProcessor();
 
-		return ip;
+		return fp;
 	}
 
 	/**
@@ -109,7 +110,7 @@ public class Align {
 		p.maxOctaveSize = (int)Math.round(Math.max(ip.getWidth(), ip.getHeight()) * maxScale);
 		p.minOctaveSize = (int)(Math.min(ip.getWidth(), ip.getHeight()) * minScale);
 
-		ip = addNoise(ip);
+		ip = addNoise(ip.convertToByteProcessor(true));
 
 		final FloatArray2DSIFT sift = new FloatArray2DSIFT(p);
 		final SIFT ijSIFT = new SIFT(sift);

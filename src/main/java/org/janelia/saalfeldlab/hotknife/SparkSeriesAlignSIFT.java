@@ -61,6 +61,7 @@ import mpicbg.models.PointMatch;
 import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel2D;
+import mpicbg.trakem2.transform.RigidModel2D;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
@@ -262,6 +263,7 @@ public class SparkSeriesAlignSIFT {
 		final int distance = options.getDistance();
 		final double maxEpsilon = options.getMaxFilterEpsilon();
 		final int numIterations = options.getNumIterations();
+		final double lambdaModel = options.getLambdaModel();
 
 		final N5Reader n5 = new N5FSReader(n5Input);
 
@@ -270,7 +272,7 @@ public class SparkSeriesAlignSIFT {
 		final int nSlices = (int)dimensions[2];
 //		final int nSlices = 2000;
 
-		final double maxScale = Math.min(1.0, 1600.0 / Math.max(dimensions[0], dimensions[1]));
+		final double maxScale = Math.min(1.0, 2000.0 / Math.max(dimensions[0], dimensions[1]));
 		final double minScale = maxScale * 0.25;
 		final int fdSize = 4;
 
@@ -352,7 +354,8 @@ public class SparkSeriesAlignSIFT {
 	//											new Transform.InterpolatedAffineModel2DSupplier(
 	//													(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
 	//													(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
-												(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+//												(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+												(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
 												1000,
 												maxEpsilon,
 												0,
@@ -391,7 +394,7 @@ public class SparkSeriesAlignSIFT {
 
 		/* ... then using the desired model with low regularization ... */
 		tiles.forEach(
-				t -> ((InterpolatedAffineModel2D<?, ?>)t.getModel()).setLambda(0.1));
+				t -> ((InterpolatedAffineModel2D<?, ?>)t.getModel()).setLambda(lambdaModel));
 
 		try {
 			tc.optimize(0.01, numIterations, numIterations, 0.5);
@@ -411,11 +414,12 @@ public class SparkSeriesAlignSIFT {
 
 		/* extract affines */
 		final ArrayList<Tuple2<Integer, double[]>> transforms = new ArrayList<>();
-		for (int i = 0; i < nSlices; ++i)
-			transforms.add(
-					new Tuple2<>(
-							i,
-							Transform.convertAffine2DtoAffineTransform2D((Affine2D)tiles.get(i).getModel()).getRowPackedCopy()));
+		final ArrayList<double[]> affines = new ArrayList<>();
+		for (int i = 0; i < nSlices; ++i) {
+			final double[] affine = Transform.convertAffine2DtoAffineTransform2D((Affine2D)tiles.get(i).getModel()).getRowPackedCopy();
+			transforms.add(new Tuple2<>(i, affine));
+			affines.add(affine);
+		}
 
 		/* bounding box, too fast locally to spend time to parallelize */
 		final double[] min = new double[]{Double.MAX_VALUE, Double.MAX_VALUE};
@@ -446,8 +450,10 @@ public class SparkSeriesAlignSIFT {
 
 		n5Writer.createDataset(outData, Intervals.dimensionsAsLongArray(targetInterval), new int[] {1024, 1024, 1}, N5Utils.dataType(type), new GzipCompression());
 		n5Writer.setAttribute(outData, "offset", Intervals.minAsLongArray(targetInterval));
+		n5Writer.setAttribute(outData, "affines", affines);
 		n5Writer.createDataset(outMask, Intervals.dimensionsAsLongArray(targetInterval), new int[] {1024, 1024, 1}, DataType.UINT8, new GzipCompression());
 		n5Writer.setAttribute(outMask, "offset", Intervals.minAsLongArray(targetInterval));
+		n5Writer.setAttribute(outMask, "affines", affines);
 
 		/* export aligned series */
 		final JavaPairRDD<Integer, double[]> rddTransforms = sc.parallelizePairs(transforms);
