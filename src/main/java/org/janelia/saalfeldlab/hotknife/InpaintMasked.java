@@ -184,7 +184,7 @@ public class InpaintMasked implements Callable<Void> {
 		for (int m = 0; m < masks.length; ++m) {
 			final ImageProcessor ipMask = ipMasks[m];
 			for (int i = 0; i < n; ++i) {
-				if (ipMask.getf(i) > 0) {
+				if (ipMask.getf(i) == 0) {
 					fp.setf(i, Float.NaN);
 				}
 			}
