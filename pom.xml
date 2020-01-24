@@ -32,6 +32,7 @@
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2</artifactId>
+			<version>5.8.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
