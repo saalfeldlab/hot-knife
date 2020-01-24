@@ -149,9 +149,6 @@ public class InpaintMasked implements Callable<Void> {
 		final ImagePlus[] masks = new ImagePlus[maskPaths.length];
 		Arrays.setAll(masks, i -> IJ.openImage(maskPaths[i]));
 
-		System.out.println(Arrays.toString(maskPaths));
-		System.out.println(maskPaths.length);
-
 		final ImageProcessor ipImp = imp.getProcessor();
 		final ImageProcessor[] ipMasks = new ImageProcessor[masks.length];
 		Arrays.setAll(ipMasks, i -> masks[i].getProcessor());
@@ -163,7 +160,7 @@ public class InpaintMasked implements Callable<Void> {
 		for (int m = 0; m < masks.length; ++m) {
 			final ImageProcessor ipMask = ipMasks[m];
 			for (int i = 0; i < n; ++i) {
-				if (ipMask.getf(i) > 0) {
+				if (ipMask.getf(i) == 0) {
 					fp.setf(i, Float.NaN);
 				}
 			}
