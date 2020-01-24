@@ -48,73 +48,77 @@ import net.imglib2.type.numeric.RealType;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
-public class DeformationFieldTransform< T extends RealType< T > > implements RealTransform
-{
-	/* one for each dimension */
-	private final RealRandomAccess< T >[] positionAccesses;
+public class DeformationFieldTransform<T extends RealType<T>> implements RealTransform {
 
-	public DeformationFieldTransform( final RealRandomAccess< T >[] positionAccesses )
-	{
+	/* one for each dimension */
+	private final RealRandomAccess<T>[] positionAccesses;
+
+	@SafeVarargs
+	public DeformationFieldTransform(final RealRandomAccess<T>... positionAccesses) {
+
 		this.positionAccesses = positionAccesses;
 	}
 
-	@SuppressWarnings( "unchecked" )
-	public DeformationFieldTransform( final RealRandomAccessible< T >[] positions )
-	{
-		assert( Arrays.stream( positions ).allMatch( p -> p.numDimensions() == positions.length ) ) : "Dimensions do not match.";
+	@SuppressWarnings("unchecked")
+	@SafeVarargs
+	public DeformationFieldTransform(final RealRandomAccessible<T>... positions) {
 
-		positionAccesses = new RealRandomAccess[ positions.length ];
-		Arrays.setAll( positionAccesses, i -> positions[ i ].realRandomAccess() );
+		assert (Arrays
+				.stream(positions)
+				.allMatch(p -> p.numDimensions() == positions.length)) : "Dimensions do not match.";
+
+		positionAccesses = new RealRandomAccess[positions.length];
+		Arrays.setAll(positionAccesses, i -> positions[i].realRandomAccess());
 	}
 
 	@Override
-	public int numSourceDimensions()
-	{
+	public int numSourceDimensions() {
+
 		return positionAccesses.length;
 	}
 
 	@Override
-	public int numTargetDimensions()
-	{
+	public int numTargetDimensions() {
+
 		return positionAccesses.length;
 	}
 
 	@Override
-	public void apply( final double[] source, final double[] target )
-	{
-		for ( int d = 0; d < positionAccesses.length; d++ )
-			positionAccesses[ d ].setPosition( source );
+	public void apply(final double[] source, final double[] target) {
 
-		for ( int d = 0; d < positionAccesses.length; d++ )
-			target[ d ] = positionAccesses[ d ].get().getRealDouble() + source[ d ];
+		for (int d = 0; d < positionAccesses.length; d++)
+			positionAccesses[d].setPosition(source);
+
+		for (int d = 0; d < positionAccesses.length; d++)
+			target[d] = positionAccesses[d].get().getRealDouble() + source[d];
 	}
 
 	@Override
-	public void apply( final float[] source, final float[] target )
-	{
-		for ( int d = 0; d < positionAccesses.length; d++ )
-			positionAccesses[ d ].setPosition( source );
+	public void apply(final float[] source, final float[] target) {
 
-		for ( int d = 0; d < positionAccesses.length; d++ )
-			target[ d ] = ( float )(positionAccesses[ d ].get().getRealDouble() + source[ d ]);
+		for (int d = 0; d < positionAccesses.length; d++)
+			positionAccesses[d].setPosition(source);
+
+		for (int d = 0; d < positionAccesses.length; d++)
+			target[d] = (float)(positionAccesses[d].get().getRealDouble() + source[d]);
 	}
 
 	@Override
-	public void apply( final RealLocalizable source, final RealPositionable target )
-	{
-		for ( int d = 0; d < positionAccesses.length; d++ )
-			positionAccesses[ d ].setPosition( source );
+	public void apply(final RealLocalizable source, final RealPositionable target) {
 
-		for ( int d = 0; d < positionAccesses.length; d++ )
-			target.setPosition( positionAccesses[ d ].get().getRealDouble() + source.getDoublePosition( d ), d );
+		for (int d = 0; d < positionAccesses.length; d++)
+			positionAccesses[d].setPosition(source);
+
+		for (int d = 0; d < positionAccesses.length; d++)
+			target.setPosition(positionAccesses[d].get().getRealDouble() + source.getDoublePosition(d), d);
 	}
 
 	@Override
-	public RealTransform copy()
-	{
-		@SuppressWarnings( "unchecked" )
-		final RealRandomAccess< T >[] accessCopies = new RealRandomAccess[ positionAccesses.length ];
-		Arrays.setAll( accessCopies, i -> positionAccesses[ i ].copyRealRandomAccess() );
-		return new DeformationFieldTransform<>( accessCopies );
+	public RealTransform copy() {
+
+		@SuppressWarnings("unchecked")
+		final RealRandomAccess<T>[] accessCopies = new RealRandomAccess[positionAccesses.length];
+		Arrays.setAll(accessCopies, i -> positionAccesses[i].copyRealRandomAccess());
+		return new DeformationFieldTransform<>(accessCopies);
 	}
 }
