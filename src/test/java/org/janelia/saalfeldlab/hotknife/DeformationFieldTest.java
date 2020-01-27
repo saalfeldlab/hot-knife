@@ -34,8 +34,10 @@ public class DeformationFieldTest {
 	private double[] yField = new double[width * height * depth];
 	private double[] zField = new double[width * height * depth];
 
+	private DeformationFieldTransform2<DoubleType> realSaalfeldTransform2;
 	private DeformationFieldTransform<DoubleType> saalfeldTransform2;
 	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> bogovicTransform2;
+	private DeformationFieldTransform2<DoubleType> realSaalfeldTransform3;
 	private DeformationFieldTransform<DoubleType> saalfeldTransform3;
 	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> bogovicTransform3;
 
@@ -78,6 +80,19 @@ public class DeformationFieldTest {
 
 		saalfeldTransform2 = new DeformationFieldTransform<>(xFieldReal2, yFieldReal2);
 		saalfeldTransform3 = new DeformationFieldTransform<>(xFieldReal3, yFieldReal3, zFieldReal3);
+
+		final RealRandomAccessible<DoubleType> fieldReal2 = Views.interpolate(
+				Views.extendZero(
+						Views.stack(xFieldImg2, yFieldImg2)),
+				new NLinearInterpolatorFactory<>());
+
+		final RealRandomAccessible<DoubleType> fieldReal3 = Views.interpolate(
+				Views.extendZero(
+						Views.stack(xFieldImg3, yFieldImg3, zFieldImg3)),
+				new NLinearInterpolatorFactory<>());
+
+		realSaalfeldTransform2 = new DeformationFieldTransform2<>(fieldReal2);
+		realSaalfeldTransform3 = new DeformationFieldTransform2<>(fieldReal3);
 	}
 
 	@Test
@@ -86,11 +101,14 @@ public class DeformationFieldTest {
 		final double[] src = new double[2];
 		final double[] tgt1 = new double[2];
 		final double[] tgt2 = new double[2];
+		final double[] tgt3 = new double[2];
 		for (src[1] = 0; src[1] < depth; src[1] += 0.3 + 0.3 * rnd.nextGaussian()) {
 			for (src[0] = 0; src[0] < width * height; src[0] += 0.3 + 0.3 * rnd.nextGaussian()) {
 				saalfeldTransform2.apply(src, tgt2);
 				bogovicTransform2.apply(src, tgt1);
+				realSaalfeldTransform2.apply(src, tgt3);
 				assertArrayEquals(tgt1, tgt2, 0.001);
+				assertArrayEquals(tgt1, tgt3, 0.001);
 			}
 		}
 	}
@@ -101,12 +119,15 @@ public class DeformationFieldTest {
 		final double[] src = new double[3];
 		final double[] tgt1 = new double[3];
 		final double[] tgt2 = new double[3];
+		final double[] tgt3 = new double[3];
 		for (src[2] = 0; src[2] < depth; src[2] += 0.3 + 0.3 * rnd.nextGaussian()) {
 			for (src[1] = 0; src[1] < height; src[1] += 0.3 + 0.3 * rnd.nextGaussian()) {
 				for (src[0] = 0; src[0] < width; src[0] += 0.3 + 0.3 * rnd.nextGaussian()) {
 					saalfeldTransform3.apply(src, tgt2);
 					bogovicTransform3.apply(src, tgt1);
+					realSaalfeldTransform3.apply(src, tgt3);
 					assertArrayEquals(tgt1, tgt2, 0.001);
+					assertArrayEquals(tgt1, tgt3, 0.001);
 				}
 			}
 		}
@@ -158,6 +179,12 @@ public class DeformationFieldTest {
 	}
 
 	@Test
+	public void testRealSaalfeldDeformationField2() {
+
+		testDeformation2(realSaalfeldTransform2, 5);
+	}
+
+	@Test
 	public void testBogovicDeformationField3() {
 
 		testDeformation3(bogovicTransform3, 5);
@@ -168,5 +195,11 @@ public class DeformationFieldTest {
 	public void testSaalfeldDeformationField3() {
 
 		testDeformation3(saalfeldTransform3, 5);
+	}
+
+	@Test
+	public void testRealSaalfeldDeformationField3() {
+
+		testDeformation3(realSaalfeldTransform3, 5);
 	}
 }
