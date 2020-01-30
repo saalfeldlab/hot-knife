@@ -36,10 +36,10 @@ public class DeformationFieldTest {
 
 	private DeformationFieldTransform2<DoubleType> realSaalfeldTransform2;
 	private DeformationFieldTransform<DoubleType> saalfeldTransform2;
-	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> bogovicTransform2;
+	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> imglib2Transform2;
 	private DeformationFieldTransform2<DoubleType> realSaalfeldTransform3;
 	private DeformationFieldTransform<DoubleType> saalfeldTransform3;
-	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> bogovicTransform3;
+	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> imglib2Transform3;
 
 	{
 		Arrays.setAll(xField, i -> rnd.nextGaussian());
@@ -53,41 +53,39 @@ public class DeformationFieldTest {
 		final ArrayImg<DoubleType, DoubleArray> yFieldImg3 = ArrayImgs.doubles(yField, width, height, depth);
 		final ArrayImg<DoubleType, DoubleArray> zFieldImg3 = ArrayImgs.doubles(zField, width, height, depth);
 
-		bogovicTransform2 =
-				new net.imglib2.realtransform.DeformationFieldTransform<>(
-						Views.stack(xFieldImg2, yFieldImg2));
+		imglib2Transform2 =
+				new net.imglib2.realtransform.DeformationFieldTransform<>(xFieldImg2, yFieldImg2);
 
-		bogovicTransform3 =
-				new net.imglib2.realtransform.DeformationFieldTransform<>(
-						Views.stack(xFieldImg3, yFieldImg3, zFieldImg3));
+		imglib2Transform3 =
+				new net.imglib2.realtransform.DeformationFieldTransform<>(xFieldImg3, yFieldImg3, zFieldImg3);
 
 		final RealRandomAccessible<DoubleType> xFieldReal2 = Views.interpolate(
-				Views.extendZero(xFieldImg2),
+				Views.extendBorder(xFieldImg2),
 				new NLinearInterpolatorFactory<>());
 		final RealRandomAccessible<DoubleType> yFieldReal2 = Views.interpolate(
-				Views.extendZero(yFieldImg2),
+				Views.extendBorder(yFieldImg2),
 				new NLinearInterpolatorFactory<>());
 
 		final RealRandomAccessible<DoubleType> xFieldReal3 = Views.interpolate(
-				Views.extendZero(xFieldImg3),
+				Views.extendBorder(xFieldImg3),
 				new NLinearInterpolatorFactory<>());
 		final RealRandomAccessible<DoubleType> yFieldReal3 = Views.interpolate(
-				Views.extendZero(yFieldImg3),
+				Views.extendBorder(yFieldImg3),
 				new NLinearInterpolatorFactory<>());
 		final RealRandomAccessible<DoubleType> zFieldReal3 = Views.interpolate(
-				Views.extendZero(zFieldImg3),
+				Views.extendBorder(zFieldImg3),
 				new NLinearInterpolatorFactory<>());
 
 		saalfeldTransform2 = new DeformationFieldTransform<>(xFieldReal2, yFieldReal2);
 		saalfeldTransform3 = new DeformationFieldTransform<>(xFieldReal3, yFieldReal3, zFieldReal3);
 
 		final RealRandomAccessible<DoubleType> fieldReal2 = Views.interpolate(
-				Views.extendZero(
+				Views.extendBorder(
 						Views.stack(xFieldImg2, yFieldImg2)),
 				new NLinearInterpolatorFactory<>());
 
 		final RealRandomAccessible<DoubleType> fieldReal3 = Views.interpolate(
-				Views.extendZero(
+				Views.extendBorder(
 						Views.stack(xFieldImg3, yFieldImg3, zFieldImg3)),
 				new NLinearInterpolatorFactory<>());
 
@@ -105,7 +103,7 @@ public class DeformationFieldTest {
 		for (src[1] = 0; src[1] < depth; src[1] += 0.3 + 0.3 * rnd.nextGaussian()) {
 			for (src[0] = 0; src[0] < width * height; src[0] += 0.3 + 0.3 * rnd.nextGaussian()) {
 				saalfeldTransform2.apply(src, tgt2);
-				bogovicTransform2.apply(src, tgt1);
+				imglib2Transform2.apply(src, tgt1);
 				realSaalfeldTransform2.apply(src, tgt3);
 				assertArrayEquals(tgt1, tgt2, 0.001);
 				assertArrayEquals(tgt1, tgt3, 0.001);
@@ -124,7 +122,7 @@ public class DeformationFieldTest {
 			for (src[1] = 0; src[1] < height; src[1] += 0.3 + 0.3 * rnd.nextGaussian()) {
 				for (src[0] = 0; src[0] < width; src[0] += 0.3 + 0.3 * rnd.nextGaussian()) {
 					saalfeldTransform3.apply(src, tgt2);
-					bogovicTransform3.apply(src, tgt1);
+					imglib2Transform3.apply(src, tgt1);
 					realSaalfeldTransform3.apply(src, tgt3);
 					assertArrayEquals(tgt1, tgt2, 0.001);
 					assertArrayEquals(tgt1, tgt3, 0.001);
@@ -168,7 +166,7 @@ public class DeformationFieldTest {
 	@Test
 	public void testBogovicDeformationField2() {
 
-		testDeformation2(bogovicTransform2, 5);
+		testDeformation2(imglib2Transform2, 5);
 	}
 
 
@@ -187,7 +185,7 @@ public class DeformationFieldTest {
 	@Test
 	public void testBogovicDeformationField3() {
 
-		testDeformation3(bogovicTransform3, 5);
+		testDeformation3(imglib2Transform3, 5);
 	}
 
 
