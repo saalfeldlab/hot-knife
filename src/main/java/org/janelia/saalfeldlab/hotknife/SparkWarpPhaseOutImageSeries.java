@@ -16,6 +16,7 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -27,6 +28,12 @@ import java.util.stream.LongStream;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.alignment.Utils;
+import org.janelia.alignment.util.FileUtil;
+import org.scijava.Context;
+import org.scijava.SciJava;
+import org.scijava.ui.DefaultUIService;
+import org.scijava.ui.UIService;
 
 import ij.IJ;
 import ij.ImagePlus;
@@ -117,6 +124,9 @@ public class SparkWarpPhaseOutImageSeries implements Callable<Void>, Serializabl
 
 		System.out.println(lambdaIndex);
 
+		final String outputFormat = formatOutput.substring(formatOutput.lastIndexOf('.') + 1);
+		System.out.println("output format is: '" + outputFormat + "'");
+
 		final JavaRDD<Tuple2<Double, Long>> lambdaIndexRDD = sc.parallelize(lambdaIndex);
 
 		lambdaIndexRDD.foreach(tuple -> {
@@ -164,6 +174,11 @@ public class SparkWarpPhaseOutImageSeries implements Callable<Void>, Serializabl
 
 			final String inputPath = String.format(formatInput, tuple._2());
 			final ImagePlus imp = IJ.openImage(inputPath);
+
+			if (imp == null) {
+				throw new IllegalArgumentException("failed to load " + inputPath);
+			}
+
 			final ImagePlusImg img = ImagePlusImgs.from(imp);
 			final RealRandomAccessible<?> imgReal = Views.interpolate(
 					Views.extendValue(img, ((Type)Util.getTypeFromInterval(img)).createVariable()),
@@ -185,7 +200,12 @@ public class SparkWarpPhaseOutImageSeries implements Callable<Void>, Serializabl
 
 			final String outPath = String.format(formatOutput, tuple._2());
 
-			IJ.save(target.getImagePlus(), outPath);
+			Utils.saveImage(target.getImagePlus().getBufferedImage(),
+							new File(outPath),
+							false,
+							0.85f);
+
+			//IJ.saveAs(target.getImagePlus(), outputFormat, outPath);
 		});
 
 		sc.close();
