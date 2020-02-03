@@ -42,6 +42,9 @@ public class SubsampleHeightmap {
         processHeightmap(minhdf5, costStep, n5Path, flattenDataset + minFaceDatasetName);
         // Max heightmap
         processHeightmap(maxhdf5, costStep, n5Path, flattenDataset + maxFaceDatasetName);
+
+        System.out.println("Done.");
+        System.exit(0);
     }
 
     private static void processHeightmap(String hdf5name, int costStep, String n5Path, String outDataset) throws IOException, ExecutionException, InterruptedException {
