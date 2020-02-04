@@ -57,6 +57,7 @@ import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale;
 import net.imglib2.realtransform.Scale2D;
+import net.imglib2.realtransform.ScaleAndTranslation;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -342,7 +343,7 @@ public class Transform {
 		final int n = positionField.numDimensions() - 1;
 
 		@SuppressWarnings("unchecked")
-		final RealRandomAccess<T>[] positionAccesses = (RealRandomAccess<T>[])new RealRandomAccess[(int)positionField.dimension(n)];
+		final RealRandomAccess<T>[] positionAccesses = new RealRandomAccess[(int)positionField.dimension(n)];
 		Arrays.setAll(
 				positionAccesses,
 				d -> Views.interpolate(
@@ -656,5 +657,24 @@ public class Transform {
 		}
 
 		return Views.stack(transformedIntervals);
+	}
+
+
+	/**
+	 * Create a scale and shift transformation from image to world space that
+	 * compensates for the pixel offset introduced by scaling with top left
+	 * pixel coordinates preserved (like when averaging pixel windows for
+	 * downscaling).
+	 *
+	 * @param scale
+	 * @return
+	 */
+	public ScaleAndTranslation createTopLeftScaleShift(final double[] scale) {
+
+		final double[] offset = new double[scale.length];
+		Arrays.setAll(offset, i -> scale[i] * 0.5 - 0.5);
+		return new ScaleAndTranslation(
+						scale,
+						offset);
 	}
 }
