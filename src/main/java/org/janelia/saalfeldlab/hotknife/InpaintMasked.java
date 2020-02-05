@@ -209,8 +209,7 @@ public class InpaintMasked implements Callable<Void> {
 		return null;
 	}
 
-
-	public void run(final FloatProcessor fp) {
+	public static void run(final FloatProcessor fp) {
 
 		final int width = fp.getWidth();
 		final int height = fp.getHeight();
@@ -266,67 +265,68 @@ public class InpaintMasked implements Callable<Void> {
 							n += 0.5f;
 						}
 					}
+				}
 
+				if (x > 0) {
+					j = indexOf(x - 1, y, width);
+					final float l = fp.getf(j);
+					if (Float.isNaN(l)) {
+						if (!fBorder.contains(j))
+							newBorder.add(j);
+					} else {
+						s += l;
+						n += 1;
+					}
+				}
+				if (x < w) {
+					j = indexOf(x + 1, y, width);
+					final float r = fp.getf(j);
+					if (Float.isNaN(r)) {
+						if (!fBorder.contains(j))
+							newBorder.add(j);
+					} else {
+						s += r;
+						n += 1;
+					}
+				}
+
+				if (y < h) {
 					if (x > 0) {
-						j = indexOf(x - 1, y, width);
-						final float l = fp.getf(j);
-						if (Float.isNaN(l)) {
+						j = indexOf(x - 1, y + 1, width);
+						final float bl = fp.getf(j);
+						if (Float.isNaN(bl)) {
 							if (!fBorder.contains(j))
 								newBorder.add(j);
 						} else {
-							s += l;
-							n += 1;
+							s += 0.5f * bl;
+							n += 0.5f;
 						}
+					}
+					j = indexOf(x, y + 1, width);
+					final float b = fp.getf(j);
+					if (Float.isNaN(b)) {
+						if (!fBorder.contains(j))
+							newBorder.add(j);
+					} else {
+						s += b;
+						n += 1;
 					}
 					if (x < w) {
-						j = indexOf(x + 1, y, width);
-						final float r = fp.getf(j);
-						if (Float.isNaN(r)) {
+						j = indexOf(x + 1, y + 1, width);
+						final float br = fp.getf(j);
+						if (Float.isNaN(br)) {
 							if (!fBorder.contains(j))
 								newBorder.add(j);
 						} else {
-							s += r;
-							n += 1;
+							s += 0.5f * br;
+							n += 0.5f;
 						}
 					}
-
-					if (y < h) {
-						if (x > 0) {
-							j = indexOf(x - 1, y + 1, width);
-							final float bl = fp.getf(j);
-							if (Float.isNaN(bl)) {
-								if (!fBorder.contains(j))
-									newBorder.add(j);
-							} else {
-								s += 0.5f * bl;
-								n += 0.5f;
-							}
-						}
-						j = indexOf(x, y + 1, width);
-						final float b = fp.getf(j);
-						if (Float.isNaN(b)) {
-							if (!fBorder.contains(j))
-								newBorder.add(j);
-						} else {
-							s += b;
-							n += 1;
-						}
-						if (x < w) {
-							j = indexOf(x + 1, y + 1, width);
-							final float br = fp.getf(j);
-							if (Float.isNaN(br)) {
-								if (!fBorder.contains(j))
-									newBorder.add(j);
-							} else {
-								s += 0.5f * br;
-								n += 0.5f;
-							}
-						}
-					}
-
-					if (n > 0)
-						fpCopy.setf(i, s / n);
 				}
+
+				if (n > 0)
+					fpCopy.setf(i, s / n);
+
 				return true;
 			});
 
