@@ -18,21 +18,24 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import ij.ImageJ;
-import ij.ImagePlus;
 import ij.process.FloatProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
@@ -40,6 +43,11 @@ import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.position.FunctionRandomAccessible;
+import net.imglib2.realtransform.InverseRealTransform;
+import net.imglib2.realtransform.RealTransformRandomAccessible;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.Type;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
@@ -47,7 +55,7 @@ import net.imglib2.type.numeric.integer.IntType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.RealSum;
-import net.imglib2.util.Util;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import net.imglib2.view.composite.GenericComposite;
 import net.preibisch.surface.Test;
@@ -83,7 +91,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	private <T extends Type<T>> ArrayImg<UnsignedByteType, ByteArray> costMask(final RandomAccessibleInterval<T> cost) {
 
 		final ArrayImg<UnsignedByteType, ByteArray> mask = ArrayImgs.unsignedBytes(cost.dimension(0), cost.dimension(1));
-		final T reference = Util.getTypeFromInterval(cost).createVariable();
+		final T reference = net.imglib2.util.Util.getTypeFromInterval(cost).createVariable();
 		final ArrayCursor<UnsignedByteType> maskCursor = mask.cursor();
 		final long depth = cost.dimension(2);
 		final Cursor<GenericComposite<T>> costCursor = Views.flatIterable(Views.collapse(cost)).cursor();
@@ -102,12 +110,12 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	private <T extends Type<T>, M extends NumericType<M>> void maskSlice(
+	private static <T extends Type<T>, M extends NumericType<M>> void maskSlice(
 			final RandomAccessibleInterval<T> slice,
 			final RandomAccessibleInterval<M> mask,
 			final T value) {
 
-		final M zero = Util.getTypeFromInterval(mask).createVariable();
+		final M zero = net.imglib2.util.Util.getTypeFromInterval(mask).createVariable();
 		zero.setZero();
 
 		final Cursor<M> maskCursor = Views.flatIterable(mask).cursor();
@@ -126,7 +134,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final ArrayList<ArrayImg<FloatType, FloatArray>> slices = new ArrayList<>();
 		for (int z = 0; z < cost.dimension(2); ++z) {
-			final FloatProcessor fpSlice = org.janelia.saalfeldlab.hotknife.util.Util.materialize(Views.hyperSlice(cost, 2, z));
+			final FloatProcessor fpSlice = Util.materialize(Views.hyperSlice(cost, 2, z));
 			final ArrayImg<FloatType, FloatArray> slice = ArrayImgs.floats((float[])fpSlice.getPixels(), fpSlice.getWidth(), fpSlice.getHeight());
 			maskSlice(slice, mask, new FloatType(Float.NaN));
 			InpaintMasked.run(fpSlice);
@@ -137,20 +145,18 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	private RandomAccessibleInterval<FloatType> inpaintSurface(
-			final RandomAccessibleInterval<FloatType> surface,
-			final RandomAccessibleInterval<UnsignedByteType> mask) {
+	private static <M extends RealType<M>> RandomAccessibleInterval<FloatType> inpaintHeightField(
+			final RandomAccessibleInterval<FloatType> heightField,
+			final RandomAccessibleInterval<M> mask) {
 
-		final FloatProcessor fpSlice = org.janelia.saalfeldlab.hotknife.util.Util.materialize(surface);
-		final ArrayImg<FloatType, FloatArray> slice = ArrayImgs.floats((float[])fpSlice.getPixels(), fpSlice.getWidth(), fpSlice.getHeight());
-
-		System.out.println(slice.dimension(0) + ", " + slice.dimension(1) + "     " + mask.dimension(0) + ", " + mask.dimension(1));
+		final FloatProcessor fpSlice = Util.materialize(heightField);
+		final ArrayImg<FloatType, FloatArray> slice =
+				ArrayImgs.floats(
+						(float[])fpSlice.getPixels(),
+						fpSlice.getWidth(),
+						fpSlice.getHeight());
 		maskSlice(slice, mask, new FloatType(Float.NaN));
-
-		new ImagePlus("maskedSlice", org.janelia.saalfeldlab.hotknife.util.Util.materialize(slice)).show();
-
 		InpaintMasked.run(fpSlice);
-		ImageJFunctions.show(slice);
 
 		return slice;
 	}
@@ -177,6 +183,106 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
+
+
+
+	/**
+	 * Generate an updated min height field for a cost function warped by
+	 * a given min and max height field that are usually lower scale.
+	 *
+	 * @param <T>
+	 * @param cost at target resolution
+	 * @param minField in scaled and shifted z-coordinates according to scale
+	 * @param maxField in scaled and shifted z-coordinates according to scale
+	 * @param minAvg weighted average of minField
+	 * @param maxAvg weighted average of maxField
+	 * @param scale scale factors transforming minFIeld and maxField to cost
+	 * @param padding range of the cost function around the prior min face
+	 *
+	 * @return
+	 */
+	public static <
+					T extends RealType<T>,
+					M extends RealType<M>,
+					F extends RealType<F>> RandomAccessibleInterval<FloatType> updateMinHeightField(
+			final RandomAccessibleInterval<T> cost,
+			final RandomAccessibleInterval<M> mask,
+			final RandomAccessibleInterval<F> minField,
+			final RandomAccessibleInterval<F> maxField,
+			final double minAvg,
+			final double maxAvg,
+			final double[] scale,
+			final long padding,
+			final int maxStepSize) {
+
+		final RealRandomAccessible<F> minFieldScaled =
+				Transform.scaleAndShiftHeightField(
+						Transform.scaleAndShiftHeightFieldValues(
+								minField,
+								scale[2],
+								0),
+						Arrays.copyOf(scale, 2));
+
+		final RealRandomAccessible<F> maxFieldScaled =
+				Transform.scaleAndShiftHeightField(
+						Transform.scaleAndShiftHeightFieldValues(
+								maxField,
+								scale[2],
+								0),
+						Arrays.copyOf(scale, 2));
+
+		final double offsetZScaledMinAvg = (minAvg + 0.5) * scale[2] - 0.5;
+		final double offsetZScaledMaxAvg = (maxAvg + 0.5) * scale[2] - 0.5;
+
+		final FlattenTransform<F> flatteningTransform =
+				new FlattenTransform<>(
+						minFieldScaled,
+						maxFieldScaled,
+						offsetZScaledMinAvg,
+						offsetZScaledMaxAvg);
+
+		final RealTransformRandomAccessible<T, InverseRealTransform> transformedCost = RealViews.transform(
+				Views.interpolate(
+						Views.extendBorder(cost),
+						new NLinearInterpolatorFactory<>()),
+				flatteningTransform.inverse());
+
+		ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
+
+		final long minMin = (long)Math.floor(offsetZScaledMinAvg - padding);
+
+		final IntervalView<T> cropTransformCost = Views.offsetInterval(
+				transformedCost,
+				new long[] {cost.min(0), cost.min(1), minMin},
+				new long[] {cost.dimension(0), cost.dimension(1), padding * 2});
+
+		final RandomAccessibleInterval<IntType> heightFieldUpdate = Test.process2(
+				cropTransformCost,
+				maxStepSize,
+				0,
+				Integer.MAX_VALUE);
+
+		final RandomAccessibleInterval<F> doubleFixedHeightField = Converters.convert(
+				heightFieldUpdate,
+				(a, b) -> b.setReal(a.get() - 1 - padding),
+				net.imglib2.util.Util.getTypeFromInterval(minField).createVariable());
+
+		final RandomAccessibleInterval<FloatType> updatedMinField = Converters.convert(
+			Views.collapseReal(
+					Views.stack(
+						Views.offsetInterval(
+								Views.raster(minFieldScaled),
+								heightFieldUpdate),
+						doubleFixedHeightField)),
+			(a, b) -> b.set(a.get(0).getRealFloat() + a.get(1).getRealFloat()),
+			new FloatType());
+
+		return inpaintHeightField(
+				updatedMinField,
+				mask);
+	}
+
+
 	@Override
 	public Void call() throws IOException {
 
@@ -186,12 +292,14 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
+
+
 		final String dataset = inGroup + "/s" + scaleIndex;
-		final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, inGroup + "/s" + scaleIndex);
+		final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
 		final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
 
 		final ArrayImg<UnsignedByteType, ByteArray> mask = costMask(permutedCost);
-		ImageJFunctions.show(mask);
+		ImageJFunctions.show(mask, "mask");
 
 		final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 				Converters.convert(
@@ -200,10 +308,70 @@ public class SparkSurfaceFit implements Callable<Void>{
 							new FloatType()),
 				mask);
 
+
+
+		final String dataset2 = inGroup + "/s" + scaleIndex;
+		final RandomAccessibleInterval<UnsignedByteType> cost2 = N5Utils.openVolatile(n5, dataset2);
+		final RandomAccessibleInterval<UnsignedByteType> permutedCost2 = Views.permute(cost2, 1, 2);
+
+		final ArrayImg<UnsignedByteType, ByteArray> mask2 = costMask(permutedCost);
+		ImageJFunctions.show(mask2, "mask2");
+
+		final RandomAccessibleInterval<FloatType> inpaintedCost2 = inpaintCost(
+				Converters.convert(
+							permutedCost2,
+							(a, b) -> b.set(a.getRealFloat()),
+							new FloatType()),
+				mask2);
+
+
+
+
+
 		final double[] downsamplingFactors = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
 		final double dzScale = downsamplingFactors[0] / downsamplingFactors[1];
 
 		System.out.println(dzScale);
+
+		final long constantMin = 100;
+		final long constantMax = permutedCost.dimension(2) - 100;
+
+		final RandomAccessibleInterval<FloatType> constantMinField =
+				Views.offsetInterval(
+						new FunctionRandomAccessible<>(
+							2,
+							(a, b) -> b.set(constantMin),
+							FloatType::new),
+						mask);
+
+		final RandomAccessibleInterval<FloatType> constantMaxField =
+				Views.offsetInterval(
+						new FunctionRandomAccessible<>(
+							2,
+							(a, b) -> b.set(constantMax),
+							FloatType::new),
+						mask);
+
+
+
+		/* test updateMinHeightField */
+		final RandomAccessibleInterval<FloatType> updatedMinHeightField = updateMinHeightField(
+				inpaintedCost,
+				mask,
+				constantMinField,
+				constantMaxField,
+				constantMin,
+				constantMax,
+				new double[] {1, 1, 1},
+				100,
+				(int)Math.round(dzScale));
+
+		ImageJFunctions.show(updatedMinHeightField, "updated height field");
+
+
+
+
+
 
 		final RandomAccessibleInterval<IntType> top = Test.process2(
 				Views.offsetInterval(
@@ -214,7 +382,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 				0,
 				Integer.MAX_VALUE);
 
-		final RandomAccessibleInterval<FloatType> topInpainted = inpaintSurface(
+		final RandomAccessibleInterval<FloatType> topInpainted = inpaintHeightField(
 				Converters.convert(
 						top,
 						(a, b) -> b.set(a.getRealFloat()),
@@ -232,12 +400,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		System.out.println(topAvg);
 
-		ImageJFunctions.show(top);
-		ImageJFunctions.show(topInpainted);
-
-
-
-
+//		ImageJFunctions.show(top, "top");
+		ImageJFunctions.show(topInpaintedOffset, "topInpainted offset");
 
 
 		final RandomAccessibleInterval<IntType> bot = Test.process2(
@@ -249,7 +413,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 				0,
 				Integer.MAX_VALUE);
 
-		final RandomAccessibleInterval<FloatType> botInpainted = inpaintSurface(
+		final RandomAccessibleInterval<FloatType> botInpainted = inpaintHeightField(
 				Converters.convert(
 						bot,
 						(a, b) -> b.set(a.getRealFloat()),
@@ -258,7 +422,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final RandomAccessibleInterval<FloatType> botInpaintedOffset = Converters.convert(
 				botInpainted,
-				(a, b) -> b.set(a.get() - 1),
+				(a, b) -> b.set(a.get() - 1 + inpaintedCost.dimension(2) / 2),
 				new FloatType());
 
 		final double botAvg = weightedAverage(
@@ -267,8 +431,28 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		System.out.println(botAvg);
 
-		ImageJFunctions.show(bot);
-		ImageJFunctions.show(botInpainted);
+//		ImageJFunctions.show(bot);
+//		ImageJFunctions.show(botInpainted);
+
+
+
+
+		/* test updateMinHeightField */
+		final RandomAccessibleInterval<FloatType> updatedMinHeightField2 = updateMinHeightField(
+				inpaintedCost2,
+				mask2,
+				updatedMinHeightField,
+				botInpaintedOffset,
+				topAvg,
+				botAvg,
+				new double[] {1, 1, 4},
+				100,
+				(int)Math.round(dzScale) * 4);
+
+		ImageJFunctions.show(updatedMinHeightField2, "updated min height field 2");
+
+
+
 
 		sc.close();
 
