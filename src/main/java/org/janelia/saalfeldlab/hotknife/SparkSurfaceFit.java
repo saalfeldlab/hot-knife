@@ -34,6 +34,7 @@ import ij.ImageJ;
 import ij.process.FloatProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.IterableInterval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
@@ -53,8 +54,10 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.IntType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.RealSum;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import net.imglib2.view.composite.GenericComposite;
@@ -197,6 +200,49 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
+	private static <
+					T extends RealType<T>,
+					M extends RealType<M>> RandomAccessibleInterval<FloatType> calculateHeightField(
+							final RandomAccessible<T> transformedCost,
+							final RandomAccessibleInterval<M> mask,
+							final RealRandomAccessible<DoubleType> heightFieldScaled,
+							final double offsetZScaledAvg,
+							final long padding,
+							final int maxStepSize) {
+
+		final long min = (long)Math.floor(offsetZScaledAvg - padding);
+
+		final IntervalView<T> cropTransformCost = Views.offsetInterval(
+				transformedCost,
+				new long[] {mask.min(0), mask.min(1), min},
+				new long[] {mask.dimension(0), mask.dimension(1), padding * 2});
+
+		final RandomAccessibleInterval<IntType> heightFieldUpdate = Test.process2(
+				cropTransformCost,
+				maxStepSize,
+				0,
+				Integer.MAX_VALUE);
+
+		final RandomAccessibleInterval<DoubleType> doubleFixedHeightField = Converters.convert(
+				heightFieldUpdate,
+				(a, b) -> b.setReal(a.get() - 1 - padding),
+				new DoubleType());
+
+		final RandomAccessibleInterval<FloatType> updatedMinField = Converters.convert(
+			Views.collapseReal(
+					Views.stack(
+						Views.offsetInterval(
+								Views.raster(heightFieldScaled),
+								heightFieldUpdate),
+						doubleFixedHeightField)),
+			(a, b) -> b.set(a.get(0).getRealFloat() + a.get(1).getRealFloat()),
+			new FloatType());
+
+		return inpaintHeightField(
+				updatedMinField,
+				mask);
+	}
+
 
 
 
@@ -218,7 +264,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	public static <
 					T extends RealType<T>,
 					M extends RealType<M>,
-					F extends RealType<F>> RandomAccessibleInterval<FloatType> updateMinHeightField(
+					F extends RealType<F>> ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updateMinHeightFields(
 			final RandomAccessibleInterval<T> cost,
 			final RandomAccessibleInterval<M> mask,
 			final RandomAccessibleInterval<F> minField,
@@ -229,7 +275,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long padding,
 			final int maxStepSize) {
 
-		final RealRandomAccessible<F> minFieldScaled =
+		final RealRandomAccessible<DoubleType> minFieldScaled =
 				Transform.scaleAndShiftHeightField(
 						Transform.scaleAndShiftHeightFieldValues(
 								minField,
@@ -237,9 +283,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 								0),
 						Arrays.copyOf(scale, 2));
 
-		ImageJFunctions.show(Views.interval(Views.raster(minFieldScaled), cost), "min field scaled");
+//		ImageJFunctions.show(Views.interval(Views.raster(minFieldScaled), cost), "min field scaled");
 
-		final RealRandomAccessible<F> maxFieldScaled =
+		final RealRandomAccessible<DoubleType> maxFieldScaled =
 				Transform.scaleAndShiftHeightField(
 						Transform.scaleAndShiftHeightFieldValues(
 								maxField,
@@ -247,12 +293,12 @@ public class SparkSurfaceFit implements Callable<Void>{
 								0),
 						Arrays.copyOf(scale, 2));
 
-		ImageJFunctions.show(Views.interval(Views.raster(maxFieldScaled), cost), "max field scaled");
+//		ImageJFunctions.show(Views.interval(Views.raster(maxFieldScaled), cost), "max field scaled");
 
 		final double offsetZScaledMinAvg = (minAvg + 0.5) * scale[2] - 0.5;
 		final double offsetZScaledMaxAvg = (maxAvg + 0.5) * scale[2] - 0.5;
 
-		final FlattenTransform<F> flatteningTransform =
+		final FlattenTransform<DoubleType> flatteningTransform =
 				new FlattenTransform<>(
 						minFieldScaled,
 						maxFieldScaled,
@@ -265,39 +311,26 @@ public class SparkSurfaceFit implements Callable<Void>{
 						new NLinearInterpolatorFactory<>()),
 				flatteningTransform);
 
-		ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
+//		ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
 
-		final long minMin = (long)Math.floor(offsetZScaledMinAvg - padding);
 
-		final IntervalView<T> cropTransformCost = Views.offsetInterval(
+		final RandomAccessibleInterval<FloatType> updatedMinField = calculateHeightField(
 				transformedCost,
-				new long[] {cost.min(0), cost.min(1), minMin},
-				new long[] {cost.dimension(0), cost.dimension(1), padding * 2});
+				mask,
+				minFieldScaled,
+				offsetZScaledMinAvg,
+				padding,
+				maxStepSize);
 
-		final RandomAccessibleInterval<IntType> heightFieldUpdate = Test.process2(
-				cropTransformCost,
-				maxStepSize,
-				0,
-				Integer.MAX_VALUE);
+		final RandomAccessibleInterval<FloatType> updatedMaxField = calculateHeightField(
+				transformedCost,
+				mask,
+				maxFieldScaled,
+				offsetZScaledMaxAvg,
+				padding,
+				maxStepSize);
 
-		final RandomAccessibleInterval<F> doubleFixedHeightField = Converters.convert(
-				heightFieldUpdate,
-				(a, b) -> b.setReal(a.get() - 1 - padding),
-				net.imglib2.util.Util.getTypeFromInterval(minField).createVariable());
-
-		final RandomAccessibleInterval<FloatType> updatedMinField = Converters.convert(
-			Views.collapseReal(
-					Views.stack(
-						Views.offsetInterval(
-								Views.raster(minFieldScaled),
-								heightFieldUpdate),
-						doubleFixedHeightField)),
-			(a, b) -> b.set(a.get(0).getRealFloat() + a.get(1).getRealFloat()),
-			new FloatType());
-
-		return inpaintHeightField(
-				updatedMinField,
-				mask);
+		return new ValuePair<>(updatedMinField, updatedMaxField);
 	}
 
 
@@ -351,8 +384,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		System.out.println(dzScale);
 
-		final long constantMin = 100;
-		final long constantMax = permutedCost.dimension(2) - 100;
+		final long constantMin = permutedCost.dimension(2) / 4;
+		final long constantMax = permutedCost.max(2) - constantMin;
 
 		final RandomAccessibleInterval<FloatType> constantMinField =
 				Views.offsetInterval(
@@ -373,7 +406,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 
 		/* test updateMinHeightField */
-		final RandomAccessibleInterval<FloatType> updatedMinHeightField = updateMinHeightField(
+		final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updatedHeightFields = updateMinHeightFields(
 				inpaintedCost,
 				mask,
 				constantMinField,
@@ -381,11 +414,11 @@ public class SparkSurfaceFit implements Callable<Void>{
 				constantMin,
 				constantMax,
 				new double[] {1, 1, 1},
-				100,
+				constantMin,
 				(int)Math.round(dzScale));
 
-		ImageJFunctions.show(updatedMinHeightField, "updated height field");
-
+		ImageJFunctions.show(updatedHeightFields.getA(), "updated min height field");
+		ImageJFunctions.show(updatedHeightFields.getB(), "updated max height field");
 
 
 
@@ -458,20 +491,30 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 
 
+		final double topAvgUpdated = weightedAverage(
+				Views.flatIterable(updatedHeightFields.getA()),
+				Views.flatIterable(mask));
+		final double botAvgUpdated = weightedAverage(
+				Views.flatIterable(updatedHeightFields.getB()),
+				Views.flatIterable(mask));
+
+		System.out.println(topAvgUpdated);
+		System.out.println(botAvgUpdated);
 
 		/* test updateMinHeightField */
-		final RandomAccessibleInterval<FloatType> updatedMinHeightField2 = updateMinHeightField(
+		final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updatedHeightFields2 = updateMinHeightFields(
 				inpaintedCost2,
 				mask2,
-				updatedMinHeightField,
-				botInpaintedOffset,
-				topAvg,
-				botAvg,
+				updatedHeightFields.getA(),
+				updatedHeightFields.getB(),
+				topAvgUpdated,
+				botAvgUpdated,
 				new double[] {1, 1, 4},
 				9,
 				(int)Math.round(dzScale) * 4);
 
-		ImageJFunctions.show(updatedMinHeightField2, "updated min height field 2");
+		ImageJFunctions.show(updatedHeightFields2.getA(), "updated min height field 2");
+		ImageJFunctions.show(updatedHeightFields2.getB(), "updated max height field 2");
 
 
 

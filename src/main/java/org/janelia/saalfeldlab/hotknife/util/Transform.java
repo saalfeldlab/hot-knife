@@ -64,7 +64,6 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 
 /**
@@ -693,7 +692,7 @@ public class Transform {
 	}
 
 
-	public static <T extends RealType<T>> RandomAccessibleInterval<T> scaleAndShiftHeightFieldValues(
+	public static <T extends RealType<T>> RandomAccessibleInterval<DoubleType> scaleAndShiftHeightFieldValues(
 			final RandomAccessibleInterval<T> heightField,
 			final double scale,
 			final double offset) {
@@ -701,6 +700,6 @@ public class Transform {
 		return Converters.convert(
 				heightField,
 				(a, b) -> b.setReal((a.getRealDouble() + offset + 0.5) * scale - 0.5),
-				Util.getTypeFromInterval(heightField).createVariable());
+				new DoubleType());
 	}
 }
