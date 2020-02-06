@@ -183,6 +183,20 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
+	private <T extends RealType<T>> double[] minMax(
+			final IterableInterval<T> values) {
+
+		final double[] minMax = new double[]{Double.MAX_VALUE, -Double.MAX_VALUE};
+
+		for (final T value : values) {
+			final double v = value.getRealDouble();
+			if (minMax[0] > v) minMax[0] = v;
+			if (minMax[1] < v) minMax[1] = v;
+		}
+		return minMax;
+	}
+
+
 
 
 
@@ -223,6 +237,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 								0),
 						Arrays.copyOf(scale, 2));
 
+		ImageJFunctions.show(Views.interval(Views.raster(minFieldScaled), cost), "min field scaled");
+
 		final RealRandomAccessible<F> maxFieldScaled =
 				Transform.scaleAndShiftHeightField(
 						Transform.scaleAndShiftHeightFieldValues(
@@ -230,6 +246,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 								scale[2],
 								0),
 						Arrays.copyOf(scale, 2));
+
+		ImageJFunctions.show(Views.interval(Views.raster(maxFieldScaled), cost), "max field scaled");
 
 		final double offsetZScaledMinAvg = (minAvg + 0.5) * scale[2] - 0.5;
 		final double offsetZScaledMaxAvg = (maxAvg + 0.5) * scale[2] - 0.5;
@@ -245,7 +263,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 				Views.interpolate(
 						Views.extendBorder(cost),
 						new NLinearInterpolatorFactory<>()),
-				flatteningTransform.inverse());
+				flatteningTransform);
 
 		ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
 
@@ -310,7 +328,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 
 
-		final String dataset2 = inGroup + "/s" + scaleIndex;
+		final String dataset2 = inGroup + "/s" + (scaleIndex - 1);
 		final RandomAccessibleInterval<UnsignedByteType> cost2 = N5Utils.openVolatile(n5, dataset2);
 		final RandomAccessibleInterval<UnsignedByteType> permutedCost2 = Views.permute(cost2, 1, 2);
 
@@ -398,7 +416,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 				Views.flatIterable(topInpaintedOffset),
 				Views.flatIterable(mask));
 
-		System.out.println(topAvg);
+		final double[] topMinMax = minMax(Views.flatIterable(topInpaintedOffset));
+
+		System.out.println(topAvg + " " + Arrays.toString(topMinMax));
 
 //		ImageJFunctions.show(top, "top");
 		ImageJFunctions.show(topInpaintedOffset, "topInpainted offset");
@@ -429,7 +449,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 				Views.flatIterable(botInpaintedOffset),
 				Views.flatIterable(mask));
 
-		System.out.println(botAvg);
+		final double[] botMinMax = minMax(Views.flatIterable(botInpaintedOffset));
+
+		System.out.println(botAvg + " " + Arrays.toString(topMinMax));
 
 //		ImageJFunctions.show(bot);
 //		ImageJFunctions.show(botInpainted);
@@ -446,7 +468,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 				topAvg,
 				botAvg,
 				new double[] {1, 1, 4},
-				100,
+				9,
 				(int)Math.round(dzScale) * 4);
 
 		ImageJFunctions.show(updatedMinHeightField2, "updated min height field 2");
