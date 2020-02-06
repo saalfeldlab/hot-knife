@@ -41,6 +41,7 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.converter.Converters;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
@@ -63,6 +64,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 
 /**
@@ -669,12 +671,36 @@ public class Transform {
 	 * @param scale
 	 * @return
 	 */
-	public ScaleAndTranslation createTopLeftScaleShift(final double[] scale) {
+	public static ScaleAndTranslation createTopLeftScaleShift(final double[] scale) {
 
 		final double[] offset = new double[scale.length];
 		Arrays.setAll(offset, i -> scale[i] * 0.5 - 0.5);
 		return new ScaleAndTranslation(
 						scale,
 						offset);
+	}
+
+
+	public static <T extends RealType<T>> RealRandomAccessible<T> scaleAndShiftHeightField(
+			final RandomAccessibleInterval<T> heightField,
+			final double[] scale) {
+
+		return RealViews.affineReal(
+				Views.interpolate(
+						Views.extendBorder(heightField),
+						new NLinearInterpolatorFactory<>()),
+				createTopLeftScaleShift(scale));
+	}
+
+
+	public static <T extends RealType<T>> RandomAccessibleInterval<T> scaleAndShiftHeightFieldValues(
+			final RandomAccessibleInterval<T> heightField,
+			final double scale,
+			final double offset) {
+
+		return Converters.convert(
+				heightField,
+				(a, b) -> b.setReal((a.getRealDouble() + offset + 0.5) * scale - 0.5),
+				Util.getTypeFromInterval(heightField).createVariable());
 	}
 }
