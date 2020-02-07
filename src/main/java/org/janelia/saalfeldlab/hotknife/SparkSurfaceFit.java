@@ -311,7 +311,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 						new NLinearInterpolatorFactory<>()),
 				flatteningTransform);
 
-//		ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
+		ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
 
 
 		final RandomAccessibleInterval<FloatType> updatedMinField = calculateHeightField(
@@ -344,179 +344,102 @@ public class SparkSurfaceFit implements Callable<Void>{
 		sc.setLogLevel("ERROR");
 
 
+		/* initialize */
+		final long[] initDimensions = n5.getAttribute(inGroup + "/s" + scaleIndex, "dimensions", long[].class);
 
-		final String dataset = inGroup + "/s" + scaleIndex;
-		final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
-		final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
+		double minAvg = initDimensions[1] / 4;
+		double maxAvg = initDimensions[1] - minAvg - 1;
 
-		final ArrayImg<UnsignedByteType, ByteArray> mask = costMask(permutedCost);
-		ImageJFunctions.show(mask, "mask");
+		double[] downsamplingFactors = n5.getAttribute(inGroup + "/s" + scaleIndex, "downsamplingFactors", double[].class);
 
-		final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
-				Converters.convert(
-							permutedCost,
-							(a, b) -> b.set(a.getRealFloat()),
-							new FloatType()),
-				mask);
+		final float fMinAvg = (float)minAvg;
+		final float fMaxAvg = (float)maxAvg;
 
-
-
-		final String dataset2 = inGroup + "/s" + (scaleIndex - 1);
-		final RandomAccessibleInterval<UnsignedByteType> cost2 = N5Utils.openVolatile(n5, dataset2);
-		final RandomAccessibleInterval<UnsignedByteType> permutedCost2 = Views.permute(cost2, 1, 2);
-
-		final ArrayImg<UnsignedByteType, ByteArray> mask2 = costMask(permutedCost);
-		ImageJFunctions.show(mask2, "mask2");
-
-		final RandomAccessibleInterval<FloatType> inpaintedCost2 = inpaintCost(
-				Converters.convert(
-							permutedCost2,
-							(a, b) -> b.set(a.getRealFloat()),
-							new FloatType()),
-				mask2);
-
-
-
-
-
-		final double[] downsamplingFactors = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
-		final double dzScale = downsamplingFactors[0] / downsamplingFactors[1];
-
-		System.out.println(dzScale);
-
-		final long constantMin = permutedCost.dimension(2) / 4;
-		final long constantMax = permutedCost.max(2) - constantMin;
-
-		final RandomAccessibleInterval<FloatType> constantMinField =
+		RandomAccessibleInterval<FloatType> minField =
 				Views.offsetInterval(
 						new FunctionRandomAccessible<>(
 							2,
-							(a, b) -> b.set(constantMin),
+							(a, b) -> b.set(fMinAvg),
 							FloatType::new),
-						mask);
+						new long[3],
+						new long[] {
+								initDimensions[0],
+								initDimensions[2],
+								initDimensions[1]});
 
-		final RandomAccessibleInterval<FloatType> constantMaxField =
+		RandomAccessibleInterval<FloatType> maxField =
 				Views.offsetInterval(
 						new FunctionRandomAccessible<>(
 							2,
-							(a, b) -> b.set(constantMax),
+							(a, b) -> b.set(fMaxAvg),
 							FloatType::new),
-						mask);
+						new long[3],
+						new long[] {
+								initDimensions[0],
+								initDimensions[2],
+								initDimensions[1]});
+
+		int padding = (int)Math.round(minAvg);
+
+		for (int s = scaleIndex; s > scaleIndex - 5; --s) {
+
+			final String dataset = inGroup + "/s" + s;
+			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
+			final ArrayImg<UnsignedByteType, ByteArray> mask = costMask(permutedCost);
+			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
+					Converters.convert(
+								permutedCost,
+								(a, b) -> b.set(a.getRealFloat()),
+								new FloatType()),
+					mask);
+
+			final double[] newDownsamplingFactors = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
+			final double[] scale = new double[] {
+					downsamplingFactors[0] / newDownsamplingFactors[0],
+					downsamplingFactors[2] / newDownsamplingFactors[2],
+					downsamplingFactors[1] / newDownsamplingFactors[1]};
+			downsamplingFactors = newDownsamplingFactors;
+
+			final double dzScale = downsamplingFactors[0] / downsamplingFactors[1];
+
+			System.out.println(dzScale);
+			System.out.println(Arrays.toString(scale));
+
+			final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updatedHeightFields = updateMinHeightFields(
+					inpaintedCost,
+					mask,
+					minField,
+					maxField,
+					minAvg,
+					maxAvg,
+					scale,
+					padding,
+//					(int)Math.round(dzScale));
+					(int)Math.round(scale[2]));
+
+			minField = updatedHeightFields.getA();
+			maxField = updatedHeightFields.getB();
+
+			ImageJFunctions.show(minField, "updated min height field " + s);
+			ImageJFunctions.show(maxField, "updated max height field " + s);
+
+			minAvg = weightedAverage(
+					Views.flatIterable(minField),
+					Views.flatIterable(mask));
+			maxAvg = weightedAverage(
+					Views.flatIterable(maxField),
+					Views.flatIterable(mask));
+
+			System.out.println(minAvg);
+			System.out.println(maxAvg);
 
 
 
-		/* test updateMinHeightField */
-		final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updatedHeightFields = updateMinHeightFields(
-				inpaintedCost,
-				mask,
-				constantMinField,
-				constantMaxField,
-				constantMin,
-				constantMax,
-				new double[] {1, 1, 1},
-				constantMin,
-				(int)Math.round(dzScale));
-
-		ImageJFunctions.show(updatedHeightFields.getA(), "updated min height field");
-		ImageJFunctions.show(updatedHeightFields.getB(), "updated max height field");
 
 
-
-
-
-		final RandomAccessibleInterval<IntType> top = Test.process2(
-				Views.offsetInterval(
-						inpaintedCost,
-						new long[] {0, 0, 0},
-						new long[] {inpaintedCost.dimension(0), inpaintedCost.dimension(1), inpaintedCost.dimension(2) / 2}),
-				(int)Math.round(dzScale),
-				0,
-				Integer.MAX_VALUE);
-
-		final RandomAccessibleInterval<FloatType> topInpainted = inpaintHeightField(
-				Converters.convert(
-						top,
-						(a, b) -> b.set(a.getRealFloat()),
-						new FloatType()),
-				mask);
-
-		final RandomAccessibleInterval<FloatType> topInpaintedOffset = Converters.convert(
-				topInpainted,
-				(a, b) -> b.set(a.get() - 1),
-				new FloatType());
-
-		final double topAvg = weightedAverage(
-				Views.flatIterable(topInpaintedOffset),
-				Views.flatIterable(mask));
-
-		final double[] topMinMax = minMax(Views.flatIterable(topInpaintedOffset));
-
-		System.out.println(topAvg + " " + Arrays.toString(topMinMax));
-
-//		ImageJFunctions.show(top, "top");
-		ImageJFunctions.show(topInpaintedOffset, "topInpainted offset");
-
-
-		final RandomAccessibleInterval<IntType> bot = Test.process2(
-				Views.offsetInterval(
-						inpaintedCost,
-						new long[] {0, 0, inpaintedCost.dimension(2) / 2},
-						new long[] {inpaintedCost.dimension(0), inpaintedCost.dimension(1), inpaintedCost.dimension(2) / 2}),
-				(int)Math.round(dzScale),
-				0,
-				Integer.MAX_VALUE);
-
-		final RandomAccessibleInterval<FloatType> botInpainted = inpaintHeightField(
-				Converters.convert(
-						bot,
-						(a, b) -> b.set(a.getRealFloat()),
-						new FloatType()),
-				mask);
-
-		final RandomAccessibleInterval<FloatType> botInpaintedOffset = Converters.convert(
-				botInpainted,
-				(a, b) -> b.set(a.get() - 1 + inpaintedCost.dimension(2) / 2),
-				new FloatType());
-
-		final double botAvg = weightedAverage(
-				Views.flatIterable(botInpaintedOffset),
-				Views.flatIterable(mask));
-
-		final double[] botMinMax = minMax(Views.flatIterable(botInpaintedOffset));
-
-		System.out.println(botAvg + " " + Arrays.toString(topMinMax));
-
-//		ImageJFunctions.show(bot);
-//		ImageJFunctions.show(botInpainted);
-
-
-
-		final double topAvgUpdated = weightedAverage(
-				Views.flatIterable(updatedHeightFields.getA()),
-				Views.flatIterable(mask));
-		final double botAvgUpdated = weightedAverage(
-				Views.flatIterable(updatedHeightFields.getB()),
-				Views.flatIterable(mask));
-
-		System.out.println(topAvgUpdated);
-		System.out.println(botAvgUpdated);
-
-		/* test updateMinHeightField */
-		final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updatedHeightFields2 = updateMinHeightFields(
-				inpaintedCost2,
-				mask2,
-				updatedHeightFields.getA(),
-				updatedHeightFields.getB(),
-				topAvgUpdated,
-				botAvgUpdated,
-				new double[] {1, 1, 4},
-				9,
-				(int)Math.round(dzScale) * 4);
-
-		ImageJFunctions.show(updatedHeightFields2.getA(), "updated min height field 2");
-		ImageJFunctions.show(updatedHeightFields2.getB(), "updated max height field 2");
-
-
+			padding = 9;
+		}
 
 
 		sc.close();
