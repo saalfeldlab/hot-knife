@@ -306,6 +306,18 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
+	/**
+	 *
+	 * @param <T>
+	 * @param <M>
+	 * @param transformedCost
+	 * @param mask serves as both mask and target interval (don't forget the offsets)
+	 * @param heightFieldScaled
+	 * @param offsetZScaledAvg
+	 * @param padding
+	 * @param maxStepSize
+	 * @return
+	 */
 	private static <
 					T extends RealType<T>,
 					M extends RealType<M>> RandomAccessibleInterval<FloatType> calculateHeightField(
@@ -335,7 +347,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final RandomAccessibleInterval<FloatType> updatedMinField = Converters.convert(
 			Views.collapseReal(
 					Views.stack(
-						Views.offsetInterval(
+						Views.interval(
 								Views.raster(heightFieldScaled),
 								heightFieldUpdate),
 						doubleFixedHeightField)),
@@ -354,6 +366,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 *
 	 * @param <T>
 	 * @param cost at target resolution
+	 * @param mask serves as both mask and target interval in x,y (don't forget the offsets)
 	 * @param minField in scaled and shifted z-coordinates according to scale
 	 * @param maxField in scaled and shifted z-coordinates according to scale
 	 * @param minAvg weighted average of minField
