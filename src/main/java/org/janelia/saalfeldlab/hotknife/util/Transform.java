@@ -702,4 +702,19 @@ public class Transform {
 				(a, b) -> b.setReal((a.getRealDouble() + offset + 0.5) * scale - 0.5),
 				new DoubleType());
 	}
+
+	public static <T extends RealType<T>> RealRandomAccessible<DoubleType> scaleAndShiftHeightFieldAndValues(
+			final RandomAccessibleInterval<T> heightField,
+			final double[] scale) {
+
+		return RealViews.affineReal(
+				Views.interpolate(
+						Views.extendBorder(
+								scaleAndShiftHeightFieldValues(
+										heightField,
+										scale[2],
+										0)),
+						new NLinearInterpolatorFactory<>()),
+				createTopLeftScaleShift(new double[] {scale[0], scale[1]}));
+	}
 }
