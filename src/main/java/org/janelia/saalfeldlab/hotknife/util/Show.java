@@ -27,6 +27,7 @@ import static net.imglib2.type.PrimitiveType.SHORT;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -39,7 +40,9 @@ import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.viewer.Source;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.Cache;
@@ -58,6 +61,9 @@ import net.imglib2.img.cell.CellGrid;
 import net.imglib2.position.RealPositionRealRandomAccessible;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
+import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.Scale3D;
+import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.Type;
 import net.imglib2.type.numeric.ARGBType;
@@ -209,7 +215,7 @@ public class Show {
 	@SuppressWarnings( { "unchecked", "rawtypes" } )
 	public static final <T extends NativeType<T>> RandomAccessibleInterval<T> wrapAsVolatileCachedCellImg(
 			final RandomAccessibleInterval<T> source,
-			final int[] blockSize) throws IOException {
+			final int[] blockSize) {
 
 		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
 		final CellGrid grid = new CellGrid(dimensions, blockSize);
@@ -356,5 +362,55 @@ public class Show {
 		}
 
 		return Views.stack(comparisonIntervals);
+	}
+
+
+	public static final <T extends NumericType<T> & NativeType<T>> RandomAccessibleIntervalMipmapSource<T> createTransformedMipmapSource(
+			final RealTransform transformToSource,
+			final RandomAccessibleInterval<T>[] rawMipmaps,
+			final double[][] scales,
+			final VoxelDimensions voxelDimensions,
+			final String name) {
+
+		final int numScales = rawMipmaps.length;
+
+		@SuppressWarnings("unchecked")
+		final RandomAccessibleInterval<T>[] mipmaps = new RandomAccessibleInterval[numScales];
+
+		final T type = Util.getTypeFromInterval(rawMipmaps[0]).createVariable();
+
+		for (int s = 0; s < numScales; ++s) {
+
+			final double[] scale = scales[s];
+			final double[] shift = new double[scale.length]; // 3
+			Arrays.setAll(shift, i -> 0.5 * (scale[i] - 1));
+
+			final RealTransformSequence transformSequence = new RealTransformSequence();
+			final Scale3D scale3D = new Scale3D(scale);
+			final Translation3D shift3D = new Translation3D(shift);
+			transformSequence.add(scale3D);
+			transformSequence.add(shift3D);
+			transformSequence.add(transformToSource);
+			transformSequence.add(shift3D.inverse());
+			transformSequence.add(scale3D.inverse());
+
+			final RandomAccessibleInterval<T> transformedSource =
+					Transform.createTransformedInterval(
+							Views.permute(rawMipmaps[s], 1, 2),
+							rawMipmaps[0],
+							transformSequence,
+							type.createVariable());
+
+			final RandomAccessibleInterval<T> cachedSource = Show.wrapAsVolatileCachedCellImg(transformedSource, new int[]{32, 32, 32});
+
+			mipmaps[s] = cachedSource;
+		}
+
+		return new RandomAccessibleIntervalMipmapSource<>(
+						mipmaps,
+						type.createVariable(),
+						scales,
+						voxelDimensions,
+						name);
 	}
 }
