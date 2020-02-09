@@ -23,10 +23,14 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Util;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
@@ -44,6 +48,7 @@ import ij.ImageJ;
 import ij.process.FloatProcessor;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
 import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
@@ -195,7 +200,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	private static <T extends RealType<T>, M extends RealType<M>> double weightedAverage(
+	private static <T extends RealType<T>, M extends RealType<M>> double[] sumWeightedValues(
 			final IterableInterval<T> values,
 			final IterableInterval<M> weights) {
 
@@ -212,7 +217,16 @@ public class SparkSurfaceFit implements Callable<Void>{
 			if (Double.isNaN(valuesCursor.get().getRealDouble()))
 				System.out.println(weight);
 		}
-		return valueSum.getSum() / weightSum.getSum();
+		return new double[]{valueSum.getSum(), weightSum.getSum()};
+	}
+
+
+	private static <T extends RealType<T>, M extends RealType<M>> double weightedAverage(
+			final IterableInterval<T> values,
+			final IterableInterval<M> weights) {
+
+		final double[] sums = sumWeightedValues(values, weights);
+		return sums[0] / sums[1];
 	}
 
 
@@ -527,7 +541,25 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	public static void processBlock(
+	/**
+	 * Update the height field for a block.
+	 *
+	 * @param n5CostPath n5 container for cost, input only
+	 * @param n5FieldPath n5 container for height fields, both in put and output
+	 * @param costDataset
+	 * @param heightFieldGroup input height field group
+	 * @param heightFieldGroupOutput output height field group
+	 * @param blockMinOut 2D min coordinates of the out put block
+	 * @param blockSizeOut 2D size of the output block
+	 * @param blockPadding 2D padding of the output block for processing
+	 * @param padding padding in z around the previous surface
+	 * @param maxStepSize maximum z step size for surface update in output space
+	 *
+	 * @return value and weight sums of the updated height fields (can be all 0 if everything is masked)
+	 *
+	 * @throws IOException if something goes wrong with the n5 containers
+	 */
+	public static double[][] processBlock(
 			final String n5CostPath,
 			final String n5FieldPath,
 			final String costDataset,
@@ -559,8 +591,6 @@ public class SparkSurfaceFit implements Callable<Void>{
 				blockSize,
 				i -> Math.min(fullCost.dimension(i) - blockMin[i], blockSizeOut[i] + blockPadding[i] + blockPadding[i]));
 
-
-
 		final RandomAccessibleInterval<UnsignedByteType> cost =
 			Views.interval(
 					fullCost,
@@ -576,7 +606,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final RandomAccessibleInterval<UnsignedByteType> mask = costMask(cost);
 
 		if (maskEmpty(Views.iterable(mask)))
-			return;
+			return new double[][] {{0, 0}, {0, 0}};
 
 		/* TODO This inpaints the entire cost column, do it for a crop with padding around avgmin/max */
 		final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
@@ -614,19 +644,130 @@ public class SparkSurfaceFit implements Callable<Void>{
 				padding,
 				maxStepSize);
 
+		final FinalInterval cropInterval = new FinalInterval(
+				blockMin,
+				new long[] {
+						blockSize[0] + blockMin[0] - 1,
+						blockSize[1] + blockMin[1] - 1
+				});
+
+		final IntervalView<FloatType> minFieldOut = Views.interval(fields.getA(), cropInterval);
+		final IntervalView<FloatType> maxFieldOut = Views.interval(fields.getB(), cropInterval);
+
 		final String minFieldOutName = heightFieldGroupOutput + "/min";
 		final String maxFieldOutName = heightFieldGroupOutput + "/max";
 
 		N5Utils.saveBlock(
-				fields.getA(),
+				minFieldOut,
 				n5Field,
 				minFieldOutName,
 				n5Field.getDatasetAttributes(minFieldOutName));
 		N5Utils.saveBlock(
-				fields.getB(),
+				maxFieldOut,
 				n5Field,
 				maxFieldOutName,
 				n5Field.getDatasetAttributes(maxFieldOutName));
+
+		return new double[][] {
+				sumWeightedValues(
+						Views.flatIterable(minFieldOut),
+						Views.flatIterable(mask)),
+				sumWeightedValues(
+						Views.flatIterable(maxFieldOut),
+						Views.flatIterable(mask))};
+	}
+
+
+	/**
+	 * Update the height field by splitting into blocks.
+	 *
+	 * @param n5CostPath n5 container for cost, input only
+	 * @param n5FieldPath n5 container for height fields, both in put and output
+	 * @param costDataset
+	 * @param heightFieldGroup input height field group
+	 * @param heightFieldGroupOutput output height field group
+	 * @param blockMinOut 2D min coordinates of the out put block
+	 * @param blockSizeOut 2D size of the output block
+	 * @param blockPadding 2D padding of the output block for processing
+	 * @param padding padding in z around the previous surface
+	 * @param maxStepSize maximum z step size for surface update in output space
+	 *
+	 * @throws IOException if something goes wrong with the n5 containers
+	 */
+	public static void updateHeightFields(
+			final JavaSparkContext sc,
+			final String n5CostPath,
+			final String n5FieldPath,
+			final String costDataset,
+			final String heightFieldGroup,
+			final String heightFieldGroupOutput,
+			final long[] blockSizeOut,
+			final long[] blockPadding,
+			final long padding,
+			final int maxStepSize) throws IOException {
+
+		final N5Reader n5Cost = new N5FSReader(n5CostPath);
+		final N5Writer n5Field = new N5FSWriter(n5FieldPath);
+
+		final int[] blockSizeOutInt = new int[blockSizeOut.length];
+		Arrays.setAll(blockSizeOutInt, i -> (int)blockSizeOut[i]);
+
+		final long[] dimensions = n5Cost.getAttribute(costDataset, "dimensions", long[].class);
+		final double[] downsamplingFactorsXZY = n5Cost.getAttribute(costDataset, "downsamplingFactors", double[].class);
+		final double[] downsamplingFactors = new double[] {
+				downsamplingFactorsXZY[0],
+				downsamplingFactorsXZY[2],
+				downsamplingFactorsXZY[1]};
+
+		n5Field.createGroup(heightFieldGroupOutput);
+		n5Field.setAttribute(heightFieldGroupOutput, "downsamplingFactors", downsamplingFactors);
+		final DatasetAttributes attributes =
+				new DatasetAttributes(
+						dimensions,
+						blockSizeOutInt,
+						DataType.FLOAT32,
+						new GzipCompression());
+		final String minDataset = heightFieldGroupOutput + "/min";
+		final String maxDataset = heightFieldGroupOutput + "/max";
+		n5Field.createDataset(
+				minDataset,
+				attributes);
+		n5Field.createDataset(
+				maxDataset,
+				attributes);
+
+		final JavaRDD<long[][]> grid = sc.parallelize(
+				Grid.create(
+						Arrays.copyOf(dimensions, 2),
+						new int[] {
+								(int)blockSizeOut[0],
+								(int)blockSizeOut[1]}));
+		final JavaRDD<double[][]> avgs =
+				grid.map(cell ->
+					processBlock(
+							n5CostPath,
+							n5FieldPath,
+							costDataset,
+							heightFieldGroup,
+							heightFieldGroupOutput,
+							cell[0],
+							cell[1],
+							blockPadding,
+							padding,
+							maxStepSize));
+
+		final double[][] sumAvgs = avgs.reduce((a, b) -> {
+
+			final double[][] c = new double[a.length][2];
+			for (int i = 0; i < c.length; ++i) {
+				c[i][0] = a[i][0] + b[i][0];
+				c[i][1] = a[i][1] + b[i][1];
+			}
+			return c;
+		});
+
+		n5Field.setAttribute(minDataset, "avg", sumAvgs[0][0] / sumAvgs[0][1]);
+		n5Field.setAttribute(maxDataset, "avg", sumAvgs[1][0] / sumAvgs[1][1]);
 	}
 
 
@@ -721,8 +862,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 					(int)inpaintedCost.dimension(2) - 1,
 					2);
 
-			minAvg = weightedAverage(Views.iterable(heightFields[0]), Views.iterable(mask));
-			maxAvg = weightedAverage(Views.iterable(heightFields[1]), Views.iterable(mask));
+			minAvg = weightedAverage(Views.flatIterable(heightFields[0]), Views.flatIterable(mask));
+			maxAvg = weightedAverage(Views.flatIterable(heightFields[1]), Views.flatIterable(mask));
 
 			System.out.println(minAvg + ", " + maxAvg);
 
