@@ -1000,8 +1000,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	@Override
-	public Void call() throws IOException {
+	public Void callSparkAndVisualizae() throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -1175,6 +1174,102 @@ public class SparkSurfaceFit implements Callable<Void>{
 			bdv = Show.mipmapSource(volatileMipmapSource, bdv, options.addTo(bdv));
 		}
 
+
+		sc.close();
+
+		return null;
+	}
+
+
+	@Override
+	public Void call() throws IOException {
+
+		final N5Reader n5 = new N5FSReader(n5Path);
+
+		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
+		final JavaSparkContext sc = new JavaSparkContext(conf);
+		sc.setLogLevel("ERROR");
+
+		/* initialize */
+		double minAvg;
+		double maxAvg;
+
+		final double[] downsamplingFactors = new double[3];
+
+		RandomAccessibleInterval<FloatType> minField;
+		RandomAccessibleInterval<FloatType> maxField;
+		{
+			final N5Writer n5Writer = new N5FSWriter(n5FieldPath);
+
+			final String dataset = inGroup + "/s" + scaleIndex;
+			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
+			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
+					Converters.convert(
+								permutedCost,
+								(a, b) -> b.set(a.getRealFloat()),
+								new FloatType()),
+					mask);
+
+			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
+			downsamplingFactors[0] = downsamplingFactorsXZY[0];
+			downsamplingFactors[1] = downsamplingFactorsXZY[2];
+			downsamplingFactors[2] = downsamplingFactorsXZY[1];
+			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
+
+			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
+					inpaintedCost,
+					mask,
+					(int)Math.max(1, Math.round(dzScale * maxDeltaZ)),
+					1,
+					(int)inpaintedCost.dimension(2) - 1,
+					2);
+
+			minAvg = weightedAverage(Views.flatIterable(heightFields[0]), Views.flatIterable(mask));
+			maxAvg = weightedAverage(Views.flatIterable(heightFields[1]), Views.flatIterable(mask));
+
+			System.out.println(minAvg + ", " + maxAvg);
+
+			if (minAvg > maxAvg) {
+				final double a = minAvg;
+				minAvg = maxAvg;
+				maxAvg = a;
+				minField = heightFields[1];
+				maxField = heightFields[0];
+			} else {
+				minField = heightFields[0];
+				maxField = heightFields[1];
+			}
+
+			final String groupName = outGroup + "/s" + scaleIndex;
+			n5Writer.createGroup(groupName);
+			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
+			final String minDataset = groupName + "/min";
+			N5Utils.save(minField, n5Writer, minDataset, new int[] {1024, 1024}, new GzipCompression());
+			n5Writer.setAttribute(minDataset, "avg", minAvg);
+			final String maxDataset = groupName + "/max";
+			N5Utils.save(maxField, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
+			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
+		}
+
+		for (int s = scaleIndex - 1; s > scaleIndex - 9; --s) {
+
+			final long[] blockSize = new long[] {128, 128};
+			final long[] blockPadding = new long[] {32, 32};
+
+			updateHeightFields(
+					sc,
+					n5Path,
+					n5FieldPath,
+					inGroup + "/s" + s,
+					outGroup + "/s" + (s + 1),
+					outGroup + "/s" + s,
+					blockSize,
+					blockPadding,
+					maxDeltaZ,
+					2);
+		}
 
 		sc.close();
 
