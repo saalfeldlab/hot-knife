@@ -165,9 +165,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	private static RandomAccessibleInterval<FloatType> inpaintCost(
+	private static <M extends RealType<M>> RandomAccessibleInterval<FloatType> inpaintCost(
 			final RandomAccessibleInterval<FloatType> cost,
-			final RandomAccessibleInterval<UnsignedByteType> mask) {
+			final RandomAccessibleInterval<M> mask) {
 
 		final ArrayList<ArrayImg<FloatType, FloatArray>> slices = new ArrayList<>();
 		for (int z = 0; z < cost.dimension(2); ++z) {
@@ -354,22 +354,20 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final long min = (long)Math.floor(offsetZScaledAvg - padding);
 
-		final IntervalView<T> cropTransformCost = Views.interval(
+		final RandomAccessibleInterval<T> cropTransformCost = Views.interval(
 				transformedCost,
 				new long[] {mask.min(0), mask.min(1), min},
 				new long[] {mask.max(0), mask.max(1), min + padding * 2 - 1});
 
-		/*
-		 * TODO shouldn't we inpaint here?  It surely is the warped cost,
-		 * so some artifacts expected, but is this an actual problem?
-		 * Benefits are that this happens at a much smaller crop of cost and
-		 * that the corresponding crop in the original is very hard to estimate
-		 * (min/ max of height field +/- padding which can be quite large if
-		 * the height field is very tilted).
-		 **/
+		final RandomAccessibleInterval<FloatType> inpaintedCropTransformCost = inpaintCost(
+				Converters.convert(
+						cropTransformCost,
+						(a, b) -> b.set(a.getRealFloat()),
+						new FloatType()),
+				mask);
 
 		final RandomAccessibleInterval<IntType> heightFieldUpdate = extractSurface(
-				cropTransformCost,
+				inpaintedCropTransformCost,
 				maxStepSize);
 
 		System.out.println("height field update " + net.imglib2.util.Util.printInterval(heightFieldUpdate));
@@ -615,14 +613,6 @@ public class SparkSurfaceFit implements Callable<Void>{
 		if (maskEmpty(Views.iterable(mask)))
 			return new double[][] {{0, 0}, {0, 0}};
 
-		/* TODO This inpaints the entire cost column, do it for a crop with padding around avgmin/max */
-		final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
-				Converters.convert(
-							cost,
-							(a, b) -> b.set(a.getRealFloat()),
-							new FloatType()),
-				mask);
-
 		final double[] downsamplingFactorsXZY = n5Cost.getAttribute(costDataset, "downsamplingFactors", double[].class);
 		final double[] downsamplingFactors = new double[]{
 				downsamplingFactorsXZY[0],
@@ -636,15 +626,16 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final double[] downsamplingHeightField = n5Cost.getAttribute(heightFieldGroup, "downsamplingFactors", double[].class);
 		final double[] scale = new double[] {
-				downsamplingFactors[0] / downsamplingHeightField[0],
-				downsamplingFactors[1] / downsamplingHeightField[1],
-				downsamplingFactors[2] / downsamplingHeightField[2]};
+				downsamplingHeightField[0] / downsamplingFactors[0],
+				downsamplingHeightField[1] / downsamplingFactors[1],
+				downsamplingHeightField[2] / downsamplingFactors[2]};
 
-		System.out.println("inpainted cost " + net.imglib2.util.Util.printInterval(inpaintedCost));
+		System.out.println("scale " + Arrays.toString(scale));
+
 		System.out.println("mask " + net.imglib2.util.Util.printInterval(mask));
 
 		final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> fields = updateHeightFields(
-				inpaintedCost,
+				cost,
 				mask,
 				minField,
 				maxField,
@@ -851,7 +842,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		double minAvg;
 		double maxAvg;
 
-		final double[] downsamplingFactors = new double[3];
+		double[] downsamplingFactors = new double[3];
 
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
@@ -912,7 +903,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		for (int s = scaleIndex - 1; s > scaleIndex - 7; --s) {
 
-			final long[] blockSize = new long[] {64, 64};
+			final long[] blockSize = new long[] {128, 128};
 			final long[] padding = new long[] {32, 32};
 
 			updateHeightFields(
@@ -931,8 +922,16 @@ public class SparkSurfaceFit implements Callable<Void>{
 			/* visualization again ... */
 
 			final N5FSReader n5Field = new N5FSReader(n5FieldPath);
-			minField = N5Utils.open(n5Field, outGroup + "/s" + s + "/min");
-			maxField = N5Utils.open(n5Field, outGroup + "/s" + s + "/max");
+			final String groupName = outGroup + "/s" + s;
+			final String minFieldName = groupName + "/min";
+			final String maxFieldName = groupName + "/max";
+
+			minField = N5Utils.open(n5Field, minFieldName);
+			maxField = N5Utils.open(n5Field, maxFieldName);
+
+			downsamplingFactors = n5Field.getAttribute(groupName, "downsamplingFactors", double[].class);
+			minAvg = n5Field.getAttribute(minFieldName, "avg", double.class);
+			maxAvg = n5Field.getAttribute(maxFieldName, "avg", double.class);
 
 			final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
 					Transform.scaleAndShiftHeightFieldAndValues(minField, downsamplingFactors),
