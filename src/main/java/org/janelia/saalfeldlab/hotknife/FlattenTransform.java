@@ -15,27 +15,27 @@ import net.imglib2.outofbounds.OutOfBoundsBorderFactory;
 import net.imglib2.outofbounds.OutOfBoundsFactory;
 import net.imglib2.realtransform.InverseRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransform;
-import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.view.Views;
 
 /**
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  *
  */
-public class FlattenTransform implements InvertibleRealTransform {
+public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTransform {
 
 	private final int n;
-	private final RealRandomAccessible<DoubleType> minAccessible;
-	private final RealRandomAccessible<DoubleType> maxAccessible;
-	private final RealRandomAccess<DoubleType> minAccess;
-	private final RealRandomAccess<DoubleType> maxAccess;
+	private final RealRandomAccessible<T> minAccessible;
+	private final RealRandomAccessible<T> maxAccessible;
+	private final RealRandomAccess<T> minAccess;
+	private final RealRandomAccess<T> maxAccess;
 	private final double min;
 	private final double norm;
 
 
 	public FlattenTransform(
-			final RealRandomAccessible<DoubleType> min,
-			final RealRandomAccessible<DoubleType> max,
+			final RealRandomAccessible<T> min,
+			final RealRandomAccessible<T> max,
 			final double minPosition,
 			final double maxPosition) {
 
@@ -52,12 +52,12 @@ public class FlattenTransform implements InvertibleRealTransform {
 	}
 
 	public FlattenTransform(
-			final RandomAccessibleInterval<DoubleType> min,
-			final RandomAccessibleInterval<DoubleType> max,
+			final RandomAccessibleInterval<T> min,
+			final RandomAccessibleInterval<T> max,
 			final double minPosition,
 			final double maxPosition,
-			final InterpolatorFactory<DoubleType, RandomAccessible<DoubleType>> interpolatorFactory,
-			final OutOfBoundsFactory<DoubleType, RandomAccessibleInterval<DoubleType>> outOfBoundsFactory) {
+			final InterpolatorFactory<T, RandomAccessible<T>> interpolatorFactory,
+			final OutOfBoundsFactory<T, RandomAccessibleInterval<T>> outOfBoundsFactory) {
 
 		this(
 				Views.extend(min, outOfBoundsFactory),
@@ -68,11 +68,11 @@ public class FlattenTransform implements InvertibleRealTransform {
 	}
 
 	public FlattenTransform(
-			final RandomAccessible<DoubleType> min,
-			final RandomAccessible<DoubleType> max,
+			final RandomAccessible<T> min,
+			final RandomAccessible<T> max,
 			final double minPosition,
 			final double maxPosition,
-			final InterpolatorFactory<DoubleType, RandomAccessible<DoubleType>> interpolatorFactory) {
+			final InterpolatorFactory<T, RandomAccessible<T>> interpolatorFactory) {
 
 		this(
 				Views.interpolate(min, interpolatorFactory),
@@ -82,8 +82,8 @@ public class FlattenTransform implements InvertibleRealTransform {
 	}
 
 	public FlattenTransform(
-			final RandomAccessibleInterval<DoubleType> min,
-			final RandomAccessibleInterval<DoubleType> max,
+			final RandomAccessibleInterval<T> min,
+			final RandomAccessibleInterval<T> max,
 			final double minPosition,
 			final double maxPosition) {
 
@@ -119,8 +119,8 @@ public class FlattenTransform implements InvertibleRealTransform {
 
 		minAccess.setPosition(source);
 		maxAccess.setPosition(source);
-		final double minPosition = minAccess.get().get();
-		final double maxPosition = maxAccess.get().get();
+		final double minPosition = minAccess.get().getRealDouble();
+		final double maxPosition = maxAccess.get().getRealDouble();
 		final double scale = maxPosition - minPosition;
 
 		target[n] = (source[n] - minPosition) / scale * norm + min;
@@ -134,8 +134,8 @@ public class FlattenTransform implements InvertibleRealTransform {
 		target.setPosition(source);
 		minAccess.setPosition(source);
 		maxAccess.setPosition(source);
-		final double minPosition = minAccess.get().get();
-		final double maxPosition = maxAccess.get().get();
+		final double minPosition = minAccess.get().getRealDouble();
+		final double maxPosition = maxAccess.get().getRealDouble();
 		final double scale = maxPosition - minPosition;
 
 		target.setPosition((source.getDoublePosition(n) - minPosition) / scale * norm + min, n);
@@ -150,8 +150,8 @@ public class FlattenTransform implements InvertibleRealTransform {
 
 		minAccess.setPosition(target);
 		maxAccess.setPosition(target);
-		final double minPosition = minAccess.get().get();
-		final double maxPosition = maxAccess.get().get();
+		final double minPosition = minAccess.get().getRealDouble();
+		final double maxPosition = maxAccess.get().getRealDouble();
 		final double scale = maxPosition - minPosition;
 
 		source[n] = (target[n] - min) / norm * scale + minPosition;
@@ -166,8 +166,8 @@ public class FlattenTransform implements InvertibleRealTransform {
 
 		minAccess.setPosition(target);
 		maxAccess.setPosition(target);
-		final double minPosition = minAccess.get().get();
-		final double maxPosition = maxAccess.get().get();
+		final double minPosition = minAccess.get().getRealDouble();
+		final double maxPosition = maxAccess.get().getRealDouble();
 		final double scale = maxPosition - minPosition;
 
 		source.setPosition((target.getDoublePosition(n) - min) / norm * scale + minPosition, n);
@@ -180,8 +180,8 @@ public class FlattenTransform implements InvertibleRealTransform {
 	}
 
 	@Override
-	public FlattenTransform copy() {
+	public FlattenTransform<T> copy() {
 
-		return new FlattenTransform(minAccessible, maxAccessible, min, min + norm);
+		return new FlattenTransform<>(minAccessible, maxAccessible, min, min + norm);
 	}
 }

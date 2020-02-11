@@ -55,14 +55,23 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
+import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import scala.Tuple2;
 
 /**
- * Align a 3D N5 dataset.
+ * Warp an image series so that the first image in the series is fully warped
+ * and the last one is not (well, almost not, just the last step before 0).
+ *
+ *
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
+@Command(
+		name = "SparkWarpPhaseOutImageSeries",
+		mixinStandardHelpOptions = true,
+		version = "0.0.4-SNAPSHOT",
+		description = "Warp an image series so that the first image in the series is fully warped and the last one is not (well, almost not, just the last step before 0).")
 public class SparkWarpPhaseOutImageSeries implements Callable<Void>, Serializable {
 
 	@Option(names = "--formatInput", required = true, description = "format string for input images, e.g. ")
