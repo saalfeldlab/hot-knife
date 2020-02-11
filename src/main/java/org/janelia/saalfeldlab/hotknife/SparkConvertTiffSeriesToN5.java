@@ -19,10 +19,14 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -105,17 +109,24 @@ public class SparkConvertTiffSeriesToN5 {
 				else
 					parseCSLongArray(minString, min);
 
-				System.out.println(String.format(urlFormat, firstSliceIndex + min[2]));
+				final String firstSlicePathName = String.format(urlFormat, firstSliceIndex + min[2]);
+				System.out.println("first slice image: " + firstSlicePathName);
 
 				/* width and height */
-				final ImagePlus firstSlice = new Opener().openImage(String.format(urlFormat, firstSliceIndex + min[2]));
+				final ImagePlus firstSlice = new Opener().openImage(firstSlicePathName);
 				sourceSize[0] = firstSlice.getWidth();
 				sourceSize[1] = firstSlice.getHeight();
 
 				/* depth */
-				final File[] tiffs = new File(urlFormat).getParentFile().listFiles(
-						(dir, file) -> file.endsWith(urlFormat.substring(urlFormat.lastIndexOf('.'))));
-				sourceSize[2] = tiffs.length;
+				final File imageDirectory = new File(urlFormat).getParentFile();
+				final String imageExtension = urlFormat.substring(urlFormat.lastIndexOf('.'));
+				final List<String> sortedImagePathNames = Files.list(imageDirectory.toPath())
+						.map(Path::toString)
+						.filter(pathString -> pathString.endsWith(imageExtension))
+						.sorted()
+						.collect(Collectors.toList());
+				final int firstSliceImageIndex = sortedImagePathNames.indexOf(firstSlicePathName);
+				sourceSize[2] = sortedImagePathNames.size() - firstSliceImageIndex;
 
 				if (sizeString == null) {
 					size[0] = sourceSize[0] - min[0];
@@ -144,7 +155,7 @@ public class SparkConvertTiffSeriesToN5 {
 				}
 
 				parsedSuccessfully = true;
-			} catch (final CmdLineException e) {
+			} catch (final Exception e) {
 				System.err.println(e.getMessage());
 				parser.printUsage(System.err);
 			}
