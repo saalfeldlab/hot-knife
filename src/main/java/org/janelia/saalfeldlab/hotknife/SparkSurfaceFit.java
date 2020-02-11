@@ -99,14 +99,29 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Option(names = {"-i", "--n5CostInput"}, required = true, description = "N5 input group for cost, e.g. /cost-0")
 	private String inGroup = null;
 
+	@Option(names = {"--n5Raw"}, description = "N5 input group for cost, e.g. /raw")
+	private String rawGroup = null;
+
 	@Option(names = {"-o", "--n5SurfaceOutput"}, required = true, description = "N5 output group for , e.g. /surface-1")
 	private String outGroup = null;
 
-	@Option(names = {"-s", "--scale"}, description = "scale index, e.g. 10")
-	private int scaleIndex = 0;
+	@Option(names = {"--firstScale"}, description = "initial scale index, e.g. 8")
+	private int firstScaleIndex = 0;
+
+	@Option(names = {"--lastScale"}, description = "terminal scale index, e.g. 1")
+	private int lastScaleIndex = 0;
 
 	@Option(names = {"-z", "--maxDeltaZ"}, description = "maximum slope of the surface in original pixels, e.g. 0.25")
 	private double maxDeltaZ = 0.25;
+
+	@Option(names = {"--initMaxDeltaZ"}, description = "maximum slope of the surface in original pixels in the first scale level (initialization), e.g. 0.25")
+	private double initMaxDeltaZ = 0.25;
+
+	@Option(names = {"--minDistance"}, description = "minimum distance between the both surfaces, e.g. 1000")
+	private double minDistance = 1;
+
+	@Option(names = {"--maxDistance"}, description = "maximum distance between the both surfaces, e.g. 3500")
+	private double maxDistance = Double.MAX_VALUE;
 
 	/**
 	 * Mask (0) all voxel z-columns with all equal cost.
@@ -122,7 +137,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final T reference = net.imglib2.util.Util.getTypeFromInterval(cost).createVariable();
 		final ArrayCursor<UnsignedByteType> maskCursor = mask.cursor();
 		final long depth = cost.dimension(2);
-		final Cursor<GenericComposite<T>> costCursor = Views.flatIterable(Views.collapse(cost)).cursor();
+		final Cursor<? extends GenericComposite<T>> costCursor = Views.flatIterable(Views.collapse(cost)).cursor();
 		while (maskCursor.hasNext()) {
 			final UnsignedByteType maskValue = maskCursor.next();
 			final GenericComposite<T> costValue = costCursor.next();
@@ -808,8 +823,6 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final int numProc = Runtime.getRuntime().availableProcessors();
 		final SharedQueue queue = new SharedQueue(Math.min(24, Math.max(1, numProc - 2)));
 
-		final String rawGroup = "/zcorr/Sec06___20200130_110551";
-
 		final int numScales = n5.list(rawGroup).length;
 		final double[][] scales = new double[numScales][];
 		@SuppressWarnings("unchecked")
@@ -856,7 +869,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		{
 			final N5Writer n5Writer = new N5FSWriter(n5FieldPath);
 
-			final String dataset = inGroup + "/s" + scaleIndex;
+			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
 			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
@@ -876,9 +889,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
 					inpaintedCost,
 					mask,
-					(int)Math.max(1, Math.round(dzScale * maxDeltaZ)),
-					1,
-					(int)inpaintedCost.dimension(2) - 1,
+					(int)Math.max(1, Math.round(dzScale * initMaxDeltaZ)),
+					(int)Math.ceil(minDistance / downsamplingFactors[2]),
+					Math.min((int)inpaintedCost.dimension(2) - 1, (int)Math.ceil(maxDistance / downsamplingFactors[2])),
 					2);
 
 			minAvg = weightedAverage(Views.iterable(heightFields[0]), Views.iterable(mask));
@@ -897,7 +910,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			System.out.println(minAvg + ", " + maxAvg);
 
-			final String groupName = outGroup + "/s" + scaleIndex;
+			final String groupName = outGroup + "/s" + firstScaleIndex;
 			n5Writer.createGroup(groupName);
 			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
 			final String minDataset = groupName + "/min";
@@ -908,7 +921,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
 		}
 
-		for (int s = scaleIndex - 1; s > scaleIndex - 7; --s) {
+		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
 
 			final String dataset = inGroup + "/s" + s;
 			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
@@ -1000,7 +1013,11 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	public Void callSparkAndVisualizae() throws IOException {
+	@Override
+	public Void call() throws IOException {
+//	public Void callSparkAndVisualization() throws IOException {
+
+		new ImageJ();
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -1016,8 +1033,6 @@ public class SparkSurfaceFit implements Callable<Void>{
 		 */
 		final int numProc = Runtime.getRuntime().availableProcessors();
 		final SharedQueue queue = new SharedQueue(Math.min(24, Math.max(1, numProc - 2)));
-
-		final String rawGroup = "/zcorr/Sec06___20200130_110551";
 
 		final int numScales = n5.list(rawGroup).length;
 		final double[][] scales = new double[numScales][];
@@ -1065,7 +1080,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		{
 			final N5Writer n5Writer = new N5FSWriter(n5FieldPath);
 
-			final String dataset = inGroup + "/s" + scaleIndex;
+			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
 			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
@@ -1085,9 +1100,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
 					inpaintedCost,
 					mask,
-					(int)Math.max(1, Math.round(dzScale * maxDeltaZ)),
-					1,
-					(int)inpaintedCost.dimension(2) - 1,
+					(int)Math.max(1, Math.round(dzScale * initMaxDeltaZ)),
+					(int)Math.ceil(minDistance / downsamplingFactors[2]),
+					Math.min((int)inpaintedCost.dimension(2) - 1, (int)Math.ceil(maxDistance / downsamplingFactors[2])),
 					2);
 
 			minAvg = weightedAverage(Views.flatIterable(heightFields[0]), Views.flatIterable(mask));
@@ -1106,7 +1121,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 				maxField = heightFields[1];
 			}
 
-			final String groupName = outGroup + "/s" + scaleIndex;
+			final String groupName = outGroup + "/s" + firstScaleIndex;
 			n5Writer.createGroup(groupName);
 			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
 			final String minDataset = groupName + "/min";
@@ -1117,7 +1132,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
 		}
 
-		for (int s = scaleIndex - 1; s > scaleIndex - 9; --s) {
+		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
 
 			final long[] blockSize = new long[] {128, 128};
 			final long[] blockPadding = new long[] {32, 32};
@@ -1181,8 +1196,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	@Override
-	public Void call() throws IOException {
+	public Void callSpark() throws IOException {
+//	@Override
+//	public Void call() throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -1201,7 +1217,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		{
 			final N5Writer n5Writer = new N5FSWriter(n5FieldPath);
 
-			final String dataset = inGroup + "/s" + scaleIndex;
+			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
 			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
@@ -1221,9 +1237,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
 					inpaintedCost,
 					mask,
-					(int)Math.max(1, Math.round(dzScale * maxDeltaZ)),
-					1,
-					(int)inpaintedCost.dimension(2) - 1,
+					(int)Math.max(1, Math.round(dzScale * initMaxDeltaZ)),
+					(int)Math.ceil(minDistance / downsamplingFactors[2]),
+					Math.min((int)inpaintedCost.dimension(2) - 1, (int)Math.ceil(maxDistance / downsamplingFactors[2])),
 					2);
 
 			minAvg = weightedAverage(Views.flatIterable(heightFields[0]), Views.flatIterable(mask));
@@ -1242,7 +1258,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 				maxField = heightFields[1];
 			}
 
-			final String groupName = outGroup + "/s" + scaleIndex;
+			final String groupName = outGroup + "/s" + firstScaleIndex;
 			n5Writer.createGroup(groupName);
 			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
 			final String minDataset = groupName + "/min";
@@ -1253,7 +1269,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
 		}
 
-		for (int s = scaleIndex - 1; s > scaleIndex - 9; --s) {
+		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
 
 			final long[] blockSize = new long[] {128, 128};
 			final long[] blockPadding = new long[] {32, 32};
@@ -1278,8 +1294,6 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
-
-		new ImageJ();
 
 		CommandLine.call(new SparkSurfaceFit(), args);
 	}
