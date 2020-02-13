@@ -1013,9 +1013,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	@Override
-	public Void call() throws IOException {
-//	public Void callSparkAndVisualization() throws IOException {
+//	@Override
+//	public Void call() throws IOException {
+	public Void callSparkAndVisualization() throws IOException {
 
 		new ImageJ();
 
@@ -1196,9 +1196,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	public Void callSpark() throws IOException {
-//	@Override
-//	public Void call() throws IOException {
+//	public Void callSpark() throws IOException {
+	@Override
+	public Void call() throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
