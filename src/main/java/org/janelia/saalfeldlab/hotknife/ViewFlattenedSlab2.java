@@ -63,7 +63,7 @@ public class ViewFlattenedSlab2 implements Callable<Void>{
 	@Option(names = {"--n5Field"}, required = true, description = "N5 fields group, e.g. /surface-1")
 	private String fieldGroup = null;
 
-	@Option(names = {"--scale"}, required = true, description = "initial scale index, e.g. 1")
+	@Option(names = {"--scale"}, required = true,  split=",", description = "initial scale index, e.g. 1")
 	private int[] scaleIndices = null;
 
 	private boolean useVolatile = true;
