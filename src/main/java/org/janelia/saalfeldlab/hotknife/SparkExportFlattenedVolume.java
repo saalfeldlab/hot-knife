@@ -17,6 +17,7 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 
@@ -46,8 +47,7 @@ import picocli.CommandLine.Option;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
-public class SparkExportFlattenedVolume implements Callable<Void> {
-
+public class SparkExportFlattenedVolume implements Callable<Void>, Serializable {
 
 	@Option(names = {"--n5RawPath"}, required = true, description = "N5 raw input path, e.g. /nrs/flyem/tmp/VNC.n5")
 	private String n5RawInputPath = null;
@@ -70,8 +70,8 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 	@Option(names = {"--padding"}, required = false, description = "padding beyond flattening field min and max in px, e.g. 20")
 	private int padding = 0;
 
-	@Option(names = "--blockSize", required = false, description = "Size of output blocks, e.g. 128,128,128")
-	private final int[] blockSize = new int[] {128, 128, 128};
+	@Option(names = "--blockSize", required = false, split=",", description = "Size of output blocks, e.g. 128,128,128")
+	private int[] blockSize = new int[] {128, 128, 128};
 
 	@Override
 	public Void call() throws IOException {
@@ -81,7 +81,7 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 		sc.setLogLevel("ERROR");
 
 		final int[] rawBlockSize;
-		final DatasetAttributes attributes;
+		final long[] dimensions;
 		final String minFieldName;
 		final String maxFieldName;
 		final double[] downsamplingFactors;
@@ -101,13 +101,20 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 			min = (minAvg + 0.5) * downsamplingFactors[2] - 0.5;
 			max = (maxAvg + 0.5) * downsamplingFactors[2] - 0.5;
 
-			attributes = n5RawReader.getDatasetAttributes(rawDataset);
+			final DatasetAttributes attributes = n5RawReader.getDatasetAttributes(rawDataset);
 			rawBlockSize = attributes.getBlockSize();
+			final long[] rawDimensions = attributes.getDimensions();
+
+			dimensions = new long[] {
+					rawDimensions[0],
+					rawDimensions[2],
+					Math.round(max + padding) - Math.round(min - padding)
+			};
 
 			final N5Writer n5Writer = new N5FSWriter(n5OutPath);
 			n5Writer.createDataset(
 					outDataset,
-					attributes.getDimensions(),
+					dimensions,
 					blockSize,
 					attributes.getDataType(),
 					attributes.getCompression());
@@ -120,7 +127,7 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 		final JavaRDD<long[][]> rdd =
 				sc.parallelize(
 						Grid.create(
-								attributes.getDimensions(),
+								dimensions,
 								gridBlockSize,
 								blockSize));
 
@@ -148,13 +155,14 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 							max);
 
 					final RandomAccessibleInterval<UnsignedByteType> flattened =
-							Transform.createTransformedInterval(
-									rawVolume,
-									new FinalInterval(
-											new long[] {rawVolume.min(0), rawVolume.min(1), (int)Math.round(min - padding)},
-											new long[] {rawVolume.max(0), rawVolume.max(1), (int)Math.round(max + padding)}),
-									flattenTransform,
-									new UnsignedByteType());
+							Views.zeroMin(
+									Transform.createTransformedInterval(
+										rawVolume,
+										new FinalInterval(
+												new long[] {rawVolume.min(0), rawVolume.min(1), (int)Math.round(min - padding)},
+												new long[] {rawVolume.max(0), rawVolume.max(1), (int)Math.round(max + padding)}),
+										flattenTransform.inverse(),
+										new UnsignedByteType()));
 
 					final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
 					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDataset, gridBlock[2]);
@@ -167,6 +175,6 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 
 	public static final void main(final String... args) {
 
-		CommandLine.call(new SparkSurfaceFit(), args);
+		CommandLine.call(new SparkExportFlattenedVolume(), args);
 	}
 }
