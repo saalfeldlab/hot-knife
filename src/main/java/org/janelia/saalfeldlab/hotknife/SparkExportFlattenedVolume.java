@@ -88,8 +88,8 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 		final double min;
 		final double max;
 		{
-			final N5Writer n5RawReader = new N5FSWriter(n5RawInputPath);
-			final N5Writer n5FieldReader = new N5FSWriter(n5FieldPath);
+			final N5Reader n5RawReader = new N5FSReader(n5RawInputPath);
+			final N5Reader n5FieldReader = new N5FSReader(n5FieldPath);
 
 			minFieldName = fieldGroup + "/min";
 			maxFieldName = fieldGroup + "/max";
@@ -127,7 +127,7 @@ public class SparkExportFlattenedVolume implements Callable<Void> {
 		rdd.foreach(
 				gridBlock -> {
 					final N5Reader n5RawReader = new N5FSReader(n5RawInputPath);
-					final N5Writer n5FieldReader = new N5FSWriter(n5FieldPath);
+					final N5Reader n5FieldReader = new N5FSReader(n5FieldPath);
 					final N5Writer n5Writer = new N5FSWriter(n5OutPath);
 
 					/* raw */
