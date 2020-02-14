@@ -396,7 +396,7 @@ public class Show {
 
 			final RandomAccessibleInterval<T> transformedSource =
 					Transform.createTransformedInterval(
-							Views.permute(rawMipmaps[s], 1, 2),
+							rawMipmaps[s],
 							rawMipmaps[0],
 							transformSequence,
 							type.createVariable());

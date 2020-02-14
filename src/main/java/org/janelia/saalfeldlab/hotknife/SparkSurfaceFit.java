@@ -62,10 +62,8 @@ import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InverseRealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
-import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.Type;
 import net.imglib2.type.numeric.NumericType;
@@ -806,6 +804,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
+	@SuppressWarnings("unchecked")
 	public Void callSingle() throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
@@ -825,12 +824,11 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final int numScales = n5.list(rawGroup).length;
 		final double[][] scales = new double[numScales][];
-		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
 		for (int s = 0; s < numScales; ++s) {
 
 			final String mipmapName = rawGroup + "/s" + s;
-			rawMipmaps[s] = N5Utils.openVolatile(n5, mipmapName);
+			rawMipmaps[s] = Views.permute((RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName), 1, 2);
 			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
 			if (scale == null)
 				scale = new double[] {1, 1, 1};
@@ -986,16 +984,14 @@ public class SparkSurfaceFit implements Callable<Void>{
 					Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
 					(minAvg + 0.5) * downsamplingFactors[2] - 0.5,
 					(maxAvg + 0.5) * downsamplingFactors[2] - 0.5);
-			final AffineTransform3D permutation = new AffineTransform3D();
-			permutation.set(
-					1, 0, 0, 0,
-					0, 0, 1, 0,
-					0, 1, 0, 0);
-			final RealTransformSequence tfs = new RealTransformSequence();
-			tfs.add(permutation);
-			tfs.add(flattenTransform.inverse());
 
-			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource = Show.createTransformedMipmapSource(tfs, rawMipmaps, scales, voxelDimensions, "" + s);
+			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
+					Show.createTransformedMipmapSource(
+							flattenTransform.inverse(),
+							rawMipmaps,
+							scales,
+							voxelDimensions,
+							"" + s);
 
 			final Source<?> volatileMipmapSource;
 			if (useVolatile)
@@ -1015,6 +1011,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 //	@Override
 //	public Void call() throws IOException {
+	@SuppressWarnings("unchecked")
 	public Void callSparkAndVisualization() throws IOException {
 
 		new ImageJ();
@@ -1036,12 +1033,11 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final int numScales = n5.list(rawGroup).length;
 		final double[][] scales = new double[numScales][];
-		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
 		for (int s = 0; s < numScales; ++s) {
 
 			final String mipmapName = rawGroup + "/s" + s;
-			rawMipmaps[s] = N5Utils.openVolatile(n5, mipmapName);
+			rawMipmaps[s] = Views.permute((RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName), 1, 2);
 			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
 			if (scale == null)
 				scale = new double[] {1, 1, 1};
@@ -1169,16 +1165,14 @@ public class SparkSurfaceFit implements Callable<Void>{
 					Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
 					(minAvg + 0.5) * downsamplingFactors[2] - 0.5,
 					(maxAvg + 0.5) * downsamplingFactors[2] - 0.5);
-			final AffineTransform3D permutation = new AffineTransform3D();
-			permutation.set(
-					1, 0, 0, 0,
-					0, 0, 1, 0,
-					0, 1, 0, 0);
-			final RealTransformSequence tfs = new RealTransformSequence();
-			tfs.add(permutation);
-			tfs.add(flattenTransform.inverse());
 
-			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource = Show.createTransformedMipmapSource(tfs, rawMipmaps, scales, voxelDimensions, "" + s);
+			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
+					Show.createTransformedMipmapSource(
+							flattenTransform.inverse(),
+							rawMipmaps,
+							scales,
+							voxelDimensions,
+							"" + s);
 
 			final Source<?> volatileMipmapSource;
 			if (useVolatile)

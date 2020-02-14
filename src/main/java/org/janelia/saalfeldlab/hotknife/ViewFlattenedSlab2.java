@@ -35,8 +35,6 @@ import bdv.viewer.Source;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.position.FunctionRandomAccessible;
-import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -112,6 +110,7 @@ public class ViewFlattenedSlab2 implements Callable<Void>{
 	}
 
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
@@ -128,12 +127,11 @@ public class ViewFlattenedSlab2 implements Callable<Void>{
 
 		final int numScales = n5.list(rawGroup).length;
 		final double[][] scales = new double[numScales][];
-		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
 		for (int s = 0; s < numScales; ++s) {
 
 			final String mipmapName = rawGroup + "/s" + s;
-			rawMipmaps[s] = N5Utils.openVolatile(n5, mipmapName);
+			rawMipmaps[s] = Views.permute((RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName), 1, 2);
 			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
 			if (scale == null)
 				scale = new double[] {1, 1, 1};
@@ -177,16 +175,14 @@ public class ViewFlattenedSlab2 implements Callable<Void>{
 					Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
 					min,
 					max);
-			final AffineTransform3D permutation = new AffineTransform3D();
-			permutation.set(
-					1, 0, 0, 0,
-					0, 0, 1, 0,
-					0, 1, 0, 0);
-			final RealTransformSequence tfs = new RealTransformSequence();
-			tfs.add(permutation);
-			tfs.add(flattenTransform.inverse());
 
-			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource = Show.createTransformedMipmapSource(tfs, rawMipmaps, scales, voxelDimensions, "flattened raw " + s);
+			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
+					Show.createTransformedMipmapSource(
+							flattenTransform.inverse(),
+							rawMipmaps,
+							scales,
+							voxelDimensions,
+							"flattened raw " + s);
 
 			final Source<?> volatileMipmapSource;
 			if (useVolatile)
@@ -201,7 +197,7 @@ public class ViewFlattenedSlab2 implements Callable<Void>{
 			final IntervalView<DoubleType> zRange = Views.interval(
 					zRange(minAvg, maxAvg, 255, 1),
 					new long[] {0, 0, Math.round(min) - padding},
-					new long[] {rawMipmaps[0].dimension(0), rawMipmaps[0].dimension(2), Math.round(max) + padding});
+					new long[] {rawMipmaps[0].dimension(0), rawMipmaps[0].dimension(1), Math.round(max) + padding});
 
 			final RandomAccessibleInterval<DoubleType> transformedSource =
 					Transform.createTransformedInterval(
@@ -210,7 +206,7 @@ public class ViewFlattenedSlab2 implements Callable<Void>{
 							flattenTransform,
 							new DoubleType(0));
 
-			bdv = BdvFunctions.show(Views.permute(transformedSource, 1, 2), "flat field " + s, BdvOptions.options().addTo(bdv));
+			bdv = BdvFunctions.show(transformedSource, "flat field " + s, BdvOptions.options().addTo(bdv));
 			bdv.setDisplayRangeBounds(0, 255);
 			bdv.setDisplayRange(0, 255);
 			bdv.setColor(new ARGBType(0xff00ff00));
