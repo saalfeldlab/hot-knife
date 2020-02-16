@@ -340,9 +340,15 @@ public class SparkGenerateFaceScaleSpace {
 		n5.createGroup(options.getOutputGroupName());
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(options.getInputDatasetName());
+		final long[] dimensions = attributes.getDimensions();
 
 		/* downsample */
 		final long[] min = options.getMin().clone();
+		for (int d = 0; d < min.length; ++d) {
+			if (min[d] < 0) {
+				min[d] = dimensions[d] - 1 - min[d];
+			}
+		}
 		final long[] size = options.getSize().clone();
 		String sourceDatasetName = options.getInputDatasetName();
 		for (int scaleIndex = 1; scaleIndex < 10; ++scaleIndex) {
