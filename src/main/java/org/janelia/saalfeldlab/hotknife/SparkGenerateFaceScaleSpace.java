@@ -108,9 +108,13 @@ public class SparkGenerateFaceScaleSpace {
 				} else
 					parseCSLongArray(sizeString, size);
 
-				/* default min and size for -1 fields */
+				/* absolute coordinates for negative min */
+				for (int i = 0; i < min.length; ++i) {
+					if (min[i] < 0) min[i] = sourceSize[i] + min[i] - 1;
+				}
+
+				/* default size for 0 fields */
 				for (int i = 0; i < size.length; ++i) {
-					if (min[i] == 0) min[i] = 0;
 					if (size[i] == 0) size[i] = sourceSize[i] - min[i];
 				}
 
@@ -229,7 +233,7 @@ public class SparkGenerateFaceScaleSpace {
 					for (int d = 0; d < min.length; ++d) {
 						if (size[d] < 0) {
 							absMin[d] = min[d] + size[d];
-							absSize[d] = min[d] - absMin[d];
+							absSize[d] = -size[d];
 						}
 						else {
 							absMin[d] = min[d];
@@ -278,7 +282,7 @@ public class SparkGenerateFaceScaleSpace {
 		for (int d = 0; d < min.length; ++d) {
 			if (size[d] < 0) {
 				absMin[d] = min[d] + size[d];
-				absSize[d] = min[d] - absMin[d];
+				absSize[d] = -size[d];
 			}
 			else {
 				absMin[d] = min[d];
@@ -340,15 +344,9 @@ public class SparkGenerateFaceScaleSpace {
 		n5.createGroup(options.getOutputGroupName());
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(options.getInputDatasetName());
-		final long[] dimensions = attributes.getDimensions();
 
 		/* downsample */
 		final long[] min = options.getMin().clone();
-		for (int d = 0; d < min.length; ++d) {
-			if (min[d] < 0) {
-				min[d] = dimensions[d] - 1 - min[d];
-			}
-		}
 		final long[] size = options.getSize().clone();
 		String sourceDatasetName = options.getInputDatasetName();
 		for (int scaleIndex = 1; scaleIndex < 10; ++scaleIndex) {
