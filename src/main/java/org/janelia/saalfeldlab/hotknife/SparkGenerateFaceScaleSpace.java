@@ -286,7 +286,7 @@ public class SparkGenerateFaceScaleSpace {
 			}
 		}
 
-		final long[] outDimensions = new long[]{absSize[0], absSize[2]};
+		final long[] outDimensions = new long[]{absSize[0], absSize[1]};
 
 		n5.createDataset(
 				outDatasetName,
@@ -320,7 +320,7 @@ public class SparkGenerateFaceScaleSpace {
 							roi = Views.invertAxis(roi, d);
 
 					final IntervalView<FloatType> zeroMin = Views.zeroMin(roi);
-					final IntervalView<FloatType> face = Views.hyperSlice(zeroMin, 1, 0);
+					final IntervalView<FloatType> face = Views.hyperSlice(zeroMin, 2, 0);
 					final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(face, gridBlock[0], gridBlock[1]);
 					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
 				});

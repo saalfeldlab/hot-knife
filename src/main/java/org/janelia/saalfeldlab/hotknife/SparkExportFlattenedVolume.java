@@ -111,7 +111,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 					Math.round(max + padding) - Math.round(min - padding)
 			};
 
-			final N5Writer n5Writer = new N5FSWriter(n5OutPath);
+			final N5FSWriter n5Writer = new N5FSWriter(n5OutPath);
 			n5Writer.createDataset(
 					outDataset,
 					dimensions,
