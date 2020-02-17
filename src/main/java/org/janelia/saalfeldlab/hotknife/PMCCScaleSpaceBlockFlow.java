@@ -20,10 +20,8 @@ import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.array.ArrayRandomAccess;
-import net.imglib2.img.basictypeaccess.array.DoubleArray;
+import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.basictypeaccess.array.IntArray;
-import net.imglib2.img.planar.PlanarImg;
-import net.imglib2.img.planar.PlanarImgs;
 import net.imglib2.interpolation.InterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.position.RealPositionRealRandomAccessible;
@@ -238,29 +236,25 @@ public class PMCCScaleSpaceBlockFlow
 		}
 	}
 
-	private static final DeformationFieldTransform< DoubleType > createDeformationFieldTransform(
+	private static final DeformationFieldTransform< FloatType > createDeformationFieldTransform(
 			final FloatProcessor shiftX,
 			final FloatProcessor shiftY,
-			final InterpolatorFactory< DoubleType, RandomAccessible< DoubleType > > interpolatorFactory )
+			final InterpolatorFactory< FloatType, RandomAccessible< FloatType > > interpolatorFactory )
 	{
-		final PlanarImg< DoubleType, DoubleArray > data = PlanarImgs.doubles( shiftX.getWidth(), shiftX.getHeight(), 2 );
-		final float[] floatXPixels = ( float[] )shiftX.getPixels();
-		int i = 0;
-		for ( final DoubleType t : Views.flatIterable( Views.hyperSlice( data, 2, 0 ) ) )
-			t.set( floatXPixels[ i++ ] );
-		final float[] floatYPixels = ( float[] )shiftY.getPixels();
-		i = 0;
-		for ( final DoubleType t : Views.flatIterable( Views.hyperSlice( data, 2, 1 ) ) )
-			t.set( floatYPixels[ i++ ] );
+		final ArrayImg<FloatType, FloatArray> imgX = ArrayImgs.floats((float[])shiftX.getPixels(), shiftX.getWidth(), shiftX.getHeight());
+		final ArrayImg<FloatType, FloatArray> imgY = ArrayImgs.floats((float[])shiftY.getPixels(), shiftY.getWidth(), shiftY.getHeight());
 
 		return new DeformationFieldTransform<>(
 				Views.interpolate(
-						Views.extendBorder( data ),
-						interpolatorFactory ) );
+						Views.extendBorder(imgX),
+						interpolatorFactory),
+				Views.interpolate(
+						Views.extendBorder(imgY),
+						interpolatorFactory));
 	}
 
 
-	public static final DeformationFieldTransform< DoubleType > createDeformationFieldTransform(
+	public static final DeformationFieldTransform< FloatType > createDeformationFieldTransform(
 			final FloatProcessor shiftX,
 			final FloatProcessor shiftY )
 	{
@@ -362,7 +356,7 @@ public class PMCCScaleSpaceBlockFlow
 			shiftYFloat.copyBits( divisionWeights, 0, 0, Blitter.DIVIDE );
 
 			/* append deformation field to existing transformation */
-			final DeformationFieldTransform< DoubleType > deformationField = createDeformationFieldTransform(
+			final DeformationFieldTransform< FloatType > deformationField = createDeformationFieldTransform(
 					shiftXFloat,
 					shiftYFloat );
 
