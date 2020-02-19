@@ -9,8 +9,8 @@ CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace
 N_NODES=10
 
 N5PATH='/nrs/flyem/tmp/VNC-align.n5'
-N5DATASETINPUT='/align/slab-22/raw/s0'
-N5GROUPOUTPUT='/align/slab-22/bot'
+N5DATASETINPUT='align/slab-6/raw/s0'
+N5GROUPOUTPUT='align/slab-6/bot'
 MIN='0,0,-23'
 SIZE='0,0,-512'
 BLOCKSIZE='1024,1024'
@@ -23,4 +23,4 @@ ARGV="\
 --size '$SIZE' \
 --blockSize '$BLOCKSIZE'"
 
-TERMINATE=1 LSF_PROJECT="flyem" $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
+TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV

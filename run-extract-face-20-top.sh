@@ -6,13 +6,13 @@ ABS_DIR=`readlink -f "$OWN_DIR"`
 FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh
 JAR=$PWD/hot-knife-0.0.4-SNAPSHOT.jar
 CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace
-N_NODES=20
+N_NODES=10
 
-N5PATH='/nrs/flyem/data/tmp/Z1217-19m/VNC.n5'
-N5DATASETINPUT='/slab-20/raw/s0'
-N5GROUPOUTPUT='/slab-20/top'
-MIN='0,26,0'
-SIZE='0,512,0'
+N5PATH='/nrs/flyem/tmp/VNC-align.n5'
+N5DATASETINPUT='/align/slab-20/raw/s0'
+N5GROUPOUTPUT='/align/slab-20/top'
+MIN='0,0,23'
+SIZE='0,0,512'
 BLOCKSIZE='1024,1024'
 
 ARGV="\
@@ -23,4 +23,4 @@ ARGV="\
 --size '$SIZE' \
 --blockSize '$BLOCKSIZE'"
 
-TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
+TERMINATE=1 LSF_PROJECT="flyem" $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
