@@ -8,9 +8,9 @@ JAR=$PWD/hot-knife-0.0.4-SNAPSHOT.jar
 CLASS=org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage
 N_NODES=20
 
-N5_PATH='/nrs/flyem/data/tmp/Z1217-19m/VNC.n5'
-N5_GROUP_INPUT='/align-5'
-N5_GROUP_OUTPUT='/align-6'
+N5_PATH='/nrs/flyem/tmp/VNC-align.n5'
+N5_GROUP_INPUT='/align/align-5'
+N5_GROUP_OUTPUT='/align/align-6'
 SCALE_INDEX='2'
 STEP_SIZE='512'
 LAMBDA_FILTER='0.25'
@@ -27,5 +27,5 @@ ARGV="\
 --lambdaModel '$LAMBDA_MODEL' \
 --maxEpsilon '$MAX_EPSILON'"
 
-TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
+TERMINATE=1 LSF_PROJECT="flyem" $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
 
