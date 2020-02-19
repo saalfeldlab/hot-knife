@@ -171,6 +171,12 @@ public class ViewAlignedSlabSeries {
 
 		for (int i = 0; i < datasetNames.size(); ++i) {
 
+			final String datasetName = datasetNames.get(i);
+			final long[] dimensions = n5.getAttribute(datasetName + "/s0", "dimensions", long[].class);
+			long botOffset = botOffsets.get(i);
+			if (botOffset < 0) botOffset = dimensions[2] + botOffset - 1;
+
+
 			final RealTransform top = Transform.loadScaledTransform(n5, group + "/" + transformDatasetNames[i * 2]);
 			final RealTransform bot = Transform.loadScaledTransform(n5, group + "/" + transformDatasetNames[i * 2 + 1]);
 			final RealTransform transition =
@@ -178,13 +184,11 @@ public class ViewAlignedSlabSeries {
 							top,
 							bot,
 							topOffsets.get(i),
-							botOffsets.get(i));
+							botOffset);
 
 			final FinalInterval cropInterval = new FinalInterval(
 					new long[] {fMin[0], fMin[1], topOffsets.get(i)},
-					new long[] {fMax[0], fMax[1], botOffsets.get(i)});
-
-			final String datasetName = datasetNames.get(i);
+					new long[] {fMax[0], fMax[1], botOffset});
 
 			final int numScales = n5.list(datasetName).length;
 
@@ -205,7 +209,7 @@ public class ViewAlignedSlabSeries {
 				transformSequence.add(scale3D);
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
-								Views.permute(source, 1, 2),
+								source,
 								cropInterval,
 								transformSequence,
 								new UnsignedByteType(0));
@@ -238,7 +242,7 @@ public class ViewAlignedSlabSeries {
 
 			bdv = Show.mipmapSource(transformedVolatileMipmapSource, bdv);
 
-			zOffset += botOffsets.get(i) - topOffsets.get(i) + 1;
+			zOffset += botOffset - topOffsets.get(i) + 1;
 		}
 
 		return bdv;
