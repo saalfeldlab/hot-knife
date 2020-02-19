@@ -32,10 +32,15 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import bdv.util.ConstantRandomAccessible;
+import bdv.viewer.Interpolation;
+import bdv.viewer.Source;
+import bdv.viewer.render.DefaultMipmapOrdering;
+import bdv.viewer.render.MipmapOrdering;
 import mpicbg.models.Affine2D;
 import mpicbg.models.InterpolatedAffineModel2D;
 import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
@@ -49,6 +54,7 @@ import net.imglib2.position.RealPositionRealRandomAccessible;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform;
 import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.PositionFieldTransform;
 import net.imglib2.realtransform.RealTransform;
@@ -74,6 +80,111 @@ import net.imglib2.view.Views;
 public class Transform {
 
 	private Transform() {}
+
+	public static class TransformedSource<T> implements Source<T>, MipmapOrdering {
+
+		private final Source<T> source;
+
+		private final String name;
+
+		private final MipmapOrdering sourceMipmapOrdering;
+
+		private final RealTransform transform;
+
+		public TransformedSource(
+				final Source<T> source,
+				final RealTransform transform,
+				final String name) {
+
+			this.source = source;
+			this.name = name;
+			this.transform = transform;
+			sourceMipmapOrdering =
+					MipmapOrdering.class.isInstance(source) ?
+							(MipmapOrdering)source : new DefaultMipmapOrdering(source);
+		}
+
+		@Override
+		public boolean isPresent(final int t) {
+
+			return source.isPresent(t);
+		}
+
+		@Override
+		public RandomAccessibleInterval<T> getSource(final int t, final int level) {
+
+			return Views.interval(
+					Views.raster(
+							getInterpolatedSource(
+									t,
+									level,
+									Interpolation.NEARESTNEIGHBOR)),
+					estimateBoundingInterval(t, level));
+		}
+
+		private Interval estimateBoundingInterval(final int t, final int level) {
+
+			final Interval wrappedInterval = source.getSource(t, level);
+			// TODO: Do something meaningful: apply transform, estimate bounding box, etc.
+			return wrappedInterval;
+		}
+
+		@Override
+		public RealRandomAccessible<T> getInterpolatedSource(
+				final int t,
+				final int level,
+				final Interpolation method) {
+
+			final AffineTransform3D affine = new AffineTransform3D();
+			source.getSourceTransform( t, level, affine );
+			final RealRandomAccessible< T > srcRaTransformed = RealViews.affineReal(source.getInterpolatedSource(t, level, method), affine);
+
+			return new RealTransformRealRandomAccessible<>(srcRaTransformed, transform);
+		}
+
+		@Override
+		public void getSourceTransform(final int t, final int level, final AffineTransform3D transform) {
+
+			transform.identity();
+		}
+
+		@Override
+		public T getType() {
+
+			return source.getType();
+		}
+
+		@Override
+		public String getName() {
+
+			return source.getName() + "-" + name;
+		}
+
+		@Override
+		public VoxelDimensions getVoxelDimensions() {
+
+			return source.getVoxelDimensions();
+		}
+
+		@Override
+		public int getNumMipmapLevels() {
+
+			return source.getNumMipmapLevels();
+		}
+
+		@Override
+		public synchronized MipmapHints getMipmapHints(
+				final AffineTransform3D screenTransform,
+				final int timepoint,
+				final int previousTimepoint) {
+
+			return sourceMipmapOrdering.getMipmapHints(
+					screenTransform,
+					timepoint,
+					previousTimepoint);
+		}
+	}
+
 
 	@SuppressWarnings("serial")
 	public static abstract class AbstractInterpolatedModelSupplier<A extends Model<A>, B extends Model<B>, C extends InterpolatedModel<A, B, C>> implements Supplier<C>, Serializable {
