@@ -1,9 +1,15 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import org.janelia.saalfeldlab.hotknife.ops.GradientCenter;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -13,12 +19,26 @@ import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
+import ij.ImageJ;
+import ij.ImagePlus;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
+import net.imglib2.converter.RealFloatConverter;
+import net.imglib2.exception.ImgLibException;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.iterator.ZeroMinIntervalIterator;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Util;
+import net.imglib2.view.Views;
 import picocli.CommandLine.Option;
 
 public class Cost implements Callable<Void>
@@ -42,15 +62,238 @@ public class Cost implements Callable<Void>
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException
 	{
+		new ImageJ();
 		final MipMapData data = new MipMapData( new N5FSReader(rawN5), datasetName );
 
-		final RandomAccessibleInterval< UnsignedByteType > mipmap = data.getMipmap( 6 );
-		ImageJFunctions.show( mipmap );
+		final int scale = 5; //5: size: (372, 159, 253), t=3d-affine: (32.0, 0.0, 0.0, 15.5, 0.0, 32.0, 0.0, 15.5, 0.0, 0.0, 32.0, 15.5)
 
-		data.display( useVolatile );
-		//displayData( data.openVolatileMipmaps(), data.mipmapScales() );
+		final RandomAccessibleInterval< FloatType > mipmapF =
+				Converters.convert(
+						data.getMipmap( scale ),
+						new RealFloatConverter< UnsignedByteType >(),
+						new FloatType() );
+
+		System.out.println( Util.printInterval( mipmapF ));
+		final Img< FloatType > tmp = ArrayImgs.floats( data.dimensions()[ scale ] );
+
+		cost( mipmapF, tmp, 1 );
+		//Gauss3.gauss( new double[] {5,0,5}, Views.extendZero( mipmapF ), tmp );
+
+		GradientCenter< FloatType > gc = new GradientCenter<>( Views.extendZero( tmp.copy() ), 1, 0.5 );
+		gc.accept( tmp );
+
+		//gc = new GradientCenter<>( Views.extendZero( tmp.copy() ), 1, 0.5 );
+		//gc.accept( tmp );
+
+		imp( tmp ).show();
+		imp( mipmapF ).show();
+
+		//gc.accept( output );
+		//data.display( useVolatile );
 
 		return null;
+	}
+
+	public static void cost( final RandomAccessibleInterval< FloatType > input, final RandomAccessibleInterval< FloatType > output, final int d )
+	{
+		final int numResin = 7; // pixels that are for sure in the resin
+
+		final RandomAccess< FloatType > ra = input.randomAccess();
+		final RandomAccess< FloatType > raOut = output.randomAccess();
+
+		final long[] pos = new long[ 3 ];
+
+		for ( int z = 0; z < input.dimension( 2 ); ++z )
+		{
+			System.out.println( "z: " + z );
+			pos[ 2 ] = z;
+
+			final ArrayList< Float > values = new ArrayList<>();
+
+			for ( int x = 0; x < input.dimension(  0  ); ++x )
+			{
+				pos[ 0 ] = x;
+				pos[ 1 ] = 0;
+
+				ra.setPosition( pos );
+
+				int count = 0;
+
+				for ( int y = 0; y < input.dimension( d ); ++y )
+				{
+					final float v = ra.get().get();
+					ra.fwd( d );
+
+					if ( v == 0.0 )
+						continue;
+
+					if ( ++count == 1 ) // skip one pixel
+						continue;
+
+					if ( count >= numResin )
+						break;
+
+					values.add( v );
+				}
+
+				/*
+				pos[ 0 ] = x;
+				pos[ 1 ] = 0;
+				ra.setPosition( pos );
+				count = 0;
+
+				for ( int y = (int)input.dimension( d ) - 1; y >= 0; --y )
+				{
+					final float v = ra.get().get();
+					ra.bck( d );
+
+					if ( v == 0.0 )
+						continue;
+
+					if ( ++count == 1 ) // skip one pixel
+						continue;
+
+					if ( count >= numResin )
+						break;
+
+					values.add( v );
+				}*/
+			}
+
+			final double avg = avg( values );
+			final double stDev = stDev( values, avg );
+
+			System.out.println( "avg = " + avg + ", stDev = " + stDev );
+
+			for ( int x = 0; x < input.dimension(  0  ); ++x )
+			{
+				pos[ 0 ] = x;
+				pos[ 1 ] = 0;
+
+				ra.setPosition( pos );
+				int count = 0;
+
+				float last = 0;
+
+				for ( int y = 0; y < input.dimension( d )/2; ++y )
+				{
+					final float v = ra.get().get();
+					ra.fwd( d );
+
+					if ( v == 0.0 )
+						continue;
+
+					if ( ++count == 1 ) // skip one pixel
+						continue;
+
+					final double diff = avg - v;
+					
+					if ( diff > stDev/2 )
+					{
+						raOut.setPosition( ra );
+						raOut.get().set( (float)( (diff/stDev) ) );
+					}
+				}
+			}
+		}
+
+		/*
+		final long[] dim = new long[ input.numDimensions() ];
+		input.dimensions( dim );
+		dim[ d ] = 1;
+
+
+		ZeroMinIntervalIterator it = new ZeroMinIntervalIterator( dim );
+
+
+		while ( it.hasNext() )
+		{
+			it.fwd();
+
+			ra.setPosition( it );
+
+			int count = 0;
+
+			for ( int i = 0; i < input.dimension( d ) / 2; ++i )
+			{
+				final float v = ra.get().get();
+				ra.fwd( d );
+
+				if ( v == 0.0 )
+					continue;
+
+				if ( ++count == 1 ) // skip one pixel
+					continue;
+
+				if ( count >= numResin )
+					break;
+
+				values.add( v );
+				//raOut.setPosition( ra );
+				//raOut.get().setOne();
+			}
+		}
+
+		final double avg = avg( values );
+		final double stDev = stDev( values, avg );
+
+		System.out.println( "avg = " + avg );
+		System.out.println( "stDev = " + stDev );
+
+		it = new ZeroMinIntervalIterator( dim );
+		final RandomAccess< FloatType > raOut = output.randomAccess();
+
+		while ( it.hasNext() )
+		{
+			it.fwd();
+
+			ra.setPosition( it );
+
+			int count = 0;
+
+			for ( int i = 0; i < input.dimension( d ) / 2; ++i )
+			{
+				final float v = ra.get().get();
+				ra.fwd( d );
+
+				if ( v == 0.0 )
+					continue;
+
+				if ( ++count == 1 ) // skip one pixel
+					continue;
+
+				final double diff = avg - v;
+				
+				if ( diff > stDev )
+				{
+					raOut.setPosition( ra );
+					raOut.get().set( (float)Math.pow( diff, 2) );
+				}
+			}
+		}*/
+	}
+
+	public static double avg( final List< Float > values )
+	{
+		final double size = values.size();
+		double avg = 0;
+
+		for ( final double v : values )
+			avg += v / size;
+
+		return avg;
+	}
+
+	public static double stDev( final List< Float > values, final double avg )
+	{
+		double stDev = 0;
+		
+		for ( final double value : values )
+			stDev += (avg - value) * (avg - value );
+		
+		stDev /= (double) values.size();
+		
+		return Math.sqrt( stDev );
 	}
 
 	public class MipMapData
@@ -187,6 +430,109 @@ public class Cost implements Callable<Void>
 
 			return bdv;
 		}
+	}
+
+	final static ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+
+	public static < T extends RealType< T > & NativeType< T > > ImagePlus imp( final RandomAccessibleInterval< T > img )
+	{
+		return imp( img, true, img.toString(), Double.NaN, Double.NaN, service );
+	}
+
+	public static < T extends RealType< T > & NativeType< T > > ImagePlus imp(
+			final RandomAccessibleInterval< T > img,
+			final double min,
+			final double max )
+	{
+		return imp( img, true, img.toString(), min, max, service );
+	}
+
+	@SuppressWarnings("unchecked")
+	public static < T extends RealType< T > & NativeType< T > > ImagePlus imp(
+			final RandomAccessibleInterval< T > img,
+			final boolean virtualDisplay,
+			final String title,
+			final double min,
+			final double max,
+			final ExecutorService service )
+	{
+		ImagePlus imp = null;
+
+		if ( img instanceof ImagePlusImg )
+			try { imp = ((ImagePlusImg<T, ?>)img).getImagePlus(); } catch (ImgLibException e) {}
+
+		if ( imp == null )
+		{
+			if ( virtualDisplay )
+				imp = ImageJFunctions.wrap( img, title, service );
+			else
+				imp = ImageJFunctions.wrap( img, title, service ).duplicate();
+		}
+
+		final double[] minmax = getFusionMinMax( img, min, max );
+
+		imp.setTitle( title );
+		imp.setDimensions( 1, (int)img.dimension( 2 ), 1 );
+		imp.setDisplayRange( minmax[ 0 ], minmax[ 1 ] );
+
+		return imp;
+	}
+
+	public static < T extends RealType< T > > double[] getFusionMinMax(
+			final RandomAccessibleInterval<T> img,
+			final double min,
+			final double max )
+	{
+		final double[] minmax;
+
+		if ( Double.isNaN( min ) || Double.isNaN( max ) )
+			minmax = minMaxApprox( img );
+		else if ( min == 0 && max == 65535 )
+		{
+			// 16 bit input was assumed, little hack in case it was 8-bit
+			minmax = minMaxApprox( img );
+			if ( minmax[ 1 ] <= 255 )
+			{
+				minmax[ 0 ] = 0;
+				minmax[ 1 ] = 255;
+			}
+		}
+		else
+			minmax = new double[]{ (float)min, (float)max };
+
+		return minmax;
+	}
+
+	public static < T extends RealType< T > > double[] minMaxApprox( final RandomAccessibleInterval< T > img )
+	{
+		return minMaxApprox( img, 1000 );
+	}
+	
+	public static < T extends RealType< T > > double[] minMaxApprox( final RandomAccessibleInterval< T > img, final int numPixels )
+	{
+		return minMaxApprox( img, new Random( 3535 ), numPixels );
+	}
+
+	public static < T extends RealType< T > > double[] minMaxApprox( final RandomAccessibleInterval< T > img, final Random rnd, final int numPixels )
+	{
+		final RandomAccess< T > ra = img.randomAccess();
+
+		// run threads and combine results
+		double min = Double.MAX_VALUE;
+		double max = -Double.MAX_VALUE;
+
+		for ( int i = 0; i < numPixels; ++i )
+		{
+			for ( int d = 0; d < img.numDimensions(); ++d )
+				ra.setPosition( rnd.nextInt( (int)img.dimension( d ) ) + (int)img.min( d ), d );
+
+			final double v = ra.get().getRealDouble();
+
+			min = Math.min( min, v );
+			max = Math.max( max, v );
+		}
+
+		return new double[]{ min, max };
 	}
 }
 
