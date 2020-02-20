@@ -14,7 +14,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package org.janelia.saalfeldlab.hotknife;
+package org.janelia.saalfeldlab.hotknife.tools;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import org.janelia.saalfeldlab.hotknife.HeightFieldTransform;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Transform.TransformedSource;
@@ -37,10 +38,14 @@ import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
+import bdv.viewer.Interpolation;
+import bdv.viewer.state.ViewerState;
+import ij.ImageJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -67,10 +72,13 @@ public class PaintHeightField implements Callable<Void>{
 	@Option(names = {"-f", "--n5Field"}, required = true, description = "N5 field dataset, e.g. /surface/s1/min")
 	private String fieldGroup = null;
 
+	@Option(names = {"-g", "--n5FieldOutput"}, required = true, description = "N5 field dataset to save, overrides if the same as input, e.g. /surface/s1/min")
+	private String fieldGroupOut = null;
+
 	@Option(names = {"-s", "--scale"}, required = true,  split=",", description = "downsampling factors, e.g. 6,6,1")
 	private int[] downsamplingFactors = null;
 
-	@Option(names = {"-o", "--offset"}, required = true, description = "N5 field dataset, e.g. /surface/s1/min")
+	@Option(names = {"-o", "--offset"}, required = true, description = "offset from the target surface, this will be at z=0, e.g. 3")
 	private int offset = 0;
 
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
@@ -121,6 +129,8 @@ public class PaintHeightField implements Callable<Void>{
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
+		new ImageJ();
+
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5FSReader n5Field = new N5FSReader(n5FieldPath);
 
@@ -145,15 +155,16 @@ public class PaintHeightField implements Callable<Void>{
 		}
 
 		final BdvOptions options =
-				BdvOptions.options().
-				screenScales(new double[] {0.5, 0.25}).numRenderingThreads(4);
+				BdvOptions.options()
+				.screenScales(new double[] {0.5})
+				.numRenderingThreads(8);
 
 		BdvStackSource<?> bdv = null;
 
 		/* raw */
 		final RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(n5Field, fieldGroup);
 		final ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
-		System.out.print("Loading height field... ");
+		System.out.print("Loading height field ... ");
 		Util.copy(heightFieldSource, heightField);
 		System.out.println("done.");
 
@@ -180,7 +191,7 @@ public class PaintHeightField implements Callable<Void>{
 						queue);
 
 
-		bdv = Show.mipmapSource(mipmapSource, bdv, options.is2D().addTo(bdv));
+		bdv = Show.mipmapSource(mipmapSource, bdv, options.addTo(bdv));
 
 		final InputTriggerConfig config = getInputTriggerConfig();
 		final TriggerBehaviourBindings bindings = bdv.getBdvHandle().getTriggerbindings();
@@ -194,10 +205,39 @@ public class PaintHeightField implements Callable<Void>{
 								downsamplingFactors[1]}),
 				config);
 
+		final HeightFieldSmoothController smoothController = new HeightFieldSmoothController(
+				bdv.getBdvHandle().getViewerPanel(),
+				heightField,
+				Transform.createTopLeftScaleShift(
+						new double[] {
+								downsamplingFactors[0],
+								downsamplingFactors[1]}),
+				config);
+
+		new HeightFieldKeyActions(
+				bdv.getBdvHandle().getViewerPanel(),
+				heightField,
+				n5Path,
+				fieldGroupOut,
+				config,
+				bdv.getBdvHandle().getKeybindings());
+
 		bindings.addBehaviourMap("brush", brushController.getBehaviourMap());
 		bindings.addInputTriggerMap("brush", brushController.getInputTriggerMap());
-
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(brushController.getBrushOverlay());
+
+		bindings.addBehaviourMap("smooth", smoothController.getBehaviourMap());
+		bindings.addInputTriggerMap("smooth", smoothController.getInputTriggerMap());
+		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(smoothController.getBrushOverlay());
+
+		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
+		final ViewerState viewerState = bdv.getBdvHandle().getViewerPanel().getState();
+		final AffineTransform3D transform = new AffineTransform3D();
+		viewerState.getViewerTransform(transform);
+		transform.set(0, 3, 4);
+		viewerState.setViewerTransform(transform);
+		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
+		bdv.getBdvHandle().getViewerPanel().requestRepaint();
 
 		return null;
 	}

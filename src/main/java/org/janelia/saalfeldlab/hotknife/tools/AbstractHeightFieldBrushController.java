@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.hotknife;
+package org.janelia.saalfeldlab.hotknife.tools;
 
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.scijava.ui.behaviour.Behaviour;
@@ -9,14 +9,11 @@ import org.scijava.ui.behaviour.InputTriggerMap;
 import org.scijava.ui.behaviour.ScrollBehaviour;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 
-import bdv.bigcat.ui.BrushOverlay;
 import bdv.viewer.ViewerPanel;
-import net.imglib2.Cursor;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
-import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
@@ -25,14 +22,13 @@ import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ScaleAndTranslation;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 /**
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
-public class HeightFieldBrushController {
+public class AbstractHeightFieldBrushController {
 
 	final protected ViewerPanel viewer;
 	final protected RandomAccessibleInterval<FloatType> heightField;
@@ -45,11 +41,11 @@ public class HeightFieldBrushController {
 	protected double brushSigma = 100;
 
 	// for behavioUrs
-	private final BehaviourMap behaviourMap = new BehaviourMap();
-	private final InputTriggerMap inputTriggerMap = new InputTriggerMap();
-	private final InputTriggerAdder inputAdder;
+	protected final BehaviourMap behaviourMap = new BehaviourMap();
+	protected final InputTriggerMap inputTriggerMap = new InputTriggerMap();
+	protected final InputTriggerAdder inputAdder;
 
-	private static ArrayImg<DoubleType, DoubleArray> createMask(final double sigma, final double scale) {
+	protected static ArrayImg<DoubleType, DoubleArray> createMask(final double sigma, final double scale) {
 
 		final double sigmaScaled = sigma / scale;
 		final double varScaled = -0.5 / sigmaScaled / sigmaScaled;
@@ -85,34 +81,25 @@ public class HeightFieldBrushController {
 		return brushOverlay;
 	}
 
-	/**
-	 * Coordinates where mouse dragging started.
-	 */
-	private int oX, oY;
-
-	public HeightFieldBrushController(
+	public AbstractHeightFieldBrushController(
 			final ViewerPanel viewer,
 			final RandomAccessibleInterval<FloatType> heightField,
 			final ScaleAndTranslation heightFieldTransform,
-			final InputTriggerConfig config) {
+			final InputTriggerConfig config,
+			final BrushOverlay brushOverlay) {
 
 		this.viewer = viewer;
 		this.heightField = heightField;
 		extendedHeightField = Views.extendBorder(this.heightField);
 		this.heightFieldTransform = heightFieldTransform;
-		brushOverlay = new BrushOverlay(viewer);
+		this.brushOverlay = brushOverlay;
 		brushMask = createMask(brushSigma, heightFieldTransform.getScale(0));
 		inputAdder = config.inputTriggerAdder(inputTriggerMap, "brush");
 
 		brushLocation = new RealPoint(3);
-
-		new Push( "push", "SPACE button1" ).register();
-		new Pull( "erase", "SPACE button2", "SPACE button3" ).register();
-		new ChangeBrushRadius( "change brush radius", "SPACE scroll" ).register();
-		new MoveBrush( "move brush", "SPACE" ).register();
 	}
 
-	private void setCoordinates(final int x, final int y) {
+	protected void setCoordinates(final int x, final int y) {
 
 		brushLocation.setPosition(x, 0);
 		brushLocation.setPosition(y, 1);
@@ -123,7 +110,7 @@ public class HeightFieldBrushController {
 		heightFieldTransform.applyInverse(brushLocation, brushLocation);
 	}
 
-	private abstract class SelfRegisteringBehaviour implements Behaviour {
+	protected abstract class SelfRegisteringBehaviour implements Behaviour {
 
 		private final String name;
 
@@ -147,33 +134,14 @@ public class HeightFieldBrushController {
 		}
 	}
 
-	private abstract class AbstractPaintBehavior extends SelfRegisteringBehaviour implements DragBehaviour {
+	protected abstract class AbstractPaintBehavior extends SelfRegisteringBehaviour implements DragBehaviour {
 
 		public AbstractPaintBehavior(final String name, final String... defaultTriggers) {
 
 			super(name, defaultTriggers);
 		}
 
-		protected void paint(final RealLocalizable coords)
-		{
-			final IntervalView<FloatType> heightFieldInterval = Views.offsetInterval(
-					extendedHeightField,
-					new long[] {
-							Math.round(coords.getDoublePosition(0) - (brushMask.dimension(0) / 2)),
-							Math.round(coords.getDoublePosition(1) - (brushMask.dimension(1) / 2))},
-					new long[] {
-							brushMask.dimension(0),
-							brushMask.dimension(1)
-					});
-
-			final ArrayCursor<DoubleType> maskCursor = brushMask.cursor();
-			final Cursor<FloatType> heightFieldCursor = heightFieldInterval.cursor();
-
-			while (maskCursor.hasNext()) {
-				final FloatType v = heightFieldCursor.next();
-				v.setReal(maskCursor.next().getRealDouble() * getValue() + v.getRealDouble());
-			}
-		}
+		abstract protected void paint(final RealLocalizable coords);
 
 		protected void paint(final int x, final int y) {
 
@@ -181,20 +149,13 @@ public class HeightFieldBrushController {
 			paint(brushLocation);
 		}
 
-		abstract protected double getValue();
-
 		@Override
 		public void init( final int x, final int y ) {
-
-			synchronized (this) {
-
-				oX = x;
-				oY = y;
-			}
 
 			paint(x, y);
 
 			viewer.requestRepaint();
+			viewer.getDisplay().repaint();
 		}
 
 		@Override
@@ -204,41 +165,14 @@ public class HeightFieldBrushController {
 			paint(x, y);
 
 			viewer.requestRepaint();
+			viewer.getDisplay().repaint();
 		}
 
 		@Override
 		public void end(final int x, final int y) {}
 	}
 
-	private class Push extends AbstractPaintBehavior {
-
-		public Push(final String name, final String... defaultTriggers) {
-
-			super(name, defaultTriggers);
-		}
-
-		@Override
-		protected double getValue() {
-
-			return 0.25;
-		}
-	}
-
-	private class Pull extends AbstractPaintBehavior {
-
-		public Pull(final String name, final String... defaultTriggers) {
-
-			super(name, defaultTriggers);
-		}
-
-		@Override
-		protected double getValue() {
-
-			return -0.25;
-		}
-	}
-
-	private class ChangeBrushRadius extends SelfRegisteringBehaviour implements ScrollBehaviour {
+	protected class ChangeBrushRadius extends SelfRegisteringBehaviour implements ScrollBehaviour {
 
 		public ChangeBrushRadius(final String name, final String... defaultTriggers) {
 
@@ -254,14 +188,14 @@ public class HeightFieldBrushController {
 				else if (wheelRotation > 0)
 					brushSigma = Math.max(1, brushSigma * 0.9);
 
-				brushOverlay.setRadius((int)Math.round(brushSigma));
+				brushOverlay.setRadius(3 * (int)Math.round(brushSigma));
 				brushMask = createMask(brushSigma, heightFieldTransform.getScale(0));
 				viewer.getDisplay().repaint();
 			}
 		}
 	}
 
-	private class MoveBrush extends SelfRegisteringBehaviour implements DragBehaviour {
+	protected class MoveBrush extends SelfRegisteringBehaviour implements DragBehaviour {
 
 		public MoveBrush(final String name, final String... defaultTriggers) {
 
