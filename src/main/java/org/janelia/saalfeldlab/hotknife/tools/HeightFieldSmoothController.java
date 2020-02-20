@@ -23,7 +23,7 @@ import net.imglib2.view.Views;
  */
 public class HeightFieldSmoothController extends AbstractHeightFieldBrushController {
 
-	final protected SimpleGaussRA<FloatType> gaussOp;
+	protected SimpleGaussRA<FloatType> gaussOp;
 	protected ArrayImg<FloatType, ?> patch;
 	protected double smoothSigma = 2;
 
@@ -121,6 +121,8 @@ public class HeightFieldSmoothController extends AbstractHeightFieldBrushControl
 					smoothSigma = Math.max(1, smoothSigma * 0.9);
 
 				((SmoothBrushOverlay)brushOverlay).setRadius2(3 * (int)Math.round(smoothSigma));
+				final double scaledSigma = smoothSigma / heightFieldTransform.getScale(0);
+				gaussOp = new SimpleGaussRA<>(new double[] {scaledSigma, scaledSigma});
 				viewer.getDisplay().repaint();
 			}
 		}
