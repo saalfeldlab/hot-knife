@@ -6,7 +6,7 @@ ABS_DIR=`readlink -f "$OWN_DIR"`
 FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh
 JAR=$PWD/hot-knife-0.0.4-SNAPSHOT.jar
 CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace
-N_NODES=10
+N_NODES=20
 
 N5PATH='/nrs/flyem/tmp/VNC-align.n5'
 N5DATASETINPUT='/align/slab-11/raw/s0'

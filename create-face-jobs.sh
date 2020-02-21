@@ -20,7 +20,7 @@ do
 	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh' >> $topFaceScript
 	echo "JAR=\$PWD/hot-knife-$VERSION.jar" >> $topFaceScript
 	echo 'CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace' >> $topFaceScript
-	echo 'N_NODES=10' >> $topFaceScript
+	echo 'N_NODES=20' >> $topFaceScript
 	echo >> $topFaceScript
 	echo "N5PATH='$N5'" >> $topFaceScript
 	echo "N5DATASETINPUT='/align/slab-$slabId/raw/s0'" >> $topFaceScript
@@ -51,7 +51,7 @@ do
 	echo 'FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh' >> $botFaceScript
 	echo "JAR=\$PWD/hot-knife-$VERSION.jar" >> $botFaceScript
 	echo 'CLASS=org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace' >> $botFaceScript
-	echo 'N_NODES=10' >> $botFaceScript
+	echo 'N_NODES=20' >> $botFaceScript
 	echo >> $botFaceScript
 	echo "N5PATH='$N5'" >> $botFaceScript
 	echo "N5DATASETINPUT='/align/slab-$slabId/raw/s0'" >> $botFaceScript
