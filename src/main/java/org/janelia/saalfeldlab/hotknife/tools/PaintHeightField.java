@@ -217,6 +217,7 @@ public class PaintHeightField implements Callable<Void>{
 		new HeightFieldKeyActions(
 				bdv.getBdvHandle().getViewerPanel(),
 				heightField,
+				avg,
 				n5Path,
 				fieldGroupOut,
 				config,

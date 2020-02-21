@@ -32,6 +32,7 @@ public class HeightFieldKeyActions {
 
 	final protected ViewerPanel viewer;
 	final protected RandomAccessibleInterval<FloatType> heightField;
+	final protected double avg;
 
 	final protected String n5Path;
 	final protected String heightFieldDataset;
@@ -44,6 +45,7 @@ public class HeightFieldKeyActions {
 	public HeightFieldKeyActions(
 			final ViewerPanel viewer,
 			final RandomAccessibleInterval<FloatType> heightField,
+			final double avg,
 			final String n5Path,
 			final String heightFieldDataset,
 			final InputTriggerConfig config,
@@ -51,6 +53,7 @@ public class HeightFieldKeyActions {
 
 		this.viewer = viewer;
 		this.heightField = heightField;
+		this.avg = avg;
 		this.n5Path = n5Path;
 		this.heightFieldDataset = heightFieldDataset;
 
@@ -84,14 +87,16 @@ public class HeightFieldKeyActions {
 
 		System.out.print("Saving heightfield " + n5Path + ":/" + heightFieldDataset + " ... ");
 		final ExecutorService exec = Executors.newFixedThreadPool(4);
+		final N5FSWriter n5 = new N5FSWriter(n5Path);
 		N5Utils.save(
 				heightField,
-				new N5FSWriter(n5Path),
+				n5,
 				heightFieldDataset,
 				new int[] {1024, 1024},
 				new GzipCompression(),
 				exec);
 		exec.shutdown();
+		n5.setAttribute(heightFieldDataset, "avg", avg);
 		System.out.println("done.");
 	}
 
