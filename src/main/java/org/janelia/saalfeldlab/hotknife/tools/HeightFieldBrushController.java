@@ -1,5 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
+import java.awt.Color;
+
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 
 import bdv.viewer.ViewerPanel;
@@ -25,7 +27,7 @@ public class HeightFieldBrushController extends AbstractHeightFieldBrushControll
 			final ScaleAndTranslation heightFieldTransform,
 			final InputTriggerConfig config) {
 
-		super(viewer, heightField, heightFieldTransform, config, new BrushOverlay(viewer));
+		super(viewer, heightField, heightFieldTransform, config, new CircleOverlay(viewer, new int[] {5}, new Color[] {Color.WHITE}));
 
 		new Push( "push", "SPACE button1" ).register();
 		new Pull( "erase", "SPACE button2", "SPACE button3" ).register();

@@ -35,7 +35,7 @@ public class AbstractHeightFieldBrushController {
 	final protected RandomAccessible<FloatType> extendedHeightField;
 	final protected ScaleAndTranslation heightFieldTransform;
 	final protected RealPoint brushLocation;
-	final protected BrushOverlay brushOverlay;
+	final protected CircleOverlay brushOverlay;
 	final protected AffineTransform3D viewerTransform = new AffineTransform3D();
 	protected ArrayImg<DoubleType, DoubleArray> brushMask;
 	protected double brushSigma = 100;
@@ -76,7 +76,7 @@ public class AbstractHeightFieldBrushController {
 		return inputTriggerMap;
 	}
 
-	public BrushOverlay getBrushOverlay() {
+	public CircleOverlay getBrushOverlay() {
 
 		return brushOverlay;
 	}
@@ -86,7 +86,7 @@ public class AbstractHeightFieldBrushController {
 			final RandomAccessibleInterval<FloatType> heightField,
 			final ScaleAndTranslation heightFieldTransform,
 			final InputTriggerConfig config,
-			final BrushOverlay brushOverlay) {
+			final CircleOverlay brushOverlay) {
 
 		this.viewer = viewer;
 		this.heightField = heightField;
@@ -188,7 +188,7 @@ public class AbstractHeightFieldBrushController {
 				else if (wheelRotation > 0)
 					brushSigma = Math.max(1, brushSigma * 0.9);
 
-				brushOverlay.setRadius(3 * (int)Math.round(brushSigma));
+				brushOverlay.setRadius(3 * (int)Math.round(brushSigma), 0);
 				brushMask = createMask(brushSigma, heightFieldTransform.getScale(0));
 				viewer.getDisplay().repaint();
 			}

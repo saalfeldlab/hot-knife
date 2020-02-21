@@ -16,31 +16,57 @@ import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.ui.OverlayRenderer;
 
 /**
+ * An overlay that draws many circles with different colors.
+ *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  *
  */
-public class BrushOverlay implements OverlayRenderer {
+public class CircleOverlay implements OverlayRenderer {
 
 	final static protected BasicStroke stroke = new BasicStroke(1);
 	final protected ViewerPanel viewer;
-	protected int x, y, width, height, radius = 5;
-	protected boolean visible = false;
+	protected final int[] radii;
+	protected final Color[] colors;
 	final protected AffineTransform3D viewerTransform = new AffineTransform3D();
 
-	public BrushOverlay(final ViewerPanel viewer) {
+	protected int x, y, width, height;
+	protected boolean visible = false;
+
+	public CircleOverlay(final ViewerPanel viewer, final int[] radii, final Color[] colors) {
+
 		this.viewer = viewer;
+		this.radii = radii;
+		this.colors = colors;
 	}
 
 	public void setPosition(final int x, final int y) {
+
 		this.x = x;
 		this.y = y;
 	}
 
-	public void setRadius(final int radius) {
-		this.radius = radius;
+	public void setRadius(final int radius, final int i) {
+
+		radii[i] = radius;
+	}
+
+	public void setRadii(final int[] radii) {
+
+		System.arraycopy(radii, 0, this.radii, 0, Math.min(radii.length, this.radii.length));
+	}
+
+	public void setColor(final Color color, final int i) {
+
+		colors[i] = color;
+	}
+
+	public void setColors(final Color[] colors) {
+
+		System.arraycopy(colors, 0, this.colors, 0, Math.min(colors.length, this.colors.length));
 	}
 
 	public void setVisible(final boolean visible) {
+
 		this.visible = visible;
 	}
 
@@ -57,16 +83,19 @@ public class BrushOverlay implements OverlayRenderer {
 				viewer.getState().getViewerTransform(viewerTransform);
 				scale = Affine3DHelpers.extractScale(viewerTransform, 0);
 			}
-			final double scaledRadius = scale * radius;
 
-			if (x + scaledRadius > 0 &&
-					x - scaledRadius < width &&
-					y + scaledRadius > 0 &&
-					y - scaledRadius < height) {
-				final int roundScaledRadius = (int)Math.round(scaledRadius);
-				g2d.setColor(Color.WHITE);
-				g2d.setStroke(stroke);
-				g2d.drawOval(x - roundScaledRadius, y - roundScaledRadius, 2 * roundScaledRadius + 1, 2 * roundScaledRadius + 1);
+			for (int i = 0; i < radii.length; ++i) {
+				final double scaledRadius = scale * radii[i];
+
+				if (x + scaledRadius > 0 &&
+						x - scaledRadius < width &&
+						y + scaledRadius > 0 &&
+						y - scaledRadius < height) {
+					final int roundScaledRadius = (int)Math.round(scaledRadius);
+					g2d.setColor(colors[i]);
+					g2d.setStroke(stroke);
+					g2d.drawOval(x - roundScaledRadius, y - roundScaledRadius, 2 * roundScaledRadius + 1, 2 * roundScaledRadius + 1);
+				}
 			}
 		}
 	}

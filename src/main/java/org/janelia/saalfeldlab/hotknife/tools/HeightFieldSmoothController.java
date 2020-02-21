@@ -1,5 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
+import java.awt.Color;
+
 import org.janelia.saalfeldlab.hotknife.ops.SimpleGaussRA;
 import org.scijava.ui.behaviour.ScrollBehaviour;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
@@ -33,7 +35,7 @@ public class HeightFieldSmoothController extends AbstractHeightFieldBrushControl
 			final ScaleAndTranslation heightFieldTransform,
 			final InputTriggerConfig config) {
 
-		super(viewer, heightField, heightFieldTransform, config, new SmoothBrushOverlay(viewer));
+		super(viewer, heightField, heightFieldTransform, config, new CircleOverlay(viewer, new int[] {5, 2}, new Color[] {Color.YELLOW, Color.MAGENTA}));
 
 		gaussOp = new SimpleGaussRA<>(new double[] {smoothSigma, smoothSigma});
 		patch = new ArrayImgFactory<>(new FloatType()).create(brushMask);
@@ -120,7 +122,7 @@ public class HeightFieldSmoothController extends AbstractHeightFieldBrushControl
 				else if (wheelRotation > 0)
 					smoothSigma = Math.max(1, smoothSigma * 0.9);
 
-				((SmoothBrushOverlay)brushOverlay).setRadius2(3 * (int)Math.round(smoothSigma));
+				brushOverlay.setRadius(3 * (int)Math.round(smoothSigma), 1);
 				final double scaledSigma = smoothSigma / heightFieldTransform.getScale(0);
 				gaussOp = new SimpleGaussRA<>(new double[] {scaledSigma, scaledSigma});
 				viewer.getDisplay().repaint();
