@@ -30,75 +30,50 @@
 
 package org.janelia.saalfeldlab.hotknife.ops;
 
-import java.util.concurrent.Executors;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
-import org.scijava.plugin.Parameter;
-import org.scijava.plugin.Plugin;
-
-import net.imagej.ops.Ops;
-import net.imagej.ops.special.computer.AbstractUnaryComputerOp;
+import net.imglib2.Cursor;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.algorithm.gauss3.Gauss3;
-import net.imglib2.algorithm.gauss3.SeparableSymmetricConvolution;
-import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.view.Views;
 
 /**
- * Simple Gaussian filter Op
+ * Gradient
  *
  * @author Stephan Saalfeld
- * @author Christian Dietz (University of Konstanz)
- * @param <T> type of input and output
  */
-@Plugin(type = Ops.Filter.Gauss.class, priority = 0.5)
-public class SimpleGaussRA<T extends NumericType<T> & NativeType<T>> extends
-	AbstractUnaryComputerOp<RandomAccessible<T>, RandomAccessibleInterval<T>>
-	implements Ops.Filter.Gauss, Consumer<RandomAccessibleInterval<T>> {
+public class Max<T extends RealType<T> & NativeType<T>> implements Consumer<RandomAccessibleInterval<T>> {
 
-	@Parameter
-	final private double[] sigmas;
+	private final ArrayList<RandomAccessible<T>> sources;
 
-	public SimpleGaussRA(final double[] sigmas) {
+	public Max(final List<? extends RandomAccessible<T>> sources) {
 
-		this.sigmas = sigmas;
-	}
-
-	@Override
-	public void compute(
-			final RandomAccessible<T> input,
-			final RandomAccessibleInterval<T> output) {
-
-		try {
-			SeparableSymmetricConvolution.convolve(
-					Gauss3.halfkernels(sigmas),
-					input,
-					output,
-					Executors.newSingleThreadExecutor());
-		} catch (final IncompatibleTypeException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public void run() {
-
-		compute(in(), out());
-
-	}
-
-	@Override
-	public RandomAccessibleInterval<T> run(final RandomAccessibleInterval<T> output) {
-
-		compute(in(), output);
-		return output;
+		this.sources = new ArrayList<>(sources);
 	}
 
 	@Override
 	public void accept(final RandomAccessibleInterval<T> output) {
 
-		compute(in(), output);
+		final ArrayList<Cursor<T>> cursors = new ArrayList<>();
+		for (final RandomAccessible<T> source : sources) {
+			cursors.add(Views.flatIterable(Views.interval(source, output)).cursor());
+		}
+
+		final Cursor<T> c = Views.flatIterable(output).cursor();
+
+		while (c.hasNext()) {
+
+			final T t = c.next();
+			for (final Cursor<T> a : cursors) {
+				final T ta = a.next();
+				if (t.compareTo(ta) < 0) {
+					t.set(ta);
+				}
+			}
+		}
 	}
 }

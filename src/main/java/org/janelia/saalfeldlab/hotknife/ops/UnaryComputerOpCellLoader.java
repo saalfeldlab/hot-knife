@@ -1,7 +1,5 @@
 package org.janelia.saalfeldlab.hotknife.ops;
 
-import java.util.function.Supplier;
-
 import net.imagej.ops.Op;
 import net.imagej.ops.OpService;
 import net.imagej.ops.special.computer.Computers;
@@ -27,7 +25,6 @@ public class UnaryComputerOpCellLoader<T, S extends NativeType<S>, R extends Ran
 	@SuppressWarnings("unchecked")
 	public UnaryComputerOpCellLoader(
 			final R source,
-			final Supplier<S> targetTypeSupplier,
 			final OpService opService,
 			final Class<? extends Op> opClass,
 			final Object[] args) {
@@ -40,7 +37,6 @@ public class UnaryComputerOpCellLoader<T, S extends NativeType<S>, R extends Ran
 		 * does not yet support Type though and classes loose their generic parameters by
 		 * erasure.
 		 */
-		final S targetType = targetTypeSupplier.get();
 		op = Computers.unary(
 				opService,
 				opClass,
