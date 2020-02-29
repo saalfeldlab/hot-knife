@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
 import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -31,13 +32,11 @@ import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
-import ij.ImageJ;
 import ij.ImagePlus;
 import mpicbg.ij.clahe.Flat;
 import mpicbg.ij.plugin.NormalizeLocalContrast;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.basictypeaccess.AccessFlags;
-import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
@@ -65,7 +64,7 @@ public class CLAHEBehavior implements Callable<Void> {
 		final N5Reader n5 = new N5FSReader("/nrs/flyem/tmp/VNC-export.n5");
 		final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/2-26/s" + scaleIndex);
 
-		final int blockRadius = (int)Math.round(511 * scale);
+		final int blockRadius = (int)Math.round(1023 * scale);
 
 		final ImageJStackOp<UnsignedByteType> clahe =
 				new ImageJStackOp<>(
@@ -83,17 +82,31 @@ public class CLAHEBehavior implements Callable<Void> {
 
 		final ImageJStackOp<UnsignedByteType> lcn =
 				new ImageJStackOp<>(
-						Views.extendZero(clahed),
+						Views.extendZero(img),
 						(fp) -> NormalizeLocalContrast.run(fp, blockRadius, blockRadius, 3f, true, true),
 						blockRadius,
 						0,
 						255);
-		final RandomAccessibleInterval<UnsignedByteType> contrasted = Lazy.process(
-				clahed,
+		final RandomAccessibleInterval<UnsignedByteType> lcned = Lazy.process(
+				img,
 				new int[] {256, 256, 32},
 				new UnsignedByteType(),
 				AccessFlags.setOf(AccessFlags.VOLATILE),
 				lcn);
+
+		final ImageJStackOp<UnsignedByteType> cllcn =
+				new ImageJStackOp<>(
+						Views.extendZero(img),
+						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+						blockRadius,
+						0,
+						255);
+		final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
+				img,
+				new int[] {256, 256, 32},
+				new UnsignedByteType(),
+				AccessFlags.setOf(AccessFlags.VOLATILE),
+				cllcn);
 
 
 //		final FinalInterval cropInterval = Intervals.createMinSize(
@@ -119,14 +132,21 @@ public class CLAHEBehavior implements Callable<Void> {
 
 		bdv = BdvFunctions.show(
 				VolatileViews.wrapAsVolatile(
-						contrasted,
+						lcned,
 						queue),
-				"Contrasted",
+				"LCN",
 				BdvOptions.options().addTo(bdv));
 
-		new ImageJ();
+		bdv = BdvFunctions.show(
+				VolatileViews.wrapAsVolatile(
+						cllcned,
+						queue),
+				"CLLCN",
+				BdvOptions.options().addTo(bdv));
 
-		ImageJFunctions.show(img);
+//		new ImageJ();
+
+//		ImageJFunctions.show(img);
 
 		return null;
 	}
