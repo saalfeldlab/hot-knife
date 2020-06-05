@@ -1,6 +1,9 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
+import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
@@ -21,16 +24,14 @@ import org.scijava.ui.behaviour.util.AbstractNamedAction;
 import org.scijava.ui.behaviour.util.InputActionBindings;
 
 import bdv.util.Affine3DHelpers;
-import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.animate.RotationAnimator;
-import bdv.viewer.state.SourceState;
 import net.imglib2.Point;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.LinAlgHelpers;
+import net.imglib2.ui.OverlayRenderer;
+import net.imglib2.ui.TransformListener;
 
 /**
  *
@@ -70,6 +71,7 @@ public class HeightFieldKeyActions {
 		new SaveHeightField("save heightfield", "ctrl S").register();
 		new Undo("undo", "ctrl Z").register();
 		new GoToZero("go to z=0", "ctrl C").register();
+		new DisplayZeroLine("display z=0", viewer, "ctrl 0").register();
 
 		inputActionBindings.addActionMap("persistence", ksActionMap);
 		inputActionBindings.addInputMap("persistence", ksInputMap);
@@ -226,5 +228,116 @@ public class HeightFieldKeyActions {
 				viewer.requestRepaint();
 			}
 		}
+	}
+
+	private class DisplayZeroLine extends SelfRegisteringAction {
+
+		private static final long serialVersionUID = -7884038268749788208L;
+
+		final ViewerPanel viewer;
+		ZeroLineOverlay overlay;
+		boolean isVisible;
+
+		public DisplayZeroLine(final String name, final ViewerPanel viewer, final String ... defaultTriggers) {
+
+			super(name, defaultTriggers);
+
+			this.viewer = viewer;
+			this.overlay = null;
+			this.isVisible = false;
+		}
+
+		@Override
+		public void actionPerformed(final ActionEvent event) {
+
+			synchronized (viewer) {
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+				if ( overlay == null )
+				{
+					this.overlay = new ZeroLineOverlay( viewer );
+
+					viewer.addRenderTransformListener( overlay );
+					viewer.getDisplay().addOverlayRenderer( overlay );
+				}
+				else
+				{
+					overlay.toggleState();
+				}
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+				viewer.requestRepaint();
+			}
+		}
+	}
+
+	private static class ZeroLineOverlay implements OverlayRenderer, TransformListener< AffineTransform3D >
+	{
+		private final AffineTransform3D viewerTransform;
+		private final ViewerPanel viewer;
+		private Color col = Color.green.darker();
+
+		private boolean draw;
+
+		public ZeroLineOverlay( final ViewerPanel viewer )
+		{
+			this.viewer = viewer;
+			this.viewerTransform = new AffineTransform3D();
+			this.draw = true;
+		}
+
+		@Override
+		public void transformChanged( final AffineTransform3D transform )
+		{
+			viewerTransform.set( transform );
+		}
+
+		public void toggleState() { this.draw = !this.draw; }
+
+		@Override
+		public void drawOverlays( final Graphics g )
+		{
+			if ( !draw )
+				return;
+
+			final Graphics2D graphics = ( Graphics2D ) g;
+
+			graphics.setColor( col );
+			graphics.drawLine( 0, 0, 400, 200 );
+
+			/*
+			final double[] lPos = new double[ 3 ];
+			final double[] gPos = new double[ 3 ];
+			final AffineTransform3D transform = new AffineTransform3D();
+
+			for ( final InterestPointSource pointSource : interestPointSources )
+			{
+				final HashMap< ? extends ViewId, ? extends Collection< ? extends RealLocalizable > > coordinates = pointSource.getLocalCoordinates( t );
+
+				for ( final ViewId viewId : coordinates.keySet() )
+				{
+					pointSource.getLocalToGlobalTransform( viewId, t, transform );
+					transform.preConcatenate( viewerTransform );
+
+					for ( final RealLocalizable p : coordinates.get( viewId ) )
+					{
+						p.localize( lPos );
+						transform.apply( lPos, gPos );
+						final double size = getPointSize( gPos );
+						final int x = ( int ) ( gPos[ 0 ] - 0.5 * size );
+						final int y = ( int ) ( gPos[ 1 ] - 0.5 * size );
+						final int w = ( int ) size;
+						graphics.setColor( getColor( gPos ) );
+						graphics.fillOval( x, y, w, w );
+					}
+				}
+			}
+			*/
+		}
+
+		@Override
+		public void setCanvasSize( final int width, final int height )
+		{}
 	}
 }
