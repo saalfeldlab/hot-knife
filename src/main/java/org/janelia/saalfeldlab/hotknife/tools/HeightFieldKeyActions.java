@@ -20,9 +20,17 @@ import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.AbstractNamedAction;
 import org.scijava.ui.behaviour.util.InputActionBindings;
 
+import bdv.util.Affine3DHelpers;
+import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
+import bdv.viewer.animate.RotationAnimator;
+import bdv.viewer.state.SourceState;
+import net.imglib2.Point;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.LinAlgHelpers;
 
 /**
  *
@@ -61,6 +69,7 @@ public class HeightFieldKeyActions {
 
 		new SaveHeightField("save heightfield", "ctrl S").register();
 		new Undo("undo", "ctrl Z").register();
+		new GoToZero("go to z=0", "ctrl C").register();
 
 		inputActionBindings.addActionMap("persistence", ksActionMap);
 		inputActionBindings.addInputMap("persistence", ksInputMap);
@@ -100,6 +109,68 @@ public class HeightFieldKeyActions {
 		System.out.println("done.");
 	}
 
+	private class GoToZero extends SelfRegisteringAction {
+
+		private static final long serialVersionUID = 1679653174783245445L;
+
+		public GoToZero(final String name, final String ... defaultTriggers) {
+			super(name, defaultTriggers);
+		}
+
+		@Override
+		public void actionPerformed(final ActionEvent event) {
+
+			synchronized (viewer) {
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+				final AffineTransform3D initialTransform = viewer.getDisplay().getTransformEventHandler().getTransform();
+
+				//
+				// simply set z to zero (not good)
+				//
+
+				// initialTransform.set(0, 3, 4);
+
+				//
+				// better, turn to xy, set to z=0, turn back
+				//
+
+				// xy plane quaternion
+				final double[] qTarget = new double[] { 1, 0, 0, 0 };
+
+				// quaternion of the current viewer transformation
+				final double[] qTargetBack = new double[ 4 ];
+				Affine3DHelpers.extractRotation( initialTransform, qTargetBack );
+
+				// mouse coordinates
+				final Point p = new Point( 2 );
+				viewer.getMouseCoordinates( p );
+				double centerX = p.getIntPosition( 0 );
+				double centerY = p.getIntPosition( 1 );
+
+				// use Tobias's code to compute the rotation around the point (amount == 1.0)
+				final AffineTransform3D xyPlaneTransform = new RotationAnimator( initialTransform, centerX, centerY, qTarget, 300 ).get( 1 );
+
+				// set z to 0.0
+				xyPlaneTransform.set(0, 3, 4);
+
+				// use Tobias's code to compute the rotation around the point back to the original orientation (amount == 1.0)
+				final AffineTransform3D finalTransform = new RotationAnimator( xyPlaneTransform, centerX, centerY, qTargetBack, 300 ).get( 1 );
+
+				//
+				// update new transformation
+				//
+				viewer.getState().setViewerTransform(finalTransform);
+				viewer.transformChanged(finalTransform);
+				viewer.setCurrentViewerTransform( finalTransform );
+				viewer.requestRepaint();
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+			}
+		}
+	}
+
 	private class SaveHeightField extends SelfRegisteringAction {
 
 		private static final long serialVersionUID = -7884038268749788208L;
@@ -126,6 +197,8 @@ public class HeightFieldKeyActions {
 	}
 
 	private class Undo extends SelfRegisteringAction {
+
+		private static final long serialVersionUID = -7208806278835605976L;
 
 		public Undo(final String name, final String ... defaultTriggers) {
 
