@@ -6,6 +6,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,6 +33,7 @@ import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.ui.OverlayRenderer;
 import net.imglib2.ui.TransformListener;
+import net.imglib2.util.LinAlgHelpers;
 
 /**
  *
@@ -278,6 +280,7 @@ public class HeightFieldKeyActions {
 		private final ViewerPanel viewer;
 		private Color col = Color.green.darker();
 
+		private int width = 0, height = 0;
 		private boolean draw;
 
 		public ZeroLineOverlay( final ViewerPanel viewer )
@@ -303,41 +306,180 @@ public class HeightFieldKeyActions {
 
 			final Graphics2D graphics = ( Graphics2D ) g;
 
-			graphics.setColor( col );
-			graphics.drawLine( 0, 0, 400, 200 );
+			// we have two planes and we want to draw (if visible) the intersecting line
+			//
+			// http://geomalgorithms.com/a05-_intersect-1.html
+			//
+			// plane A: the z=0 plane of the volume
+			// plane B: the plane that BDV currently displays
 
-			/*
-			final double[] lPos = new double[ 3 ];
-			final double[] gPos = new double[ 3 ];
-			final AffineTransform3D transform = new AffineTransform3D();
+			final double[] zero = new double[ 3 ];
+			final double[] nA = new double[]{ 0, 0, 1 };
 
-			for ( final InterestPointSource pointSource : interestPointSources )
+			final double[] nATransformed = nA.clone();
+
+			viewerTransform.apply( zero, zero );
+			viewerTransform.apply( nA, nATransformed );
+
+			LinAlgHelpers.subtract( nATransformed, zero, nA );
+			LinAlgHelpers.normalize( nA );
+
+			final double[] nB = new double[]{ 0, 0, 1 };
+
+			final double dot = LinAlgHelpers.dot( nA, nB );
+
+			System.out.println( "zero: " + net.imglib2.util.Util.printCoordinates( zero ) );
+			System.out.println( "nATransformed: " + net.imglib2.util.Util.printCoordinates( nATransformed ) );
+			System.out.println( "nA: " + net.imglib2.util.Util.printCoordinates( nA ) );
+			System.out.println( "dot: " + dot );
+
+			if ( dot <= 0.9999 ) // else planes are paralell
 			{
-				final HashMap< ? extends ViewId, ? extends Collection< ? extends RealLocalizable > > coordinates = pointSource.getLocalCoordinates( t );
+				final double[] line = new double[ 3 ];
 
-				for ( final ViewId viewId : coordinates.keySet() )
+				// compute the direction of the intersecting 3d line
+				LinAlgHelpers.cross( nA, nB, line );
+				LinAlgHelpers.normalize( line );
+
+				// implicit plane A: dA = –(nA · V0), V0 = any point on the plane
+				final double dA = -( LinAlgHelpers.dot( nA, zero ) ); // zero transformed is on planeA
+
+				// implicit plane B: dB = –(nB · V0), V0 = any point on the plane
+				final double dB = -( LinAlgHelpers.dot( nB, new double[ 3 ] ) ); // zero is on planeB
+
+				// now we construct a third plane (with the line as normal vector) in order get formula for the intersection line
+
+				final double[] pL = new double[ 3 ];
+				final double[] tmp = new double[ 3 ];
+
+				LinAlgHelpers.subtract( mul( dB, nA ), mul( dA, nB ), tmp );
+				LinAlgHelpers.cross( tmp, line, pL );
+
+				System.out.println( "P(s) = " + net.imglib2.util.Util.printCoordinates( pL ) + " + s*" + net.imglib2.util.Util.printCoordinates( line ) );
+
+				// now we need to intersect the line with the screen window (it needs to intersect with two of them), it lies in the same plane hence 2d
+				final double[] q = new double[] { pL[ 0 ], pL[ 1 ] };
+				final double[] v = new double[] { line[ 0 ], line[ 1 ] };
+
+				//
+				// top screen line
+				//
+				final double[] p = new double[] { 0, 0 }; 
+				final double[] u = new double[] { 1, 0 };
+
+				final double sTop = intersect( p, u, q, v );
+				System.out.println( "top: " + sTop );
+
+				//
+				// bottom screen line
+				//
+				p[ 0 ] = 0;
+				p[ 1 ] = height - 1;
+
+				final double sBottom = intersect( p, u, q, v );
+				System.out.println( "bottom: " + sBottom );
+
+				//
+				// left screen line
+				//
+				p[ 0 ] = 0;
+				p[ 1 ] = 0;
+
+				u[ 0 ] = 0;
+				u[ 1 ] = 1;
+
+				final double sLeft = intersect( p, u, q, v );
+				System.out.println( "left: " + sLeft );
+
+				//
+				// right screen line
+				//
+				p[ 0 ] = width - 1;
+				p[ 1 ] = 0;
+
+				u[ 0 ] = 0;
+				u[ 1 ] = 1;
+
+				final double sRight = intersect( p, u, q, v );
+				System.out.println( "right: " + sRight );
+
+				if ( Double.isFinite( sTop ) && Double.isFinite( sLeft ) )
 				{
-					pointSource.getLocalToGlobalTransform( viewId, t, transform );
-					transform.preConcatenate( viewerTransform );
+					// there is still a bug here ... with scaling somehow, works when at least one vector is orthogonal to the screen
+					/*
+					// not orthogonal to x or y
+					final ArrayList< int[] > points = new ArrayList<>();
 
-					for ( final RealLocalizable p : coordinates.get( viewId ) )
+					// intersects with the top
+					if ( sTop >= 0 && sTop <= width - 1 )
+						points.add( new int[] { (int)Math.round( sTop ), 0 } );
+
+					if ( sBottom >= 0 && sBottom <= width - 1 )
+						points.add( new int[] { (int)Math.round( sBottom ), height - 1 } );
+
+					if ( sLeft >= 0 && sLeft <= height - 1 )
+						points.add( new int[] { 0, (int)Math.round( sLeft ) } );
+
+					if ( sRight >= 0 && sRight <= height - 1 )
+						points.add( new int[] { width - 1, (int)Math.round( sRight ) } );
+
+					graphics.setColor( col );
+
+					if ( points.size() == 2 )
 					{
-						p.localize( lPos );
-						transform.apply( lPos, gPos );
-						final double size = getPointSize( gPos );
-						final int x = ( int ) ( gPos[ 0 ] - 0.5 * size );
-						final int y = ( int ) ( gPos[ 1 ] - 0.5 * size );
-						final int w = ( int ) size;
-						graphics.setColor( getColor( gPos ) );
-						graphics.fillOval( x, y, w, w );
+						// normal case, two points
+						graphics.drawLine(
+								points.get( 0 )[ 0 ], points.get( 0 )[ 1 ],
+								points.get( 1 )[ 0 ], points.get( 1 )[ 1 ] );
 					}
+					else if ( points.size() > 2 )
+					{
+						// this is some edge case, literally, hitting top & left or/and bottom & right
+						System.out.println( points.size() + " points!!" );
+					}
+					*/
+				}
+				else if ( Double.isFinite( sTop ) && !Double.isFinite( sLeft ) )
+				{
+					// vertical line
+					graphics.setColor( Color.red );
+					graphics.drawLine( (int)Math.round( sTop ), 0, (int)Math.round( sBottom ), height - 1 );
+				}
+				else if ( !Double.isFinite( sTop ) && Double.isFinite( sLeft ) )
+				{
+					// horizontal line
+					graphics.setColor( Color.red );
+					graphics.drawLine( 0, (int)Math.round( sLeft ), width - 1, (int)Math.round( sRight ) );
+				}
+				else
+				{
+					System.out.println( "left: " + sLeft + ", top: " + sTop + ", right: " + sRight + ", bottom: " + sBottom );
 				}
 			}
-			*/
+		}
+
+		private static double intersect( final double[] p, final double[] u, final double[] q, final double[] v )
+		{
+			// vector from q to p
+			final double[] w = new double[ 2 ];
+			LinAlgHelpers.subtract( p, q, w );
+
+			return ( v[ 1 ] * w[ 0 ] - v[ 0 ] * w[ 1 ] ) / ( v[ 0 ] * u[ 1 ] - v[ 1 ] * u[ 0 ] );
+		}
+
+		private static double[] mul( final double s, final double[] v )
+		{
+			for ( int i = 0; i < v.length; ++i )
+				v[ i ] *= s;
+
+			return v;
 		}
 
 		@Override
 		public void setCanvasSize( final int width, final int height )
-		{}
+		{
+			this.width = width;
+			this.height = height;
+		}
 	}
 }
