@@ -2,10 +2,12 @@ package org.janelia.saalfeldlab.hotknife.tools;
 
 import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -27,6 +29,7 @@ import org.scijava.ui.behaviour.util.InputActionBindings;
 import bdv.util.Affine3DHelpers;
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.animate.RotationAnimator;
+import bdv.viewer.render.TransformAwareBufferedImageOverlayRenderer;
 import net.imglib2.Point;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -74,6 +77,15 @@ public class HeightFieldKeyActions {
 		new Undo("undo", "ctrl Z").register();
 		new GoToZero("go to z=0", "ctrl C").register();
 		new DisplayZeroLine("display z=0", viewer, "ctrl 0").register();
+		new PrintScale("print current scaling", viewer, "ctrl 2").register();
+
+		new MoveFixedSteps("move horizontal fwd", 0, true, "F").register();
+		new MoveFixedSteps("move horizontal bck", 0, false, "D").register();
+
+		new MoveFixedSteps("move vertical fwd", 1, true, "V").register();
+		new MoveFixedSteps("move vertical bck", 1, false, "C").register();
+
+		//TODO: SCALE & INTENSITY overlay
 
 		inputActionBindings.addActionMap("persistence", ksActionMap);
 		inputActionBindings.addInputMap("persistence", ksInputMap);
@@ -200,6 +212,46 @@ public class HeightFieldKeyActions {
 		}
 	}
 
+	private class MoveFixedSteps extends SelfRegisteringAction {
+
+		private static final long serialVersionUID = -7884038268749788208L;
+		final int dim;
+		final boolean fwd;
+		final int[] steps = new int[] { 2000, 1500, 100 };
+
+		public MoveFixedSteps(final String name, final int dim, final boolean fwd, final String ... defaultTriggers) {
+
+			super(name, defaultTriggers);
+			this.dim = dim;
+			this.fwd = fwd;
+		}
+
+		@Override
+		public void actionPerformed(final ActionEvent event) {
+
+			synchronized (viewer) {
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+				final AffineTransform3D finalTransform = viewer.getDisplay().getTransformEventHandler().getTransform();
+
+				final double scale = computeScale( finalTransform );
+
+				if ( fwd )
+					finalTransform.set( finalTransform.get( dim, 3 ) + steps[ dim ] * scale, dim, 3);
+				else
+					finalTransform.set( finalTransform.get( dim, 3 ) - steps[ dim ] * scale, dim, 3);
+
+				viewer.getState().setViewerTransform(finalTransform);
+				viewer.transformChanged(finalTransform);
+				viewer.setCurrentViewerTransform( finalTransform );
+				viewer.requestRepaint();
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+			}
+		}
+	}
+
 	private class Undo extends SelfRegisteringAction {
 
 		private static final long serialVersionUID = -7208806278835605976L;
@@ -274,6 +326,105 @@ public class HeightFieldKeyActions {
 		}
 	}
 
+	private class PrintScale extends SelfRegisteringAction {
+
+		private static final long serialVersionUID = -7884038268749788208L;
+
+		final ViewerPanel viewer;
+		DisplayScaleOverlay overlay;
+		boolean isVisible;
+
+		public PrintScale(final String name, final ViewerPanel viewer, final String ... defaultTriggers) {
+
+			super(name, defaultTriggers);
+
+			this.viewer = viewer;
+			this.overlay = null;
+			this.isVisible = false;
+		}
+
+		@Override
+		public void actionPerformed(final ActionEvent event) {
+
+			synchronized (viewer) {
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+				if ( overlay == null )
+				{
+					this.overlay = new DisplayScaleOverlay( viewer );
+
+					viewer.addRenderTransformListener( overlay );
+					viewer.getDisplay().addOverlayRenderer( overlay );
+				}
+				else
+				{
+					overlay.toggleState();
+				}
+
+				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+				viewer.requestRepaint();
+			}
+		}
+	}
+
+	private static class DisplayScaleOverlay implements OverlayRenderer, TransformListener< AffineTransform3D >
+	{
+		private final DecimalFormat format = new DecimalFormat("0.####");
+		private final AffineTransform3D viewerTransform;
+		private final ViewerPanel viewer;
+		private Color col = Color.green.darker();
+
+		private int width = 0, height = 0;
+		private boolean draw;
+
+		public DisplayScaleOverlay( final ViewerPanel viewer )
+		{
+			this.viewer = viewer;
+			this.viewerTransform = new AffineTransform3D();
+			this.draw = true;
+		}
+
+		@Override
+		public void setCanvasSize( final int width, final int height )
+		{
+			this.width = width;
+			this.height = height;
+		}
+
+		@Override
+		public void transformChanged( final AffineTransform3D transform )
+		{
+			viewerTransform.set( transform );
+		}
+
+		public void toggleState() { this.draw = !this.draw; }
+
+		@Override
+		public void drawOverlays( final Graphics g )
+		{
+			if ( !draw )
+				return;
+
+			//scale=det(A)^(1/3);
+			final double scale = computeScale( viewerTransform );
+
+			g.setFont( new Font( "Monospaced", Font.PLAIN, 12 ) );
+			g.drawString( "s= " + format.format( scale ) + " x", ( int ) g.getClipBounds().getWidth() - 100, (int)g.getClipBounds().getHeight() - 24 );
+
+			//TransformAwareBufferedImageOverlayRenderer t = null;
+			//t.bufferedImage;
+		}
+	}
+
+	public static double computeScale( final AffineTransform3D t )
+	{
+		final double[] m = t.getRowPackedCopy();
+
+		//scale=det(A)^(1/3);
+		return Math.pow( LinAlgHelpers.det3x3( m[ 0 ], m[ 1 ], m[ 2 ], m[ 4 ], m[ 5 ], m[ 6 ], m[ 8 ], m[ 9 ], m[ 10 ] ), 1.0/3.0 );
+	}
+
 	private static class ZeroLineOverlay implements OverlayRenderer, TransformListener< AffineTransform3D >
 	{
 		private final AffineTransform3D viewerTransform;
@@ -328,10 +479,10 @@ public class HeightFieldKeyActions {
 
 			final double dot = LinAlgHelpers.dot( nA, nB );
 
-			System.out.println( "zero: " + net.imglib2.util.Util.printCoordinates( zero ) );
-			System.out.println( "nATransformed: " + net.imglib2.util.Util.printCoordinates( nATransformed ) );
-			System.out.println( "nA: " + net.imglib2.util.Util.printCoordinates( nA ) );
-			System.out.println( "dot: " + dot );
+			//System.out.println( "zero: " + net.imglib2.util.Util.printCoordinates( zero ) );
+			//System.out.println( "nATransformed: " + net.imglib2.util.Util.printCoordinates( nATransformed ) );
+			//System.out.println( "nA: " + net.imglib2.util.Util.printCoordinates( nA ) );
+			//System.out.println( "dot: " + dot );
 
 			if ( dot <= 0.9999 ) // else planes are paralell
 			{
@@ -355,7 +506,7 @@ public class HeightFieldKeyActions {
 				LinAlgHelpers.subtract( mul( dB, nA ), mul( dA, nB ), tmp );
 				LinAlgHelpers.cross( tmp, line, pL );
 
-				System.out.println( "P(s) = " + net.imglib2.util.Util.printCoordinates( pL ) + " + s*" + net.imglib2.util.Util.printCoordinates( line ) );
+				//System.out.println( "P(s) = " + net.imglib2.util.Util.printCoordinates( pL ) + " + s*" + net.imglib2.util.Util.printCoordinates( line ) );
 
 				// now we need to intersect the line with the screen window (it needs to intersect with two of them), it lies in the same plane hence 2d
 				final double[] q = new double[] { pL[ 0 ], pL[ 1 ] };
@@ -368,7 +519,6 @@ public class HeightFieldKeyActions {
 				final double[] u = new double[] { 1, 0 };
 
 				final double sTop = intersect( p, u, q, v );
-				System.out.println( "top: " + sTop );
 
 				//
 				// bottom screen line
@@ -377,7 +527,6 @@ public class HeightFieldKeyActions {
 				p[ 1 ] = height - 1;
 
 				final double sBottom = intersect( p, u, q, v );
-				System.out.println( "bottom: " + sBottom );
 
 				//
 				// left screen line
@@ -389,7 +538,6 @@ public class HeightFieldKeyActions {
 				u[ 1 ] = 1;
 
 				final double sLeft = intersect( p, u, q, v );
-				System.out.println( "left: " + sLeft );
 
 				//
 				// right screen line
@@ -401,7 +549,6 @@ public class HeightFieldKeyActions {
 				u[ 1 ] = 1;
 
 				final double sRight = intersect( p, u, q, v );
-				System.out.println( "right: " + sRight );
 
 				if ( Double.isFinite( sTop ) && Double.isFinite( sLeft ) )
 				{
