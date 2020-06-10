@@ -28,11 +28,15 @@ import org.scijava.ui.behaviour.util.InputActionBindings;
 
 import bdv.util.Affine3DHelpers;
 import bdv.viewer.ViewerPanel;
+import bdv.viewer.animate.AbstractTransformAnimator;
 import bdv.viewer.animate.RotationAnimator;
 import bdv.viewer.render.TransformAwareBufferedImageOverlayRenderer;
+import mpicbg.models.AffineModel3D;
+import mpicbg.models.InterpolatedAffineModel3D;
 import net.imglib2.Point;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.InterpolatedRealTransform;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.ui.OverlayRenderer;
 import net.imglib2.ui.TransformListener;
@@ -79,13 +83,13 @@ public class HeightFieldKeyActions {
 		new DisplayZeroLine("display z=0", viewer, "ctrl 0").register();
 		new PrintScale("print current scaling", viewer, "ctrl 2").register();
 
-		new MoveFixedSteps("move horizontal fwd", 0, true, "F").register();
-		new MoveFixedSteps("move horizontal bck", 0, false, "D").register();
+		new MoveFixedSteps("move horizontal right", 0, false, "F").register();
+		new MoveFixedSteps("move horizontal left", 0, true, "D").register();
 
-		new MoveFixedSteps("move vertical fwd", 1, true, "V").register();
-		new MoveFixedSteps("move vertical bck", 1, false, "C").register();
+		new MoveFixedSteps("move vertical up", 1, true, "R").register();
+		new MoveFixedSteps("move vertical down", 1, false, "C").register();
 
-		//TODO: SCALE & INTENSITY overlay
+		//TODO: INTENSITY overlay
 
 		inputActionBindings.addActionMap("persistence", ksActionMap);
 		inputActionBindings.addInputMap("persistence", ksInputMap);
@@ -233,23 +237,52 @@ public class HeightFieldKeyActions {
 
 				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
-				final AffineTransform3D finalTransform = viewer.getDisplay().getTransformEventHandler().getTransform();
+				final AffineTransform3D viewerTransform = viewer.getDisplay().getTransformEventHandler().getTransform();
 
-				final double scale = computeScale( finalTransform );
+				final double scale = computeScale( viewerTransform );
+
+				final double[] tStart = new double[] { viewerTransform.get( 0, 3 ), viewerTransform.get( 1, 3 ), viewerTransform.get( 2, 3 ) };
+				final double[] tEnd = tStart.clone();
 
 				if ( fwd )
-					finalTransform.set( finalTransform.get( dim, 3 ) + steps[ dim ] * scale, dim, 3);
+					tEnd[ dim ] += steps[ dim ] * scale;
 				else
-					finalTransform.set( finalTransform.get( dim, 3 ) - steps[ dim ] * scale, dim, 3);
+					tEnd[ dim ] -= steps[ dim ] * scale;
 
-				viewer.getState().setViewerTransform(finalTransform);
-				viewer.transformChanged(finalTransform);
-				viewer.setCurrentViewerTransform( finalTransform );
-				viewer.requestRepaint();
+				viewer.setTransformAnimator( new TranslationTransformAnimator( viewerTransform, tStart, tEnd, 300 ) );
 
 				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
 			}
 		}
+	}
+
+	protected static class TranslationTransformAnimator extends AbstractTransformAnimator
+	{
+		final AffineTransform3D viewerTransform;
+		final double[] tStart;
+		final double[] tEnd;
+
+		public TranslationTransformAnimator( final AffineTransform3D viewerTransform, final double[] tStart, final double[] tEnd, final long duration )
+		{
+			super( duration );
+
+			this.viewerTransform = viewerTransform;
+			this.tStart = tStart;
+			this.tEnd = tEnd;
+		}
+
+		@Override
+		public AffineTransform3D get( final double t )
+		{
+			final AffineTransform3D transform = viewerTransform.copy();
+
+			transform.set( tStart[ 0 ] * ( 1.0 - t ) + tEnd[ 0 ] * t, 0, 3);
+			transform.set( tStart[ 1 ] * ( 1.0 - t ) + tEnd[ 1 ] * t, 1, 3);
+			transform.set( tStart[ 2 ] * ( 1.0 - t ) + tEnd[ 2 ] * t, 2, 3);
+
+			return transform;
+		}
+		
 	}
 
 	private class Undo extends SelfRegisteringAction {
