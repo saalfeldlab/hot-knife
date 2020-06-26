@@ -83,11 +83,11 @@ public class HeightFieldKeyActions {
 		new DisplayZeroLine("display z=0", viewer, "ctrl 0").register();
 		new PrintScale("print current scaling", viewer, "ctrl 2").register();
 
-		new MoveFixedSteps("move horizontal right", 0, false, "F").register();
-		new MoveFixedSteps("move horizontal left", 0, true, "D").register();
+		new MoveFixedSteps("move horizontal right", 0, false, "ctrl F").register();
+		new MoveFixedSteps("move horizontal left", 0, true, "ctrl D").register();
 
-		new MoveFixedSteps("move vertical up", 1, true, "R").register();
-		new MoveFixedSteps("move vertical down", 1, false, "C").register();
+		new MoveFixedSteps("move vertical up", 1, true, "ctrl R").register();
+		new MoveFixedSteps("move vertical down", 1, false, "ctrl C").register();
 
 		//TODO: INTENSITY overlay
 
