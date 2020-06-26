@@ -87,7 +87,7 @@ public class HeightFieldKeyActions {
 		new MoveFixedSteps("move horizontal left", 0, true, "ctrl D").register();
 
 		new MoveFixedSteps("move vertical up", 1, true, "ctrl R").register();
-		new MoveFixedSteps("move vertical down", 1, false, "ctrl C").register();
+		new MoveFixedSteps("move vertical down", 1, false, "ctrl V").register();
 
 		//TODO: INTENSITY overlay
 
