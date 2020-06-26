@@ -16,6 +16,7 @@
  */
 package org.janelia.saalfeldlab.hotknife.tools;
 
+import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -23,6 +24,9 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import org.janelia.saalfeldlab.hotknife.HeightFieldTransform;
+import org.janelia.saalfeldlab.hotknife.ops.AbsoluteGradientCenter;
+import org.janelia.saalfeldlab.hotknife.ops.GradientCenter;
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Transform.TransformedSource;
@@ -35,6 +39,7 @@ import org.scijava.ui.behaviour.io.InputTriggerDescription;
 import org.scijava.ui.behaviour.io.yaml.YamlConfigIO;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 
+import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
@@ -42,10 +47,24 @@ import bdv.viewer.Interpolation;
 import bdv.viewer.state.ViewerState;
 import ij.ImageJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccessible;
+import net.imglib2.cache.Cache;
+import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.img.cell.Cell;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.RealViews;
+import net.imglib2.realtransform.ScaleAndTranslation;
+import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -59,6 +78,8 @@ import picocli.CommandLine.Option;
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
 public class PaintHeightField implements Callable<Void>{
+
+	private static int[] blockSize = new int[] {32, 32};
 
 	@Option(names = {"-i", "--n5Path"}, required = true, description = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 	private String n5Path = null;
@@ -125,6 +146,34 @@ public class PaintHeightField implements Callable<Void>{
 	}
 
 
+	private static double[][][] sigmaSeries(
+			final double[] resolution,
+			final int stepsPerOctave,
+			final int steps) {
+
+		final double factor = Math.pow(2, 1.0 / stepsPerOctave);
+
+		final int n = resolution.length;
+		final double[][][] series = new double[3][steps][n];
+		final double minRes = Arrays.stream(resolution).min().getAsDouble();
+
+		double targetSigma = 0.5;
+		for (int i = 0; i < steps; ++i) {
+			for (int d = 0; d < n; ++d) {
+				series[0][i][d] = targetSigma / resolution[d] * minRes;
+				series[1][i][d] = Math.max(0.5, series[0][i][d]);
+			}
+			targetSigma *= factor;
+		}
+		for (int i = 1; i < steps; ++i) {
+			for (int d = 0; d < n; ++d) {
+				series[2][i][d] = Math.sqrt(Math.max(0, series[1][i][d] * series[1][i][d] - series[1][i - 1][d] * series[1][i - 1][d]));
+			}
+		}
+
+		return series;
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
@@ -164,12 +213,13 @@ public class PaintHeightField implements Callable<Void>{
 		/* raw */
 		final RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(n5Field, fieldGroup);
 		final ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
-		System.out.print("Loading height field ... ");
+
+		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
 		Util.copy(heightFieldSource, heightField);
 		System.out.println("done.");
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
-		final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
+		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
 
 		final HeightFieldTransform<DoubleType> heightFieldTransform = new HeightFieldTransform<>(
 					Transform.scaleAndShiftHeightFieldAndValues(
@@ -190,9 +240,35 @@ public class PaintHeightField implements Callable<Void>{
 						offset,
 						queue);
 
+		bdv = Show.mipmapSource( mipmapSource, bdv, options.addTo(bdv) );
 
-		bdv = Show.mipmapSource(mipmapSource, bdv, options.addTo(bdv));
+		System.out.println("Setting up gradients ... ");
 
+		/* gradients */
+		final AbsoluteGradientCenter<FloatType> gradientOp =
+				new AbsoluteGradientCenter<>(
+						Views.extendBorder( heightField ),
+						new double[] { 0.5, 0.5 });
+		final RandomAccessibleInterval<FloatType> gradient = Lazy.process(heightField, blockSize, new FloatType(), AccessFlags.setOf(), gradientOp);
+		final Cache< ?, ? > gradientCache = ((CachedCellImg< ?, ? >)gradient).getCache();
+
+		final RealRandomAccessible< FloatType > gradientFull = 
+				RealViews.affineReal(
+						Views.interpolate(
+								Views.extendZero(
+										gradient ),
+								new NLinearInterpolatorFactory<>()),
+						Transform.createTopLeftScaleShift(new double[] {downsamplingFactors[0], downsamplingFactors[1]}) );
+
+		final Interval gradientFullInterval = new FinalInterval(
+				new long[] { rawMipmaps[ 0 ].min( 0 ), rawMipmaps[ 0 ].min( 1 ) },
+				new long[] { rawMipmaps[ 0 ].max( 0 ), rawMipmaps[ 0 ].max( 1 ) } );
+
+		bdv = BdvFunctions.show( gradientFull, gradientFullInterval, "gradient", options.addTo( bdv ) );
+		bdv.setDisplayRange(0, 25);
+		bdv.setColor( new ARGBType( ARGBType.rgba( 255, 0, 0, 0 ) ) );
+
+		/* Controls */
 		final InputTriggerConfig config = getInputTriggerConfig();
 		final TriggerBehaviourBindings bindings = bdv.getBdvHandle().getTriggerbindings();
 
@@ -203,6 +279,7 @@ public class PaintHeightField implements Callable<Void>{
 						new double[] {
 								downsamplingFactors[0],
 								downsamplingFactors[1]}),
+				gradientCache,
 				config);
 
 		final HeightFieldSmoothController smoothController = new HeightFieldSmoothController(
@@ -212,6 +289,7 @@ public class PaintHeightField implements Callable<Void>{
 						new double[] {
 								downsamplingFactors[0],
 								downsamplingFactors[1]}),
+				gradientCache,
 				config);
 
 		new HeightFieldKeyActions(

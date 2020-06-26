@@ -10,6 +10,7 @@ import bdv.viewer.ViewerPanel;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
+import net.imglib2.cache.Cache;
 import net.imglib2.img.array.ArrayCursor;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
@@ -29,16 +30,21 @@ public class HeightFieldSmoothController extends AbstractHeightFieldBrushControl
 	protected ArrayImg<FloatType, ?> patch;
 	protected double smoothSigma = 2;
 
+	protected final Cache< ?, ? > gradientCache;
+
 	public HeightFieldSmoothController(
 			final ViewerPanel viewer,
 			final RandomAccessibleInterval<FloatType> heightField,
 			final ScaleAndTranslation heightFieldTransform,
+			final Cache< ?, ? > gradientCache,
 			final InputTriggerConfig config) {
 
 		super(viewer, heightField, heightFieldTransform, config, new CircleOverlay(viewer, new int[] {5, 2}, new Color[] {Color.YELLOW, Color.MAGENTA}));
 
 		gaussOp = new SimpleGaussRA<>(new double[] {smoothSigma, smoothSigma});
 		patch = new ArrayImgFactory<>(new FloatType()).create(brushMask);
+
+		this.gradientCache = gradientCache;
 
 		new Smooth("paint smooth brush", "Q button1").register();
 		new ChangeBrushRadius("change smooth brush radius", "Q scroll").register();
@@ -85,6 +91,9 @@ public class HeightFieldSmoothController extends AbstractHeightFieldBrushControl
 
 				v.setReal((b - a) * lambda + a);
 			}
+
+			if ( gradientCache != null )
+				gradientCache.invalidateAll();
 		}
 	}
 
