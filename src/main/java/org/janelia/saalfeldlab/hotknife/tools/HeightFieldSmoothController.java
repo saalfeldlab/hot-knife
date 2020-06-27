@@ -57,7 +57,7 @@ public class HeightFieldSmoothController extends AbstractHeightFieldBrushControl
 		protected void paint(final RealLocalizable coords)
 		{
 			final IntervalView<FloatType> heightFieldInterval = Views.interval(
-					extendedHeightField,
+					zeroExtendedHeightField,
 					new long[] {
 							Math.round(coords.getDoublePosition(0) - (brushMask.dimension(0) / 2)),
 							Math.round(coords.getDoublePosition(1) - (brushMask.dimension(1) / 2))},

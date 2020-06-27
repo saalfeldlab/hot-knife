@@ -32,7 +32,7 @@ public class AbstractHeightFieldBrushController {
 
 	final protected ViewerPanel viewer;
 	final protected RandomAccessibleInterval<FloatType> heightField;
-	final protected RandomAccessible<FloatType> extendedHeightField;
+	final protected RandomAccessible<FloatType> extendedHeightField, zeroExtendedHeightField;
 	final protected ScaleAndTranslation heightFieldTransform;
 	final protected RealPoint brushLocation;
 	final protected CircleOverlay brushOverlay;
@@ -91,6 +91,7 @@ public class AbstractHeightFieldBrushController {
 		this.viewer = viewer;
 		this.heightField = heightField;
 		extendedHeightField = Views.extendBorder(this.heightField);
+		zeroExtendedHeightField = Views.extendZero(this.heightField);
 		this.heightFieldTransform = heightFieldTransform;
 		this.brushOverlay = brushOverlay;
 		brushMask = createMask(brushSigma, heightFieldTransform.getScale(0));

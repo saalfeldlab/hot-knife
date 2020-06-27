@@ -237,9 +237,11 @@ public class PaintHeightField implements Callable<Void>{
 		viewerState.getViewerTransform(transform);
 		transform.set(0, 3, 4);
 		viewerState.setViewerTransform(transform);
-		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
-		bdv.getBdvHandle().getViewerPanel().requestRepaint();
 
+		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
+		bdv.getBdvHandle().getViewerPanel().setCurrentViewerTransform( transform );
+		bdv.getBdvHandle().getViewerPanel().requestRepaint();
+		
 		return null;
 	}
 }

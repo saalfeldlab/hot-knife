@@ -252,9 +252,11 @@ public class Align {
 			final ConsensusFilter filter) {
 
 		final ArrayList<PointMatch> candidates = matchSIFT(a, b, maxScale, minScale, fdSize, rod, scale);
+		final int numCandidates = candidates.size(); // size of candidates is changed below
+
 		final ArrayList<PointMatch> matches = filter.filter(candidates);
 
-		System.out.printf("%d of %d matches found.", matches.size(), candidates.size());
+		System.out.printf("%d of %d matches found.", matches.size(), numCandidates);
 		System.out.println();
 
 		return matches;
