@@ -20,6 +20,7 @@ import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
@@ -39,11 +40,13 @@ import org.scijava.ui.behaviour.io.InputTriggerDescription;
 import org.scijava.ui.behaviour.io.yaml.YamlConfigIO;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 
+import bdv.tools.brightness.RealARGBColorConverterSetup;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Interpolation;
+import bdv.viewer.SourceAndConverter;
 import bdv.viewer.state.ViewerState;
 import ij.ImageJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
@@ -266,7 +269,10 @@ public class PaintHeightField implements Callable<Void>{
 
 		bdv = BdvFunctions.show( gradientFull, gradientFullInterval, "gradient", options.addTo( bdv ) );
 		bdv.setDisplayRange(0, 25);
+		bdv.setDisplayRangeBounds( 0, 500 );
 		bdv.setColor( new ARGBType( ARGBType.rgba( 255, 0, 0, 0 ) ) );
+
+		final BdvStackSource< ? > bdvGradient = bdv;
 
 		/* Controls */
 		final InputTriggerConfig config = getInputTriggerConfig();
@@ -292,6 +298,19 @@ public class PaintHeightField implements Callable<Void>{
 				gradientCache,
 				config);
 
+		final HeightFieldWeightedSmoothController weightedSmoothController = new HeightFieldWeightedSmoothController(
+				bdv.getBdvHandle().getViewerPanel(),
+				heightField,
+				Transform.createTopLeftScaleShift(
+						new double[] {
+								downsamplingFactors[0],
+								downsamplingFactors[1]}),
+				gradient,
+				bdvGradient,
+				gradientCache,
+				config);
+
+
 		new HeightFieldKeyActions(
 				bdv.getBdvHandle().getViewerPanel(),
 				heightField,
@@ -308,6 +327,10 @@ public class PaintHeightField implements Callable<Void>{
 		bindings.addBehaviourMap("smooth", smoothController.getBehaviourMap());
 		bindings.addInputTriggerMap("smooth", smoothController.getInputTriggerMap());
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(smoothController.getBrushOverlay());
+
+		bindings.addBehaviourMap("weightedsmooth", weightedSmoothController.getBehaviourMap());
+		bindings.addInputTriggerMap("weightedsmooth", weightedSmoothController.getInputTriggerMap());
+		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(weightedSmoothController.getBrushOverlay());
 
 		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
 		final ViewerState viewerState = bdv.getBdvHandle().getViewerPanel().getState();
