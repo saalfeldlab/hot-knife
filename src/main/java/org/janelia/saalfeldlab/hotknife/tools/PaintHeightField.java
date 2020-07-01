@@ -148,35 +148,6 @@ public class PaintHeightField implements Callable<Void>{
 		CommandLine.call(new PaintHeightField(), args);
 	}
 
-
-	private static double[][][] sigmaSeries(
-			final double[] resolution,
-			final int stepsPerOctave,
-			final int steps) {
-
-		final double factor = Math.pow(2, 1.0 / stepsPerOctave);
-
-		final int n = resolution.length;
-		final double[][][] series = new double[3][steps][n];
-		final double minRes = Arrays.stream(resolution).min().getAsDouble();
-
-		double targetSigma = 0.5;
-		for (int i = 0; i < steps; ++i) {
-			for (int d = 0; d < n; ++d) {
-				series[0][i][d] = targetSigma / resolution[d] * minRes;
-				series[1][i][d] = Math.max(0.5, series[0][i][d]);
-			}
-			targetSigma *= factor;
-		}
-		for (int i = 1; i < steps; ++i) {
-			for (int d = 0; d < n; ++d) {
-				series[2][i][d] = Math.sqrt(Math.max(0, series[1][i][d] * series[1][i][d] - series[1][i - 1][d] * series[1][i - 1][d]));
-			}
-		}
-
-		return series;
-	}
-
 	@SuppressWarnings("unchecked")
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
@@ -255,6 +226,10 @@ public class PaintHeightField implements Callable<Void>{
 		final RandomAccessibleInterval<FloatType> gradient = Lazy.process(heightField, blockSize, new FloatType(), AccessFlags.setOf(), gradientOp);
 		final Cache< ?, ? > gradientCache = ((CachedCellImg< ?, ? >)gradient).getCache();
 
+		System.out.println("Copying gradients ... ");
+		final ArrayImg<FloatType, ?> gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
+		Util.copy(gradient, gradientCopy);
+
 		final RealRandomAccessible< FloatType > gradientFull = 
 				RealViews.affineReal(
 						Views.interpolate(
@@ -263,11 +238,24 @@ public class PaintHeightField implements Callable<Void>{
 								new NLinearInterpolatorFactory<>()),
 						Transform.createTopLeftScaleShift(new double[] {downsamplingFactors[0], downsamplingFactors[1]}) );
 
+		final RealRandomAccessible< FloatType > gradientCopyFull = 
+				RealViews.affineReal(
+						Views.interpolate(
+								Views.extendZero(
+										gradientCopy ),
+								new NLinearInterpolatorFactory<>()),
+						Transform.createTopLeftScaleShift(new double[] {downsamplingFactors[0], downsamplingFactors[1]}) );
+
 		final Interval gradientFullInterval = new FinalInterval(
 				new long[] { rawMipmaps[ 0 ].min( 0 ), rawMipmaps[ 0 ].min( 1 ) },
 				new long[] { rawMipmaps[ 0 ].max( 0 ), rawMipmaps[ 0 ].max( 1 ) } );
 
-		bdv = BdvFunctions.show( gradientFull, gradientFullInterval, "gradient", options.addTo( bdv ) );
+		bdv = BdvFunctions.show( gradientFull, gradientFullInterval, "current gradient", options.addTo( bdv ) );
+		bdv.setDisplayRange(0, 25);
+		bdv.setDisplayRangeBounds( 0, 500 );
+		bdv.setColor( new ARGBType( ARGBType.rgba( 0, 0, 255, 0 ) ) );
+
+		bdv = BdvFunctions.show( gradientCopyFull, gradientFullInterval, "input gradient", options.addTo( bdv ) );
 		bdv.setDisplayRange(0, 25);
 		bdv.setDisplayRangeBounds( 0, 500 );
 		bdv.setColor( new ARGBType( ARGBType.rgba( 255, 0, 0, 0 ) ) );
@@ -295,7 +283,7 @@ public class PaintHeightField implements Callable<Void>{
 						new double[] {
 								downsamplingFactors[0],
 								downsamplingFactors[1]}),
-				gradientCache,
+				gradientCache, // just for invalidation
 				config);
 
 		final HeightFieldWeightedSmoothController weightedSmoothController = new HeightFieldWeightedSmoothController(
@@ -305,9 +293,9 @@ public class PaintHeightField implements Callable<Void>{
 						new double[] {
 								downsamplingFactors[0],
 								downsamplingFactors[1]}),
-				gradient,
+				gradientCopy,
 				bdvGradient,
-				gradientCache,
+				gradientCache, // just for invalidation
 				config);
 
 

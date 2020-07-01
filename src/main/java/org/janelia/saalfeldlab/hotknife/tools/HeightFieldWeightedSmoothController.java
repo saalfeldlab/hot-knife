@@ -40,9 +40,9 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 	protected double smoothSigma = 2;
 	protected double scaledSigma = smoothSigma;
 
-	final protected RandomAccessibleInterval<FloatType> gradient;
-	final protected RandomAccessible<FloatType> extendedGradient;
-	final protected BdvStackSource< ? > bdvGradient;
+	final protected RandomAccessibleInterval<FloatType> initialGradient;
+	final protected RandomAccessible<FloatType> extendedInitialGradient;
+	final protected BdvStackSource< ? > bdvInitialGradient;
 
 	final protected Cache< ?, ? > gradientCache;
 
@@ -50,8 +50,8 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 			final ViewerPanel viewer,
 			final RandomAccessibleInterval<FloatType> heightField,
 			final ScaleAndTranslation heightFieldTransform,
-			final RandomAccessibleInterval<FloatType> gradient,
-			final BdvStackSource< ? > bdvGradient,
+			final RandomAccessibleInterval<FloatType> initialGradient,
+			final BdvStackSource< ? > bdvInitialGradient,
 			final Cache< ?, ? > gradientCache,
 			final InputTriggerConfig config) {
 
@@ -61,10 +61,10 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 		this.patchHF = new ArrayImgFactory<>(new FloatType()).create(brushMask);
 		this.patchWeight = new ArrayImgFactory<>(new FloatType()).create(brushMask);
 
-		this.gradient = gradient;
-		this.extendedGradient = Views.extendZero( gradient );
-		this.bdvGradient = bdvGradient;
+		this.bdvInitialGradient = bdvInitialGradient;
 		this.gradientCache = gradientCache;
+		this.initialGradient = initialGradient;
+		this.extendedInitialGradient = Views.extendZero( initialGradient );
 
 		new Smooth("paint weighted smooth brush", "W button1").register();
 		new ChangeBrushRadius("change weighted smooth brush radius", "W scroll").register();
@@ -77,7 +77,6 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 		public Smooth(final String name, final String... defaultTriggers) {
 
 			super(name, defaultTriggers);
-			new ImageJ();
 		}
 
 		@Override
@@ -92,13 +91,13 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 							Math.round(coords.getDoublePosition(0) + (brushMask.dimension(0) / 2)),
 							Math.round(coords.getDoublePosition(1) + (brushMask.dimension(1) / 2))});
 
-			final double[] currentMinMax = getMinMaxDisplayRange( bdvGradient );
+			final double[] currentMinMax = getMinMaxDisplayRange( bdvInitialGradient );
 
 			final float min = (float)currentMinMax[ 0 ];
 			final float max = (float)currentMinMax[ 1 ];
 
-			final RandomAccessible< FloatType > convertedExtendedGradient = Converters.convert(
-					extendedGradient,
+			final RandomAccessible< FloatType > convertedExtendedInitialGradient = Converters.convert(
+					extendedInitialGradient,
 					// TODO: Listener on the sliders, only update converter if necessary
 					new Converter< FloatType, FloatType >()
 					{
@@ -113,7 +112,7 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 			final WeightedGaussRA< FloatType > weightedgauss =
 					new WeightedGaussRA<>(
 							extendedHeightField,
-							convertedExtendedGradient,
+							convertedExtendedInitialGradient,
 							Views.translate(
 									patchHF,
 									heightFieldInterval.min(0),
@@ -148,8 +147,8 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 				v.setReal((b - a) * lambda + a);
 			}
 
-			//if ( gradientCache != null )
-			//	gradientCache.invalidateAll();
+			if ( gradientCache != null )
+				gradientCache.invalidateAll();
 		}
 	}
 
@@ -201,7 +200,7 @@ public class HeightFieldWeightedSmoothController extends AbstractHeightFieldBrus
 	{
 		// TODO: Listener on the sliders, only update converter if necessary
 		// TODO: hack that assumes that it is the second assignment, higher versions of bdv-vistools allow to query this directly
-		final MinMaxGroup group = bdv.getBdvHandle().getSetupAssignments().getMinMaxGroups().get( 1 );
+		final MinMaxGroup group = bdv.getBdvHandle().getSetupAssignments().getMinMaxGroups().get( 2 );
 
 		return new double[] {
 				group.getMinBoundedValue().getCurrentValue(),
