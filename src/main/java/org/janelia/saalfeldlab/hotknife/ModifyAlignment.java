@@ -1,12 +1,36 @@
 package org.janelia.saalfeldlab.hotknife;
+import org.janelia.saalfeldlab.hotknife.util.Util;
+
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.view.Views;
 
 public class ModifyAlignment
 {
+	public static ArrayImg<DoubleType, ?> copyPositionField( final RandomAccessibleInterval<DoubleType> positionFieldIn )
+	{
+		final ArrayImg<DoubleType, ?> positionFieldCopy = new ArrayImgFactory<>(new DoubleType()).create(Views.zeroMin( positionFieldIn ));
+
+		Util.copy(Views.zeroMin( positionFieldIn ), positionFieldCopy);
+		
+		return positionFieldCopy;
+	}
+
+	public static < T > RandomAccessibleInterval< T > setPositionFieldBounds(
+			final RandomAccessibleInterval< T > positionFieldCopy,
+			final RandomAccessibleInterval< ? > positionFieldIn)
+	{
+		final long[] min = new long[ positionFieldIn.numDimensions() ];
+		positionFieldIn.min( min );
+
+		return Views.translate( positionFieldCopy, min );
+	}
+
 	public static <T extends RealType<T>> void modifyPositionField(
 			final RandomAccessibleInterval<T> positionFieldCopy,
 			final int[] loc,

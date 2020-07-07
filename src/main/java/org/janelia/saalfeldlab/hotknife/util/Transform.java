@@ -480,11 +480,14 @@ public class Transform {
 		 */
 		final RandomAccessibleInterval<T> positionField;
 
+		if ( count == 1 ) // Loading: /align-v3/align-1-testb/align-v3.slab-2.bot.face
+		{
+			
+		}
 		if ( count == 2 ) // Loading: /align-v3/align-1-testb/align-v3.slab-3.top.face
 		{
-			final ArrayImg<DoubleType, ?> positionFieldCopy = new ArrayImgFactory<>(new DoubleType()).create(Views.zeroMin( positionFieldIn ));
-
-			Util.copy((RandomAccessibleInterval)Views.zeroMin( positionFieldIn ), positionFieldCopy);
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionFieldIn );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
@@ -498,47 +501,11 @@ public class Transform {
 					new double[] { 26, -20 },
 					new double[] { 200, 200 } );
 
-			/*
-			// needs to move down by 70 pixels on the top at about 50 from the top
-			int locX = 800;
-			int locY = 135;
-			double moveByX = 500;//0;
-			double moveByY = 500;//-100;
-			double sigmaX = 10;//350;
-			double sigmaY = 10;//150;
-			double[] halfKernelX = Gauss3.halfkernel( sigmaX, Gauss3.halfkernelsizes( new double[] { sigmaX } )[ 0 ] ,false );
-			double[] halfKernelY = Gauss3.halfkernel( sigmaY, Gauss3.halfkernelsizes( new double[] { sigmaY } )[ 0 ] ,false );
-
-			
-			final Cursor< DoubleType > c = positionFieldCopy.localizingCursor();
-
-			while ( c.hasNext() )
-			{
-				final DoubleType t = c.next();
-
-				final int distX = Math.abs( c.getIntPosition( 0 ) - locX );
-				final int distY = Math.abs( c.getIntPosition( 1 ) - locY );
-
-				if ( c.getIntPosition( 2 ) == 1 ) // y
-				{
-					if ( distX < halfKernelX.length && distY < halfKernelY.length )
-						t.set( t.get() + moveByY * ( halfKernelX[ distX ] * halfKernelY[ distY ] ) );
-				}
-				else // x
-				{
-					if ( distX < halfKernelX.length && distY < halfKernelY.length )
-						t.set( t.get() + moveByX * ( halfKernelX[ distX ] * halfKernelY[ distY ] ) );
-				}
-			}
-			*/
 			//new ImageJ();
 			//ImageJFunctions.show( positionFieldCopy, Executors.newFixedThreadPool( 8 ) );
 			//SimpleMultiThreading.threadHaltUnClean();
-			
-			final long[] min = new long[ positionFieldIn.numDimensions() ];
-			positionFieldIn.min( min );
 
-			positionField = (RandomAccessibleInterval)Views.translate( positionFieldCopy, min );
+			positionField = (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionFieldIn );
 		}
 		else
 		{
