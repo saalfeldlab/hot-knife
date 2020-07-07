@@ -21,8 +21,11 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
+import org.janelia.saalfeldlab.hotknife.ModifyAlignment;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -36,20 +39,27 @@ import bdv.viewer.Interpolation;
 import bdv.viewer.Source;
 import bdv.viewer.render.DefaultMipmapOrdering;
 import bdv.viewer.render.MipmapOrdering;
+import ij.ImageJ;
 import mpicbg.models.Affine2D;
 import mpicbg.models.InterpolatedAffineModel2D;
 import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
 import mpicbg.spim.data.sequence.VoxelDimensions;
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.position.RealPositionRealRandomAccessible;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform;
@@ -437,6 +447,7 @@ public class Transform {
 		return Views.stack(dFields);
 	}
 
+	static int count = 0;
 	/**
 	 * Creates a {@link RealTransform} from a positionField raster.  The last
 	 * dimension of the input raster enumerates the dimensions, i.e. the input
@@ -450,8 +461,91 @@ public class Transform {
 	 * @param positionField
 	 * @return
 	 */
-	public static <T extends RealType<T>> PositionFieldTransform<T> createPositionFieldTransform(final RandomAccessibleInterval<T> positionField) {
+	public static <T extends RealType<T>> PositionFieldTransform<T> createPositionFieldTransform(final RandomAccessibleInterval<T> positionFieldIn) {
 
+		/*
+		Loading: /align-v3/align-1-testb/align-v3.slab-2.top.face
+		count: 0
+		Loading: /align-v3/align-1-testb/align-v3.slab-2.bot.face
+		count: 1
+		Loading: /align-v3/align-1-testb/align-v3.slab-3.top.face
+		count: 2
+		Loading: /align-v3/align-1-testb/align-v3.slab-3.bot.face
+		count: 3
+		Loading: /align-v3/align-1-testb/align-v3.slab-4.top.face
+		count: 4
+		Loading: /align-v3/align-1-testb/align-v3.slab-4.bot.face
+		count: 5
+
+		 */
+		final RandomAccessibleInterval<T> positionField;
+
+		if ( count == 2 ) // Loading: /align-v3/align-1-testb/align-v3.slab-3.top.face
+		{
+			final ArrayImg<DoubleType, ?> positionFieldCopy = new ArrayImgFactory<>(new DoubleType()).create(Views.zeroMin( positionFieldIn ));
+
+			Util.copy((RandomAccessibleInterval)Views.zeroMin( positionFieldIn ), positionFieldCopy);
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 800, 135 },
+					new double[] { 0, -70 },
+					new double[] { 350, 150 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1190, 390 },
+					new double[] { 26, -20 },
+					new double[] { 200, 200 } );
+
+			/*
+			// needs to move down by 70 pixels on the top at about 50 from the top
+			int locX = 800;
+			int locY = 135;
+			double moveByX = 500;//0;
+			double moveByY = 500;//-100;
+			double sigmaX = 10;//350;
+			double sigmaY = 10;//150;
+			double[] halfKernelX = Gauss3.halfkernel( sigmaX, Gauss3.halfkernelsizes( new double[] { sigmaX } )[ 0 ] ,false );
+			double[] halfKernelY = Gauss3.halfkernel( sigmaY, Gauss3.halfkernelsizes( new double[] { sigmaY } )[ 0 ] ,false );
+
+			
+			final Cursor< DoubleType > c = positionFieldCopy.localizingCursor();
+
+			while ( c.hasNext() )
+			{
+				final DoubleType t = c.next();
+
+				final int distX = Math.abs( c.getIntPosition( 0 ) - locX );
+				final int distY = Math.abs( c.getIntPosition( 1 ) - locY );
+
+				if ( c.getIntPosition( 2 ) == 1 ) // y
+				{
+					if ( distX < halfKernelX.length && distY < halfKernelY.length )
+						t.set( t.get() + moveByY * ( halfKernelX[ distX ] * halfKernelY[ distY ] ) );
+				}
+				else // x
+				{
+					if ( distX < halfKernelX.length && distY < halfKernelY.length )
+						t.set( t.get() + moveByX * ( halfKernelX[ distX ] * halfKernelY[ distY ] ) );
+				}
+			}
+			*/
+			//new ImageJ();
+			//ImageJFunctions.show( positionFieldCopy, Executors.newFixedThreadPool( 8 ) );
+			//SimpleMultiThreading.threadHaltUnClean();
+			
+			final long[] min = new long[ positionFieldIn.numDimensions() ];
+			positionFieldIn.min( min );
+
+			positionField = (RandomAccessibleInterval)Views.translate( positionFieldCopy, min );
+		}
+		else
+		{
+			positionField = positionFieldIn;
+		}
+
+		System.out.println( "count: " + count++ );
 		final int n = positionField.numDimensions() - 1;
 
 		@SuppressWarnings("unchecked")
