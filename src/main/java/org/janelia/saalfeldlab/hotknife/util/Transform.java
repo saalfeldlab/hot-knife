@@ -518,6 +518,56 @@ public class Transform {
 
 			positionField = (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionFieldIn );
 		}
+		else if ( count == 3 ) // Loading: /align-v3/align-1-testb/align-v3.slab-3.bot.face
+		{
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionFieldIn );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 800, 135 },
+					new double[] { -25 / 2.0, -45/ 2.0 },
+					new double[] { 200, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1152, 408 },
+					new double[] { -10 / 2.0, -5 / 2.0 },
+					new double[] { 200, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 950, 390 },
+					new double[] { 0, 10 / 2.0 },
+					new double[] { 150, 150 } );
+
+			positionField = (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionFieldIn );
+		}
+		else if ( count == 4 ) // Loading: /align-v3/align-1-testb/align-v3.slab-4.top.face
+		{
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionFieldIn );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 800, 135 },
+					new double[] { -25 / -2.0, -45 / -2.0 },
+					new double[] { 200, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1152, 408 },
+					new double[] { -10 / -2.0, -5 / -2.0 },
+					new double[] { 200, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 950, 390 },
+					new double[] { 0, 10 / -2.0 },
+					new double[] { 150, 150 } );
+
+			positionField = (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionFieldIn );
+		}
 		else
 		{
 			positionField = positionFieldIn;
