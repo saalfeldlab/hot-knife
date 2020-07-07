@@ -482,9 +482,24 @@ public class Transform {
 
 		if ( count == 1 ) // Loading: /align-v3/align-1-testb/align-v3.slab-2.bot.face
 		{
-			
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionFieldIn );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 800, 135 },
+					new double[] { 0, -70 / -2.0 },
+					new double[] { 350, 150 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1190, 390 },
+					new double[] { 26 / -2.0, -20 / -2.0 },
+					new double[] { 200, 200 } );
+
+			positionField = (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionFieldIn );
 		}
-		if ( count == 2 ) // Loading: /align-v3/align-1-testb/align-v3.slab-3.top.face
+		else if ( count == 2 ) // Loading: /align-v3/align-1-testb/align-v3.slab-3.top.face
 		{
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionFieldIn );
@@ -492,18 +507,14 @@ public class Transform {
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 800, 135 },
-					new double[] { 0, -70 },
+					new double[] { 0, -70 / 2 },
 					new double[] { 350, 150 } );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 1190, 390 },
-					new double[] { 26, -20 },
+					new double[] { 26 / 2, -20 / 2 },
 					new double[] { 200, 200 } );
-
-			//new ImageJ();
-			//ImageJFunctions.show( positionFieldCopy, Executors.newFixedThreadPool( 8 ) );
-			//SimpleMultiThreading.threadHaltUnClean();
 
 			positionField = (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionFieldIn );
 		}
