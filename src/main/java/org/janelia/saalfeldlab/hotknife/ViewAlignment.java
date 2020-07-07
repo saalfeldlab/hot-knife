@@ -114,6 +114,7 @@ public class ViewAlignment {
 		final int showScaleIndex = options.getScaleIndex();
 		final double showScale = 1.0 / (1 << showScaleIndex);
 
+		System.out.println( "showscale: " + showScale );
 		Bdv bdv = null;
 
 		final int numProc = Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 );
@@ -129,6 +130,7 @@ public class ViewAlignment {
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = 0; i < datasetNames.length; ++i) {
+				System.out.println( "Loading: " +  group + "/" + transformDatasetNames[i] );
 				realTransforms[i] = Transform.loadScaledTransform(
 						n5,
 						group + "/" + transformDatasetNames[i]);
