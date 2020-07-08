@@ -219,6 +219,25 @@ public class ModifyAlignment
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
+		/*else if ( surfaceCount == 9 ) // Loading: /align-v3/align-1/align-v3.slab-6.bot.face
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1079, 1960 },
+					new double[] { 280, -50 },
+					new double[] { 600, 200 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		*/
 		else
 		{
 			System.out.println( datasetName + " (" + surfaceCount + ") was not changed." );
@@ -375,14 +394,14 @@ public class ModifyAlignment
 
 		System.out.println( "showscale: " + showScale );
 
-		final String[] allDatasetNames = n5in.getAttribute(group, "datasets", String[].class);
+		final String[] datasetNames = n5in.getAttribute(group, "datasets", String[].class);
 		final String[] transformDatasetNames = n5in.getAttribute(group, "transforms", String[].class);
 		final double[] boundsMin = n5in.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5in.getAttribute(group, "boundsMax", double[].class);
 
-		final String[] datasetNames = new String[ 5 ];
+		/*final String[] datasetNames = new String[ 5 ];
 		for ( int i = 0;i < datasetNames.length; ++i )
-			datasetNames[ i ] = allDatasetNames[ i ];
+			datasetNames[ i ] = allDatasetNames[ i ];*/
 
 		final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 
