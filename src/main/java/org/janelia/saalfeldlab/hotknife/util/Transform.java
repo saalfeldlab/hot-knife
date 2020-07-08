@@ -619,6 +619,35 @@ public class Transform {
 		n5.setAttribute(datasetName, "scale", transformScale);
 	}
 
+	/**
+	 * Saves a transform as a position field in an N5 dataset
+	 *
+	 * @param n5
+	 * @param datasetName
+	 * @param positionField
+	 * @param transformScale
+	 * @param boundsMin
+	 * @param boundsMax
+	 * @throws IOException
+	 */
+	public static void savePositionField(
+			final N5Writer n5,
+			final String datasetName,
+			final RandomAccessibleInterval<DoubleType> positionField,
+			final double transformScale,
+			final double[] boundsMin,
+			final double[] boundsMax) throws IOException {
+
+		final int n = positionField.numDimensions() - 1;
+		final int[] blockSize = new int[n + 1];
+		Arrays.fill(blockSize, 1024);
+		blockSize[n] = n;
+		N5Utils.save(positionField, n5, datasetName, blockSize, new GzipCompression());
+		n5.setAttribute(datasetName, "boundsMin", boundsMin);
+		n5.setAttribute(datasetName, "boundsMax", boundsMax);
+		n5.setAttribute(datasetName, "scale", transformScale);
+	}
+
 	public static DatasetAttributes createScaledTransformDataset(
 			final N5Writer n5,
 			final String datasetName,
