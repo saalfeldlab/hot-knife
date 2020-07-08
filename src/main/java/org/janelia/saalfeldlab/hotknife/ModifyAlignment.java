@@ -75,15 +75,33 @@ public class ModifyAlignment
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 800, 135 },
+					new int[] { 1446, 245 },//new int[] { 800, 135 },
 					new double[] { 0, -70 / -2.0 },
 					new double[] { 350, 150 } );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 1190, 390 },
+					new int[] { 1840, 475 },//new int[] { 1190, 390 },
 					new double[] { 26 / -2.0, -20 / -2.0 },
 					new double[] { 200, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1575, 435 },
+					new double[] { 25 / -2.0, 10 / -2.0 },
+					new double[] { 75, 75 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1688, 583 },
+					new double[] { -10 / -2.0, 15 / -2.0 },
+					new double[] { 75, 75 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1590, 703 },
+					new double[] { -6 / -2.0, 4 / -2.0 },
+					new double[] { 150, 150 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -99,15 +117,33 @@ public class ModifyAlignment
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 800, 135 },
-					new double[] { 0, -70 / 2 },
+					new int[] { 1446, 245 },
+					new double[] { 0, -70 / 2.0 },
 					new double[] { 350, 150 } );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 1190, 390 },
-					new double[] { 26 / 2, -20 / 2 },
+					new int[] { 1840, 475 },
+					new double[] { 26 / 2.0, -20 / 2.0 },
 					new double[] { 200, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1575, 435 },
+					new double[] { 25 / 2.0, 10 / 2.0 },
+					new double[] { 75, 75 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1688, 583 },
+					new double[] { -10 / 2.0, 15 / 2.0 },
+					new double[] { 75, 75 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1590, 703 },
+					new double[] { -6 / 2.0, 4 / 2.0 },
+					new double[] { 150, 150 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -123,21 +159,27 @@ public class ModifyAlignment
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 800, 135 },
-					new double[] { -25 / 2.0, -45/ 2.0 },
+					new int[] { 1446, 245 },//new int[] { 800, 135 },
+					new double[] { -5 / 2.0, -45 / 2.0 },
 					new double[] { 200, 200 } );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 1152, 408 },
+					new int[] { 1802, 508 },//new int[] { 1152, 408 },
 					new double[] { -10 / 2.0, -5 / 2.0 },
 					new double[] { 200, 200 } );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 950, 390 },
+					new int[] { 1600, 490 },//new int[] { 950, 390 },
 					new double[] { 0, 10 / 2.0 },
 					new double[] { 150, 150 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1423, 420 },
+					new double[] { 0, 25 / 2.0 },
+					new double[] { 100, 100 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -153,21 +195,27 @@ public class ModifyAlignment
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 800, 135 },
-					new double[] { -25 / -2.0, -45 / -2.0 },
+					new int[] { 1446, 245 },//new int[] { 800, 135 },
+					new double[] { -5 / -2.0, -45 / -2.0 },
 					new double[] { 200, 200 } );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 1152, 408 },
+					new int[] { 1802, 508 },//new int[] { 1152, 408 },
 					new double[] { -10 / -2.0, -5 / -2.0 },
 					new double[] { 200, 200 } );
 
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 950, 390 },
+					new int[] { 1600, 490 },//new int[] { 950, 390 },
 					new double[] { 0, 10 / -2.0 },
 					new double[] { 150, 150 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1423, 420 },
+					new double[] { 0, 25 / -2.0 },
+					new double[] { 100, 100 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -327,10 +375,14 @@ public class ModifyAlignment
 
 		System.out.println( "showscale: " + showScale );
 
-		final String[] datasetNames = n5in.getAttribute(group, "datasets", String[].class);
+		final String[] allDatasetNames = n5in.getAttribute(group, "datasets", String[].class);
 		final String[] transformDatasetNames = n5in.getAttribute(group, "transforms", String[].class);
 		final double[] boundsMin = n5in.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5in.getAttribute(group, "boundsMax", double[].class);
+
+		final String[] datasetNames = new String[ 5 ];
+		for ( int i = 0;i < datasetNames.length; ++i )
+			datasetNames[ i ] = allDatasetNames[ i ];
 
 		final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 
