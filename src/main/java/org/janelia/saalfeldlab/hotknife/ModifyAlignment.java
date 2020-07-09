@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import org.janelia.saalfeldlab.hotknife.util.Grid;
@@ -22,6 +21,7 @@ import org.kohsuke.args4j.Option;
 import bdv.util.Bdv;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
+import mpicbg.models.RigidModel2D;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
@@ -30,11 +30,15 @@ import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.PositionFieldTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.LinAlgHelpers;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
@@ -47,22 +51,6 @@ public class ModifyAlignment
 			final double transformScale,
 			final String datasetName )
 	{
-		/*
-		Loading: /align-v3/align-1-testb/align-v3.slab-2.top.face
-		count: 0
-		Loading: /align-v3/align-1-testb/align-v3.slab-2.bot.face
-		count: 1
-		Loading: /align-v3/align-1-testb/align-v3.slab-3.top.face
-		count: 2
-		Loading: /align-v3/align-1-testb/align-v3.slab-3.bot.face
-		count: 3
-		Loading: /align-v3/align-1-testb/align-v3.slab-4.top.face
-		count: 4
-		Loading: /align-v3/align-1-testb/align-v3.slab-4.bot.face
-		count: 5
-
-		 */
-
 		if ( surfaceCount == 1 ) // Loading: /align-v3/align-1-testb/align-v3.slab-2.bot.face
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
@@ -219,7 +207,7 @@ public class ModifyAlignment
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
-		/*else if ( surfaceCount == 9 ) // Loading: /align-v3/align-1/align-v3.slab-6.bot.face
+		else if ( surfaceCount == 8 || surfaceCount == 9 ) // Loading: /align-v3/align-1/align-v3.slab-6.bot & top.face
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
 
@@ -229,15 +217,51 @@ public class ModifyAlignment
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
 
+			// line defined by 660,1924 >> 1725,1800
+			final double x1 = 882, y1 = 1900 + 35, x2 = 1683, y2 = 1807 + 35;
+
+			// move parallel to this line in y (this is a concatenate)
+			final double[] moveVector = new double[] { 260, -25 };
+			final double[] additionalMoveVector = new double[ 2 ];
+
+			final Cursor< DoubleType > c = Views.iterable( positionFieldCopy ).localizingCursor();
+
+			while ( c.hasNext() )
+			{
+				final DoubleType t = c.next();
+
+				final double x0 = c.getDoublePosition( 0 ), y0 = c.getDoublePosition( 1 );
+				final double distance = ( (y2-y1)*x0 - (x2-x1)*y0 + x2*y1 - y2*x1 ) / ( Math.sqrt( (y2 - y1)*(y2 - y1) + (x2 - x1)*(x2 - x1 ) ));
+				
+				if ( distance < 0 )
+				{
+					if ( c.getIntPosition( 0 ) > 1740 )
+					{
+						additionalMoveVector[ 0 ] = -10;
+						additionalMoveVector[ 1 ] = 65;
+					}
+					else
+					{
+						additionalMoveVector[ 0 ] = 0;
+						additionalMoveVector[ 1 ] = 0;
+					}
+
+					// move parallel to the line
+					if ( c.getIntPosition( 2 ) == 1 ) // y
+						t.set( t.get() + moveVector[ 1 ] + additionalMoveVector[ 1 ] );
+					else
+						t.set( t.get() + moveVector[ 0 ] + additionalMoveVector[ 0 ]);
+				}
+			}
+			/*
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
-					new int[] { 1079, 1960 },
-					new double[] { 280, -50 },
-					new double[] { 600, 200 } );
-
+					new int[] { 2043, 2341 },
+					new double[] { -10, 65 },
+					new double[] { 200, 200 } );
+			*/
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
-		*/
 		else
 		{
 			System.out.println( datasetName + " (" + surfaceCount + ") was not changed." );
@@ -399,9 +423,16 @@ public class ModifyAlignment
 		final double[] boundsMin = n5in.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5in.getAttribute(group, "boundsMax", double[].class);
 
-		/*final String[] datasetNames = new String[ 5 ];
+		/*
+		final String[] datasetNames = new String[ 4 ];
+		final String[] transformDatasetNames = new String[ 4 ];
 		for ( int i = 0;i < datasetNames.length; ++i )
-			datasetNames[ i ] = allDatasetNames[ i ];*/
+		{
+			datasetNames[ i ] = allDatasetNames[ i + 7 ];
+			transformDatasetNames[ i ] = allTransformDatasetNames[ i + 9 ];
+			System.out.println( datasetNames[ i ] + ", " + transformDatasetNames[ i ]);
+		}
+		*/
 
 		final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 
