@@ -346,6 +346,42 @@ public class ModifyAlignment
 			
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
+		else if ( surfaceCount == 25 ) // Loading: align-v3.slab-14.bot.face
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1280, 1045 },
+					new double[] { 0, -15 / 2.0 },
+					new double[] { 300, 80 } );
+			
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 26 ) // Loading: align-v3.slab-15.top.face
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1280, 1045 },
+					new double[] { 0, -15 / -2.0 },
+					new double[] { 300, 80 } );
+			
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
 		else
 		{
 			System.out.println( datasetName + " (" + surfaceCount + ") was not changed." );
