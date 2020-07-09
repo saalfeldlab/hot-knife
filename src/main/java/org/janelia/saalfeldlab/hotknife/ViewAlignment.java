@@ -129,6 +129,7 @@ public class ViewAlignment {
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = 0; i < datasetNames.length; ++i) {
+				System.out.println( "z=" + i + " >>> " + transformDatasetNames[i] );
 				realTransforms[i] = Transform.loadScaledTransform(
 						n5,
 						group + "/" + transformDatasetNames[i]);
