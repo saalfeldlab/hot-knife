@@ -1,7 +1,7 @@
 /**
  *
  */
-package org.janelia.saalfeldlab.hotknife.tests;
+package org.janelia.saalfeldlab.hotknife;
 
 import java.util.ArrayList;
 import java.util.Arrays;
