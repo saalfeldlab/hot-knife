@@ -29,6 +29,7 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
+import net.imglib2.util.Intervals;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -48,6 +49,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Export a render stack to N5.
@@ -151,25 +154,40 @@ public class SparkComputeCost {
 				zcorrBlockSize[2] / costSteps[2]
 		};
 
-        n5w.createDataset(
+		long[] costSize = new long[]{ zcorrSize[0] / costSteps[0], zcorrSize[1] / costSteps[1], zcorrSize[2] / costSteps[2] };
+
+		n5w.createDataset(
         		costDataset,
-        		zcorrSize,
+        		costSize,
         		costBlockSize,
         		DataType.UINT8,
         		new GzipCompression());
 		final ArrayList<Long[]> gridCoords = new ArrayList<>();
 
-		for (long x = 0; x < Math.ceil(zcorrSize[0] / costSteps[0]); x++) {
-			for (long z = 0; z < Math.ceil(zcorrSize[2] / costSteps[2]); z++) {
+		int gridXSize = (int)Math.ceil(zcorrSize[0] / costSteps[0]);
+		int gridZSize = (int)Math.ceil(zcorrSize[2] / costSteps[2]);
+
+		for (long x = 0; x < gridXSize; x++) {
+			for (long z = 0; z < gridZSize; z++) {
 				gridCoords.add(new Long[]{x, z});
 			}
 		}
 
+		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
+
 		final JavaRDD<Long[]> rddSlices = sc.parallelize(gridCoords);
 
 		rddSlices.foreach(gridCoord -> {
+		//gridCoords.forEach(gridCoord -> {
 
-			processColumn(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord);
+			ExecutorService executorService =  Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 2);
+
+			try {
+			    processColumn(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService);
+			} catch (Exception e)
+			    {
+				e.printStackTrace();
+			    }
 
 		});
 	}
@@ -183,7 +201,10 @@ public class SparkComputeCost {
 			int[] zcorrBlockSize,
 			long[] zcorrSize,
 			int[] costSteps,
-			Long[] gridCoord) throws Exception {
+			Long[] gridCoord,
+			ExecutorService executorService) throws Exception {
+
+	    System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1]);
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5Writer n5w = new N5FSWriter(costN5Path);
@@ -199,6 +220,8 @@ public class SparkComputeCost {
 				zcorrInterval.dimension(2) / costSteps[2]);
 		RandomAccess<UnsignedByteType> costAccess = cost.randomAccess();
 
+		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
+
 		// Loop over slices and populate cost
 		for( int zIdx = 0; zIdx < zcorr.max(2); zIdx += costSteps[2] ) {
 			RandomAccessibleInterval<UnsignedByteType> slice = Views.hyperSlice(zcorr, 2, zIdx);
@@ -212,7 +235,7 @@ public class SparkComputeCost {
 				cc.get().set(sliceAccess.get());
 			}
 
-			Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0]);
+			Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
 			Cursor<FloatType> csCur = costSlice.localizingCursor();
 			while( csCur.hasNext() ) {
 				csCur.fwd();
@@ -223,6 +246,8 @@ public class SparkComputeCost {
 		}
 
 		RandomAccessibleInterval<UnsignedByteType> costRai = CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
+
+		System.out.println("Writing blocks");
 
 		// Now loop over blocks and write
 		for( int yGrid = 0; yGrid < Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
@@ -261,6 +286,8 @@ public class SparkComputeCost {
 
 		final SparkConf conf = new SparkConf().setAppName("SparkComputeCost");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
+		
+		//final JavaSparkContext sc = null;
 
 		computeCost(sc, options);
 
