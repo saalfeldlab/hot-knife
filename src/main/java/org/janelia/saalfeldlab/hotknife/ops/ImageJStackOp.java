@@ -30,6 +30,7 @@
 
 package org.janelia.saalfeldlab.hotknife.ops;
 
+import java.util.Arrays;
 import java.util.function.Consumer;
 
 import org.janelia.saalfeldlab.hotknife.util.Util;
@@ -140,7 +141,7 @@ public class ImageJStackOp<T extends RealType<T> & NativeType<T>> implements Con
 										b.setReal(Math.min(maxIntensity, Math.max(minIntensity, a.getRealFloat())));
 									},
 									type),
-							min),
+							Arrays.copyOf(min, 2)),
 					outputSlice);
 
 			/* increase slicePositions */
