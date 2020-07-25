@@ -16,6 +16,10 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import ij.IJ;
+import ij.ImagePlus;
+import ij.io.Opener;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -39,13 +43,9 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
-import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.IJ;
-import ij.ImagePlus;
-import ij.io.Opener;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -90,6 +90,9 @@ public class SparkConvertTiffSeriesToN5 {
 		@Option(name = "--factors", usage = "Specifies generates a scale pyramid with given factors with relative scaling between factors, e.g. 2,2,2")
 		private String downsamplingFactorsString = null;
 		private int[] downsamplingFactors;
+
+		@Option(name = "--dataType", usage = "Input URL format for tiff series, e.g. /nrs/flyem/data/Z0115-22_Sec26/flatten/flattened/zcorr.%05d-flattened.tif")
+		private final String dataTypeString = DataType.UINT8.toString();
 
 		private final long[] sourceSize;
 
@@ -222,6 +225,16 @@ public class SparkConvertTiffSeriesToN5 {
 		 * @return the downsamplingFactors
 		 */
 		public int[] getDownsamplingFactors() { return downsamplingFactors; }
+
+		public DataType getDataType() {
+			final DataType dataType = DataType.fromString(dataTypeString);
+			if (dataType == null) {
+				throw new IllegalArgumentException(
+						"invalid --dataType '" + dataTypeString + "' specified, must be one of " +
+						Arrays.asList(DataType.values()));
+			}
+			return dataType;
+		}
 	}
 
 
@@ -233,7 +246,8 @@ public class SparkConvertTiffSeriesToN5 {
 			final long[] min,
 			final long[] size,
 			final int[] blockSize,
-			final long firstSliceIndex) throws IOException {
+			final long firstSliceIndex,
+			final DataType dataType) throws IOException {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
@@ -245,7 +259,7 @@ public class SparkConvertTiffSeriesToN5 {
         		datasetName,
         		size,
         		slicesDatasetBlockSize,
-        		DataType.UINT8,
+        		dataType,
         		new GzipCompression());
 		final ArrayList<Long> slices = new ArrayList<>();
 		for (long z = min[2]; z < min[2] + size[2]; ++z)
@@ -370,7 +384,8 @@ public class SparkConvertTiffSeriesToN5 {
         		options.getMin(),
         		options.getSize(),
         		options.getBlockSize(),
-        		options.getFirstSliceIndex());
+        		options.getFirstSliceIndex(),
+				options.getDataType());
 
 		/* re-block */
 		reSave(
