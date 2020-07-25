@@ -91,7 +91,7 @@ public class SparkConvertTiffSeriesToN5 {
 		private String downsamplingFactorsString = null;
 		private int[] downsamplingFactors;
 
-		@Option(name = "--dataType", usage = "Input URL format for tiff series, e.g. /nrs/flyem/data/Z0115-22_Sec26/flatten/flattened/zcorr.%05d-flattened.tif")
+		@Option(name = "--dataType", usage = "Source data type (e.g. uint8, uint16, ...)")
 		private final String dataTypeString = DataType.UINT8.toString();
 
 		private final long[] sourceSize;
