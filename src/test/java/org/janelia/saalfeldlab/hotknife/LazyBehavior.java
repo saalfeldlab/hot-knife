@@ -91,7 +91,7 @@ public class LazyBehavior {
 		}
 
 //		final ImagePlus imp = IJ.openImage("https://imagej.nih.gov/ij/images/bridge.gif");
-		final ImagePlus imp = IJ.openImage("/home/saalfeld/projects/clay-white-matter/sect18b-s02-clahe.gif");
+		final ImagePlus imp = IJ.openImage(System.getProperty("user.home") + "/projects/clay-white-matter/sect18b-s02-clahe.gif");
 		imp.show();
 
 		final RandomAccessibleInterval<UnsignedByteType> img = ImagePlusImgs.from(imp);
