@@ -210,32 +210,52 @@ public class SparkComputeCost {
 		final N5Writer n5w = new N5FSWriter(costN5Path);
 
 		RandomAccessibleInterval<UnsignedByteType> zcorr = N5Utils.open(n5, zcorrDataset);
+		RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendZero(zcorr);
 		Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize);
 
-		zcorr = Views.zeroMin( Views.interval( zcorr, zcorrInterval ) );
+		zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
 		Img<UnsignedByteType> cost = ArrayImgs.unsignedBytes(
-				zcorrInterval.dimension(0) / costSteps[0],
-				zcorrInterval.dimension(1) / costSteps[1],
-				zcorrInterval.dimension(2) / costSteps[2]);
+								     (long) Math.ceil((float)zcorrInterval.dimension(0) / (float)costSteps[0]),
+								     (long) Math.ceil((float)zcorrInterval.dimension(1) / (float)costSteps[1]),
+								     (long) Math.ceil((float)zcorrInterval.dimension(2) / (float)costSteps[2]));
 		RandomAccess<UnsignedByteType> costAccess = cost.randomAccess();
 
+		System.out.println("Zcorr block size: " + Arrays.toString( zcorrBlockSize ) );
+		System.out.println("Zcorr itnerval dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(zcorr)) );
 		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
 
 		// Loop over slices and populate cost
-		for( int zIdx = 0; zIdx < zcorr.max(2); zIdx += costSteps[2] ) {
-			RandomAccessibleInterval<UnsignedByteType> slice = Views.hyperSlice(zcorr, 2, zIdx);
+		int maxZ = (int) Math.min(zcorrBlockSize[2], (zcorrSize[2] - gridCoord[1] * zcorrBlockSize[2]));// handle remaining boundary
+		for( int zIdx = 0; zIdx < maxZ; zIdx += costSteps[2] ) {
+		    RandomAccessibleInterval<UnsignedByteType> slice = Views.zeroMin(Views.hyperSlice(zcorr, 2, zIdx + zcorrInterval.min(2)));
 
 			RandomAccess<UnsignedByteType> sliceAccess = slice.randomAccess();
 			Img<UnsignedByteType> sliceCopy = ArrayImgs.unsignedBytes(slice.dimension(0), slice.dimension(1));
-			Cursor<UnsignedByteType> cc = sliceCopy.localizingCursor();
+
+			System.out.println( zIdx + " " + zcorr.max(2) + " Slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(slice)));
+			System.out.println("Slice copy dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(sliceCopy)));
+
+			Cursor<UnsignedByteType> cc = Views.zeroMin(sliceCopy).localizingCursor();
+			try {
 			while( cc.hasNext() ) {
-				cc.fwd();;
+				cc.fwd();
 				sliceAccess.setPosition(cc);
-				cc.get().set(sliceAccess.get());
+				cc.get().set(sliceAccess.get());// FIXME: currently getting an index error here from the set() call
+			}
+			} catch (Exception e) {
+			    System.out.println("Exception: " + zIdx + ":" + gridCoord[0] + ", " + gridCoord[1] + " :: " + cc.getDoublePosition(0) + ", " + cc.getDoublePosition(1));
+			    e.printStackTrace();
 			}
 
+			System.out.println("Compute resin.");
+
 			Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
+
+			System.out.println("Cost slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(costSlice)));
+
+			costAccess = Views.hyperSlice( cost, 2, zIdx / costSteps[2] ).randomAccess();
+
 			Cursor<FloatType> csCur = costSlice.localizingCursor();
 			while( csCur.hasNext() ) {
 				csCur.fwd();
@@ -269,9 +289,9 @@ public class SparkComputeCost {
 		long startX = gridX * zcorrBlockSize[0];
 		long startY = 0;
 		long startZ = gridZ * zcorrBlockSize[2];
-		long stopX = ( gridX + 1 ) * zcorrBlockSize[0];
-		long stopY = zcorrSize[1];
-		long stopZ = ( gridZ + 1 ) * zcorrBlockSize[2];
+		long stopX = ( gridX + 1 ) * zcorrBlockSize[0] - 1;
+		long stopY = zcorrSize[1] - 1;
+		long stopZ = ( gridZ + 1 ) * zcorrBlockSize[2] - 1;
 		return new FinalInterval(
 				new long[]{startX, startY, startZ},
 				new long[]{stopX, stopY, stopZ});
