@@ -85,6 +85,30 @@ public class SparkComputeCost {
 		private String costStepString = null;
 		private int[] costSteps;
 
+		@Option(name = "--bandSize", required = false, usage = "Band size for computing distribution of resin")
+		private int bandSize = 20;
+
+		@Option(name = "--minGradient", required = false, usage = "Minimum gradient is an upper limit on gradient magnitude")
+		private int minGradient = 20;
+
+		@Option(name = "--slopeCorrXRange", required = false, usage = "The width of the band (along x-axis) for computing slope correction")
+    	private int slopeCorrXRange = 10;
+
+		@Option(name = "--slopeCorrBandFactor", required = false, usage = "Factor (times band size) for requiring the start of tissue")
+    	private float slopeCorrBandFactor = 3.5f;
+
+		@Option(name = "--maxSlope", required = false, usage = "Max slope of for slope correction")
+		private float maxSlope = 0.04f;
+
+		@Option(name = "--minSlope", required = false, usage = "Min slope of for slope correction")
+		private float minSlope = 0;
+
+		@Option(name = "--startThresh", required = false, usage = "Start threshold for detecting the start of the band region")
+		private int startThresh = 50;
+
+		@Option(name = "--kernelSize", required = false, usage = "Kernel size used for computing gradient used in cost stats calculation")
+    	private int kernelSize = 5;// for valsCount
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -129,6 +153,38 @@ public class SparkComputeCost {
 		public int[] getCostSteps() {
 			return costSteps;
 		}
+
+		public int getBandSize() {
+			return bandSize;
+		}
+
+		public int getMinGradient() {
+			return minGradient;
+		}
+
+		public int getSlopeCorrXRange() {
+			return slopeCorrXRange;
+		}
+
+		public float getSlopeCorrBandFactor() {
+			return slopeCorrBandFactor;
+		}
+
+		public float getMaxSlope() {
+			return maxSlope;
+		}
+
+		public float getMinSlope() {
+			return minSlope;
+		}
+
+		public int getStartThresh() {
+			return startThresh;
+		}
+
+		public int getKernelSize() {
+			return kernelSize;
+		}
 	}
 
 	public static final void computeCost(
@@ -162,6 +218,7 @@ public class SparkComputeCost {
         		costBlockSize,
         		DataType.UINT8,
         		new GzipCompression());
+		n5w.setAttribute(costDataset, "downsampleFactors", costSteps);
 		final ArrayList<Long[]> gridCoords = new ArrayList<>();
 
 		int gridXSize = (int)Math.ceil(zcorrSize[0] / costSteps[0]);
@@ -183,7 +240,10 @@ public class SparkComputeCost {
 			ExecutorService executorService =  Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 2);
 
 			try {
-			    processColumn(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService);
+			    processColumn(
+			    		n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService,
+						options.getBandSize(), options.getMinGradient(), options.getSlopeCorrXRange(), options.getSlopeCorrBandFactor(), options.getMaxSlope(),
+						options.getMinSlope(), options.getStartThresh(), options.getKernelSize());
 			} catch (Exception e)
 			    {
 				e.printStackTrace();
@@ -202,7 +262,15 @@ public class SparkComputeCost {
 			long[] zcorrSize,
 			int[] costSteps,
 			Long[] gridCoord,
-			ExecutorService executorService) throws Exception {
+			ExecutorService executorService,
+			int bandSize,
+			int minGradient,
+			int slopeCorrXRange,
+			float slopeCorrBandFactor,
+			float maxSlope,
+			float minSlope,
+			int startThresh,
+			int kernelSize) throws Exception {
 
 	    System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1]);
 
@@ -249,6 +317,15 @@ public class SparkComputeCost {
 			}
 
 			System.out.println("Compute resin.");
+
+			DagmarCost.setBandSize(bandSize);
+			DagmarCost.setMinGradient(minGradient);
+			DagmarCost.setSlopeCorrXRange(slopeCorrXRange);
+			DagmarCost.setSlopeCorrBandFactor(slopeCorrBandFactor);
+			DagmarCost.setMaxSlope(maxSlope);
+			DagmarCost.setMinSlope(minSlope);
+			DagmarCost.setStartThresh(startThresh);
+			DagmarCost.setKernelSize(kernelSize);
 
 			Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
 
