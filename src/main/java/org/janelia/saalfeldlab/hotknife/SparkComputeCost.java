@@ -335,7 +335,7 @@ public class SparkComputeCost {
 		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
 
 		// Loop over slices and populate cost
-		int maxZ = (int) Math.min(zcorrBlockSize[2], (zcorrSize[2] - gridCoord[1] * zcorrBlockSize[2]));// handle remaining boundary
+		int maxZ = (int) Math.min(zcorrInterval.dimension(2), (zcorrSize[2] - gridCoord[1] * zcorrInterval.dimension(2)));// handle remaining boundary
 		for( int zIdx = 0; zIdx < maxZ; zIdx += costSteps[2] ) {
 		    RandomAccessibleInterval<UnsignedByteType> slice = Views.zeroMin(Views.hyperSlice(zcorr, 2, zIdx + zcorrInterval.min(2)));
 
