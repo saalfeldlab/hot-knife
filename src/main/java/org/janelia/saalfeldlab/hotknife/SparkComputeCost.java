@@ -234,22 +234,52 @@ public class SparkComputeCost {
 
 		final JavaRDD<Long[]> rddSlices = sc.parallelize(gridCoords);
 
-		rddSlices.foreach(gridCoord -> {
-		//gridCoords.forEach(gridCoord -> {
+		// foreach version
 
-			ExecutorService executorService =  Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 2);
+		// rddSlices.foreach(gridCoord -> {
+		// //gridCoords.forEach(gridCoord -> {
 
-			try {
-			    processColumn(
-			    		n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService,
-						options.getBandSize(), options.getMinGradient(), options.getSlopeCorrXRange(), options.getSlopeCorrBandFactor(), options.getMaxSlope(),
-						options.getMinSlope(), options.getStartThresh(), options.getKernelSize());
-			} catch (Exception e)
-			    {
-				e.printStackTrace();
-			    }
+		// 	//ExecutorService executorService =  Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 2);
+		// 	ExecutorService executorService =  Executors.newFixedThreadPool(1);// runs out of threads otherwise
+		// 	//ExecutorService executorService =  Executors.newCachedThreadPool();
 
-		});
+		// 	try {
+		// 	    processColumn(
+		// 	    		n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService,
+		// 				options.getBandSize(), options.getMinGradient(), options.getSlopeCorrXRange(), options.getSlopeCorrBandFactor(), options.getMaxSlope(),
+		// 				options.getMinSlope(), options.getStartThresh(), options.getKernelSize());
+		// 	} catch (Exception e)
+		// 	    {
+		// 		e.printStackTrace();
+		// 	    }
+
+		// 	executorService.shutdown();
+		// });
+
+		rddSlices.foreachPartition( gridCoordPartition -> {
+			//gridCoords.forEach(gridCoord -> {
+
+			//ExecutorService executorService =  Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 2);
+			ExecutorService executorService =  Executors.newFixedThreadPool(1 );
+			//ExecutorService executorService =  Executors.newCachedThreadPool();
+
+			gridCoordPartition.forEachRemaining(gridCoord -> {
+				
+				try {
+				    processColumn(
+						  n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService,
+						  options.getBandSize(), options.getMinGradient(), options.getSlopeCorrXRange(), options.getSlopeCorrBandFactor(), options.getMaxSlope(),
+						  options.getMinSlope(), options.getStartThresh(), options.getKernelSize());
+				} catch (Exception e) {
+				    e.printStackTrace();
+				}
+				
+			    });
+
+			executorService.shutdown();
+
+		    });
+
 	}
 
 	private static void processColumn(
