@@ -204,10 +204,16 @@ public class SparkComputeCost {
 		long[] zcorrSize = n5.getAttribute(zcorrDataset, "dimensions", long[].class);
 		RandomAccessibleInterval<UnsignedByteType> zcorr = N5Utils.openVolatile(n5, zcorrDataset);
 
+//		int[] costBlockSize = new int[]{
+//				zcorrBlockSize[0] / costSteps[0],
+//				zcorrBlockSize[1] / costSteps[1],
+//				zcorrBlockSize[2] / costSteps[2]
+//		};
+
 		int[] costBlockSize = new int[]{
-				zcorrBlockSize[0] / costSteps[0],
-				zcorrBlockSize[1] / costSteps[1],
-				zcorrBlockSize[2] / costSteps[2]
+				zcorrBlockSize[0],
+				zcorrBlockSize[1],
+				zcorrBlockSize[2]
 		};
 
 		long[] costSize = new long[]{ zcorrSize[0] / costSteps[0], zcorrSize[1] / costSteps[1], zcorrSize[2] / costSteps[2] };
@@ -221,8 +227,11 @@ public class SparkComputeCost {
 		n5w.setAttribute(costDataset, "downsampleFactors", costSteps);
 		final ArrayList<Long[]> gridCoords = new ArrayList<>();
 
-		int gridXSize = (int)Math.ceil(zcorrSize[0] / costSteps[0]);
-		int gridZSize = (int)Math.ceil(zcorrSize[2] / costSteps[2]);
+//		int gridXSize = (int)Math.ceil(zcorrSize[0] / (float)costBlockSize[0]);
+//		int gridZSize = (int)Math.ceil(zcorrSize[2] / (float)costBlockSize[2]);
+
+		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
+		int gridZSize = (int)Math.ceil(costSize[2] / (float)costBlockSize[2]);
 
 		for (long x = 0; x < gridXSize; x++) {
 			for (long z = 0; z < gridZSize; z++) {
@@ -232,6 +241,7 @@ public class SparkComputeCost {
 
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
 
+		// Grids are w.r.t cost blocks
 		final JavaRDD<Long[]> rddSlices = sc.parallelize(gridCoords);
 
 		// foreach version
@@ -309,7 +319,8 @@ public class SparkComputeCost {
 
 		RandomAccessibleInterval<UnsignedByteType> zcorr = N5Utils.open(n5, zcorrDataset);
 		RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendZero(zcorr);
-		Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize);
+
+		Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 
 		zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
@@ -320,7 +331,7 @@ public class SparkComputeCost {
 		RandomAccess<UnsignedByteType> costAccess = cost.randomAccess();
 
 		System.out.println("Zcorr block size: " + Arrays.toString( zcorrBlockSize ) );
-		System.out.println("Zcorr itnerval dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(zcorr)) );
+		System.out.println("Zcorr interval dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(zcorr)) );
 		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
 
 		// Loop over slices and populate cost
@@ -392,13 +403,13 @@ public class SparkComputeCost {
 		}
 	}
 
-	private static Interval getZcorrInterval(Long gridX, Long gridZ, long[] zcorrSize, int[] zcorrBlockSize) {
-		long startX = gridX * zcorrBlockSize[0];
+	private static Interval getZcorrInterval(Long gridX, Long gridZ, long[] zcorrSize, int[] zcorrBlockSize, int[] costSteps) {
+		long startX = ( gridX * costSteps[0] ) * zcorrBlockSize[0];
 		long startY = 0;
-		long startZ = gridZ * zcorrBlockSize[2];
-		long stopX = ( gridX + 1 ) * zcorrBlockSize[0] - 1;
+		long startZ = ( gridZ * costSteps[2] ) * zcorrBlockSize[2];
+		long stopX = ( ( gridX + 1 ) * costSteps[0] ) * zcorrBlockSize[0] - 1;
 		long stopY = zcorrSize[1] - 1;
-		long stopZ = ( gridZ + 1 ) * zcorrBlockSize[2] - 1;
+		long stopZ = ( ( gridZ + 1 ) * costSteps[2] ) * zcorrBlockSize[2] - 1;
 		return new FinalInterval(
 				new long[]{startX, startY, startZ},
 				new long[]{stopX, stopY, stopZ});
