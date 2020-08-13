@@ -99,7 +99,7 @@ public class ViewCost {
 
 	public static final void main(String... args) throws IOException, InterruptedException, ExecutionException {
 
-		args = new String[]{"--n5Path","/home/kharrington/Data/portableVNC.n5","-i","/z33/v2_acquire_1_7270_sp2___20200804_184632_s0_crop001/","--cost",""};
+		//args = new String[]{"--n5Path","/home/kharrington/Data/portableVNC.n5","-i","/z33/v2_acquire_1_7270_sp2___20200804_184632_s0_crop001/","--cost",""};
 
 
 		final Options options = new Options(args);
