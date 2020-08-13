@@ -224,7 +224,7 @@ public class SparkComputeCost {
         		costBlockSize,
         		DataType.UINT8,
         		new GzipCompression());
-		n5w.setAttribute(costDataset, "downsampleFactors", costSteps);
+		n5w.setAttribute(costDataset, "downsamplingFactors", costSteps);
 		final ArrayList<Long[]> gridCoords = new ArrayList<>();
 
 //		int gridXSize = (int)Math.ceil(zcorrSize[0] / (float)costBlockSize[0]);
