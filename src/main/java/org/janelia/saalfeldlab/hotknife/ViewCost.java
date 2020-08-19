@@ -30,6 +30,7 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
+import net.imglib2.converter.Converters;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
@@ -117,14 +118,20 @@ public class ViewCost {
 		final SharedQueue queue = new SharedQueue( numProc );
 		final CacheHints cacheHints = new CacheHints( LoadingStrategy.VOLATILE, 0, true );
 
-		RandomAccessibleInterval<UnsignedByteType> raw = N5Utils.open(n5, options.getRawGroup(), new UnsignedByteType());
-		RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.open(n5, options.getCostGroup(), new UnsignedByteType());
-		long[] costDownsample = n5.getAttribute(options.getCostGroup(), "downsampleFactors", long[].class);
+		RandomAccessibleInterval<UnsignedByteType> raw = Views.zeroMin(N5Utils.open(n5, options.getRawGroup(), new UnsignedByteType()));
+		RandomAccessibleInterval<UnsignedByteType> cost = Views.zeroMin(N5Utils.open(n5, options.getCostGroup(), new UnsignedByteType()));
+		long[] costDownsample = n5.getAttribute(options.getCostGroup(), "downsamplingFactors", long[].class);
 
-		RandomAccessibleInterval<UnsignedByteType> rawDownsample = Views.subsample(raw, costDownsample);
+		RandomAccessibleInterval<UnsignedByteType> costInvert = Converters.convert(cost,
+											   (a,b) -> b.set(255 - a.get()),
+											   new UnsignedByteType());
+
+		System.out.println("vals: " + raw + " " + cost + " " + costDownsample);
+
+		RandomAccessibleInterval<UnsignedByteType> rawDownsample = Views.interval(Views.subsample(Views.extendZero(raw), costDownsample), cost);
 
 		bdv = BdvFunctions.show(rawDownsample, "input", Bdv.options());
-		bdv = BdvFunctions.show(cost, "cost", Bdv.options().addTo(bdv));
+		bdv = BdvFunctions.show(costInvert, "cost", Bdv.options().addTo(bdv));
 
 	}
 }
