@@ -13,14 +13,17 @@ N_NODES=4
 
 N5="/nrs/flyem/tmp/Z1217_33m_VNC.n5"
 FULL_DATASET="/render/Sec33/v2_acquire_1_7270_sp2___20200804_184632"
-COST_DATASET="/cost/Sec33/v2_acquire_1_7270_sp2___20200804_184632"
+COST_DATASET="/cost/Sec33/v2_acquire_1_7270_sp2___20200804_184632_kernelSize9"
 
 ARGV="\
 --inputN5Path=$N5 \
 --outputN5Path=$N5 \
 --costN5Group=$COST_DATASET/s1 \
 --inputN5Group=$FULL_DATASET/s0 \
---costSteps=6,1,6"
+--costSteps=6,1,6 \
+--bandSize=100 \
+--kernelSize=9"
+# w.r.t. bandSize I am concerned that the preprocessing leads to some low values being added to the bands for distribution calculation
 
 
 LSF_PROJECT="flyem"

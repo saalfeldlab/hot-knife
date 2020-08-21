@@ -11,16 +11,20 @@ N_NODES=2
 
 # n5-view -i /nrs/flyem/tmp/Z1217_33m_VNC.n5 -d /render/Sec33/v2_acquire_1_7270_sp2___20200804_184632 -o 323,-153,1
 
-N5="/nrs/flyem/tmp/VNC.n5"
-FULL_DATASET="/zcorr/Sec03___20200110_121405"
-COST_DATASET="/cost_new/Sec03___20200110_121405"
+N5="/groups/cosem/cosem/data/HeLa_Cell2_4x4x4nm/HeLa_Cell2_4x4x4nm.n5"
+FULL_DATASET="/volumes/raw"
+OUT_N5="/nrs/flyem/tmp/HC2.n5"
+COST_DATASET="/volumes/cost"
 
 ARGV="\
 --inputN5Path=$N5 \
---outputN5Path=$N5 \
+--outputN5Path=$OUT_N5 \
 --costN5Group=$COST_DATASET/s1 \
---inputN5Group=$FULL_DATASET/s0 \
---costSteps=6,1,6"
+--inputN5Group=$FULL_DATASET \
+--costSteps=6,1,6 \
+--startThresh=185 \
+--slopeCorrBandFactor=1.5 \
+--bandSize=20"
 
 LSF_PROJECT="flyem"
 
