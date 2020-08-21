@@ -28,6 +28,7 @@ import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
+import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 import net.imglib2.util.Intervals;
 import org.apache.spark.SparkConf;
@@ -368,13 +369,16 @@ public class SparkComputeCost {
 			DagmarCost.setStartThresh(startThresh);
 			DagmarCost.setKernelSize(kernelSize);
 
-			Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
+			// Compute cost on subsampled
+			//Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
+
+			SubsampleIntervalView<FloatType> costSlice = Views.subsample(DagmarCost.computeResin(sliceCopy, 1, executorService), costSteps[0], 1);
 
 			System.out.println("Cost slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(costSlice)));
 
 			costAccess = Views.hyperSlice( cost, 2, zIdx / costSteps[2] ).randomAccess();
 
-			Cursor<FloatType> csCur = costSlice.localizingCursor();
+			Cursor<FloatType> csCur = Views.iterable(costSlice).localizingCursor();
 			while( csCur.hasNext() ) {
 				csCur.fwd();
 				costAccess.setPosition(csCur);
