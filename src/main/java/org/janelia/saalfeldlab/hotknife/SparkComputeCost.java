@@ -16,35 +16,25 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
-import com.kephale.vnc.CostUtils;
-import com.kephale.vnc.DagmarCost;
-import ij.process.ColorProcessor;
+import org.janelia.saalfeldlab.hotknife.cost.CostUtils;
+import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
 import net.imglib2.*;
-import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 import net.imglib2.util.Intervals;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.alignment.ArgbRenderer;
-import org.janelia.alignment.RenderParameters;
-import org.janelia.alignment.util.ImageProcessorCache;
-import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.n5.*;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -85,6 +75,9 @@ public class SparkComputeCost {
 		@Option(name = "--costSteps", required = true, usage = "Step size for computing cost, e.g. 6,1,6")
 		private String costStepString = null;
 		private int[] costSteps;
+
+		@Option(name = "--axisMode", required = true, usage = "Which axis to compute along (or both)? 0, 2, or 0|2")
+		private String axisMode = null;
 
 		@Option(name = "--bandSize", required = false, usage = "Band size for computing distribution of resin")
 		private int bandSize = 20;
@@ -186,9 +179,11 @@ public class SparkComputeCost {
 		public int getKernelSize() {
 			return kernelSize;
 		}
+
+		public String getAxisMode() { return axisMode; }
 	}
 
-	public static final void computeCost(
+	public static void computeCost(
 			final JavaSparkContext sc,
 			final Options options) throws IOException {
 
@@ -197,6 +192,7 @@ public class SparkComputeCost {
 		String zcorrDataset = options.getInputDatasetName();
 		String costDataset = options.getCostDatasetName();
 		int[] costSteps = options.getCostSteps();
+		String axisMode = options.getAxisMode();
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5Writer n5w = new N5FSWriter(costN5Path);
@@ -275,10 +271,12 @@ public class SparkComputeCost {
 			//ExecutorService executorService =  Executors.newCachedThreadPool();
 
 			gridCoordPartition.forEachRemaining(gridCoord -> {
-				
+
+
+
 				try {
 				    processColumn(
-						  n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService,
+						  n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, axisMode, gridCoord, executorService,
 						  options.getBandSize(), options.getMinGradient(), options.getSlopeCorrXRange(), options.getSlopeCorrBandFactor(), options.getMaxSlope(),
 						  options.getMinSlope(), options.getStartThresh(), options.getKernelSize());
 				} catch (Exception e) {
@@ -302,6 +300,82 @@ public class SparkComputeCost {
 			int[] zcorrBlockSize,
 			long[] zcorrSize,
 			int[] costSteps,
+			String axisMode,
+			Long[] gridCoord,
+			ExecutorService executorService,
+			int bandSize,
+			int minGradient,
+			int slopeCorrXRange,
+			float slopeCorrBandFactor,
+			float maxSlope,
+			float minSlope,
+			int startThresh,
+			int kernelSize) throws Exception {
+		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] + " costAxis: " + axisMode);
+
+		RandomAccessibleInterval<UnsignedByteType> cost;
+		if (axisMode == "2") {// This is the original mode
+			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+		} else if (axisMode == "0") {// Compute along axis 0
+			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+		} else if (axisMode == "0|2") {// Compute along both 0 and 2 then combine
+			RandomAccessibleInterval<UnsignedByteType> cost2 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+			RandomAccessibleInterval<UnsignedByteType> cost0 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+			cost = mergeCosts(cost0, cost2);
+		} else {
+			System.err.println("axisMode unknown: " + axisMode);
+			return;
+		}
+
+		System.out.println("Writing blocks");
+
+		final N5Writer n5w = new N5FSWriter(costN5Path);
+
+		// Now loop over blocks and write
+		for( int yGrid = 0; yGrid < Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
+			long[] gridOffset = new long[]{gridCoord[0], yGrid, gridCoord[1]};
+			RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
+					cost,
+					new FinalInterval(
+							new long[]{0, yGrid * zcorrBlockSize[1], 0},
+							new long[]{cost.dimension(0) - 1, (yGrid + 1) * zcorrBlockSize[1] - 1, cost.dimension(2) - 1}));
+			N5Utils.saveBlock(
+					block,
+					n5w,
+					costDataset,
+					gridOffset);
+		}
+	}
+
+	private static RandomAccessibleInterval<UnsignedByteType> mergeCosts(RandomAccessibleInterval<UnsignedByteType> topCost, RandomAccessibleInterval<UnsignedByteType> botCost) {
+
+        Img<UnsignedByteType> outCost = ArrayImgs.unsignedBytes(topCost.dimension(0), topCost.dimension(1));
+
+        RandomAccess<UnsignedByteType> topAccess = topCost.randomAccess();
+        RandomAccess<UnsignedByteType> botAccess = botCost.randomAccess();
+
+        Cursor<UnsignedByteType> outCur = outCost.localizingCursor();
+        while (outCur.hasNext()) {
+            outCur.fwd();
+            topAccess.setPosition(outCur);
+            botAccess.setPosition(outCur);
+
+            outCur.get().set(Math.min(topAccess.get().get(), botAccess.get().get()));
+        }
+
+        return outCost;
+	}
+
+	private static RandomAccessibleInterval<UnsignedByteType> processColumnAlongAxis(
+			String n5Path,
+			String costN5Path,
+			String zcorrDataset,
+			String costDataset,
+			int[] costBlockSize,
+			int[] zcorrBlockSize,
+			long[] zcorrSize,
+			int[] costSteps,
+			int costAxis,
 			Long[] gridCoord,
 			ExecutorService executorService,
 			int bandSize,
@@ -313,12 +387,13 @@ public class SparkComputeCost {
 			int startThresh,
 			int kernelSize) throws Exception {
 
-	    System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1]);
-
 		final N5Reader n5 = new N5FSReader(n5Path);
-		final N5Writer n5w = new N5FSWriter(costN5Path);
 
 		RandomAccessibleInterval<UnsignedByteType> zcorr = N5Utils.open(n5, zcorrDataset);
+
+		// The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
+		zcorr = Views.permute(zcorr, costAxis, 2);
+
 		RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendZero(zcorr);
 
 		Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
@@ -360,21 +435,27 @@ public class SparkComputeCost {
 
 			System.out.println("Compute resin.");
 
-			DagmarCost.setBandSize(bandSize);
-			DagmarCost.setMinGradient(minGradient);
-			DagmarCost.setSlopeCorrXRange(slopeCorrXRange);
-			DagmarCost.setSlopeCorrBandFactor(slopeCorrBandFactor);
-			DagmarCost.setMaxSlope(maxSlope);
-			DagmarCost.setMinSlope(minSlope);
-			DagmarCost.setStartThresh(startThresh);
-			DagmarCost.setKernelSize(kernelSize);
+			DagmarCost costFn = new DagmarCost();
+
+			costFn.setBandSize(bandSize);
+			costFn.setMinGradient(minGradient);
+			costFn.setSlopeCorrXRange(slopeCorrXRange);
+			costFn.setSlopeCorrBandFactor(slopeCorrBandFactor);
+			costFn.setMaxSlope(maxSlope);
+			costFn.setMinSlope(minSlope);
+			costFn.setStartThresh(startThresh);
+			costFn.setKernelSize(kernelSize);
 
 			// Compute cost on subsampled
 			//Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
 
-			SubsampleIntervalView<FloatType> costSlice = Views.subsample(DagmarCost.computeResin(sliceCopy, 1, executorService), costSteps[0], 1);
+			SubsampleIntervalView<FloatType> costSlice =
+					Views.subsample(
+							costFn.computeResin(sliceCopy, executorService),
+							costSteps[0],
+							1);
 
-			System.out.println("Cost slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(costSlice)));
+			//System.out.println("Cost slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(costSlice)));
 
 			costAccess = Views.hyperSlice( cost, 2, zIdx / costSteps[2] ).randomAccess();
 
@@ -387,24 +468,7 @@ public class SparkComputeCost {
 			}
 		}
 
-		RandomAccessibleInterval<UnsignedByteType> costRai = CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
-
-		System.out.println("Writing blocks");
-
-		// Now loop over blocks and write
-		for( int yGrid = 0; yGrid < Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
-			long[] gridOffset = new long[]{gridCoord[0], yGrid, gridCoord[1]};
-			RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
-					costRai,
-					new FinalInterval(
-							new long[]{0, yGrid * zcorrBlockSize[1], 0},
-							new long[]{cost.dimension(0) - 1, (yGrid + 1) * zcorrBlockSize[1] - 1, cost.dimension(2) - 1}));
-			N5Utils.saveBlock(
-					block,
-					n5w,
-					costDataset,
-					gridOffset);
-		}
+		return CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
 	}
 
 	private static Interval getZcorrInterval(Long gridX, Long gridZ, long[] zcorrSize, int[] zcorrBlockSize, int[] costSteps) {
