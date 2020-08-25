@@ -76,7 +76,7 @@ public class SparkComputeCost {
 		private String costStepString = null;
 		private int[] costSteps;
 
-		@Option(name = "--axisMode", required = true, usage = "Which axis to compute along (or both)? 0, 2, or 0|2")
+		@Option(name = "--axisMode", required = true, usage = "Which axis to compute along (or both)? 0, 2, or 02")
 		private String axisMode = null;
 
 		@Option(name = "--bandSize", required = false, usage = "Band size for computing distribution of resin")
@@ -193,6 +193,11 @@ public class SparkComputeCost {
 		String costDataset = options.getCostDatasetName();
 		int[] costSteps = options.getCostSteps();
 		String axisMode = options.getAxisMode();
+
+		System.out.println("Computing cost on: " + n5Path + " " + zcorrDataset );
+		System.out.println("Cost output: " + costN5Path + " " + costDataset );
+		System.out.println("Cost steps: " + costSteps[0] + ", " + costSteps[1] + ", " + costSteps[2] );
+		System.out.println("Axis mode: " + axisMode );
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5Writer n5w = new N5FSWriter(costN5Path);
@@ -318,7 +323,7 @@ public class SparkComputeCost {
 			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 		} else if (axisMode == "0") {// Compute along axis 0
 			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-		} else if (axisMode == "0|2") {// Compute along both 0 and 2 then combine
+		} else if (axisMode == "02") {// Compute along both 0 and 2 then combine
 			RandomAccessibleInterval<UnsignedByteType> cost2 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 			RandomAccessibleInterval<UnsignedByteType> cost0 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 			cost = mergeCosts(cost0, cost2);
@@ -494,7 +499,7 @@ public class SparkComputeCost {
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		
 		//final JavaSparkContext sc = null;
-
+		
 		computeCost(sc, options);
 
 		sc.close();
