@@ -16,17 +16,14 @@
  */
 package org.janelia.saalfeldlab.hotknife.tools;
 
-import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import org.janelia.saalfeldlab.hotknife.HeightFieldTransform;
 import org.janelia.saalfeldlab.hotknife.ops.AbsoluteGradientCenter;
-import org.janelia.saalfeldlab.hotknife.ops.GradientCenter;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
@@ -40,19 +37,16 @@ import org.scijava.ui.behaviour.io.InputTriggerDescription;
 import org.scijava.ui.behaviour.io.yaml.YamlConfigIO;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 
-import bdv.tools.brightness.RealARGBColorConverterSetup;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Interpolation;
-import bdv.viewer.SourceAndConverter;
 import bdv.viewer.state.ViewerState;
 import ij.ImageJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
-import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.cache.Cache;
@@ -60,13 +54,9 @@ import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.basictypeaccess.AccessFlags;
-import net.imglib2.img.cell.Cell;
-import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
-import net.imglib2.realtransform.ScaleAndTranslation;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -230,7 +220,7 @@ public class PaintHeightField implements Callable<Void>{
 		final ArrayImg<FloatType, ?> gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
 		Util.copy(gradient, gradientCopy);
 
-		final RealRandomAccessible< FloatType > gradientFull = 
+		final RealRandomAccessible< FloatType > gradientFull =
 				RealViews.affineReal(
 						Views.interpolate(
 								Views.extendZero(
@@ -238,7 +228,7 @@ public class PaintHeightField implements Callable<Void>{
 								new NLinearInterpolatorFactory<>()),
 						Transform.createTopLeftScaleShift(new double[] {downsamplingFactors[0], downsamplingFactors[1]}) );
 
-		final RealRandomAccessible< FloatType > gradientCopyFull = 
+		final RealRandomAccessible< FloatType > gradientCopyFull =
 				RealViews.affineReal(
 						Views.interpolate(
 								Views.extendZero(
@@ -330,7 +320,7 @@ public class PaintHeightField implements Callable<Void>{
 		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
 		bdv.getBdvHandle().getViewerPanel().setCurrentViewerTransform( transform );
 		bdv.getBdvHandle().getViewerPanel().requestRepaint();
-		
+
 		return null;
 	}
 }
