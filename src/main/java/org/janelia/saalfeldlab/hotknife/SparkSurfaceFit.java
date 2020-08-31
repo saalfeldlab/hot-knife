@@ -62,7 +62,7 @@ import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.realtransform.InverseRealTransform;
+import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.Type;
@@ -520,7 +520,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 						offsetZScaledMinAvg,
 						offsetZScaledMaxAvg);
 
-		final RealTransformRandomAccessible<T, InverseRealTransform> transformedCost = RealViews.transform(
+		final RealTransformRandomAccessible<T, ? extends RealTransform> transformedCost = RealViews.transform(
 				Views.interpolate(
 						Views.extendBorder(cost),
 						new NLinearInterpolatorFactory<>()),
