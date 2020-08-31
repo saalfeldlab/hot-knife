@@ -41,8 +41,10 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.io.Opener;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.type.numeric.integer.UnsignedIntType;
 import net.imglib2.view.Views;
 
 /**
@@ -204,6 +206,24 @@ public class SparkConvertTiffSeriesToN5 {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
+		ImagePlus firstImp = IJ.openImage(String.format(urlFormat, firstSliceIndex));
+		final DataType type;
+		switch (firstImp.getType()) {
+		case ImagePlus.GRAY16:
+			type = DataType.UINT16;
+			break;
+		case ImagePlus.GRAY32:
+			type = DataType.FLOAT32;
+			break;
+		case ImagePlus.COLOR_RGB:
+			type = DataType.UINT32;
+			break;
+		default:
+			type = DataType.UINT8;
+			break;
+		}
+		firstImp = null;
+
         final int[] slicesDatasetBlockSize = new int[]{
         		blockSize[0] * 8,
         		blockSize[1] * 8,
@@ -212,7 +232,7 @@ public class SparkConvertTiffSeriesToN5 {
         		datasetName,
         		size,
         		slicesDatasetBlockSize,
-        		DataType.UINT8,
+        		type,
         		new GzipCompression());
 		final ArrayList<Long> slices = new ArrayList<>();
 		for (long z = min[2]; z < min[2] + size[2]; ++z)
@@ -227,9 +247,19 @@ public class SparkConvertTiffSeriesToN5 {
 				return;
 
 			@SuppressWarnings({ "unchecked", "rawtypes" })
-			final RandomAccessibleInterval<UnsignedByteType> slice =
+			RandomAccessibleInterval img = ImagePlusImgs.from(imp);
+			if (imp.getType() == ImagePlus.COLOR_RGB)
+				img = Converters.convert(
+						(RandomAccessibleInterval<ARGBType>)img,
+						(a, b) -> {
+							b.set(a.get());
+						},
+						new UnsignedIntType());
+
+			@SuppressWarnings({ "unchecked", "rawtypes" })
+			final RandomAccessibleInterval slice =
 					Views.offsetInterval(
-							(RandomAccessibleInterval)ImagePlusImgs.from(imp),
+							img,
 							new long[]{
 									min[0],
 									min[1]},
