@@ -45,9 +45,10 @@ import net.imglib2.realtransform.RealViewsExtension;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.transform.integer.BoundingBox;
 import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
@@ -77,7 +78,7 @@ public class ShearTest {
 		return (RandomAccessibleInterval<T>)ArrayImgs.unsignedShorts(shorts, width, height);
 	}
 
-	public static void main(final String... args) throws FormatException, IOException {
+	public static <T extends NativeType<T> & NumericType<T>> void main(final String... args) throws FormatException, IOException {
 
 		new ImageJ();
 
@@ -90,7 +91,7 @@ public class ShearTest {
 		final int width = reader.getSizeX();
 		final int height = reader.getSizeY();
 
-		final ArrayList<RandomAccessibleInterval<? extends NativeType<?>>> slices = new ArrayList<>();
+		final ArrayList<RandomAccessibleInterval<T>> slices = new ArrayList<>();
 
 		for (int i = 0; i < nSlices; ++i) {
 
@@ -98,12 +99,12 @@ public class ShearTest {
 			System.out.println(i);
 		}
 
-		final RandomAccessibleInterval stack = Views.stack(slices);
+		final RandomAccessibleInterval<T> stack = Views.stack(slices);
 		ImageJFunctions.show(stack);
 
-		final ExtendedRandomAccessibleInterval<UnsignedShortType, ?> extended = Views.extendValue(stack, new UnsignedShortType());
+		final ExtendedRandomAccessibleInterval<T, ?> extended = Views.extendValue(stack, Util.getTypeFromInterval(stack).createVariable());
 //		final RealRandomAccessible<UnsignedShortType> interpolant = Views.interpolate(extended, new NearestNeighborInterpolatorFactory<>());
-		final RealRandomAccessible<UnsignedShortType> interpolant = Views.interpolate(extended, new NLinearInterpolatorFactory<>());
+		final RealRandomAccessible<T> interpolant = Views.interpolate(extended, new NLinearInterpolatorFactory<>());
 
 		final AffineTransform3D affine = new AffineTransform3D();
 //		affine.set(
@@ -123,13 +124,13 @@ public class ShearTest {
 
 		affine.preConcatenate(scale);
 
-		final AffineRealRandomAccessible<UnsignedShortType, AffineGet> transformed = RealViewsExtension.affineReal(interpolant, affine);
+		final AffineRealRandomAccessible<T, AffineGet> transformed = RealViewsExtension.affineReal(interpolant, affine);
 
-		final BdvStackSource<UnsignedShortType> bdv = BdvFunctions.show(transformed, stack, "real");
+		final BdvStackSource<T> bdv = BdvFunctions.show(transformed, stack, "real");
 		bdv.setDisplayRange(64, 512);
 
 //		final AffineRealRandomAccessible<UnsignedShortType, AffineGet> transformedInteger = RealViews.affineReal(extended, affine, new NearestNeighborInterpolatorFactory<>());
-		final AffineRealRandomAccessible<UnsignedShortType, AffineGet> transformedInteger = RealViewsExtension.affineReal(extended, affine, new NLinearInterpolatorFactory<>());
+		final AffineRealRandomAccessible<T, AffineGet> transformedInteger = RealViewsExtension.affineReal(extended, affine, new NLinearInterpolatorFactory<>());
 
 		BdvFunctions.show(transformedInteger, stack, "integer + real", BdvOptions.options().addTo(bdv)).setDisplayRange(64, 512);
 
