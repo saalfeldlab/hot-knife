@@ -29,9 +29,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.hotknife.ConsensusFilter;
 import org.janelia.saalfeldlab.hotknife.MultiConsensusFilter;
-import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -39,18 +37,18 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 
 import com.google.common.reflect.TypeToken;
 
+import ij.ImageJ;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
-import mpicbg.imagefeatures.Feature;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel2D;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.preibisch.legacy.mpicbg.PointMatchGeneric;
+import net.preibisch.legacy.io.IOFunctions;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
-import net.preibisch.mvrecon.process.deconvolution.DeconViews;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
@@ -84,8 +82,8 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	@Option(names = "--cam", required = true, description = "Cam key, e.g. cam1")
 	private String cam = null;
 
-	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 10")
-	private int distance = 10;
+	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 3 (which is +-2)")
+	private int distance = 3;
 
 	@Option(names = "--minIntensity", required = false, description = "min intensity")
 	private double minIntensity = 0;
@@ -100,7 +98,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	private double lambdaFilter = 0.1;
 
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
-	private double maxEpsilon = 50.0;
+	private double maxEpsilon = 2.0;
 
 	@Option(names = "--iterations", required = false, description = "number of iterations")
 	private int numIterations = 2000;
@@ -135,7 +133,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 					"slices",
 					new TypeToken<ArrayList<Slice>>() {}.getType());
 
-			final String featuresGroupName = n5.groupPath(groupName, "features");
+			final String featuresGroupName = n5.groupPath(groupName, "DoG-detections");
 			if (n5.exists(featuresGroupName))
 				n5.remove(featuresGroupName);
 			n5.createDataset(
@@ -172,13 +170,17 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 			}
 		}
 
-		final double sigma = 2.000;
-		final double threshold = 0.01;
+		final double sigma = 1.8;
+		final double threshold = 0.007;
 		final float intensityScale = 255.0f / (float)(maxIntensity - minIntensity);
 
 		final ArrayList<Integer> slices = new ArrayList<>();
+		//for (int i = 50; i <= 51; ++i)
 		for (int i = 0; i < stack.size(); ++i)
 			slices.add(new Integer(i));
+
+		new ImageJ();
+		IOFunctions.printIJLog = false;
 
 		final JavaRDD<Integer> rddSlices = sc.parallelize(slices);
 
@@ -238,7 +240,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		/* match features */
 		final int numNeighbors = 3;
 		final int redundancy = 0;
-		final double ratioOfDistance = 3.0;
+		final double ratioOfDistance = 2.0;
 		final double differenceThreshold = Double.MAX_VALUE;
 
 		final JavaRDD<Integer> rddIndices = rddFeatures.filter(pair -> pair._2() > 0).map(pair -> pair._1());
@@ -265,7 +267,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 									ratioOfDistance,
 									differenceThreshold ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
 
-					final ConsensusFilter filter = new MultiConsensusFilter<>(
+					final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 //							new Transform.InterpolatedAffineModel2DSupplier(
 //							(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
 //							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
@@ -274,8 +276,8 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 							1000,
 							maxEpsilon,
 							0,
-							50);
-					
+							40);
+
 					final ArrayList<PointMatch> matches = filter.filter(candidates);
 
 					if (matches.size() > 0) {
@@ -302,7 +304,20 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	@Override
 	public Void call() throws IOException, FormatException {
 
-		final SparkConf conf = new SparkConf().setAppName("SparkExtractSIFTMatches");
+		// System property for locally calling spark has to be set, e.g. -Dspark.master=local[4]
+		final String sparkLocal = System.getProperty( "spark.master" );
+
+		// only do that if the system property is not set
+		if ( sparkLocal == null || sparkLocal.trim().length() == 0 )
+		{
+			System.out.println( "Spark System property not set: " + sparkLocal );
+			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 ) + "]" );
+		}
+
+		System.out.println( "Spark System property is: " + System.getProperty( "spark.master" ) );
+
+		final SparkConf conf = new SparkConf().setAppName("SparkExtractGeometricPointDescriptorMatches");
+
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
