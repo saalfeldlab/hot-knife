@@ -143,6 +143,11 @@
 			<groupId>ome</groupId>
 			<artifactId>bio-formats_plugins</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>net.preibisch</groupId>
+			<artifactId>multiview-reconstruction</artifactId>
+			<version>0.8.1</version>
+		</dependency>
 	</dependencies>
 
 	<repositories>
