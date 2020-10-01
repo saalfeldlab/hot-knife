@@ -100,7 +100,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	private double maxIntensity = 4096;
 
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
-	private double maxEpsilon = 2.0;
+	private double maxEpsilon = 5.0;
 
 	@Option(names = "--iterations", required = false, description = "number of iterations")
 	private int numIterations = 2000;
