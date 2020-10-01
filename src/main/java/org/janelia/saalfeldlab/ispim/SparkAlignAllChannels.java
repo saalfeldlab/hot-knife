@@ -19,12 +19,17 @@ package org.janelia.saalfeldlab.ispim;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -42,11 +47,11 @@ import picocli.CommandLine.Option;
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
 @Command(
-		name = "SparkExtractAllSIFTMatches",
+		name = "SparkAlignAllChannels",
 		mixinStandardHelpOptions = true,
 		version = "0.0.4-SNAPSHOT",
-		description = "Extract SIFT matches from all iSPIM camera series in a project")
-public class SparkExtractAllSIFTMatches implements Callable<Void>, Serializable {
+		description = "Align all channels with matches from all its camera images")
+public class SparkAlignAllChannels implements Callable<Void>, Serializable {
 
 	private static final long serialVersionUID = 6708886268386777152L;
 
@@ -74,51 +79,56 @@ public class SparkExtractAllSIFTMatches implements Callable<Void>, Serializable 
 	@Option(names = "--iterations", required = false, description = "number of iterations")
 	private int numIterations = 2000;
 
+	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
+	private HashSet<String> excludeIds = new HashSet<>();
+
 	@SuppressWarnings("serial")
-	@Override
-	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException {
+	public static List<String[]> getIdsChannels(final N5Reader n5) throws IOException {
 
-		final ArrayList<String> ids;
-		final HashMap<String, HashMap<String, double[]>> camTransforms;
-		final N5Reader n5 = new N5FSReader(n5Path);
-
-		camTransforms = n5.getAttribute(
+		final HashMap<String, HashMap<String, double[]>> camTransforms = n5.getAttribute(
 				"/",
 				"camTransforms",
 				new TypeToken<HashMap<String, HashMap<String, double[]>>>() {}.getType());
-		ids = n5.getAttribute(
+		final ArrayList<String> ids = n5.getAttribute(
 				"/",
 				"stacks",
 				new TypeToken<ArrayList<String>>() {}.getType());
 
-		final SparkConf conf = new SparkConf().setAppName("SparkExtractSIFTMatches");
+		final Stream<String[]> idsChannels =
+				ids.stream().flatMap(
+						id -> camTransforms.keySet().stream().map(
+								channel -> new String[] {id, channel}));
+
+		return idsChannels.collect(Collectors.toList());
+	}
+
+	@Override
+	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException {
+
+		System.out.println(Arrays.toString(excludeIds.toArray()));
+
+		final N5Reader n5 = new N5FSReader(n5Path);
+
+		final SparkConf conf = new SparkConf().setAppName("SparkAlignAllChannels");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		final Stream<String[]> idsChannelsCams =
-				ids.stream().flatMap(
-						id -> camTransforms.entrySet().stream().flatMap(
-								channelEntry -> channelEntry.getValue().keySet().stream().map(
-										cam -> new String[] {channelEntry.getKey(), cam})).map(
-												c -> new String[] {id, c[0], c[1]}));
+		final JavaRDD<String[]> rddIdsChannels = sc.parallelize(
+				getIdsChannels(n5));
 
-		idsChannelsCams.forEach(idc -> {
-//			if (Integer.parseInt(idc[0].replace("Pos", "")) > 47 && n5.exists(n5.groupPath(idc)))
-			if (n5.exists(n5.groupPath(idc)))
-				try {
-					System.out.println("Extracting matches for " + n5.groupPath(idc));
-					SparkExtractSIFTMatches.extractStackSIFTMatches(
-							sc,
-							n5Path,
-							idc[0],
-							idc[1],
-							idc[2],
-							distance,
-							minIntensity, maxIntensity, lambdaModel, maxEpsilon, numIterations);
-				} catch (IOException | FormatException e) {
-					System.err.println("Failed to extract features for " + n5Path + " : " + n5.groupPath(idc) + " because:");
-					e.printStackTrace(System.err);
-				}
+		rddIdsChannels.foreach(idc -> {
+			if (!excludeIds.contains(idc[0])) {
+				System.out.println("Aligning " + idc[0] + "/" + idc[1]);
+				new CommandLine(new AlignChannel()).execute(
+						new String[] {
+								"--n5Path", n5Path,
+								"--id", idc[0],
+								"--channel", idc[1],
+								"--distance", "" + distance,
+								"--lambdaModel", "" + lambdaModel,
+								"--maxEpsilon", "" + maxEpsilon,
+								"--iterations", "" + numIterations});
+			}
 		});
 
 		sc.close();
@@ -130,6 +140,8 @@ public class SparkExtractAllSIFTMatches implements Callable<Void>, Serializable 
 
 	public static final void main(final String... args) {
 
-		System.exit(new CommandLine(new SparkExtractAllSIFTMatches()).execute(args));
+		System.out.println(Arrays.toString(args));
+
+		System.exit(new CommandLine(new SparkAlignAllChannels()).execute(args));
 	}
 }

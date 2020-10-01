@@ -144,6 +144,11 @@
 			<artifactId>bio-formats_plugins</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>21.0</version>
+		</dependency>
+		<dependency>
 			<groupId>net.preibisch</groupId>
 			<artifactId>multiview-reconstruction</artifactId>
 			<version>0.8.1</version>
@@ -204,6 +209,14 @@
 						<relocation>
 							<pattern>org.apache.commons.compress</pattern>
 							<shadedPattern>org.janelia.saalfeldlab.org.apache.commons.compress</shadedPattern>
+						</relocation>
+						<relocation>
+							<pattern>com.google.common.base</pattern>
+							<shadedPattern>org.janelia.saalfeldlab.com.google.common.base</shadedPattern>
+						</relocation>
+						<relocation>
+							<pattern>com.google.common.reflect</pattern>
+							<shadedPattern>org.janelia.saalfeldlab.com.google.common.reflect</shadedPattern>
 						</relocation>
 					</relocations>
 				</configuration>
