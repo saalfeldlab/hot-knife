@@ -38,12 +38,14 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import com.google.common.reflect.TypeToken;
 
 import ij.ImageJ;
+import ij.ImagePlus;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel2D;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -82,20 +84,20 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	@Option(names = "--cam", required = true, description = "Cam key, e.g. cam1")
 	private String cam = null;
 
-	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 3 (which is +-2)")
+	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 3")
 	private int distance = 3;
+
+	@Option(names = {"-r", "--redundancy"}, required = false, description = "redundancy for geometric descriptor matching (default: 0)")
+	private int redundancy = 0;
+
+	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default: 25)")
+	private int minNumInliers = 25;
 
 	@Option(names = "--minIntensity", required = false, description = "min intensity")
 	private double minIntensity = 0;
 
 	@Option(names = "--maxIntensity", required = false, description = "max intensity")
 	private double maxIntensity = 4096;
-
-	@Option(names = "--lambdaModel", required = false, description = "lambda for rigid regularizer in model")
-	private double lambdaModel = 0.1;
-
-	@Option(names = "--lambdaFilter", required = false, description = "lambda for rigid regularizer in filter")
-	private double lambdaFilter = 0.1;
 
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
 	private double maxEpsilon = 2.0;
@@ -111,10 +113,11 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 			final String channel,
 			final String cam,
 			final int distance,
+			final int redundancy,
 			final double minIntensity,
 			final double maxIntensity,
-			final double lambdaModel,
 			final double maxEpsilon,
+			final int minNumInliers,
 			final int numIterations) throws IOException, FormatException {
 
 		final ArrayList<Slice> stack;
@@ -175,12 +178,11 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		final float intensityScale = 255.0f / (float)(maxIntensity - minIntensity);
 
 		final ArrayList<Integer> slices = new ArrayList<>();
-		//for (int i = 50; i <= 51; ++i)
+
 		for (int i = 0; i < stack.size(); ++i)
 			slices.add(new Integer(i));
 
-		new ImageJ();
-		IOFunctions.printIJLog = false;
+		System.out.println( "Stack has #slice=" + stack.size() );
 
 		final JavaRDD<Integer> rddSlices = sc.parallelize(slices);
 
@@ -239,15 +241,16 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		/* match features */
 		final int numNeighbors = 3;
-		final int redundancy = 0;
 		final double ratioOfDistance = 2.0;
 		final double differenceThreshold = Double.MAX_VALUE;
+
+		//new ImageJ();
 
 		final JavaRDD<Integer> rddIndices = rddFeatures.filter(pair -> pair._2() > 0).map(pair -> pair._1());
 		final JavaPairRDD<Integer, Integer> rddPairs = rddIndices.cartesian(rddIndices).filter(
 				pair -> {
 					final int diff = pair._2() - pair._1();
-					return diff > 0 && diff < distance;
+					return diff > 0 && diff <= distance;
 				});
 		final JavaPairRDD<Tuple2<Integer, Integer>, Integer> rddMatches = rddPairs.mapToPair(
 				pair -> {
@@ -273,10 +276,10 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 //							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
 							(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
 //							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-							1000,
+							numIterations,
 							maxEpsilon,
 							0,
-							40);
+							minNumInliers);
 
 					final ArrayList<PointMatch> matches = filter.filter(candidates);
 
@@ -291,6 +294,9 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 								new long[] {pair._1(), pair._2()});
 					}
 
+					//if ( pair._1().intValue() == 50 && pair._2().intValue() == 51 || pair._1().intValue() == 100 && pair._2().intValue() == 101 )
+					//	show( stack, width, height, matches, pair._1().intValue(), pair._2().intValue() );
+
 					return new Tuple2<>(
 							new Tuple2<>(pair._1(), pair._2()),
 							matches.size());
@@ -299,6 +305,52 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		/* run matching */
 		rddMatches.count();
+	}
+
+	private static void show( final ArrayList<Slice> stack, final int width, final int height, final ArrayList<PointMatch> matches, final int sliceIndex0, final int sliceIndex1 ) throws IOException, FormatException
+	{
+		final TiffReader reader = new TiffReader();
+		Slice sliceInfo = stack.get( sliceIndex0 );
+
+		final RandomAccessibleInterval slice0 =
+				(RandomAccessibleInterval)Opener.openSlice(
+						reader,
+						sliceInfo.path,
+						sliceInfo.index,
+						width,
+						height);
+
+		sliceInfo = stack.get( sliceIndex1 );
+
+		final RandomAccessibleInterval slice1 =
+				(RandomAccessibleInterval)Opener.openSlice(
+						reader,
+						sliceInfo.path,
+						sliceInfo.index,
+						width,
+						height);
+
+		ImagePlus imp1 = ImageJFunctions.show(
+				Converters.convert(
+						(RandomAccessibleInterval<RealType<?>>)slice0,
+						(a, b) -> b.setReal(a.getRealFloat()),
+					new FloatType())
+				);
+		imp1.setRoi( mpicbg.ij.util.Util.pointsToPointRoi(
+						matches.stream().map( pm -> pm.getP1() ).collect( Collectors.toList() ) ) );
+		imp1.resetDisplayRange();
+		imp1.setTitle( "s=" + sliceIndex0);
+
+		ImagePlus imp2 = ImageJFunctions.show(
+				Converters.convert(
+						(RandomAccessibleInterval<RealType<?>>)slice1,
+						(a, b) -> b.setReal(a.getRealFloat()),
+					new FloatType())
+				);
+		imp2.setRoi( mpicbg.ij.util.Util.pointsToPointRoi(
+						matches.stream().map( pm -> pm.getP2() ).collect( Collectors.toList() ) ) );
+		imp2.resetDisplayRange();
+		imp2.setTitle( "s=" + sliceIndex1);
 	}
 
 	@Override
@@ -321,7 +373,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		extractGeometricDescriptorMatches(sc, n5Path, id, channel, cam, distance, minIntensity, maxIntensity, lambdaModel, maxEpsilon, numIterations);
+		extractGeometricDescriptorMatches(sc, n5Path, id, channel, cam, distance, redundancy, minIntensity, maxIntensity, maxEpsilon, minNumInliers, numIterations);
 
 		sc.close();
 
