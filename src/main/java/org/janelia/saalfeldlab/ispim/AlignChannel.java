@@ -92,6 +92,13 @@ public class AlignChannel implements Callable<Void>, Serializable {
 	@Option(names = "--iterations", required = false, description = "number of iterations")
 	private int numIterations = 2000;
 
+	@Option(names = "--shearX", required = false, description = "shearing of z into x, e.g. -13 (default null)")
+	private Double shearX = null;
+
+	@Option(names = "--shearY", required = false, description = "shearing of z into y, e.g. -1 (default null)")
+	private Double shearY = null;
+
+
 	private static int channelLength(
 			final N5Reader n5,
 			final String id,
@@ -100,14 +107,17 @@ public class AlignChannel implements Callable<Void>, Serializable {
 
 		int channelLength = 0;
 		for (final String cam : cams) {
-			final long[] dimensions = n5.getAttribute(n5.groupPath(id, channel, cam, "matches"), "dimensions", long[].class);
-			if (dimensions[0] > channelLength)
-				channelLength = (int)dimensions[0];
+			final String datasetName = n5.groupPath(id, channel, cam, "matches");
+			if (n5.datasetExists(datasetName)) {
+				final long[] dimensions = n5.getAttribute(datasetName, "dimensions", long[].class);
+				if (dimensions[0] > channelLength)
+					channelLength = (int)dimensions[0];
+			}
 		}
 		return channelLength;
 	}
 
-	private static double[] fit(
+	public static double[] fit(
 			final List<AffineTransform2D> affines,
 			final Set<AffineTransform2D> consider,
 			final int r,
@@ -138,7 +148,7 @@ public class AlignChannel implements Callable<Void>, Serializable {
 		return array;
 	}
 
-	private static double[][] fit(
+	public static double[][] fit(
 			final List<AffineTransform2D> affines,
 			final Set<AffineTransform2D> consider) throws NotEnoughDataPointsException, IllDefinedDataPointsException {
 
@@ -248,8 +258,8 @@ public class AlignChannel implements Callable<Void>, Serializable {
 						final double[] p2l = match.getP2().getL();
 						final double[] p1w = match.getP1().getW();
 						final double[] p2w = match.getP2().getW();
-						channelCamTransform.inverse().apply(p1l, p1l);
-						channelCamTransform.inverse().apply(p2l, p2l);
+						channelCamTransform.applyInverse(p1l, p1l);
+						channelCamTransform.applyInverse(p2l, p2l);
 						System.arraycopy(p1l, 0, p1w, 0, p1l.length);
 						System.arraycopy(p2l, 0, p2w, 0, p2l.length);
 					}
@@ -260,57 +270,58 @@ public class AlignChannel implements Callable<Void>, Serializable {
 			}
 		}
 
-		final Set<Tile<?>> nonEmptyTiles = tiles.stream().filter(tile -> tile.getConnectedTiles().size() > 0).collect(Collectors.toSet());
+		final ArrayList<Set<Tile<?>>> graphs = Tile.identifyConnectedGraphs(tiles);
 
-		/* optimize */
-		/* feed all tiles that have connections into tile configuration, report those that are disconnected */
-		final TileConfiguration tc = new TileConfiguration();
-		tc.addTiles(nonEmptyTiles);
+		if (shearX == null || shearY == null) {
 
-		/* three pass optimization, first using the regularizer exclusively ... */
-		try {
-			tc.preAlign();
-			tc.optimizeSilently(new ErrorStatistic(numIterations), maxEpsilon, numIterations, numIterations, 1);
-		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
-			e.printStackTrace();
+			final Set<Tile<?>> nonEmptyTiles = tiles.stream().filter(tile -> tile.getConnectedTiles().size() > 0).collect(Collectors.toSet());
+
+			/* optimize */
+			/* feed all tiles that have connections into tile configuration, report those that are disconnected */
+			final TileConfiguration tc = new TileConfiguration();
+			tc.addTiles(nonEmptyTiles);
+
+			/* three pass optimization, first using the regularizer exclusively ... */
+			try {
+				tc.preAlign();
+				tc.optimizeSilently(new ErrorStatistic(numIterations), maxEpsilon, numIterations, numIterations, 1);
+			} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+				e.printStackTrace();
+			}
+
+			final Set<Tile<?>> largestGraph =
+					graphs.stream().max((a, b) -> a.size() == b.size() ? 0 : a.size() < b.size() ? -1 : 1).get();
+
+			/* extract affines */
+			final ArrayList<AffineTransform2D> transforms = new ArrayList<>();
+			final HashSet<AffineTransform2D> consider = new HashSet<>();
+			for (final Tile<?> tile : tiles) {
+
+				final AffineTransform2D transform =
+						Transform.convertAffine2DtoAffineTransform2D((Affine2D)tile.getModel());
+				transforms.add(transform);
+				if (largestGraph.contains(tile))
+					consider.add(transform);
+			}
+
+			final double[] shearXFit = fit(transforms, consider, 0, 2);
+			final double[] shearYFit = fit(transforms, consider, 1, 2);
+
+			System.out.println("average shear");
+			System.out.println("x : a = " + shearXFit[0] + ", b = " + shearXFit[1]);
+			System.out.println("y : a = " + shearYFit[0] + ", b = " + shearYFit[1]);
+
+			if ( shearX == null) shearX = shearXFit[0];
+			if ( shearY == null) shearY = shearYFit[0];
 		}
-
-		for (final Tile<?> tile : tiles) {
-
-			System.out.println();
-
-		}
-
-		final ArrayList<Set<Tile<?>>> graphs = Tile.identifyConnectedGraphs(nonEmptyTiles);
-		final Set<Tile<?>> largestGraph =
-				graphs.stream().max((a, b) -> a.size() == b.size() ? 0 : a.size() < b.size() ? -1 : 1).get();
-
-		/* extract affines */
-		final ArrayList<AffineTransform2D> transforms = new ArrayList<>();
-		final HashSet<AffineTransform2D> consider = new HashSet<>();
-		for (final Tile<?> tile : tiles) {
-
-			final AffineTransform2D transform =
-					Transform.convertAffine2DtoAffineTransform2D((Affine2D)tile.getModel());
-			transforms.add(transform);
-			if (largestGraph.contains(tile))
-				consider.add(transform);
-		}
-
-		final double[] shearX = fit(transforms, consider, 0, 2);
-		final double[] shearY = fit(transforms, consider, 1, 2);
-
-		System.out.println("average shear");
-		System.out.println("x : a = " + shearX[0] + ", b = " + shearX[1]);
-		System.out.println("y : a = " + shearY[0] + ", b = " + shearY[1]);
 
 		/* align all tiles using the average shear model, and crank up the regularizer */
 		final TranslationModel2D defaultTransform = new TranslationModel2D();
-		defaultTransform.set(shearX[0], shearY[0]);
+		defaultTransform.set(shearX, shearY);
 		for (int i = 0; i < nSlices; ++i) {
 
-			final double x = shearX[0] * i;
-			final double y = shearY[0] * i;
+			final double x = shearX * i;
+			final double y = shearY * i;
 
 			final Tile tile = tiles.get(i);
 //			final AffineModel2D affineModel = new AffineModel2D();
@@ -337,12 +348,13 @@ public class AlignChannel implements Callable<Void>, Serializable {
 
 		try {
 			tc2.optimizeSilently(new ErrorStatistic(numIterations), maxEpsilon, numIterations, numIterations, 1);
+//			tc2.optimize(new ErrorStatistic(numIterations), maxEpsilon, numIterations, numIterations, 1);
 		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
 			e.printStackTrace();
 		}
 
 		/* extract affines */
-		transforms.clear();
+		final ArrayList<AffineTransform2D> transforms = new ArrayList<>();
 		for (final Tile<?> tile : tiles) {
 			final InterpolatedAffineModel2D interpolatedAffineModel = new InterpolatedAffineModel2D(((InterpolatedModel)tile.getModel()).getA(), ((ConstantModel)((InterpolatedModel)tile.getModel()).getB()).getModel(), lambdaModel);
 			transforms.add(
