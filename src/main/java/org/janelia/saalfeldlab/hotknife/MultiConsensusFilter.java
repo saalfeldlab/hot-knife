@@ -88,10 +88,10 @@ public class MultiConsensusFilter<M extends Model<?>> implements ConsensusFilter
 		final ArrayList<PointMatch> inliers = new ArrayList<>();
 		final ArrayList<ArrayList<PointMatch>> multiConsensusSets = filterMultiConsensusSets(candidates);
 
-		System.out.printf("Found %d consensus sets.", multiConsensusSets.size());
-		System.out.println();
-
 		multiConsensusSets.stream().forEach(consensusSet -> inliers.addAll(consensusSet));
+
+		System.out.printf("Found %d consensus sets with %d inliers", multiConsensusSets.size(), inliers.size());
+		System.out.println();
 
 		return inliers;
 	}
