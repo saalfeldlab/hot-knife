@@ -62,17 +62,14 @@ public class SparkExtractAllSIFTMatches implements Callable<Void>, Serializable 
 	@Option(names = "--maxIntensity", required = false, description = "max intensity")
 	private double maxIntensity = 4096;
 
-	@Option(names = "--lambdaModel", required = false, description = "lambda for rigid regularizer in model")
-	private double lambdaModel = 0.1;
-
-	@Option(names = "--lambdaFilter", required = false, description = "lambda for rigid regularizer in filter")
-	private double lambdaFilter = 0.1;
-
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
 	private double maxEpsilon = 50.0;
 
-	@Option(names = "--iterations", required = false, description = "number of iterations")
-	private int numIterations = 2000;
+	@Option(names = "--iterations", required = false, description = "number of iterations for RANSAC (default 1000)")
+	private int numIterations = 1000;
+
+	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default 10)")
+	private int minNumInliers = 10;
 
 	@SuppressWarnings("serial")
 	@Override
@@ -114,7 +111,11 @@ public class SparkExtractAllSIFTMatches implements Callable<Void>, Serializable 
 							idc[1],
 							idc[2],
 							distance,
-							minIntensity, maxIntensity, lambdaModel, maxEpsilon, numIterations);
+							minIntensity,
+							maxIntensity,
+							maxEpsilon,
+							numIterations,
+							minNumInliers);
 				} catch (IOException | FormatException e) {
 					System.err.println("Failed to extract features for " + n5Path + " : " + n5.groupPath(idc) + " because:");
 					e.printStackTrace(System.err);

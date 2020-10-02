@@ -84,17 +84,14 @@ public class SparkExtractSIFTMatches implements Callable<Void>, Serializable {
 	@Option(names = "--maxIntensity", required = false, description = "max intensity")
 	private double maxIntensity = 4096;
 
-	@Option(names = "--lambdaModel", required = false, description = "lambda for rigid regularizer in model")
-	private double lambdaModel = 0.1;
-
-	@Option(names = "--lambdaFilter", required = false, description = "lambda for rigid regularizer in filter")
-	private double lambdaFilter = 0.1;
-
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
 	private double maxEpsilon = 50.0;
 
-	@Option(names = "--iterations", required = false, description = "number of iterations")
-	private int numIterations = 2000;
+	@Option(names = "--iterations", required = false, description = "number of iterations for RANSAC (default 1000)")
+	private int numIterations = 1000;
+
+	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default 10)")
+	private int minNumInliers = 10;
 
 	@SuppressWarnings("serial")
 	public static void extractStackSIFTMatches(
@@ -106,9 +103,9 @@ public class SparkExtractSIFTMatches implements Callable<Void>, Serializable {
 			final int distance,
 			final double minIntensity,
 			final double maxIntensity,
-			final double lambdaModel,
 			final double maxEpsilon,
-			final int numIterations) throws IOException, FormatException {
+			final int numIterations,
+			final int minNumInliers) throws IOException, FormatException {
 
 		final ArrayList<Slice> stack;
 		final String groupName;
@@ -246,10 +243,10 @@ public class SparkExtractSIFTMatches implements Callable<Void>, Serializable {
 //													(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
 											(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
 //											(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-											1000,
+											numIterations,
 											maxEpsilon,
 											0,
-											10)),
+											minNumInliers)),
 							64));
 
 					if (matches.size() > 0) {
@@ -280,7 +277,18 @@ public class SparkExtractSIFTMatches implements Callable<Void>, Serializable {
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		extractStackSIFTMatches(sc, n5Path, id, channel, cam, distance, minIntensity, maxIntensity, lambdaModel, maxEpsilon, numIterations);
+		extractStackSIFTMatches(
+				sc,
+				n5Path,
+				id,
+				channel,
+				cam,
+				distance,
+				minIntensity,
+				maxIntensity,
+				maxEpsilon,
+				numIterations,
+				minNumInliers);
 
 		sc.close();
 
