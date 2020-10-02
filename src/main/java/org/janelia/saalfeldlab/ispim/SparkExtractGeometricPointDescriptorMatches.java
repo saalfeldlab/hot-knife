@@ -51,6 +51,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.preibisch.legacy.io.IOFunctions;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
+import net.preibisch.mvrecon.process.interestpointdetection.InterestPointTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
@@ -184,6 +185,10 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		System.out.println( "Stack has #slice=" + stack.size() );
 
+		final boolean limitDetections = true;
+		final int maxDetections = 1500;
+		final int maxDetectionsTypeIndex = 0; // { "Brightest", "Around median (of those above threshold)", "Weakest (above threshold)" };
+
 		final JavaRDD<Integer> rddSlices = sc.parallelize(slices);
 
 		/* save features */
@@ -203,7 +208,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 										width,
 										height);
 
-						final ArrayList< InterestPoint > points = 
+						ArrayList< InterestPoint > points =
 								DoGImgLib2.computeDoG(
 										Converters.convert(
 											(RandomAccessibleInterval<RealType<?>>)slice,
@@ -220,6 +225,9 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 										0, /* min intensity */
 										255, /* max intensity */
 										Executors.newFixedThreadPool( 1 ) );
+
+						if ( limitDetections )
+							points = (ArrayList< InterestPoint >)InterestPointTools.limitList( maxDetections, maxDetectionsTypeIndex, points );
 
 						if (points.size() > 0) {
 							n5Writer.writeSerializedBlock(
