@@ -19,6 +19,7 @@ package org.janelia.saalfeldlab.ispim;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
@@ -84,7 +85,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	@Option(names = "--cam", required = true, description = "Cam key, e.g. cam1")
 	private String cam = null;
 
-	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 3")
+	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared (default: 3)")
 	private int distance = 3;
 
 	@Option(names = {"-r", "--redundancy"}, required = false, description = "redundancy for geometric descriptor matching (default: 0)")
@@ -377,7 +378,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		sc.close();
 
-		System.out.println("Done.");
+		System.out.println( new Date( System.currentTimeMillis() ) + ": Done.");
 
 		return null;
 	}
