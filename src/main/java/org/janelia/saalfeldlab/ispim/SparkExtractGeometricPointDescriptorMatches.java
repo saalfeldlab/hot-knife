@@ -16,6 +16,7 @@
  */
 package org.janelia.saalfeldlab.ispim;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -95,11 +96,11 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default: 25)")
 	private int minNumInliers = 25;
 
-	@Option(names = "--minIntensity", required = false, description = "min intensity")
+	@Option(names = "--minIntensity", required = false, description = "min intensity, if minIntensity==maxIntensity determine min/max per slice (default: 0)")
 	private double minIntensity = 0;
 
-	@Option(names = "--maxIntensity", required = false, description = "max intensity")
-	private double maxIntensity = 4096;
+	@Option(names = "--maxIntensity", required = false, description = "max intensity, if minIntensity==maxIntensity determine min/max per slice (default: 0)")
+	private double maxIntensity = 0;
 
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
 	private double maxEpsilon = 5.0;
@@ -177,7 +178,6 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		final double sigma = 1.8;
 		final double threshold = 0.007;
-		final float intensityScale = 255.0f / (float)(maxIntensity - minIntensity);
 
 		final ArrayList<Integer> slices = new ArrayList<>();
 
@@ -213,9 +213,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 								DoGImgLib2.computeDoG(
 										Converters.convert(
 											(RandomAccessibleInterval<RealType<?>>)slice,
-											(a, b) -> {
-												b.setReal((a.getRealFloat() - minIntensity) * intensityScale);
-											},
+											(a, b) -> b.setReal( a.getRealFloat() ),
 										new FloatType()),
 										null,
 										sigma,
@@ -223,9 +221,23 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 										1, /*localization*/
 										false, /*findMin*/
 										true, /*findMax*/
-										0, /* min intensity */
-										255, /* max intensity */
+										minIntensity, /* min intensity */
+										maxIntensity, /* max intensity */
 										Executors.newFixedThreadPool( 1 ) );
+
+						/*if ( i.intValue() % 50 == 0 )
+						{
+							ImagePlus imp1 = ImageJFunctions.show(
+									Converters.convert(
+											(RandomAccessibleInterval<RealType<?>>)slice,
+											(a, b) -> b.setReal(a.getRealFloat()),
+										new FloatType())
+									);
+							imp1.setRoi( mpicbg.ij.util.Util.pointsToPointRoi(
+									points ) );
+							imp1.resetDisplayRange();
+							imp1.setTitle( "s=" + i);
+						}*/
 
 						if ( limitDetections )
 							points = (ArrayList< InterestPoint >)InterestPointTools.limitList( maxDetections, maxDetectionsTypeIndex, points );
@@ -270,6 +282,10 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 					final ArrayList<InterestPoint> ip1 = n5Writer.readSerializedBlock(datasetName, datasetAttributes, new long[] {pair._1()});
 					final ArrayList<InterestPoint> ip2 = n5Writer.readSerializedBlock(datasetName, datasetAttributes, new long[] {pair._2()});
 
+					// not enough points to build a descriptor
+					if ( ip1.size() < numNeighbors + redundancy + 1 || ip2.size() < numNeighbors + redundancy + 1 )
+						return new Tuple2<>( new Tuple2<>(pair._1(), pair._2()), 0 );
+					
 					final List< PointMatch > candidates = 
 							new RGLDMMatcher<>().extractCorrespondenceCandidates(
 									ip1,
@@ -387,11 +403,13 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		sc.close();
 
 		System.out.println( new Date( System.currentTimeMillis() ) + ": Done.");
+		//SimpleMultiThreading.threadHaltUnClean();
+
 
 		return null;
 	}
 
-	public static final void main(final String... args) {
+	public static final void main(final String... args) throws IOException {
 
 		System.exit(new CommandLine(new SparkExtractGeometricPointDescriptorMatches()).execute(args));
 	}
