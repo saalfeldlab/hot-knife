@@ -82,6 +82,9 @@ public class SparkAlignAllChannels implements Callable<Void>, Serializable {
 	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
 	private HashSet<String> excludeIds = new HashSet<>();
 
+	@Option(names = "--excludeChannels", split=",", required = false, description = "channels to be exluded")
+	private HashSet<String> excludeChannels = new HashSet<>();
+
 	@SuppressWarnings("serial")
 	public static List<String[]> getIdsChannels(final N5Reader n5) throws IOException {
 
@@ -117,7 +120,7 @@ public class SparkAlignAllChannels implements Callable<Void>, Serializable {
 				getIdsChannels(n5));
 
 		rddIdsChannels.foreach(idc -> {
-			if (!excludeIds.contains(idc[0])) {
+			if (!excludeIds.contains(idc[0]) && !excludeChannels.contains(idc[1])) {
 				System.out.println("Aligning " + idc[0] + "/" + idc[1]);
 				new CommandLine(new AlignChannel()).execute(
 						new String[] {

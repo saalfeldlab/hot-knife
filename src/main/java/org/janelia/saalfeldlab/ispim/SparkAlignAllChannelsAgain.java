@@ -85,6 +85,9 @@ public class SparkAlignAllChannelsAgain implements Callable<Void>, Serializable 
 	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
 	private HashSet<String> excludeIds = new HashSet<>();
 
+	@Option(names = "--excludeChannels", split=",", required = false, description = "channels to be exluded")
+	private HashSet<String> excludeChannels = new HashSet<>();
+
 	@SuppressWarnings("serial")
 	@Override
 	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException {
@@ -151,25 +154,25 @@ public class SparkAlignAllChannelsAgain implements Callable<Void>, Serializable 
 			System.out.println("  " + entry.getKey() + " : x = " + value[0] / value[2] + ", y = " + value[1] / value[2]);
 		}
 
-//		rddIdsChannels.foreach(idc -> {
-//			if (!excludeIds.contains(idc[0])) {
-//				System.out.println("Aligning " + idc[0] + "/" + idc[1]);
-//				final double[] channelShear = shearSums.get(idc[1]);
-//				final double shearX = channelShear[0] / channelShear[2];
-//				final double shearY = channelShear[1] / channelShear[2];
-//				new CommandLine(new AlignChannel()).execute(
-//						new String[] {
-//								"--n5Path", n5Path,
-//								"--id", idc[0],
-//								"--channel", idc[1],
-//								"--distance", "" + distance,
-//								"--lambdaModel", "" + lambdaModel,
-//								"--maxEpsilon", "" + maxEpsilon,
-//								"--iterations", "" + numIterations,
-//								"--shearX", "" + shearX,
-//								"--shearY", "" + shearY});
-//			}
-//		});
+		rddIdsChannels.foreach(idc -> {
+			if (!excludeIds.contains(idc[0]) && !excludeChannels.contains(idc[1])) {
+				System.out.println("Aligning " + idc[0] + "/" + idc[1]);
+				final double[] channelShear = shearSums.get(idc[1]);
+				final double shearX = channelShear[0] / channelShear[2];
+				final double shearY = channelShear[1] / channelShear[2];
+				new CommandLine(new AlignChannel()).execute(
+						new String[] {
+								"--n5Path", n5Path,
+								"--id", idc[0],
+								"--channel", idc[1],
+								"--distance", "" + distance,
+								"--lambdaModel", "" + lambdaModel,
+								"--maxEpsilon", "" + maxEpsilon,
+								"--iterations", "" + numIterations,
+								"--shearX", "" + shearX,
+								"--shearY", "" + shearY});
+			}
+		});
 
 
 		sc.close();

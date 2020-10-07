@@ -61,6 +61,9 @@ public class CompareAlignments implements Callable<Void>, Serializable {
 	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
 	private HashSet<String> excludeIds = new HashSet<>();
 
+	@Option(names = "--excludeChannels", split=",", required = false, description = "channels to be exluded")
+	private HashSet<String> excludeChannels = new HashSet<>();
+
 	@Option(names = "--outPath", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6")
 	private String outPath = null;
 
@@ -86,6 +89,9 @@ public class CompareAlignments implements Callable<Void>, Serializable {
 				new TypeToken<ArrayList<String>>() {}.getType());
 
 		for (final String channel : camTransforms.keySet()) {
+
+			if (excludeChannels.contains(channel))
+				continue;
 
 			System.out.println(channel);
 

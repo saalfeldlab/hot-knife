@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
@@ -71,6 +72,12 @@ public class SparkExtractAllSIFTMatches implements Callable<Void>, Serializable 
 	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default 10)")
 	private int minNumInliers = 10;
 
+	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
+	private HashSet<String> excludeIds = new HashSet<>();
+
+	@Option(names = "--excludeChannels", split=",", required = false, description = "channels to be exluded")
+	private HashSet<String> excludeChannels = new HashSet<>();
+
 	@SuppressWarnings("serial")
 	@Override
 	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException {
@@ -100,8 +107,7 @@ public class SparkExtractAllSIFTMatches implements Callable<Void>, Serializable 
 												c -> new String[] {id, c[0], c[1]}));
 
 		idsChannelsCams.forEach(idc -> {
-//			if (Integer.parseInt(idc[0].replace("Pos", "")) > 47 && n5.exists(n5.groupPath(idc)))
-			if (n5.exists(n5.groupPath(idc)))
+			if (!excludeIds.contains(idc[0]) && !excludeChannels.contains(idc[1]) && n5.exists(n5.groupPath(idc)))
 				try {
 					System.out.println("Extracting matches for " + n5.groupPath(idc));
 					SparkExtractSIFTMatches.extractStackSIFTMatches(
