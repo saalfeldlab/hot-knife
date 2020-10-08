@@ -62,6 +62,7 @@ import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
+import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
@@ -253,7 +254,14 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 						new NearestNeighborRealRandomAccessibleStackInterpolatorFactory<>(),
 				3);
 
-		return new ValuePair<>(interpolatedStack, bounds);
+		if ( firstSliceIndex != 0 )
+			return new ValuePair<>(
+					RealViews.transform(
+							interpolatedStack,
+							new Translation3D(0, 0, firstSliceIndex ) ),
+					bounds);
+		else
+			return new ValuePair<>(interpolatedStack, bounds);
 	}
 
 
