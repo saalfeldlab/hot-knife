@@ -200,6 +200,8 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 	 * transformation and a per slice alignment transformation.  Also
 	 * returns the resulting 2D bounds of the transformed slice series.
 	 *
+	 * Note: the RealRandomAccessible is sitting at z=0, independent of the firstSliceIndex
+	 *
 	 * @param <T>
 	 * @param slices
 	 * @param camTransform invertible forward transform
@@ -254,14 +256,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 						new NearestNeighborRealRandomAccessibleStackInterpolatorFactory<>(),
 				3);
 
-		if ( firstSliceIndex != 0 )
-			return new ValuePair<>(
-					RealViews.transform(
-							interpolatedStack,
-							new Translation3D(0, 0, firstSliceIndex ) ),
-					bounds);
-		else
-			return new ValuePair<>(interpolatedStack, bounds);
+		return new ValuePair<>(interpolatedStack, bounds);
 	}
 
 
