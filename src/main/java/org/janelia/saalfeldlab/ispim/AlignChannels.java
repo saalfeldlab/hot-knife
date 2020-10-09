@@ -29,7 +29,11 @@ import net.imglib2.img.list.ListImg;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.position.FunctionRandomAccessible;
 import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
+import net.imglib2.realtransform.Translation3D;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.ValuePair;
@@ -144,15 +148,70 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final AffineTransform2D camAtransform = camTransforms.get( channelA ).get( camA );
 		final AffineTransform2D camBtransform = camTransforms.get( channelB ).get( camB );
 
-		final ValuePair<RealRandomAccessible<UnsignedShortType>, RealInterval> alignedStackBounds =
-				ViewISPIMStack.openAlignedStack(
+		final RandomAccessibleInterval< UnsignedShortType > imgA =
+				openRandomAccessibleInterval(
 						slicesA,
 						new UnsignedShortType(0),
-						Interpolation.NEARESTNEIGHBOR,
+						Interpolation.NLINEAR,
 						camAtransform,
 						alignments.get( channelA ),
 						firstSliceIndex,
 						lastSliceIndex);
+
+
+		final RandomAccessibleInterval< UnsignedShortType > imgB =
+				openRandomAccessibleInterval(
+						slicesB,
+						new UnsignedShortType(0),
+						Interpolation.NLINEAR,
+						camAtransform,
+						alignments.get( channelB ),
+						firstSliceIndex,
+						lastSliceIndex);
+
+		new ImageJ();
+
+		final ImagePlus impA = ImageJFunctions.wrap(imgA, "imgA" ).duplicate();
+		impA.setDimensions( 1, impA.getStackSize(), 1 );
+		impA.resetDisplayRange();
+		impA.show();
+
+		final ImagePlus impB = ImageJFunctions.wrap(imgB, "imgB" ).duplicate();
+		impB.setDimensions( 1, impB.getStackSize(), 1 );
+		impB.resetDisplayRange();
+		impB.show();
+
+		//ImageJFunctions.show( imgA );
+		SimpleMultiThreading.threadHaltUnClean();
+		return null;
+	}
+
+	public static < T extends NumericType<T> & NativeType<T> > RandomAccessibleInterval< T > openRandomAccessibleInterval(
+			final List< Slice > slices,
+			final T background,
+			final Interpolation interpolation,
+			final AffineTransform2D camTransform,
+			final RandomAccessible<AffineTransform2D> alignments,
+			final int firstSliceIndex,
+			final int lastSliceIndex ) throws FormatException, IOException
+	{
+		ValuePair<RealRandomAccessible<T>, RealInterval> alignedStackBounds =
+				ViewISPIMStack.openAlignedStack(
+						slices,
+						background,
+						interpolation,
+						camTransform,
+						alignments,
+						firstSliceIndex,
+						lastSliceIndex);
+
+		// the stack is sitting at z=0, independent of the firstslice index
+		if ( firstSliceIndex != 0 )
+			alignedStackBounds = new ValuePair<>(
+					RealViews.transform(
+							alignedStackBounds.getA(),
+							new Translation3D(0, 0, firstSliceIndex ) ),
+					alignedStackBounds.getB() );
 
 		final RealInterval realBounds2D = alignedStackBounds.getB();
 		final RealInterval realBounds3D = Intervals.createMinMax(
@@ -172,18 +231,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final RealInterval realBounds = transformedStackBounds.getB();
 		final Interval bounds = Intervals.smallestContainingInterval(realBounds);*/
 
-		final RandomAccessibleInterval< UnsignedShortType > imgA = 
-				Views.interval( Views.raster( alignedStackBounds.getA() ), Intervals.smallestContainingInterval(realBounds3D) );
-
-		new ImageJ();
-		final ImagePlus impA = ImageJFunctions.wrap(imgA, "imgA" );
-		impA.setDimensions( 1, impA.getStackSize(), 1 );
-		impA.resetDisplayRange();
-		impA.show();
-
-		//ImageJFunctions.show( imgA );
-		SimpleMultiThreading.threadHaltUnClean();
-		return null;
+		return Views.interval( Views.raster( alignedStackBounds.getA() ), Intervals.smallestContainingInterval(realBounds3D) );
 	}
-
 }
