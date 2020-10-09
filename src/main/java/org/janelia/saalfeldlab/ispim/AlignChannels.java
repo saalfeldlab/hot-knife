@@ -16,6 +16,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import bdv.viewer.Interpolation;
+import ij.IJ;
 import ij.ImageJ;
 import ij.ImagePlus;
 import loci.formats.FormatException;
@@ -38,6 +39,7 @@ import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
+import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
@@ -135,14 +137,20 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
 
+		final int gaussOverhead = DoGImgLib2.radiusDoG( 2.0 );
+		System.out.println( "gauss overhead: " + gaussOverhead );
+
 		// testing
-		final int firstSliceIndex = 510;
-		final int lastSliceIndex = 520;
+		final int firstSliceIndex = 510 - gaussOverhead;
+		final int lastSliceIndex = 510 + gaussOverhead;
+
+		System.out.println( "from=" + firstSliceIndex );
+		System.out.println( "to=" + lastSliceIndex );
 
 		final HashMap<String, List<Slice>> chA = stacks.get( channelA );
 		final HashMap<String, List<Slice>> chB = stacks.get( channelB );
 		final List< Slice > slicesA = chA.get( camA );
-		final List< Slice > slicesB = chA.get( camB );
+		final List< Slice > slicesB = chB.get( camB );
 
 		/* this is the inverse */
 		final AffineTransform2D camAtransform = camTransforms.get( channelA ).get( camA );
@@ -156,7 +164,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						camAtransform,
 						alignments.get( channelA ),
 						firstSliceIndex,
-						lastSliceIndex);
+						lastSliceIndex,
+						null );
 
 
 		final RandomAccessibleInterval< UnsignedShortType > imgB =
@@ -164,10 +173,11 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						slicesB,
 						new UnsignedShortType(0),
 						Interpolation.NLINEAR,
-						camAtransform,
+						camBtransform,
 						alignments.get( channelB ),
 						firstSliceIndex,
-						lastSliceIndex);
+						lastSliceIndex,
+						imgA );
 
 		new ImageJ();
 
@@ -181,6 +191,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		impB.resetDisplayRange();
 		impB.show();
 
+		IJ.run("Merge Channels...", "c2=DUP_imgA c6=DUP_imgB create");
+
 		//ImageJFunctions.show( imgA );
 		SimpleMultiThreading.threadHaltUnClean();
 		return null;
@@ -193,7 +205,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			final AffineTransform2D camTransform,
 			final RandomAccessible<AffineTransform2D> alignments,
 			final int firstSliceIndex,
-			final int lastSliceIndex ) throws FormatException, IOException
+			final int lastSliceIndex,
+			final Interval lastInterval ) throws FormatException, IOException
 	{
 		ValuePair<RealRandomAccessible<T>, RealInterval> alignedStackBounds =
 				ViewISPIMStack.openAlignedStack(
@@ -231,6 +244,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final RealInterval realBounds = transformedStackBounds.getB();
 		final Interval bounds = Intervals.smallestContainingInterval(realBounds);*/
 
-		return Views.interval( Views.raster( alignedStackBounds.getA() ), Intervals.smallestContainingInterval(realBounds3D) );
+		final Interval displayInterval = lastInterval == null ? Intervals.smallestContainingInterval(realBounds3D) : lastInterval;
+
+		return Views.interval( Views.raster( alignedStackBounds.getA() ), displayInterval );
 	}
 }
