@@ -125,6 +125,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			}
 		}
 
+		new ImageJ();
+
 		System.out.println( "localLastSliceIndex: " + localLastSliceIndex );
 
 		final Gson gson = new GsonBuilder().registerTypeAdapter(
@@ -149,6 +151,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		final HashMap<String, List<Slice>> chA = stacks.get( channelA );
 		final HashMap<String, List<Slice>> chB = stacks.get( channelB );
+
 		final List< Slice > slicesA = chA.get( camA );
 		final List< Slice > slicesB = chB.get( camB );
 
@@ -167,7 +170,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						lastSliceIndex,
 						null );
 
-
 		final RandomAccessibleInterval< UnsignedShortType > imgB =
 				openRandomAccessibleInterval(
 						slicesB,
@@ -179,8 +181,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						lastSliceIndex,
 						imgA );
 
-		new ImageJ();
-
 		final ImagePlus impA = ImageJFunctions.wrap(imgA, "imgA" ).duplicate();
 		impA.setDimensions( 1, impA.getStackSize(), 1 );
 		impA.resetDisplayRange();
@@ -190,9 +190,15 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		impB.setDimensions( 1, impB.getStackSize(), 1 );
 		impB.resetDisplayRange();
 		impB.show();
+		
 
-		IJ.run("Merge Channels...", "c2=DUP_imgA c6=DUP_imgB create");
+		//IJ.run("Merge Channels...", "c2=DUP_imgA c6=DUP_imgB create");
 
+		// cam4 (Ch488+561+647nm) vs cam4 (Ch515+594nm)
+		// cam1 (Ch405nm) vs cam3 (Ch515+594nm)
+		// cam1 (Ch405nm) vs cam3 (Ch488+561+647nm)**
+
+		
 		//ImageJFunctions.show( imgA );
 		SimpleMultiThreading.threadHaltUnClean();
 		return null;
