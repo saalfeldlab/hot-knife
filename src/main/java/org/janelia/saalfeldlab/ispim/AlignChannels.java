@@ -52,6 +52,7 @@ import net.imglib2.realtransform.Scale3D;
 import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
@@ -59,6 +60,7 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
+import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.deconvolution.DeconViews;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import picocli.CommandLine;
@@ -187,7 +189,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading imgsA." );
 
-		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< FloatType >> imgsA =
+		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsA =
 				openRandomAccessibleIntervals(
 						slicesA,
 						new UnsignedShortType(0),
@@ -209,9 +211,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		impAw.resetDisplayRange();
 		impAw.show();
 
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading imgsB." );
-
-		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< FloatType >> imgsB =
+		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsB =
 				openRandomAccessibleIntervals(
 						slicesB,
 						new UnsignedShortType(0),
@@ -232,6 +232,40 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		impBw.setDimensions( 1, impB.getStackSize(), 1 );
 		impBw.resetDisplayRange();
 		impBw.show();
+
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgA." );
+
+		ArrayList< InterestPoint > pointsA =
+				DoGImgLib2.computeDoG(
+						imgsA.getA(),
+						imgsA.getB(),
+						2.0,
+						0.01,
+						1, /*localization*/
+						false, /*findMin*/
+						true, /*findMax*/
+						0.0, /* min intensity */
+						0.0, /* max intensity */
+						service /*Executors.newFixedThreadPool( 1 )*/ );
+
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsA.size() + " points." );
+
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgB." );
+
+		ArrayList< InterestPoint > pointsB =
+				DoGImgLib2.computeDoG(
+						imgsB.getA(),
+						imgsB.getB(),
+						2.0,
+						0.01,
+						1, /*localization*/
+						false, /*findMin*/
+						true, /*findMax*/
+						0.0, /* min intensity */
+						0.0, /* max intensity */
+						service /*Executors.newFixedThreadPool( 1 )*/ );
+
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsB.size() + " points." );
 
 		//IJ.run("Merge Channels...", "c2=DUP_imgA c6=DUP_imgB create");
 
@@ -366,7 +400,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		return new ValuePair<>( new ValuePair<>(interpolatedStack, interpolatedWeights), bounds);
 	}
 
-	public static < T extends NumericType<T> & NativeType<T> > ValuePair<RandomAccessibleInterval< T >, RandomAccessibleInterval< FloatType > > openRandomAccessibleIntervals(
+	public static < T extends RealType<T> & NativeType<T> > ValuePair<RandomAccessibleInterval< T >, RandomAccessibleInterval< T > > openRandomAccessibleIntervals(
 			final List< Slice > slices,
 			final T background,
 			final Interpolation interpolation,
@@ -420,11 +454,11 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final Interval displayInterval = Intervals.smallestContainingInterval(realBounds3D);
 
 		/* interpolated pixels get a weight of 0.0 */
-		alignedWeights = Converters.convert( alignedWeights, (a,b) -> b.set( a.get() >= 0.99999f ? 1.0f : 0.0f ), new FloatType() );
+		RealRandomAccessible<T> alignedWeightsConv = Converters.convert( alignedWeights, (a,b) -> b.setReal( a.get() >= 0.99999f ? 1 : 0 ), background );
 
 		return new ValuePair<>(
 				Views.interval( Views.raster( alignedStack ), displayInterval ),
-				Views.interval( Views.raster( alignedWeights ), displayInterval ) );
+				Views.interval( Views.raster( alignedWeightsConv ), displayInterval ) );
 	}
 
 	public static < T extends NumericType<T> & NativeType<T> > RandomAccessibleInterval< T > openRandomAccessibleInterval(
