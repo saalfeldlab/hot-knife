@@ -45,6 +45,7 @@ import net.imglib2.realtransform.RealViewsExtension;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.transform.integer.BoundingBox;
 import net.imglib2.type.NativeType;
+import net.imglib2.type.Type;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Pair;
@@ -59,7 +60,7 @@ import net.imglib2.view.Views;
  */
 public class ShearTest {
 
-	public static <T extends NativeType<T>> RandomAccessibleInterval<T> openSlice(
+	public static RandomAccessibleInterval openSlice(
 			final IFormatReader reader,
 			final int slice,
 			final int width,
@@ -74,10 +75,10 @@ public class ShearTest {
 
 		buffer.asShortBuffer().get(shorts);
 
-		return (RandomAccessibleInterval<T>)ArrayImgs.unsignedShorts(shorts, width, height);
+		return (RandomAccessibleInterval)ArrayImgs.unsignedShorts(shorts, width, height);
 	}
 
-	public static void main(final String... args) throws FormatException, IOException {
+	public static < T extends Type< T >> void main(final String... args) throws FormatException, IOException {
 
 		new ImageJ();
 
@@ -90,7 +91,7 @@ public class ShearTest {
 		final int width = reader.getSizeX();
 		final int height = reader.getSizeY();
 
-		final ArrayList<RandomAccessibleInterval<? extends NativeType<?>>> slices = new ArrayList<>();
+		final ArrayList<RandomAccessibleInterval<T>> slices = new ArrayList<>();
 
 		for (int i = 0; i < nSlices; ++i) {
 
