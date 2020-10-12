@@ -121,8 +121,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 
 			final ArrayList<RealRandomAccessible<T>> slicesList = new ArrayList<>();
 			RealInterval bounds = null;
-			for (int i = firstSliceIndex; i < lastSliceIndex; ++i) {
-
+			for (int i = firstSliceIndex; i <= lastSliceIndex; ++i) {
 				final Slice slice = slices.get(i);
 				final RandomAccessibleInterval<T> img =
 						Opener.openSlice(
