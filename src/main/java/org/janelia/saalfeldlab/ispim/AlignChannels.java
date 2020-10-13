@@ -212,6 +212,23 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		impAw.resetDisplayRange();
 		impAw.show();
 
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgA." );
+
+		ArrayList< InterestPoint > pointsA =
+				DoGImgLib2.computeDoG(
+						imgsA.getA(),
+						imgsA.getB(),
+						2.0,
+						0.01,
+						1, /*localization*/
+						false, /*findMin*/
+						true, /*findMax*/
+						0.0, /* min intensity */
+						0.0, /* max intensity */
+						service /*Executors.newFixedThreadPool( 1 )*/ );
+
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsA.size() + " points." );
+
 		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsB =
 				openRandomAccessibleIntervals(
 						slicesB,
@@ -233,23 +250,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		impBw.setDimensions( 1, impB.getStackSize(), 1 );
 		impBw.resetDisplayRange();
 		impBw.show();
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgA." );
-
-		ArrayList< InterestPoint > pointsA =
-				DoGImgLib2.computeDoG(
-						imgsA.getA(),
-						null,
-						2.0,
-						0.01,
-						1, /*localization*/
-						false, /*findMin*/
-						true, /*findMax*/
-						0.0, /* min intensity */
-						0.0, /* max intensity */
-						service /*Executors.newFixedThreadPool( 1 )*/ );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsA.size() + " points." );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgB." );
 
