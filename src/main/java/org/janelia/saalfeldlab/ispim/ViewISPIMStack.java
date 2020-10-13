@@ -115,7 +115,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 			final int lastSliceIndex) throws FormatException, IOException {
 
 		try (TiffReader reader = new TiffReader()) {
-			reader.setId(slices.get(0).path);
+			reader.setId(slices.get(firstSliceIndex).path);
 			final int width = reader.getSizeX();
 			final int height = reader.getSizeY();
 
