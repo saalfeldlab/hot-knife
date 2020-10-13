@@ -62,6 +62,7 @@ import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.deconvolution.DeconViews;
+import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -238,7 +239,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		ArrayList< InterestPoint > pointsA =
 				DoGImgLib2.computeDoG(
 						imgsA.getA(),
-						imgsA.getB(),
+						null,
 						2.0,
 						0.01,
 						1, /*localization*/
@@ -255,7 +256,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		ArrayList< InterestPoint > pointsB =
 				DoGImgLib2.computeDoG(
 						imgsB.getA(),
-						imgsB.getB(),
+						null,
 						2.0,
 						0.01,
 						1, /*localization*/
@@ -289,7 +290,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			final int lastSliceIndex) throws FormatException, IOException {
 
 		try (TiffReader reader = new TiffReader()) {
-			reader.setId(slices.get(0).path);
+			reader.setId(slices.get(firstSliceIndex).path);
 			final int width = reader.getSizeX();
 			final int height = reader.getSizeY();
 
@@ -454,11 +455,19 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final Interval displayInterval = Intervals.smallestContainingInterval(realBounds3D);
 
 		/* interpolated pixels get a weight of 0.0 */
-		RealRandomAccessible<T> alignedWeightsConv = Converters.convert( alignedWeights, (a,b) -> b.setReal( a.get() >= 0.99999f ? 1 : 0 ), background );
+		RealRandomAccessible<T> alignedWeightsConv = Converters.convert( alignedWeights, (a,b) -> b.setReal( a.get() >= 0.99999f ? 1 : 0 ), background.copy() );
 
 		return new ValuePair<>(
-				Views.interval( Views.raster( alignedStack ), displayInterval ),
-				Views.interval( Views.raster( alignedWeightsConv ), displayInterval ) );
+				FusionTools.cacheRandomAccessibleInterval(
+						Views.interval( Views.raster( alignedStack ), displayInterval ),
+						Integer.MAX_VALUE,
+						background.copy(),
+						10, 10, 10 ),
+				FusionTools.cacheRandomAccessibleInterval(
+						Views.interval( Views.raster( alignedWeightsConv ), displayInterval ),
+						Integer.MAX_VALUE,
+						background.copy(),
+						10, 10, 10 ) );
 	}
 
 	public static < T extends NumericType<T> & NativeType<T> > RandomAccessibleInterval< T > openRandomAccessibleInterval(
