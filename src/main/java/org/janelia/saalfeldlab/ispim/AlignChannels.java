@@ -32,8 +32,11 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.converter.Converter;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.Interpolant;
@@ -229,6 +232,28 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsA.size() + " points." );
 
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Rendering " + pointsA.size() + " points." );
+
+		final long[] dim = new long[ imgsA.getA().numDimensions() ];
+		final long[] min = new long[ imgsA.getA().numDimensions() ];
+		imgsA.getA().dimensions( dim );
+		imgsA.getA().min( min );
+
+		final RandomAccessibleInterval< FloatType > dotsA = Views.translate( ArrayImgs.floats( dim ), min );
+		final RandomAccess< FloatType > rDotsA = dotsA.randomAccess();
+
+		for ( final InterestPoint ip : pointsA )
+		{
+			for ( int d = 0; d < dotsA.numDimensions(); ++d )
+				rDotsA.setPosition( Math.round( ip.getFloatPosition( d ) ), d );
+
+			rDotsA.get().setOne();
+		}
+
+		Gauss3.gauss( 1, Views.extendZero( dotsA ), dotsA );
+		ImageJFunctions.show( dotsA );
+
+		SimpleMultiThreading.threadHaltUnClean();
 		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsB =
 				openRandomAccessibleIntervals(
 						slicesB,
@@ -238,18 +263,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						alignments.get( channelB ),
 						firstSliceIndex,
 						lastSliceIndex );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Showing imgsB." );
-
-		final ImagePlus impB = ImageJFunctions.wrap(imgsB.getA(), "imgB", service ).duplicate();
-		impB.setDimensions( 1, impB.getStackSize(), 1 );
-		impB.resetDisplayRange();
-		impB.show();
-
-		final ImagePlus impBw = ImageJFunctions.wrap(imgsB.getB(), "imgBw", service ).duplicate();
-		impBw.setDimensions( 1, impB.getStackSize(), 1 );
-		impBw.resetDisplayRange();
-		impBw.show();
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgB." );
 
