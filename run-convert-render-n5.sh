@@ -1,29 +1,74 @@
-#ABS_DIR=`readlink -f "$OWN_DIR"`
-ABS_DIR=`pwd`
+#!/bin/bash
 
-FLINTSTONE=$ABS_DIR/flintstone/flintstone-lsd.sh
-JAR=$PWD/hot-knife-0.0.4-SNAPSHOT.jar # this jar must be accessible from the cluster
+set -e
+
+if (( $# < 3 )); then
+  echo "USAGE $0 <project> <stack> <number of nodes> [region]"
+  exit 1
+fi
+
+umask 0002
+
+PROJECT="${1}"
+STACK="${2}"
+N_NODES="${3}"        # 4, 10, 20
+REGION="${4:-VNC}"
+
+OWNER="Z1217_19m"
+if [[ "${REGION}" == "BR" ]]; then
+  OWNER="Z1217_19m_BR"
+fi
+
+BILL_TO="flyem"
+
+#-----------------------------------------------------------
+BASE_URL="http://tem-services.int.janelia.org:8080/render-ws/v1"
+DEPLOY_DIR="/groups/flyem/data/trautmane/hot-knife"
+
+FLINTSTONE=${DEPLOY_DIR}/flintstone/flintstone-lsd.sh
+
+JAR=${DEPLOY_DIR}/hot-knife-0.0.4-SNAPSHOT.jar                       # this jar must be accessible from the cluster
 CLASS=org.janelia.saalfeldlab.hotknife.SparkConvertRenderStackToN5
-N_NODES=1
+STACK_URL="${BASE_URL}/owner/${OWNER}/project/${PROJECT}/stack/${STACK}"
 
-URLFORMAT='/nrs/flyem/alignment/Z1217-19m/VNC/Sec20/flatten/flattened/zcorr.%05d-flattened.tif'
-N5PATH='/nrs/flyem/data/tmp/Z1217-19m/VNC.n5'
-N5DATASET='slab-20/raw/s0'
-MIN='0,720,1'
-SIZE='0,3483,0'
-BLOCKSIZE='128,128,128'
+echo """
+Pulling stack metadata from:
+${STACK_URL}
+"""
 
+STACK_JSON=`./get-formatted-json.py "${STACK_URL}"`
+
+MIN_X=`echo "${STACK_JSON}" | awk '/"minX"/ { gsub(",",""); print int($2) }'`
+MAX_X=`echo "${STACK_JSON}" | awk '/"maxX"/ { gsub(",",""); print int($2) }'`
+MIN_Y=`echo "${STACK_JSON}" | awk '/"minY"/ { gsub(",",""); print int($2) }'`
+MAX_Y=`echo "${STACK_JSON}" | awk '/"maxY"/ { gsub(",",""); print int($2) }'`
+MIN_Z=`echo "${STACK_JSON}" | awk '/"minZ"/ { gsub(",",""); print int($2) }'`
+MAX_Z=`echo "${STACK_JSON}" | awk '/"maxZ"/ { gsub(",",""); print int($2) }'`
+
+SIZE_X=$(( MAX_X - MIN_X ))
+SIZE_Y=$(( MAX_Y - MIN_Y ))
+SIZE_Z=$(( MAX_Z - MIN_Z ))
+
+RUN_TIME=`date +"%Y%m%d_%H%M%S"`
+
+# NOTE: with tile size 4096, need to keep z block size <= 64
 ARGV="\
---n5Path='/nrs/flyem/alignment/kyle/tmp/Z1217_33m.n5'
---n5Dataset='/Sec29'
---tileSize='9958,4375'
---min='4000,2000,128'
---size='512,512,16'
---blockSize='128,128,16'
---baseUrl='http://renderer-dev.int.janelia.org:8080/render-ws/v1'
---owner='Z1217_33m'
---project='Sec29'
---stack='v1_1_affine_1_12824'
+--n5Path='/nrs/flyem/tmp/${REGION}.n5'
+--n5Dataset='/render/${PROJECT}/${STACK}___${RUN_TIME}'
+--tileSize='4096,4096'
+--min='${MIN_X},${MIN_Y},${MIN_Z}'
+--size='${SIZE_X},${SIZE_Y},${SIZE_Z}'
+--blockSize='128,128,64'
+--baseUrl='${BASE_URL}'
+--owner='${OWNER}'
+--project='${PROJECT}'
+--stack='${STACK}'
 --factors='2,2,2'"
 
-TERMINATE=1 $FLINTSTONE $N_NODES $JAR $CLASS $ARGV
+echo """Running with arguments:
+${ARGV}
+"""
+
+NOHUP_FILE="nohup.${RUN_TIME}.out"
+
+nohup $FLINTSTONE $N_NODES $JAR $CLASS $ARGV > logs/${NOHUP_FILE} 2>&1 &
