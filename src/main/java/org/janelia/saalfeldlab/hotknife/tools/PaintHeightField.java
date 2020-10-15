@@ -22,6 +22,10 @@ import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+import javax.swing.WindowConstants;
+
 import org.janelia.saalfeldlab.hotknife.HeightFieldTransform;
 import org.janelia.saalfeldlab.hotknife.ops.AbsoluteGradientCenter;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
@@ -42,7 +46,7 @@ import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Interpolation;
-import bdv.viewer.state.ViewerState;
+import bdv.viewer.SynchronizedViewerState;
 import ij.ImageJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalInterval;
@@ -63,6 +67,7 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
+import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
@@ -70,6 +75,7 @@ import picocli.CommandLine.Option;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
+@Command(name = "heightfield")
 public class PaintHeightField implements Callable<Void>{
 
 	private static int[] blockSize = new int[] {32, 32};
@@ -311,7 +317,7 @@ public class PaintHeightField implements Callable<Void>{
 		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(weightedSmoothController.getBrushOverlay());
 
 		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
-		final ViewerState viewerState = bdv.getBdvHandle().getViewerPanel().getState();
+		final SynchronizedViewerState viewerState = bdv.getBdvHandle().getViewerPanel().state();
 		final AffineTransform3D transform = new AffineTransform3D();
 		viewerState.getViewerTransform(transform);
 		transform.set(0, 3, 4);
@@ -320,6 +326,8 @@ public class PaintHeightField implements Callable<Void>{
 		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
 		bdv.getBdvHandle().getViewerPanel().setCurrentViewerTransform( transform );
 		bdv.getBdvHandle().getViewerPanel().requestRepaint();
+
+		((JFrame)SwingUtilities.getWindowAncestor(bdv.getBdvHandle().getViewerPanel())).setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
 		return null;
 	}
