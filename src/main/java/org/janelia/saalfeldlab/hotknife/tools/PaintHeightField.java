@@ -306,15 +306,15 @@ public class PaintHeightField implements Callable<Void>{
 
 		bindings.addBehaviourMap("brush", brushController.getBehaviourMap());
 		bindings.addInputTriggerMap("brush", brushController.getInputTriggerMap());
-		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(brushController.getBrushOverlay());
+		bdv.getBdvHandle().getViewerPanel().getDisplay().overlays().add(brushController.getBrushOverlay());
 
 		bindings.addBehaviourMap("smooth", smoothController.getBehaviourMap());
 		bindings.addInputTriggerMap("smooth", smoothController.getInputTriggerMap());
-		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(smoothController.getBrushOverlay());
+		bdv.getBdvHandle().getViewerPanel().getDisplay().overlays().add(smoothController.getBrushOverlay());
 
 		bindings.addBehaviourMap("weightedsmooth", weightedSmoothController.getBehaviourMap());
 		bindings.addInputTriggerMap("weightedsmooth", weightedSmoothController.getInputTriggerMap());
-		bdv.getBdvHandle().getViewerPanel().getDisplay().addOverlayRenderer(weightedSmoothController.getBrushOverlay());
+		bdv.getBdvHandle().getViewerPanel().getDisplay().overlays().add(weightedSmoothController.getBrushOverlay());
 
 		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
 		final SynchronizedViewerState viewerState = bdv.getBdvHandle().getViewerPanel().state();
@@ -323,7 +323,7 @@ public class PaintHeightField implements Callable<Void>{
 		transform.set(0, 3, 4);
 		viewerState.setViewerTransform(transform);
 
-		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
+//		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
 		bdv.getBdvHandle().getViewerPanel().setCurrentViewerTransform( transform );
 		bdv.getBdvHandle().getViewerPanel().requestRepaint();
 
