@@ -258,9 +258,8 @@
 								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
 									<resource>META-INF/json/mpicbg.spim.data.generic.sequence.ImgLoaderIo</resource>
 								</transformer>
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeries</mainClass>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>org.janelia.saalfeldlab.hotknife.tools.HotKnife</mainClass>
 								</transformer>
 							</transformers>
 						</configuration>
@@ -269,6 +268,4 @@
 			</plugin>
 		</plugins>
 	</build>
-
-
 </project>
