@@ -255,7 +255,13 @@ public class AlignChannels implements Callable<Void>, Serializable {
 				/* this is the inverse */
 				final AffineTransform2D camtransform = block.getTransform();//camTransforms.get( block.channel ).get( block.cam );
 
-				final ArrayList<AffineTransform2D> transforms = n5.getAttribute(
+				final N5FSReader n5Local = new N5FSReader(
+						n5Path,
+						new GsonBuilder().registerTypeAdapter(
+								AffineTransform2D.class,
+								new AffineTransform2DAdapter()));
+
+				final ArrayList<AffineTransform2D> transforms = n5Local.getAttribute(
 						id + "/" + block.channel,
 						"transforms",
 						new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
