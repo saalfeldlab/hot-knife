@@ -255,13 +255,20 @@ public class AlignChannels implements Callable<Void>, Serializable {
 				/* this is the inverse */
 				final AffineTransform2D camtransform = block.getTransform();//camTransforms.get( block.channel ).get( block.cam );
 
+				final ArrayList<AffineTransform2D> transforms = n5.getAttribute(
+						id + "/" + block.channel,
+						"transforms",
+						new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
+
+				final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
+
 				final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
 						openRandomAccessibleIntervals(
 								slices,
 								new UnsignedShortType(0),
 								Interpolation.NLINEAR,
 								camtransform,
-								alignments.get( channelA ),
+								alignmentTransforms,//alignments.get( channelA ),
 								block.from  - block.gaussOverhead,
 								block.to + block.gaussOverhead );
 
@@ -290,7 +297,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + firstSliceIndex + ", to=" + lastSliceIndex + ", ch=" + block.channel + " (cam=" + block.cam + "): " + points.size() + " points" );
 
-				if ( block.from == 500 )
+				if ( block.from == 200 )
 				{
 					final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
 					impA.setDimensions( 1, impA.getStackSize(), 1 );
