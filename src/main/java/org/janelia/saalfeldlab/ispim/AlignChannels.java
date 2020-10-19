@@ -267,7 +267,12 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						"transforms",
 						new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
 
+				if ( block.from != 200 )
+					return new Tuple2<>(block, new ArrayList<>());
+
 				final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
+
+				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): opening images." );
 
 				final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
 						openRandomAccessibleIntervals(
@@ -278,6 +283,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 								alignmentTransforms,//alignments.get( channelA ),
 								Math.max( firstSliceIndex, block.from  - block.gaussOverhead ),
 								Math.min( localLastSlice, block.to + block.gaussOverhead ) );
+
+				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): finding points." );
 
 				final ExecutorService service = Executors.newFixedThreadPool( 1 );
 				final ArrayList< InterestPoint > initialPoints =
@@ -299,10 +306,10 @@ public class AlignChannels implements Callable<Void>, Serializable {
 				final ArrayList< InterestPoint > points = new ArrayList<>();
 
 				for ( final InterestPoint ip : initialPoints )
-					if ( ip.getDoublePosition( 2 ) > firstSliceIndex - 0.5 && ip.getDoublePosition( 2 ) < lastSliceIndex + 0.5 )
+					if ( ip.getDoublePosition( 2 ) > block.from - 0.5 && ip.getDoublePosition( 2 ) < block.to + 0.5 )
 						points.add( ip );
 
-				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + firstSliceIndex + ", to=" + lastSliceIndex + ", ch=" + block.channel + " (cam=" + block.cam + "): " + points.size() + " points" );
+				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): " + points.size() + " points" );
 
 				if ( block.from == 200 )
 				{
