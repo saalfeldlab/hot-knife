@@ -109,6 +109,12 @@ public class AlignChannels implements Callable<Void>, Serializable {
 	@Option(names = "--last", required = false, description = "Last slice index, e.g. 1000 (default MAX)")
 	private int lastSliceIndex = Integer.MAX_VALUE;
 
+	@Option(names = "--minIntensity", required = false, description = "min intensity, if minIntensity==maxIntensity determine min/max per slice (default: 0)")
+	private double minIntensity = 0;
+
+	@Option(names = "--maxIntensity", required = false, description = "max intensity, if minIntensity==maxIntensity determine min/max per slice (default: 4096)")
+	private double maxIntensity = 4096;
+
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 		new CommandLine(new AlignChannels()).execute(args);
 	}
@@ -119,10 +125,10 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		final int from, to, gaussOverhead;
 		final String channel, cam;
-		final double sigma, threshold;
+		final double sigma, threshold, minIntensity, maxIntensity;
 		final double[] transform;
 
-		public Block( final int from, final int to, final String channel, final String cam, final AffineTransform2D camtransform, final double sigma, final double threshold )
+		public Block( final int from, final int to, final String channel, final String cam, final AffineTransform2D camtransform, final double sigma, final double threshold, final double minIntensity, final double maxIntensity )
 		{
 			this.from = from;
 			this.to = to;
@@ -132,6 +138,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			this.threshold = threshold;
 			this.gaussOverhead = DoGImgLib2.radiusDoG( 2.0 );
 			this.transform = camtransform.getRowPackedCopy();
+			this.minIntensity = minIntensity;
+			this.maxIntensity = maxIntensity;
 		}
 
 		public AffineTransform2D getTransform()
@@ -150,6 +158,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			final String channelB,
 			final String camA,
 			final String camB,
+			final double minIntensity, final double maxIntensity,
 			final int firstSliceIndex,
 			final int lastSliceIndex,
 			final int blockSize ) throws FormatException, IOException
@@ -236,8 +245,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			final int from  = i * blockSize + firstSliceIndex;
 			final int to = Math.min( localLastSliceIndex, from + blockSize - 1 );
 
-			final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, 0.01 );
-			final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, 0.01 );
+			final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, 0.02, minIntensity, maxIntensity );
+			final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, 0.02, minIntensity, maxIntensity );
 
 			blocks.add( blockChannelA );
 			blocks.add( blockChannelB );
@@ -296,8 +305,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 								1, /*localization*/
 								false, /*findMin*/
 								true, /*findMax*/
-								0.0, /* min intensity */
-								0.0, /* max intensity */
+								block.minIntensity, /* min intensity */
+								block.maxIntensity, /* max intensity */
 								service );
 
 				service.shutdown();
@@ -318,29 +327,33 @@ public class AlignChannels implements Callable<Void>, Serializable {
 					impA.resetDisplayRange();
 					impA.show();
 	
-					final ImagePlus impAw = ImageJFunctions.wrap(imgs.getB(), block.channel + "w", Executors.newFixedThreadPool( 8 ) ).duplicate();
-					impAw.setDimensions( 1, impA.getStackSize(), 1 );
-					impAw.resetDisplayRange();
-					impAw.show();
+					//final ImagePlus impAw = ImageJFunctions.wrap(imgs.getB(), block.channel + "_w", Executors.newFixedThreadPool( 8 ) ).duplicate();
+					//impAw.setDimensions( 1, impAw.getStackSize(), 1 );
+					//impAw.resetDisplayRange();
+					//impAw.show();
 
 					final long[] dim = new long[ imgs.getA().numDimensions() ];
 					final long[] min = new long[ imgs.getA().numDimensions() ];
 					imgs.getA().dimensions( dim );
 					imgs.getA().min( min );
 
-					final RandomAccessibleInterval< FloatType > dotsA = Views.translate( ArrayImgs.floats( dim ), min );
-					final RandomAccess< FloatType > rDotsA = dotsA.randomAccess();
+					final RandomAccessibleInterval< FloatType > dots = Views.translate( ArrayImgs.floats( dim ), min );
+					final RandomAccess< FloatType > rDots = dots.randomAccess();
 
 					for ( final InterestPoint ip : points )
 					{
-						for ( int d = 0; d < dotsA.numDimensions(); ++d )
-							rDotsA.setPosition( Math.round( ip.getFloatPosition( d ) ), d );
+						for ( int d = 0; d < dots.numDimensions(); ++d )
+							rDots.setPosition( Math.round( ip.getFloatPosition( d ) ), d );
 
-						rDotsA.get().setOne();
+						rDots.get().setOne();
 					}
 
-					Gauss3.gauss( 1, Views.extendZero( dotsA ), dotsA );
-					ImageJFunctions.show( dotsA );
+					Gauss3.gauss( 1, Views.extendZero( dots ), dots );
+					final ImagePlus impP = ImageJFunctions.wrap( dots, "detections_" + block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
+					impP.setDimensions( 1, impP.getStackSize(), 1 );
+					impP.setSlice( impP.getStackSize() / 2 );
+					impP.resetDisplayRange();
+					impP.show();
 				}
 
 				return new Tuple2<>(block, points);
@@ -782,6 +795,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 				channelB,
 				camA,
 				camB,
+				minIntensity,
+				maxIntensity,
 				firstSliceIndex,
 				lastSliceIndex,
 				blocksize );
