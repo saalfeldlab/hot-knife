@@ -120,8 +120,9 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final int from, to, gaussOverhead;
 		final String channel, cam;
 		final double sigma, threshold;
+		final double[] transform;
 
-		public Block( final int from, final int to, final String channel, final String cam, final double sigma, final double threshold )
+		public Block( final int from, final int to, final String channel, final String cam, final AffineTransform2D camtransform, final double sigma, final double threshold )
 		{
 			this.from = from;
 			this.to = to;
@@ -130,6 +131,14 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			this.sigma = sigma;
 			this.threshold = threshold;
 			this.gaussOverhead = DoGImgLib2.radiusDoG( 2.0 );
+			this.transform = camtransform.getRowPackedCopy();
+		}
+
+		public AffineTransform2D getTransform()
+		{
+			final AffineTransform2D t = new AffineTransform2D();
+			t.set( transform );
+			return t;
 		}
 	}
 
@@ -215,6 +224,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		System.out.println(gson.toJson(ids));
 		// System.out.println(new Gson().toJson(stacks));
 
+		new ImageJ();
+	
 		final int numSlices = localLastSliceIndex - firstSliceIndex + 1;
 		final int numBlocks = numSlices / blockSize + (numSlices % blockSize > 0 ? 1 : 0);
 		final ArrayList<Block> blocks = new ArrayList<>();
@@ -224,8 +235,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			final int from  = i * blockSize + firstSliceIndex;
 			final int to = Math.min( localLastSliceIndex, from + blockSize - 1 );
 
-			final Block blockChannelA = new Block(from, to, channelA, camA, 2.0, 0.01 );
-			final Block blockChannelB = new Block(from, to, channelB, camB, 2.0, 0.01 );
+			final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, 0.01 );
+			final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, 0.01 );
 
 			blocks.add( blockChannelA );
 			blocks.add( blockChannelB );
@@ -242,9 +253,9 @@ public class AlignChannels implements Callable<Void>, Serializable {
 				final List< Slice > slices = ch.get( block.cam );
 
 				/* this is the inverse */
-				final AffineTransform2D camtransform = camTransforms.get( block.channel ).get( block.cam );
+				final AffineTransform2D camtransform = block.getTransform();//camTransforms.get( block.channel ).get( block.cam );
 
-				final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsA =
+				final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
 						openRandomAccessibleIntervals(
 								slices,
 								new UnsignedShortType(0),
@@ -254,23 +265,11 @@ public class AlignChannels implements Callable<Void>, Serializable {
 								block.from  - block.gaussOverhead,
 								block.to + block.gaussOverhead );
 
-				/*
-				final ImagePlus impA = ImageJFunctions.wrap(imgsA.getA(), "imgA", Executors.newFixedThreadPool( 8 ) ).duplicate();
-				impA.setDimensions( 1, impA.getStackSize(), 1 );
-				impA.resetDisplayRange();
-				impA.show();
-
-				final ImagePlus impAw = ImageJFunctions.wrap(imgsA.getB(), "imgAw", Executors.newFixedThreadPool( 8 ) ).duplicate();
-				impAw.setDimensions( 1, impA.getStackSize(), 1 );
-				impAw.resetDisplayRange();
-				impAw.show();
-				*/
-
 				final ExecutorService service = Executors.newFixedThreadPool( 1 );
 				final ArrayList< InterestPoint > initialPoints =
 						DoGImgLib2.computeDoG(
-								imgsA.getA(),
-								imgsA.getB(),
+								imgs.getA(),
+								imgs.getB(),
 								block.sigma,
 								block.threshold,
 								1, /*localization*/
@@ -290,6 +289,38 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						points.add( ip );
 
 				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + firstSliceIndex + ", to=" + lastSliceIndex + ", ch=" + block.channel + " (cam=" + block.cam + "): " + points.size() + " points" );
+
+				if ( block.from == 500 )
+				{
+					final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
+					impA.setDimensions( 1, impA.getStackSize(), 1 );
+					impA.resetDisplayRange();
+					impA.show();
+	
+					final ImagePlus impAw = ImageJFunctions.wrap(imgs.getB(), block.channel + "w", Executors.newFixedThreadPool( 8 ) ).duplicate();
+					impAw.setDimensions( 1, impA.getStackSize(), 1 );
+					impAw.resetDisplayRange();
+					impAw.show();
+
+					final long[] dim = new long[ imgs.getA().numDimensions() ];
+					final long[] min = new long[ imgs.getA().numDimensions() ];
+					imgs.getA().dimensions( dim );
+					imgs.getA().min( min );
+
+					final RandomAccessibleInterval< FloatType > dotsA = Views.translate( ArrayImgs.floats( dim ), min );
+					final RandomAccess< FloatType > rDotsA = dotsA.randomAccess();
+
+					for ( final InterestPoint ip : points )
+					{
+						for ( int d = 0; d < dotsA.numDimensions(); ++d )
+							rDotsA.setPosition( Math.round( ip.getFloatPosition( d ) ), d );
+
+						rDotsA.get().setOne();
+					}
+
+					Gauss3.gauss( 1, Views.extendZero( dotsA ), dotsA );
+					ImageJFunctions.show( dotsA );
+				}
 
 				return new Tuple2<>(block, points);
 			});
