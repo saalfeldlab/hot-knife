@@ -182,7 +182,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final HashMap<String, HashMap<String, List<Slice>>> stacks = new HashMap<>();
 		final HashMap<String, RandomAccessible<AffineTransform2D>> alignments = new HashMap<>();
 
-		int localLastSliceIndex = Integer.MAX_VALUE;
+		int localLastSliceIndex = lastSliceIndex;
 
 		for (final Entry<String, HashMap<String, AffineTransform2D>> channel : camTransforms.entrySet()) {
 			final HashMap<String, List<Slice>> channelStacks = new HashMap<>();
@@ -228,6 +228,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 	
 		final int numSlices = localLastSliceIndex - firstSliceIndex + 1;
 		final int numBlocks = numSlices / blockSize + (numSlices % blockSize > 0 ? 1 : 0);
+		final int localLastSlice = localLastSliceIndex;
 		final ArrayList<Block> blocks = new ArrayList<>();
 
 		for ( int i = 0; i < numBlocks; ++i )
@@ -275,8 +276,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 								Interpolation.NLINEAR,
 								camtransform,
 								alignmentTransforms,//alignments.get( channelA ),
-								block.from  - block.gaussOverhead,
-								block.to + block.gaussOverhead );
+								Math.max( firstSliceIndex, block.from  - block.gaussOverhead ),
+								Math.min( localLastSlice, block.to + block.gaussOverhead ) );
 
 				final ExecutorService service = Executors.newFixedThreadPool( 1 );
 				final ArrayList< InterestPoint > initialPoints =
@@ -639,8 +640,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			final int firstSliceIndex,
 			final int lastSliceIndex ) throws FormatException, IOException
 	{
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Opening images and weight stacks" );
-
 		ValuePair<ValuePair<RealRandomAccessible<T>,RealRandomAccessible<FloatType>>, RealInterval> alignedStackWeightBounds =
 				openAlignedWeightedStack(
 						slices,
@@ -650,8 +649,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						alignments,
 						firstSliceIndex,
 						lastSliceIndex);
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Finalizing images and weight stacks" );
 
 		RealRandomAccessible<T> alignedStack = alignedStackWeightBounds.getA().getA();
 		RealRandomAccessible<FloatType> alignedWeights = alignedStackWeightBounds.getA().getB();
