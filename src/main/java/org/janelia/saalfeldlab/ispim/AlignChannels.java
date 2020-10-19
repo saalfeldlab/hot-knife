@@ -12,12 +12,20 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import bdv.BigDataViewer;
+import bdv.util.BdvFunctions;
 import bdv.util.ConstantRandomAccessible;
 import bdv.viewer.Interpolation;
 import ij.IJ;
@@ -63,12 +71,14 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
+import net.preibisch.mvrecon.fiji.spimdata.SpimData2;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.deconvolution.DeconViews;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
+import scala.Tuple2;
 
 public class AlignChannels implements Callable<Void>, Serializable {
 
@@ -90,13 +100,50 @@ public class AlignChannels implements Callable<Void>, Serializable {
 	@Option(names = "--camB", required = true, description = "CamB key, e.g. cam1")
 	private String camB = null;
 
+	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize in z for point extraction (default: 20)")
+	private int blocksize = 20;
+
+	@Option(names = "--first", required = false, description = "First slice index, e.g. 0 (default 0)")
+	private int firstSliceIndex = 0;
+
+	@Option(names = "--last", required = false, description = "Last slice index, e.g. 1000 (default MAX)")
+	private int lastSliceIndex = Integer.MAX_VALUE;
+
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 		new CommandLine(new AlignChannels()).execute(args);
 	}
 
-	@SuppressWarnings("serial")
-	@Override
-	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException
+	public static class Block implements Serializable
+	{
+		private static final long serialVersionUID = -5770229677154496831L;
+
+		final int from, to, gaussOverhead;
+		final String channel, cam;
+		final double sigma, threshold;
+
+		public Block( final int from, final int to, final String channel, final String cam, final double sigma, final double threshold )
+		{
+			this.from = from;
+			this.to = to;
+			this.channel = channel;
+			this.cam = cam;
+			this.sigma = sigma;
+			this.threshold = threshold;
+			this.gaussOverhead = DoGImgLib2.radiusDoG( 2.0 );
+		}
+	}
+
+	public static void alignChannels(
+			final JavaSparkContext sc,
+			final String n5Path,
+			final String id,
+			final String channelA,
+			final String channelB,
+			final String camA,
+			final String camB,
+			final int firstSliceIndex,
+			final int lastSliceIndex,
+			final int blockSize ) throws FormatException, IOException
 	{
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Opening N5." );
 
@@ -116,8 +163,11 @@ public class AlignChannels implements Callable<Void>, Serializable {
 				new TypeToken<ArrayList<String>>() {}.getType());
 
 		if (!ids.contains(id))
-			return null;
-
+		{
+			System.err.println("Id '" + id + "' does not exist in '" + n5Path + "'.");
+			return;
+		}
+	
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading alignments." );
 
 		final HashMap<String, HashMap<String, List<Slice>>> stacks = new HashMap<>();
@@ -157,7 +207,6 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		}
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": localLastSliceIndex=" + localLastSliceIndex );
-
 		final Gson gson = new GsonBuilder().registerTypeAdapter(
 				AffineTransform2D.class,
 				new AffineTransform2DAdapter()).create();
@@ -166,14 +215,138 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		System.out.println(gson.toJson(ids));
 		// System.out.println(new Gson().toJson(stacks));
 
-		final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
+		final int numSlices = localLastSliceIndex - firstSliceIndex + 1;
+		final int numBlocks = numSlices / blockSize + (numSlices % blockSize > 0 ? 1 : 0);
+		final ArrayList<Block> blocks = new ArrayList<>();
 
-		final int gaussOverhead = DoGImgLib2.radiusDoG( 2.0 );
-		System.out.println( new Date(System.currentTimeMillis() ) + ": gauss overhead: " + gaussOverhead );
+		for ( int i = 0; i < numBlocks; ++i )
+		{
+			final int from  = i * blockSize + firstSliceIndex;
+			final int to = Math.min( localLastSliceIndex, from + blockSize - 1 );
+
+			final Block blockChannelA = new Block(from, to, channelA, camA, 2.0, 0.01 );
+			final Block blockChannelB = new Block(from, to, channelB, camB, 2.0, 0.01 );
+
+			blocks.add( blockChannelA );
+			blocks.add( blockChannelB );
+	
+			System.out.println( "block " + i + ": " + from + " >> " + to );
+		}
+
+		final JavaRDD<Block> rddSlices = sc.parallelize( blocks );
+
+		final JavaPairRDD<Block, ArrayList< InterestPoint >> rddFeatures = rddSlices.mapToPair(
+			block ->
+			{
+				final HashMap<String, List<Slice>> ch = stacks.get( block.channel );
+				final List< Slice > slices = ch.get( block.cam );
+
+				/* this is the inverse */
+				final AffineTransform2D camtransform = camTransforms.get( block.channel ).get( block.cam );
+
+				final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsA =
+						openRandomAccessibleIntervals(
+								slices,
+								new UnsignedShortType(0),
+								Interpolation.NLINEAR,
+								camtransform,
+								alignments.get( channelA ),
+								block.from  - block.gaussOverhead,
+								block.to + block.gaussOverhead );
+
+				/*
+				final ImagePlus impA = ImageJFunctions.wrap(imgsA.getA(), "imgA", Executors.newFixedThreadPool( 8 ) ).duplicate();
+				impA.setDimensions( 1, impA.getStackSize(), 1 );
+				impA.resetDisplayRange();
+				impA.show();
+
+				final ImagePlus impAw = ImageJFunctions.wrap(imgsA.getB(), "imgAw", Executors.newFixedThreadPool( 8 ) ).duplicate();
+				impAw.setDimensions( 1, impA.getStackSize(), 1 );
+				impAw.resetDisplayRange();
+				impAw.show();
+				*/
+
+				final ExecutorService service = Executors.newFixedThreadPool( 1 );
+				final ArrayList< InterestPoint > initialPoints =
+						DoGImgLib2.computeDoG(
+								imgsA.getA(),
+								imgsA.getB(),
+								block.sigma,
+								block.threshold,
+								1, /*localization*/
+								false, /*findMin*/
+								true, /*findMax*/
+								0.0, /* min intensity */
+								0.0, /* max intensity */
+								service );
+
+				service.shutdown();
+
+				// exclude points that lie within the Gauss overhead
+				final ArrayList< InterestPoint > points = new ArrayList<>();
+
+				for ( final InterestPoint ip : initialPoints )
+					if ( ip.getDoublePosition( 2 ) > firstSliceIndex - 0.5 && ip.getDoublePosition( 2 ) < lastSliceIndex + 0.5 )
+						points.add( ip );
+
+				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + firstSliceIndex + ", to=" + lastSliceIndex + ", ch=" + block.channel + " (cam=" + block.cam + "): " + points.size() + " points" );
+
+				return new Tuple2<>(block, points);
+			});
+
+		/* cache the booleans, so features aren't regenerated every time */
+		rddFeatures.cache();
+
+		/* collect the results */
+		final List<Tuple2<Block, ArrayList< InterestPoint >>> results = rddFeatures.collect();
+
+		final ArrayList< InterestPoint > pointsChA = new ArrayList<>();
+		final ArrayList< InterestPoint > pointsChB = new ArrayList<>();
+
+		for ( final Tuple2<Block, ArrayList< InterestPoint >> tuple : results )
+		{
+			if ( tuple._1().channel.equals( channelA ) )
+				pointsChA.addAll( tuple._2() );
+			else
+				pointsChB.addAll( tuple._2() );
+		}
+
+		System.out.println( new Date(System.currentTimeMillis() ) + ": channelA: " + pointsChA.size() + " points" );
+		System.out.println( new Date(System.currentTimeMillis() ) + ": channelB: " + pointsChA.size() + " points" );
+
+		final N5FSWriter n5Writer = new N5FSWriter(n5Path);
+
+		if (pointsChA.size() > 0)
+		{
+			final String datasetName = id + "/" + channelA + "/Stack-DoG-detections";
+			final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
+
+			n5Writer.writeSerializedBlock(
+					pointsChA,
+					datasetName,
+					datasetAttributes,
+					new long[] {0});
+		}
+
+		if (pointsChA.size() > 0)
+		{
+			final String datasetName = id + "/" + channelB + "/Stack-DoG-detections";
+			final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
+
+			n5Writer.writeSerializedBlock(
+					pointsChB,
+					datasetName,
+					datasetAttributes,
+					new long[] {0});
+		}
+
+		/*
+		System.exit( 0 );
+		//final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
 
 		// testing
-		final int firstSliceIndex = 510 - gaussOverhead;
-		final int lastSliceIndex = 510 + gaussOverhead;
+		firstSliceIndex = 510 - gaussOverhead;
+		lastSliceIndex = 510 + gaussOverhead;
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + firstSliceIndex );
 		System.out.println( new Date(System.currentTimeMillis() ) + ": to=" + lastSliceIndex );
@@ -184,7 +357,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final List< Slice > slicesA = chA.get( camA );
 		final List< Slice > slicesB = chB.get( camB );
 
-		/* this is the inverse */
+		// this is the inverse 
 		final AffineTransform2D camAtransform = camTransforms.get( channelA ).get( camA );
 		final AffineTransform2D camBtransform = camTransforms.get( channelB ).get( camB );
 
@@ -223,12 +396,12 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						imgsA.getB(),
 						2.0,
 						0.01,
-						1, /*localization*/
-						false, /*findMin*/
-						true, /*findMax*/
-						0.0, /* min intensity */
-						0.0, /* max intensity */
-						service /*Executors.newFixedThreadPool( 1 )*/ );
+						1, //localization
+						false, //findMin
+						true, //findMax
+						0.0, // min intensity 
+						0.0, // max intensity 
+						service );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsA.size() + " points." );
 
@@ -272,12 +445,12 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						null,
 						2.0,
 						0.01,
-						1, /*localization*/
-						false, /*findMin*/
-						true, /*findMax*/
-						0.0, /* min intensity */
-						0.0, /* max intensity */
-						service /*Executors.newFixedThreadPool( 1 )*/ );
+						1, //localization
+						false, //findMin
+						true, //findMax
+						0.0, // min intensity 
+						0.0, // max intensity 
+						service );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsB.size() + " points." );
 
@@ -289,8 +462,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		
 		//ImageJFunctions.show( imgA );
-		SimpleMultiThreading.threadHaltUnClean();
-		return null;
+		SimpleMultiThreading.threadHaltUnClean();*/
 	}
 
 	public static <T extends NumericType<T> & NativeType<T>> ValuePair<ValuePair<List<RealRandomAccessible<T>>,List<RealRandomAccessible<FloatType>>>, RealInterval> openWeightedStack(
@@ -531,5 +703,43 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		final Interval displayInterval = Intervals.smallestContainingInterval(realBounds3D);
 
 		return Views.interval( Views.raster( alignedStackBounds.getA() ), displayInterval );
+	}
+
+	@SuppressWarnings("serial")
+	@Override
+	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException
+	{
+		// System property for locally calling spark has to be set, e.g. -Dspark.master=local[4]
+		final String sparkLocal = System.getProperty( "spark.master" );
+
+		// only do that if the system property is not set
+		if ( sparkLocal == null || sparkLocal.trim().length() == 0 )
+		{
+			System.out.println( "Spark System property not set: " + sparkLocal );
+			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 ) + "]" );
+		}
+
+		System.out.println( "Spark System property is: " + System.getProperty( "spark.master" ) );
+
+		final SparkConf conf = new SparkConf().setAppName("SparkAlignChannels");
+
+		final JavaSparkContext sc = new JavaSparkContext(conf);
+		sc.setLogLevel("ERROR");
+
+		alignChannels(
+				sc,
+				n5Path,
+				id,
+				channelA,
+				channelB,
+				camA,
+				camB,
+				firstSliceIndex,
+				lastSliceIndex,
+				blocksize );
+
+		sc.close();
+
+		return null;
 	}
 }
