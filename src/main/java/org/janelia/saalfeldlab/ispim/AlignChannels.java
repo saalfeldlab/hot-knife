@@ -16,7 +16,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 
@@ -246,7 +248,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 			final int to = Math.min( localLastSliceIndex, from + blockSize - 1 );
 
 			final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, 0.02, minIntensity, maxIntensity );
-			final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, 0.02, minIntensity, maxIntensity );
+			final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, 0.01, minIntensity, maxIntensity );
 
 			blocks.add( blockChannelA );
 			blocks.add( blockChannelB );
@@ -276,8 +278,8 @@ public class AlignChannels implements Callable<Void>, Serializable {
 						"transforms",
 						new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
 
-				if ( block.from != 200 )
-					return new Tuple2<>(block, new ArrayList<>());
+				//if ( block.from != 200 )
+				//	return new Tuple2<>(block, new ArrayList<>());
 
 				final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
 
@@ -320,7 +322,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): " + points.size() + " points" );
 
-				if ( block.from == 200 )
+				/*if ( block.from == 200 )
 				{
 					final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
 					impA.setDimensions( 1, impA.getStackSize(), 1 );
@@ -354,7 +356,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 					impP.setSlice( impP.getStackSize() / 2 );
 					impP.resetDisplayRange();
 					impP.show();
-				}
+				}*/
 
 				return new Tuple2<>(block, points);
 			});
@@ -377,12 +379,24 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		}
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": channelA: " + pointsChA.size() + " points" );
-		System.out.println( new Date(System.currentTimeMillis() ) + ": channelB: " + pointsChA.size() + " points" );
+		System.out.println( new Date(System.currentTimeMillis() ) + ": channelB: " + pointsChB.size() + " points" );
 
 		final N5FSWriter n5Writer = new N5FSWriter(n5Path);
 
 		if (pointsChA.size() > 0)
 		{
+			final String featuresGroupName = n5Writer.groupPath(id + "/" + channelA, "Stack-DoG-detections");
+
+			if (n5Writer.exists(featuresGroupName))
+				n5Writer.remove(featuresGroupName);
+			
+			n5Writer.createDataset(
+					featuresGroupName,
+					new long[] {1},
+					new int[] {1},
+					DataType.OBJECT,
+					new GzipCompression());
+
 			final String datasetName = id + "/" + channelA + "/Stack-DoG-detections";
 			final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
 
@@ -395,6 +409,18 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		if (pointsChA.size() > 0)
 		{
+			final String featuresGroupName = n5Writer.groupPath(id + "/" + channelB, "Stack-DoG-detections");
+
+			if (n5Writer.exists(featuresGroupName))
+				n5Writer.remove(featuresGroupName);
+			
+			n5Writer.createDataset(
+					featuresGroupName,
+					new long[] {1},
+					new int[] {1},
+					DataType.OBJECT,
+					new GzipCompression());
+
 			final String datasetName = id + "/" + channelB + "/Stack-DoG-detections";
 			final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
 
