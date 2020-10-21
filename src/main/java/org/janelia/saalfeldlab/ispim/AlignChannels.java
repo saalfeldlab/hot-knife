@@ -407,7 +407,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 					new long[] {0});
 		}
 
-		if (pointsChA.size() > 0)
+		if (pointsChB.size() > 0)
 		{
 			final String featuresGroupName = n5Writer.groupPath(id + "/" + channelB, "Stack-DoG-detections");
 
