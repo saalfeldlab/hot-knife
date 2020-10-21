@@ -376,6 +376,11 @@ public class AlignChannels implements Callable<Void>, Serializable {
 				pointsChA.addAll( tuple._2() );
 			else
 				pointsChB.addAll( tuple._2() );
+
+			if ( tuple._2().size() == 0 )
+				System.out.println( "Warning: block " + tuple._1.from + " has 0 detections");
+			//Mon Oct 19 20:26:19 EDT 2020: channelA: 60121 points
+			//Mon Oct 19 20:26:19 EDT 2020: channelB: 86909 points
 		}
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": channelA: " + pointsChA.size() + " points" );
