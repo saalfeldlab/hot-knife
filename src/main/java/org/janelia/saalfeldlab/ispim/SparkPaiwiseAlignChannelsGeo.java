@@ -80,7 +80,7 @@ import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import scala.Tuple2;
 
-public class AlignChannels implements Callable<Void>, Serializable {
+public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializable {
 
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
@@ -119,7 +119,7 @@ public class AlignChannels implements Callable<Void>, Serializable {
 	private double maxIntensity = 4096;
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
-		new CommandLine(new AlignChannels()).execute(args);
+		new CommandLine(new SparkPaiwiseAlignChannelsGeo()).execute(args);
 	}
 
 	public static class Block implements Serializable
