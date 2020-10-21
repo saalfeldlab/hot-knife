@@ -411,6 +411,9 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 					pointsChA.addAll( tuple._2() );
 				else
 					pointsChB.addAll( tuple._2() );
+
+				if ( tuple._2().size() == 0 )
+					System.out.println( "Warning: block " + tuple._1.from + " has 0 detections");
 			}
 
 			System.out.println( "saving points ... " );
@@ -497,6 +500,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		for ( final PointMatch pm : candidates )
 		{
+			//Mon Oct 19 20:26:19 EDT 2020: channelA: 60121 points
+			//Mon Oct 19 20:26:19 EDT 2020: channelB: 86909 points
 			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
 			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
 		}
@@ -539,8 +544,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
 			e.printStackTrace();
 		}
-		
-		System.exit( 0 );
+
 		/*
 		final List< PointMatch > candidates = 
 				new RGLDMMatcher<>().extractCorrespondenceCandidates(
