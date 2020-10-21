@@ -175,6 +175,10 @@
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-blosc</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>sc.fiji</groupId>
+			<artifactId>Stitching_</artifactId>
+		</dependency>
 	</dependencies>
 
 	<repositories>
