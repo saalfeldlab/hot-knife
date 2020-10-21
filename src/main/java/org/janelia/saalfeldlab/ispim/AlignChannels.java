@@ -11,11 +11,14 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.MultiConsensusFilter;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -31,6 +34,9 @@ import bdv.viewer.Interpolation;
 import ij.ImageJ;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
+import mpicbg.models.AffineModel2D;
+import mpicbg.models.PointMatch;
+import mpicbg.models.TranslationModel2D;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
@@ -64,6 +70,8 @@ import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import scala.Tuple2;
@@ -461,7 +469,71 @@ public class AlignChannels implements Callable<Void>, Serializable {
 		// alignment
 		//
 
-		
+		final int numNeighbors = 3;
+		final int redundancy = 0;
+		final double ratioOfDistance = 2.0;
+		final double differenceThreshold = Double.MAX_VALUE;
+		final int numIterations = 10000;
+		final double maxEpsilon = 5;
+		final int minNumInliers = 25;
+
+		// not enough points to build a descriptor
+		if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
+			return;
+
+		final List< PointMatch > candidates = 
+				new FRGLDMMatcher<>().extractCorrespondenceCandidates(
+						pointsChA,
+						pointsChB,
+						redundancy,
+						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+
+		double minZ = localLastSliceIndex;
+		double maxZ = firstSliceIndex;
+
+		for ( final PointMatch pm : candidates )
+		{
+			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+		}
+
+		System.out.println( "candidates: " + candidates.size() + " from(z) " + minZ + " to(z) " + maxZ );
+
+		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
+//				new Transform.InterpolatedAffineModel2DSupplier(
+//				(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+//				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
+				(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+//				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+				numIterations,
+				maxEpsilon,
+				0,
+				minNumInliers);
+
+		final ArrayList<PointMatch> matches = filter.filter(candidates);
+
+		minZ = localLastSliceIndex;
+		maxZ = firstSliceIndex;
+
+		for ( final PointMatch pm : matches )
+		{
+			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+		}
+
+		System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
+
+		System.exit( 0 );
+		/*
+		final List< PointMatch > candidates = 
+				new RGLDMMatcher<>().extractCorrespondenceCandidates(
+						pointsChA,
+						pointsChB,
+						numNeighbors,
+						redundancy,
+						ratioOfDistance,
+						differenceThreshold ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+		*/
 		/*
 		System.exit( 0 );
 		//final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
