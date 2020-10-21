@@ -35,8 +35,12 @@ import ij.ImageJ;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import mpicbg.models.AffineModel2D;
+import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel2D;
+import mpicbg.models.TranslationModel3D;
+import mpicbg.trakem2.transform.AffineModel3D;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
@@ -501,9 +505,9 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 //				new Transform.InterpolatedAffineModel2DSupplier(
-//				(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+				(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
 //				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
-				(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+//				(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
 //				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
 				numIterations,
 				maxEpsilon,
@@ -523,6 +527,19 @@ public class AlignChannels implements Callable<Void>, Serializable {
 
 		System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
 
+		try {
+			final AffineModel3D affine = new AffineModel3D();
+			affine.fit( matches );
+			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
+
+			final TranslationModel3D translation = new TranslationModel3D();
+			translation.fit( matches );
+			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
+
+		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+			e.printStackTrace();
+		}
+		
 		System.exit( 0 );
 		/*
 		final List< PointMatch > candidates = 
