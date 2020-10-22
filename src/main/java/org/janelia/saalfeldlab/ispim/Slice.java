@@ -18,6 +18,8 @@ package org.janelia.saalfeldlab.ispim;
 
 import java.io.Serializable;
 
+import net.imglib2.realtransform.AffineTransform2D;
+
 /**
  * Data object for iSPIM stack slices.
  *
@@ -29,4 +31,5 @@ public class Slice implements Serializable
 
 	public String path;
 	public int index;
+	public AffineTransform2D affine = null;
 }
