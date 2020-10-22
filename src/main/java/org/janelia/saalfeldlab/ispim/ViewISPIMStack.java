@@ -62,7 +62,6 @@ import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
-import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
@@ -136,7 +135,10 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 					bounds = Intervals.union(bounds, img);
 				final ExtendedRandomAccessibleInterval<T, RandomAccessibleInterval<T>> extended = Views.extend(img, outOfBoundsFactory);
 				final RealRandomAccessible<T> interpolant = Views.interpolate(extended, interpolatorFactory);
-				slicesList.add(interpolant);
+				if (slice.affine == null)
+					slicesList.add(interpolant);
+				else
+					slicesList.add(RealViews.affineReal(interpolant, slice.affine));
 			}
 
 			return new ValuePair<>(slicesList, bounds);
