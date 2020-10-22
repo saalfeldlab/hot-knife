@@ -232,7 +232,8 @@ public class PairwiseAlignChannelsUtil
 			final AffineTransform2D camTransform,
 			final RandomAccessible<AffineTransform2D> alignments,
 			final int firstSliceIndex,
-			final int lastSliceIndex ) throws FormatException, IOException
+			final int lastSliceIndex,
+			final boolean maxBounds ) throws FormatException, IOException
 	{
 		ValuePair<RealRandomAccessible<T>, RealInterval> alignedStackBounds =
 				ViewISPIMStack.openAlignedStack(
@@ -242,7 +243,8 @@ public class PairwiseAlignChannelsUtil
 						camTransform,
 						alignments,
 						firstSliceIndex,
-						lastSliceIndex);
+						lastSliceIndex,
+						maxBounds );
 
 		// the stack is sitting at z=0, independent of the firstslice index
 		if ( firstSliceIndex != 0 )
@@ -253,13 +255,24 @@ public class PairwiseAlignChannelsUtil
 					alignedStackBounds.getB() );
 
 		final RealInterval realBounds2D = alignedStackBounds.getB();
-		final RealInterval realBounds3D = Intervals.createMinMax(
+		final RealInterval realBounds3D;
+
+		if ( maxBounds )
+			realBounds3D = Intervals.createMinMax(
 				(long)Math.floor(realBounds2D.realMin(0)),
 				(long)Math.floor(realBounds2D.realMin(1)),
 				firstSliceIndex,
 				(long)Math.ceil(realBounds2D.realMax(0)),
 				(long)Math.ceil(realBounds2D.realMax(1)),
 				lastSliceIndex);
+		else
+			realBounds3D = Intervals.createMinMax(
+					(long)Math.ceil(realBounds2D.realMin(0)),
+					(long)Math.ceil(realBounds2D.realMin(1)),
+					firstSliceIndex,
+					(long)Math.floor(realBounds2D.realMax(0)),
+					(long)Math.floor(realBounds2D.realMax(1)),
+					lastSliceIndex);
 
 		/*final ValuePair<RealRandomAccessible<UnsignedShortType>, RealInterval> transformedStackBounds =
 				ViewISPIMStack.transform(
@@ -276,3 +289,4 @@ public class PairwiseAlignChannelsUtil
 	}
 
 }
+

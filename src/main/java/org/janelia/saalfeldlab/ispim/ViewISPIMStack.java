@@ -219,7 +219,40 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 			final AffineTransform2D camTransform,
 			final RandomAccessible<AffineTransform2D> alignment,
 			final int firstSliceIndex,
-			final int lastSliceIndex) throws FormatException, IOException {
+			final int lastSliceIndex) throws FormatException, IOException
+	{
+		return openAlignedStack( slices, background, interpolationMethod, camTransform, alignment, firstSliceIndex, lastSliceIndex, true );
+	}
+
+	/**
+	 * Open a stack of slices, each transformed by a constant camera
+	 * transformation and a per slice alignment transformation.  Also
+	 * returns the resulting 2D bounds of the transformed slice series.
+	 *
+	 * Note: the RealRandomAccessible is sitting at z=0, independent of the firstSliceIndex
+	 *
+	 * @param <T>
+	 * @param slices
+	 * @param camTransform invertible forward transform
+	 * @param alignment invertible forward transforms
+	 * @param transform
+	 * @param firstSliceIndex
+	 * @param lastSliceIndex
+	 * @param maxbounds - if true the maximal bounding box encompassing everything will be computed,
+	 * otherwise the minimal bounding box that contains where data is available for every xy location in every z slice 
+	 * @return
+	 * @throws FormatException
+	 * @throws IOException
+	 */
+	public static <T extends NumericType<T> & NativeType<T>> ValuePair<RealRandomAccessible<T>, RealInterval> openAlignedStack(
+			final List<Slice> slices,
+			final T background,
+			final Interpolation interpolationMethod,
+			final AffineTransform2D camTransform,
+			final RandomAccessible<AffineTransform2D> alignment,
+			final int firstSliceIndex,
+			final int lastSliceIndex,
+			final boolean maxBounds ) throws FormatException, IOException {
 
 		/* get slices */
 		final ValuePair<List<RealRandomAccessible<T>>, RealInterval> realSlices = openStack(
@@ -243,7 +276,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 			if (bounds == null)
 				bounds = sliceBounds;
 			else
-				bounds = Intervals.union(bounds, sliceBounds);
+				bounds = maxBounds ? Intervals.union(bounds, sliceBounds) : Intervals.intersect(bounds, sliceBounds);
 			transformedRealSlices.add(RealViews.affineReal(slice, combinedTransform));
 			alignmentAccess.fwd(0);
 		}
