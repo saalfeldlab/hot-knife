@@ -424,6 +424,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					final RandomAccessibleInterval< UnsignedShortType > imgA = Views.interval( Views.raster( alignedStackBoundsA.getA() ), displayInterval );
 					final RandomAccessibleInterval< UnsignedShortType > imgB = Views.interval( Views.raster( alignedStackBoundsB.getA() ), displayInterval );
 
+					/*
 					final ImagePlus impA = ImageJFunctions.wrap(imgA, block.channelA, Executors.newFixedThreadPool( 8 ) ).duplicate();
 					impA.setDimensions( 1, impA.getStackSize(), 1 );
 					impA.resetDisplayRange();
@@ -433,6 +434,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					impB.setDimensions( 1, impB.getStackSize(), 1 );
 					impB.resetDisplayRange();
 					impB.show();
+					*/
 
 					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): performing cross correlations." );
 
