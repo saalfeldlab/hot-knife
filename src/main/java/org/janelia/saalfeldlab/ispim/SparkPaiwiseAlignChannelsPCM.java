@@ -35,13 +35,17 @@ import bdv.viewer.Interpolation;
 import ij.CompositeImage;
 import ij.ImageJ;
 import ij.ImagePlus;
+import ij.gui.PointRoi;
 import ij.gui.Roi;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
+import mpicbg.imglib.wrapper.ImgLib1;
+import mpicbg.imglib.wrapper.ImgLib2;
 import mpicbg.models.AffineModel2D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.InvertibleBoundable;
 import mpicbg.models.NotEnoughDataPointsException;
+import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
@@ -59,6 +63,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.Interpolant;
@@ -85,6 +90,7 @@ import net.imglib2.util.ValuePair;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
+import net.preibisch.mvrecon.process.downsampling.Downsample;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
@@ -114,7 +120,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 	private String camB = null;
 
 	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize in z for point extraction (default: 40)")
-	private int blocksize = 40;
+	private int blocksize = 20;
 
 	@Option(names = "--first", required = false, description = "First slice index, e.g. 0 (default 0)")
 	private int firstSliceIndex = 0;
@@ -122,8 +128,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 	@Option(names = "--last", required = false, description = "Last slice index, e.g. 1000 (default MAX)")
 	private int lastSliceIndex = Integer.MAX_VALUE;
 
-	@Option(names = "--rThreshold", required = false, description = "correlation threshold (default: 0.7)")
-	private double rThreshold = 0.7;
+	@Option(names = "--rThreshold", required = false, description = "correlation threshold (default: 0.5)")
+	private double rThreshold = 0.5;
 
 	@Option(names = "--tryLoadingCandidates", required = false, description = "Try to load previously identified PCM candidate points (default: false)")
 	private boolean tryLoadingCandidates = false;
@@ -317,7 +323,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 	
 			final JavaRDD<Block> rddSlices = sc.parallelize( blocks );
 	
-			final JavaPairRDD<Block, ArrayList< InterestPoint >> rddFeatures = rddSlices.mapToPair(
+			final JavaPairRDD<Block, ArrayList< PointMatch >> rddFeatures = rddSlices.mapToPair(
 				block ->
 				{
 					if ( block.from != 400 )
@@ -429,140 +435,135 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					impB.show();
 
 					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): performing cross correlations." );
-	
-					final ExecutorService service = Executors.newFixedThreadPool( 1 );
 
-					// run PCM in blocks
-			        final StitchingParameters params = new StitchingParameters();
-
-			        // static parameters
-			        params.dimensionality = 3;
-			        params.fusionMethod = 0;
-			        params.fusedName = "";
-			        params.addTilesAsRois = false;
-			        params.computeOverlap = true;
-			        params.ignoreZeroValuesFusion = false;
-			        params.downSample = false;
-			        params.displayFusion = false;
-			        params.invertX = false;
-			        params.invertY = false;
-			        params.ignoreZStage = false;
-			        params.xOffset = 0.0;
-			        params.yOffset = 0.0;
-			        params.zOffset = 0.0;
-
-			        // dynamic parameters
-			        params.checkPeaks = 5;
-			        params.subpixelAccuracy = true;
-
-					final int blockSizeX = 200;
-					final int blockSizeY = 200;
+					final int blockSizeX = 400;
+					final int blockSizeY = 400;
 
 					final int blocksX = (int)(displayInterval.dimension( 0 ) / blockSizeX);
 					final int blocksY = (int)(displayInterval.dimension( 1 ) / blockSizeX);
+					final long[] downsampling = new long[] { 4, 4, 1 };
 
-					for ( int blockY = 0; blockY < blocksY; ++blockY)
-						for ( int blockX = 0; blockX < blocksX; ++blockX)
+					final ExecutorService service = Executors.newFixedThreadPool( 1 );
+					final ArrayList< PointMatch > candidates = new ArrayList<>();
+
+					for ( double blockY = 0; blockY <= blocksY - 1; blockY += 0.5)
+						for ( double blockX = 0; blockX <= blocksX - 1; blockX += 0.5 )
 						{
 							Roi roi = new Roi( blockX * blockSizeX, blockY * blockSizeY, blockSizeX, blockSizeY );
 
 							final Interval blockInterval = new FinalInterval(
-									new long[] { displayInterval.min( 0 ) + blockX * blockSizeX, displayInterval.min( 1 ) + blockY * blockSizeY, displayInterval.min( 2 ) },
-									new long[] { displayInterval.min( 0 ) + blockX * blockSizeX + blockSizeX - 1, displayInterval.min( 1 ) + blockY * blockSizeY + blockSizeY - 1, displayInterval.max( 2 ) });
+									new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY ), displayInterval.min( 2 ) },
+									new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX + blockSizeX - 1 ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY + blockSizeY - 1 ), displayInterval.max( 2 ) });
 
-							final RandomAccessibleInterval< UnsignedShortType > blockA = Views.interval( imgA, blockInterval );
-							final RandomAccessibleInterval< UnsignedShortType > blockB = Views.interval( imgB, blockInterval );
+							final RandomAccessibleInterval< UnsignedShortType > blockA = Downsample.downsample( Views.interval( imgA, blockInterval ), downsampling );
+							final RandomAccessibleInterval< UnsignedShortType > blockB = Downsample.downsample( Views.interval( imgB, blockInterval ), downsampling );
 
 							ImagePlus blockAImp = ImageJFunctions.wrap( blockA, "A");
 							ImagePlus blockBImp = ImageJFunctions.wrap( blockB, "B");
 							blockAImp.setDimensions( 1, blockAImp.getStackSize(), 1 );
 							blockBImp.setDimensions( 1, blockBImp.getStackSize(), 1 );
 
-				            final PairWiseStitchingResult result =
-				                    PairWiseStitchingImgLib.stitchPairwise(blockAImp,
-				                    		blockBImp,
-				                                                           null,
-				                                                           null,
-				                                                           1,
-				                                                           1,
-				                                                           params);
-				            System.out.println( roi.getBoundingRect().x + ", " + roi.getBoundingRect().y + " = " + result.getCrossCorrelation() + ": " + Util.printCoordinates( result.getOffset() ) );
-				            //SimpleMultiThreading.threadHaltUnClean();
-				            if ( result.getCrossCorrelation() > 0.6 )
-				            {
-				    			final ArrayList<InvertibleBoundable> models = new ArrayList<>();
-				    			models.add( new mpicbg.trakem2.transform.TranslationModel3D() );
-				    			TranslationModel3D t = new TranslationModel3D();
-				    			t.set(result.getOffset( 0), result.getOffset( 1), result.getOffset( 2));
-				    			models.add( t );
+							final PairWiseStitchingResult result = PCMHelper.computePhaseCorrelation(
+									ImgLib2.wrapArrayUnsignedShortToImgLib1( FusionTools.copyImgNoTranslation(blockA, new ArrayImgFactory<>( new UnsignedShortType()), new UnsignedShortType(), service) ),
+									ImgLib2.wrapArrayUnsignedShortToImgLib1( FusionTools.copyImgNoTranslation(blockB, new ArrayImgFactory<>( new UnsignedShortType()), new UnsignedShortType(), service) ),
+									15, // peaks
+									true, // subpixel localization
+									1 // numThreads
+									);
 
-				    			final ArrayList<ImagePlus> images = new ArrayList< ImagePlus >();
-				    			images.add( blockAImp );
-				    			images.add( blockBImp );
+							System.out.println( roi.getBoundingRect().x + ", " + roi.getBoundingRect().y + " = " + result.getCrossCorrelation() + ": " + Util.printCoordinates( result.getOffset() ) );
 
-				    			final CompositeImage overlay = OverlayFusion.createOverlay( new FloatType(), images, models, 3, 1, new NLinearInterpolatorFactory<FloatType>() );
-				    			overlay.setRoi( roi );
-				    			overlay.setTitle( "r=" + result.getCrossCorrelation() );
-				    			overlay.show();
+							if ( result.getCrossCorrelation() > block.rThreshold )
+							{
+								final Point p1 = new Point( new double[] {
+										blockInterval.min( 0 ) + blockSizeX / 2,
+										blockInterval.min( 1 ) + blockSizeY / 2,
+										block.from + (block.from + block.to ) / 2} );
+								final Point p2 = new Point( new double[] {
+										p1.getL()[ 0 ] + result.getOffset( 0 ) * downsampling[ 0 ],
+										p1.getL()[ 1 ] + result.getOffset( 1 ) * downsampling[ 1 ],
+										p1.getL()[ 2 ] + result.getOffset( 2 ) * downsampling[ 2 ] } );
 
-				            }
+								candidates.add( new PointMatch( p1, p2 ) );
+								/*
+								final ArrayList<InvertibleBoundable> models = new ArrayList<>();
+								models.add( new mpicbg.trakem2.transform.TranslationModel3D() );
+								TranslationModel3D t = new TranslationModel3D();
+								t.set(result.getOffset( 0 ), result.getOffset( 1 ), result.getOffset( 2 ));
+								models.add( t );
+						
+								final ArrayList<ImagePlus> images = new ArrayList< ImagePlus >();
+								images.add( blockAImp );
+								images.add( blockBImp );
+						
+								final CompositeImage overlay = OverlayFusion.createOverlay( new FloatType(), images, models, 3, 1, new NLinearInterpolatorFactory<FloatType>() );
+								overlay.setRoi( roi );
+								overlay.setTitle( "r=" + result.getCrossCorrelation() + " x:" + blockInterval.min( 0 ) + " y:" + blockInterval.min( 1 ) );
+								overlay.show();
+								*/
+								}
 						}
+
 					service.shutdown();
+
+					System.out.println( "candidates: " + candidates.size() );
+
+					final MultiConsensusFilter filter = new MultiConsensusFilter<>(
+//							new Transform.InterpolatedAffineModel2DSupplier(
+//							(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+//							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
+							(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+//							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+							10000,
+							5,
+							0,
+							5 );
+
+					final ArrayList<PointMatch> matches = filter.filter(candidates);
+
+					TranslationModel3D model = new TranslationModel3D();
+					model.fit(matches);
+
+					System.out.println( "matches: " + matches.size() + " model: " + model );
+
+					final ArrayList<Point> sourcePoints = new ArrayList<>();
+					PointMatch.sourcePoints(matches, sourcePoints);
+					for ( final Point p : sourcePoints )
+					{
+						p.getL()[ 0 ] -= displayInterval.min( 0 );
+						p.getL()[ 1 ] -= displayInterval.min( 1 );
+					}
+					impA.setRoi(mpicbg.ij.util.Util.pointsToPointRoi(sourcePoints));
+
+					final ArrayList<InvertibleBoundable> models = new ArrayList<>();
+					models.add( new mpicbg.trakem2.transform.TranslationModel3D() );
+					models.add( model );
+			
+					final ArrayList<ImagePlus> images = new ArrayList< ImagePlus >();
+					images.add( impA );
+					images.add( impB );
+			
+					final CompositeImage overlay = OverlayFusion.createOverlay( new FloatType(), images, models, 3, 1, new NLinearInterpolatorFactory<FloatType>() );
+					overlay.show();
+
+					// TODO: return candidates, run RANSAC over all blocks
 
 					SimpleMultiThreading.threadHaltUnClean();
 
-					// exclude points that lie within the Gauss overhead
-					final ArrayList< InterestPoint > points = new ArrayList<>();
 	
-					/*if ( block.from == 200 )
-					{
-						final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
-						impA.setDimensions( 1, impA.getStackSize(), 1 );
-						impA.resetDisplayRange();
-						impA.show();
-		
-						//final ImagePlus impAw = ImageJFunctions.wrap(imgs.getB(), block.channel + "_w", Executors.newFixedThreadPool( 8 ) ).duplicate();
-						//impAw.setDimensions( 1, impAw.getStackSize(), 1 );
-						//impAw.resetDisplayRange();
-						//impAw.show();
-	
-						final long[] dim = new long[ imgs.getA().numDimensions() ];
-						final long[] min = new long[ imgs.getA().numDimensions() ];
-						imgs.getA().dimensions( dim );
-						imgs.getA().min( min );
-	
-						final RandomAccessibleInterval< FloatType > dots = Views.translate( ArrayImgs.floats( dim ), min );
-						final RandomAccess< FloatType > rDots = dots.randomAccess();
-	
-						for ( final InterestPoint ip : points )
-						{
-							for ( int d = 0; d < dots.numDimensions(); ++d )
-								rDots.setPosition( Math.round( ip.getFloatPosition( d ) ), d );
-	
-							rDots.get().setOne();
-						}
-	
-						Gauss3.gauss( 1, Views.extendZero( dots ), dots );
-						final ImagePlus impP = ImageJFunctions.wrap( dots, "detections_" + block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
-						impP.setDimensions( 1, impP.getStackSize(), 1 );
-						impP.setSlice( impP.getStackSize() / 2 );
-						impP.resetDisplayRange();
-						impP.show();
-					}*/
-	
-					return new Tuple2<>(block, points);
+					return new Tuple2<>(block, matches);
 				});
 	
 			/* cache the booleans, so features aren't regenerated every time */
 			rddFeatures.cache();
 	
 			/* collect the results */
-			final List<Tuple2<Block, ArrayList< InterestPoint >>> results = rddFeatures.collect();
+			final List<Tuple2<Block, ArrayList< PointMatch >>> results = rddFeatures.collect();
 	
 			pointsChA = new ArrayList<>();
 			pointsChB = new ArrayList<>();
 	
-			for ( final Tuple2<Block, ArrayList< InterestPoint >> tuple : results )
+			for ( final Tuple2<Block, ArrayList< PointMatch >> tuple : results )
 			{
 				if ( tuple._2().size() == 0 )
 					System.out.println( "Warning: block " + tuple._1.from + " has 0 detections");
