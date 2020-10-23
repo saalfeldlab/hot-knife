@@ -326,8 +326,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			final JavaPairRDD<Block, ArrayList< PointMatch >> rddFeatures = rddSlices.mapToPair(
 				block ->
 				{
-					if ( block.from != 400 )
-						return null;
+					//if ( block.from != 400 )
+					//	return null;
 
 					final HashMap<String, List<Slice>> chA = stacks.get( block.channelA );
 					final List< Slice > slicesA = chA.get( block.camA );
@@ -449,19 +449,12 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					for ( double blockY = 0; blockY <= blocksY - 1; blockY += 0.5)
 						for ( double blockX = 0; blockX <= blocksX - 1; blockX += 0.5 )
 						{
-							Roi roi = new Roi( blockX * blockSizeX, blockY * blockSizeY, blockSizeX, blockSizeY );
-
 							final Interval blockInterval = new FinalInterval(
 									new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY ), displayInterval.min( 2 ) },
 									new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX + blockSizeX - 1 ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY + blockSizeY - 1 ), displayInterval.max( 2 ) });
 
 							final RandomAccessibleInterval< UnsignedShortType > blockA = Downsample.downsample( Views.interval( imgA, blockInterval ), downsampling );
 							final RandomAccessibleInterval< UnsignedShortType > blockB = Downsample.downsample( Views.interval( imgB, blockInterval ), downsampling );
-
-							ImagePlus blockAImp = ImageJFunctions.wrap( blockA, "A");
-							ImagePlus blockBImp = ImageJFunctions.wrap( blockB, "B");
-							blockAImp.setDimensions( 1, blockAImp.getStackSize(), 1 );
-							blockBImp.setDimensions( 1, blockBImp.getStackSize(), 1 );
 
 							final PairWiseStitchingResult result = PCMHelper.computePhaseCorrelation(
 									ImgLib2.wrapArrayUnsignedShortToImgLib1( FusionTools.copyImgNoTranslation(blockA, new ArrayImgFactory<>( new UnsignedShortType()), new UnsignedShortType(), service) ),
@@ -470,8 +463,6 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 									true, // subpixel localization
 									1 // numThreads
 									);
-
-							System.out.println( roi.getBoundingRect().x + ", " + roi.getBoundingRect().y + " = " + result.getCrossCorrelation() + ": " + Util.printCoordinates( result.getOffset() ) );
 
 							if ( result.getCrossCorrelation() > block.rThreshold )
 							{
@@ -485,29 +476,14 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 										p1.getL()[ 2 ] + result.getOffset( 2 ) * downsampling[ 2 ] } );
 
 								candidates.add( new PointMatch( p1, p2 ) );
-								/*
-								final ArrayList<InvertibleBoundable> models = new ArrayList<>();
-								models.add( new mpicbg.trakem2.transform.TranslationModel3D() );
-								TranslationModel3D t = new TranslationModel3D();
-								t.set(result.getOffset( 0 ), result.getOffset( 1 ), result.getOffset( 2 ));
-								models.add( t );
-						
-								final ArrayList<ImagePlus> images = new ArrayList< ImagePlus >();
-								images.add( blockAImp );
-								images.add( blockBImp );
-						
-								final CompositeImage overlay = OverlayFusion.createOverlay( new FloatType(), images, models, 3, 1, new NLinearInterpolatorFactory<FloatType>() );
-								overlay.setRoi( roi );
-								overlay.setTitle( "r=" + result.getCrossCorrelation() + " x:" + blockInterval.min( 0 ) + " y:" + blockInterval.min( 1 ) );
-								overlay.show();
-								*/
 								}
 						}
 
 					service.shutdown();
 
-					System.out.println( "candidates: " + candidates.size() );
+					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): candidates: " + candidates.size() );
 
+					/*
 					final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 //							new Transform.InterpolatedAffineModel2DSupplier(
 //							(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
@@ -549,9 +525,9 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					// TODO: return candidates, run RANSAC over all blocks
 
 					SimpleMultiThreading.threadHaltUnClean();
-
+					*/
 	
-					return new Tuple2<>(block, matches);
+					return new Tuple2<>(block, candidates );
 				});
 	
 			/* cache the booleans, so features aren't regenerated every time */
@@ -563,11 +539,42 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			pointsChA = new ArrayList<>();
 			pointsChB = new ArrayList<>();
 	
+			final ArrayList< PointMatch > candidates = new ArrayList<>();
+
 			for ( final Tuple2<Block, ArrayList< PointMatch >> tuple : results )
 			{
+				candidates.addAll(tuple._2() );
+
 				if ( tuple._2().size() == 0 )
-					System.out.println( "Warning: block " + tuple._1.from + " has 0 detections");
+					System.out.println( "Warning: block " + tuple._1.from + " has 0 candidates");
 			}
+
+			System.out.println( "candidates: " + candidates.size()  );
+
+			final MultiConsensusFilter filter = new MultiConsensusFilter<>(
+//					new Transform.InterpolatedAffineModel2DSupplier(
+					(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+//					(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
+//					(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+//					(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+					10000,
+					5,
+					0,
+					50 );
+
+			final ArrayList<PointMatch> matches = filter.filter(candidates);
+
+			TranslationModel3D model = new TranslationModel3D();
+			try {
+				model.fit(matches);
+			} catch (NotEnoughDataPointsException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+			System.out.println( "matches: " + matches.size() + " model: " + model );
+
+			SimpleMultiThreading.threadHaltUnClean();
 
 			System.out.println( "saving points ... " );
 
