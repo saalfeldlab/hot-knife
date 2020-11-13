@@ -32,12 +32,14 @@ import com.google.gson.GsonBuilder;
 import bdv.util.ConstantRandomAccessible;
 import bdv.viewer.Interpolation;
 import ij.ImageJ;
+import ij.ImagePlus;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import mpicbg.models.AffineModel2D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
+import mpicbg.models.RigidModel2D;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
 import mpicbg.trakem2.transform.AffineModel3D;
@@ -49,6 +51,8 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.Interpolant;
 import net.imglib2.interpolation.InterpolatorFactory;
@@ -56,6 +60,7 @@ import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.interpolation.stack.LinearRealRandomAccessibleStackInterpolatorFactory;
 import net.imglib2.interpolation.stack.NearestNeighborRealRandomAccessibleStackInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.outofbounds.OutOfBoundsConstantValueFactory;
 import net.imglib2.outofbounds.OutOfBoundsFactory;
 import net.imglib2.realtransform.AffineTransform2D;
@@ -282,13 +287,60 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				final int from  = i * blockSize + firstSliceIndex;
 				final int to = Math.min( localLastSliceIndex, from + blockSize - 1 );
 	
-				final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, 0.02, minIntensity, maxIntensity );
-				final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, 0.01, minIntensity, maxIntensity );
+				final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, /*0.02*/0.015, minIntensity, maxIntensity );
+				final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, /*0.01*/0.005, minIntensity, maxIntensity );
 	
 				blocks.add( blockChannelA );
 				blocks.add( blockChannelB );
 		
 				System.out.println( "block " + i + ": " + from + " >> " + to );
+
+				/*
+				// visible error: from=200, to=219, ch=Ch515+594nm (cam=cam1) Pos012
+				if ( blockChannelB.from == 200 )
+				{
+					new ImageJ();
+					final HashMap<String, List<Slice>> ch = stacks.get( blockChannelB.channel );
+					final List< Slice > slices = ch.get( blockChannelB.cam );
+	
+					// this is the inverse
+					final AffineTransform2D camtransform = blockChannelB.getTransform();//camTransforms.get( block.channel ).get( block.cam );
+	
+					final N5FSReader n5Local = new N5FSReader(
+							n5Path,
+							new GsonBuilder().registerTypeAdapter(
+									AffineTransform2D.class,
+									new AffineTransform2DAdapter()));
+	
+					final ArrayList<AffineTransform2D> transforms = n5Local.getAttribute(
+							id + "/" + blockChannelB.channel,
+							"transforms",
+							new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
+	
+					//if ( block.from != 200 )
+					//	return new Tuple2<>(block, new ArrayList<>());
+	
+					final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
+	
+					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + blockChannelB.from + ", to=" + blockChannelB.to + ", ch=" + blockChannelB.channel + " (cam=" + blockChannelB.cam + "): opening images." );
+	
+					final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
+							PairwiseAlignChannelsUtil.openRandomAccessibleIntervals(
+									slices,
+									new UnsignedShortType(0),
+									Interpolation.NLINEAR,
+									camtransform,
+									alignmentTransforms,//alignments.get( channelA ),
+									Math.max( firstSliceIndex, blockChannelB.from  - blockChannelB.gaussOverhead ),
+									Math.min( localLastSlice, blockChannelB.to + blockChannelB.gaussOverhead ) );
+
+					final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), blockChannelB.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
+					impA.setDimensions( 1, impA.getStackSize(), 1 );
+					impA.resetDisplayRange();
+					impA.show();
+					
+					SimpleMultiThreading.threadHaltUnClean();
+				}*/
 			}
 	
 			final JavaRDD<Block> rddSlices = sc.parallelize( blocks );
@@ -477,11 +529,11 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		//
 
 		final int numNeighbors = 3;
-		final int redundancy = 0;
-		final double ratioOfDistance = 2.0;
+		final int redundancy = 1;
+		final double ratioOfDistance = 2;
 		final double differenceThreshold = Double.MAX_VALUE;
 		final int numIterations = 10000;
-		final double maxEpsilon = 5;
+		final double maxEpsilon = 2;
 		final int minNumInliers = 25;
 
 		// not enough points to build a descriptor
@@ -494,6 +546,15 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 						pointsChB,
 						redundancy,
 						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+
+		/*final List< PointMatch > candidates = 
+				new RGLDMMatcher<>().extractCorrespondenceCandidates(
+						pointsChA,
+						pointsChB,
+						3,
+						redundancy,
+						ratioOfDistance,
+						Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );*/
 
 		double minZ = localLastSliceIndex;
 		double maxZ = firstSliceIndex;
