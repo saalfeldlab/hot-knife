@@ -1,6 +1,5 @@
 package org.janelia.saalfeldlab.ispim;
 
-import java.awt.Rectangle;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -13,18 +12,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.MultiConsensusFilter;
-import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
@@ -33,73 +28,44 @@ import com.google.gson.GsonBuilder;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
-import bdv.util.ConstantRandomAccessible;
 import bdv.viewer.Interpolation;
 import ij.CompositeImage;
 import ij.ImageJ;
 import ij.ImagePlus;
-import ij.gui.PointRoi;
-import ij.gui.Roi;
 import loci.formats.FormatException;
-import loci.formats.in.TiffReader;
-import mpicbg.imglib.wrapper.ImgLib1;
 import mpicbg.imglib.wrapper.ImgLib2;
-import mpicbg.models.AffineModel2D;
-import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.InvertibleBoundable;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
-import mpicbg.stitching.PairWiseStitchingImgLib;
 import mpicbg.stitching.PairWiseStitchingResult;
-import mpicbg.stitching.StitchingParameters;
 import mpicbg.stitching.fusion.OverlayFusion;
-import mpicbg.trakem2.transform.AffineModel3D;
 import net.imglib2.FinalInterval;
-import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
-import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
-import net.imglib2.converter.Converters;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.list.ListImg;
-import net.imglib2.interpolation.Interpolant;
-import net.imglib2.interpolation.InterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
-import net.imglib2.interpolation.stack.LinearRealRandomAccessibleStackInterpolatorFactory;
-import net.imglib2.interpolation.stack.NearestNeighborRealRandomAccessibleStackInterpolatorFactory;
 import net.imglib2.multithreading.SimpleMultiThreading;
-import net.imglib2.outofbounds.OutOfBoundsConstantValueFactory;
-import net.imglib2.outofbounds.OutOfBoundsFactory;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Translation3D;
-import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.NumericType;
-import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
-import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
-import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.downsampling.Downsample;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
-import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
-import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
-import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import scala.Tuple2;
@@ -218,6 +184,11 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				"stacks",
 				new TypeToken<ArrayList<String>>() {}.getType());
 
+		// TODO: Remove - reset cam transforms to see if that is the reason
+		for ( final  HashMap<String, AffineTransform2D> c : camTransforms.values() )
+			for ( final String key : c.keySet() )
+				c.put( key, new AffineTransform2D() );
+		
 		if (!ids.contains(id))
 		{
 			System.err.println("Id '" + id + "' does not exist in '" + n5Path + "'.");
@@ -423,7 +394,16 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 								(long)Math.floor(realBoundsB2D.realMax(1)),
 								block.to);
 
-					final Interval displayInterval = Intervals.smallestContainingInterval( Intervals.intersect( realBoundsA3D, realBoundsB3D));
+					//System.out.println( realBoundsA3D.realMin( 0 ) + ", " +realBoundsA3D.realMin( 1 ) + ", "+realBoundsA3D.realMin( 2 ) + " --- " + realBoundsA3D.realMax( 0 ) + ", " +realBoundsA3D.realMax( 1 ) + ", "+realBoundsA3D.realMax( 2 ) );
+					//System.out.println( realBoundsB3D.realMin( 0 ) + ", " +realBoundsB3D.realMin( 1 ) + ", "+realBoundsB3D.realMin( 2 ) + " --- " + realBoundsB3D.realMax( 0 ) + ", " +realBoundsB3D.realMax( 1 ) + ", "+realBoundsB3D.realMax( 2 ) );
+					
+					final RealInterval intersectionInterval = Intervals.intersect( realBoundsA3D, realBoundsB3D );
+
+					//System.out.println( intersectionInterval.realMin( 0 ) + ", " +intersectionInterval.realMin( 1 ) + ", "+intersectionInterval.realMin( 2 ) + " --- " + intersectionInterval.realMax( 0 ) + ", " +intersectionInterval.realMax( 1 ) + ", "+intersectionInterval.realMax( 2 ) );
+					
+					final Interval displayInterval = Intervals.smallestContainingInterval( intersectionInterval );
+
+					System.out.println( Util.printInterval( displayInterval ) );
 
 					final RandomAccessibleInterval< UnsignedShortType > imgA = Views.interval( Views.raster( alignedStackBoundsA.getA() ), displayInterval );
 					final RandomAccessibleInterval< UnsignedShortType > imgB = Views.interval( Views.raster( alignedStackBoundsB.getA() ), displayInterval );
@@ -505,7 +485,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					model.fit(matches);
 
 					System.out.println( "matches: " + matches.size() + " model: " + model );
-
+					/*
 					final ArrayList<Point> sourcePoints = new ArrayList<>();
 					PointMatch.sourcePoints(matches, sourcePoints);
 					for ( final Point p : sourcePoints )
@@ -514,9 +494,9 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 						p.getL()[ 1 ] -= displayInterval.min( 1 );
 					}
 					impA.setRoi(mpicbg.ij.util.Util.pointsToPointRoi(sourcePoints));
-
+					*/
 					final ArrayList<InvertibleBoundable> models = new ArrayList<>();
-					models.add( new mpicbg.trakem2.transform.TranslationModel3D() );
+					models.add( new TranslationModel3D() );
 					models.add( model );
 			
 					final ArrayList<ImagePlus> images = new ArrayList< ImagePlus >();
@@ -527,11 +507,11 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					overlay.show();
 
 					final RealRandomAccessible< UnsignedShortType > tImgA = RealViews.affineReal( Views.interpolate( Views.extendZero( imgA ), new NLinearInterpolatorFactory<UnsignedShortType>() ), TransformationTools.getAffineTransform( model ).inverse() );
-					BdvOptions options =new BdvOptions();
+					BdvOptions options = new BdvOptions();
 					BdvStackSource<?> bdv = BdvFunctions.show( tImgA, imgA, "imgA_t" );
 					//bdv = BdvFunctions.show(imgB, "imgB", options.addTo( bdv ) );
 					BdvFunctions.show(Views.extendZero( imgB ), imgB, "imgB", options.addTo( bdv ) );
-					SimpleMultiThreading.threadHaltUnClean();
+					//SimpleMultiThreading.threadHaltUnClean();
 	
 					//return new Tuple2<>( block, candidatesLocal );
 					return new Tuple2<>( block, matches );
