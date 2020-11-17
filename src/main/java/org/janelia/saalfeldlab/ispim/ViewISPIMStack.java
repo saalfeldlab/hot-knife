@@ -314,7 +314,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 
 
 
-	private static <T extends NumericType<T> & NativeType<T>> BdvStackSource<T> showCamSource(
+	protected static <T extends NumericType<T> & NativeType<T>> BdvStackSource<T> showCamSource(
 			final BdvStackSource<?> bdv,
 			final String title,
 			final List<Slice> slices,
