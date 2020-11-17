@@ -29,6 +29,8 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import bdv.util.BdvFunctions;
+import bdv.util.BdvStackSource;
 import bdv.util.ConstantRandomAccessible;
 import bdv.viewer.Interpolation;
 import ij.ImageJ;
@@ -63,7 +65,9 @@ import net.imglib2.interpolation.stack.NearestNeighborRealRandomAccessibleStackI
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.outofbounds.OutOfBoundsConstantValueFactory;
 import net.imglib2.outofbounds.OutOfBoundsFactory;
+import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
@@ -79,6 +83,7 @@ import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
+import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
@@ -213,7 +218,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 					"transforms",
 					new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
 
-			final RandomAccessible<AffineTransform2D> alignmentTransforms= Views.extendBorder(new ListImg<>(transforms, transforms.size()));
+			final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
 
 			alignments.put(channel.getKey(), alignmentTransforms);
 
@@ -287,7 +292,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				final int from  = i * blockSize + firstSliceIndex;
 				final int to = Math.min( localLastSliceIndex, from + blockSize - 1 );
 	
-				final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, /*0.02*/0.015, minIntensity, maxIntensity );
+				final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, /*0.02*/0.005, minIntensity, maxIntensity );
 				final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, /*0.01*/0.005, minIntensity, maxIntensity );
 	
 				blocks.add( blockChannelA );
@@ -300,45 +305,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				if ( blockChannelB.from == 200 )
 				{
 					new ImageJ();
-					final HashMap<String, List<Slice>> ch = stacks.get( blockChannelB.channel );
-					final List< Slice > slices = ch.get( blockChannelB.cam );
-	
-					// this is the inverse
-					final AffineTransform2D camtransform = blockChannelB.getTransform();//camTransforms.get( block.channel ).get( block.cam );
-	
-					final N5FSReader n5Local = new N5FSReader(
-							n5Path,
-							new GsonBuilder().registerTypeAdapter(
-									AffineTransform2D.class,
-									new AffineTransform2DAdapter()));
-	
-					final ArrayList<AffineTransform2D> transforms = n5Local.getAttribute(
-							id + "/" + blockChannelB.channel,
-							"transforms",
-							new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
-	
-					//if ( block.from != 200 )
-					//	return new Tuple2<>(block, new ArrayList<>());
-	
-					final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
-	
-					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + blockChannelB.from + ", to=" + blockChannelB.to + ", ch=" + blockChannelB.channel + " (cam=" + blockChannelB.cam + "): opening images." );
-	
-					final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
-							PairwiseAlignChannelsUtil.openRandomAccessibleIntervals(
-									slices,
-									new UnsignedShortType(0),
-									Interpolation.NLINEAR,
-									camtransform,
-									alignmentTransforms,//alignments.get( channelA ),
-									Math.max( firstSliceIndex, blockChannelB.from  - blockChannelB.gaussOverhead ),
-									Math.min( localLastSlice, blockChannelB.to + blockChannelB.gaussOverhead ) );
-
-					final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), blockChannelB.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
-					impA.setDimensions( 1, impA.getStackSize(), 1 );
-					impA.resetDisplayRange();
-					impA.show();
-					
+					viewBlock( stacks.get( blockChannelB.channel ), blockChannelB, firstSliceIndex, localLastSlice, n5Path, id );
 					SimpleMultiThreading.threadHaltUnClean();
 				}*/
 			}
@@ -396,7 +363,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 									true, /*findMax*/
 									block.minIntensity, /* min intensity */
 									block.maxIntensity, /* max intensity */
-									service );
+									service,
+									1 );
 	
 					service.shutdown();
 	
@@ -530,10 +498,10 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		final int numNeighbors = 3;
 		final int redundancy = 1;
-		final double ratioOfDistance = 2;
+		final double ratioOfDistance = 3;
 		final double differenceThreshold = Double.MAX_VALUE;
 		final int numIterations = 10000;
-		final double maxEpsilon = 2;
+		final double maxEpsilon = 5;
 		final int minNumInliers = 25;
 
 		// not enough points to build a descriptor
@@ -593,7 +561,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
 
-		try {
+		try
+		{
 			final AffineModel3D affine = new AffineModel3D();
 			affine.fit( matches );
 			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
@@ -602,143 +571,93 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			translation.fit( matches );
 			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
 
-		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+			BdvStackSource<?> bdv = null;
+
+			final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine ).inverse();
+
+			bdv = displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
+			bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
+
+			System.out.println( "done" );
+		}
+		catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
 			e.printStackTrace();
 		}
 
-		/*
-		final List< PointMatch > candidates = 
-				new RGLDMMatcher<>().extractCorrespondenceCandidates(
-						pointsChA,
-						pointsChB,
-						numNeighbors,
-						redundancy,
-						ratioOfDistance,
-						differenceThreshold ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
-		*/
-		/*
-		System.exit( 0 );
-		//final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
-
-		// testing
-		firstSliceIndex = 510 - gaussOverhead;
-		lastSliceIndex = 510 + gaussOverhead;
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + firstSliceIndex );
-		System.out.println( new Date(System.currentTimeMillis() ) + ": to=" + lastSliceIndex );
-
-		final HashMap<String, List<Slice>> chA = stacks.get( channelA );
-		final HashMap<String, List<Slice>> chB = stacks.get( channelB );
-
-		final List< Slice > slicesA = chA.get( camA );
-		final List< Slice > slicesB = chB.get( camB );
-
-		// this is the inverse 
-		final AffineTransform2D camAtransform = camTransforms.get( channelA ).get( camA );
-		final AffineTransform2D camBtransform = camTransforms.get( channelB ).get( camB );
-
-		new ImageJ();
-		final ExecutorService service = Executors.newFixedThreadPool( Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 ) );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading imgsA." );
-
-		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsA =
-				openRandomAccessibleIntervals(
-						slicesA,
-						new UnsignedShortType(0),
-						Interpolation.NLINEAR,
-						camAtransform,
-						alignments.get( channelA ),
-						firstSliceIndex,
-						lastSliceIndex );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Showing imgsA." );
-
-		final ImagePlus impA = ImageJFunctions.wrap(imgsA.getA(), "imgA", service ).duplicate();
-		impA.setDimensions( 1, impA.getStackSize(), 1 );
-		impA.resetDisplayRange();
-		impA.show();
-
-		final ImagePlus impAw = ImageJFunctions.wrap(imgsA.getB(), "imgAw", service ).duplicate();
-		impAw.setDimensions( 1, impA.getStackSize(), 1 );
-		impAw.resetDisplayRange();
-		impAw.show();
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgA." );
-
-		ArrayList< InterestPoint > pointsA =
-				DoGImgLib2.computeDoG(
-						imgsA.getA(),
-						imgsA.getB(),
-						2.0,
-						0.01,
-						1, //localization
-						false, //findMin
-						true, //findMax
-						0.0, // min intensity 
-						0.0, // max intensity 
-						service );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsA.size() + " points." );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Rendering " + pointsA.size() + " points." );
-
-		final long[] dim = new long[ imgsA.getA().numDimensions() ];
-		final long[] min = new long[ imgsA.getA().numDimensions() ];
-		imgsA.getA().dimensions( dim );
-		imgsA.getA().min( min );
-
-		final RandomAccessibleInterval< FloatType > dotsA = Views.translate( ArrayImgs.floats( dim ), min );
-		final RandomAccess< FloatType > rDotsA = dotsA.randomAccess();
-
-		for ( final InterestPoint ip : pointsA )
-		{
-			for ( int d = 0; d < dotsA.numDimensions(); ++d )
-				rDotsA.setPosition( Math.round( ip.getFloatPosition( d ) ), d );
-
-			rDotsA.get().setOne();
-		}
-
-		Gauss3.gauss( 1, Views.extendZero( dotsA ), dotsA );
-		ImageJFunctions.show( dotsA );
-
-		SimpleMultiThreading.threadHaltUnClean();
-		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgsB =
-				openRandomAccessibleIntervals(
-						slicesB,
-						new UnsignedShortType(0),
-						Interpolation.NLINEAR,
-						camBtransform,
-						alignments.get( channelB ),
-						firstSliceIndex,
-						lastSliceIndex );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Finding points in imgB." );
-
-		ArrayList< InterestPoint > pointsB =
-				DoGImgLib2.computeDoG(
-						imgsB.getA(),
-						null,
-						2.0,
-						0.01,
-						1, //localization
-						false, //findMin
-						true, //findMax
-						0.0, // min intensity 
-						0.0, // max intensity 
-						service );
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": Found " + pointsB.size() + " points." );
-
-		//IJ.run("Merge Channels...", "c2=DUP_imgA c6=DUP_imgB create");
 
 		// cam4 (Ch488+561+647nm) vs cam4 (Ch515+594nm)
 		// cam1 (Ch405nm) vs cam3 (Ch515+594nm)
 		// cam1 (Ch405nm) vs cam3 (Ch488+561+647nm)**
+	}
 
+	protected static BdvStackSource<?> displayOverlap(
+			final BdvStackSource<?> bdv,
+			final String channel,
+			final String cam, 
+			final List<Slice> slices,
+			final RandomAccessible<AffineTransform2D> alignments,
+			final AffineTransform2D camTransform,
+			final AffineGet transform,
+			final int firstSliceIndex,
+			final int lastSliceIndex ) throws FormatException, IOException
+	{
+		/* this is the inverse */
+		final String title = channel + " " + cam;
+
+		return ViewISPIMStack.showCamSource(
+				bdv,
+				title,
+				slices,
+				new UnsignedShortType(0),
+				Interpolation.NEARESTNEIGHBOR,
+				camTransform.inverse(), // pass the forward transform
+				transform,
+				alignments,
+				firstSliceIndex,
+				lastSliceIndex);
+	}
+
+	protected static void viewBlock( final HashMap<String, List<Slice>> ch, final Block block, final int firstSliceIndex, final int localLastSlice, final String n5Path, final String id ) throws IOException, FormatException
+	{
+		//final HashMap<String, List<Slice>> ch = stacks.get( block.channel );
+		final List< Slice > slices = ch.get( block.cam );
+
+		// this is the inverse
+		final AffineTransform2D camtransform = block.getTransform();//camTransforms.get( block.channel ).get( block.cam );
+
+		final N5FSReader n5Local = new N5FSReader(
+				n5Path,
+				new GsonBuilder().registerTypeAdapter(
+						AffineTransform2D.class,
+						new AffineTransform2DAdapter()));
+
+		final ArrayList<AffineTransform2D> transforms = n5Local.getAttribute(
+				id + "/" + block.channel,
+				"transforms",
+				new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
+
+		//if ( block.from != 200 )
+		//	return new Tuple2<>(block, new ArrayList<>());
+
+		final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
+
+		System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): opening images." );
+
+		final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
+				PairwiseAlignChannelsUtil.openRandomAccessibleIntervals(
+						slices,
+						new UnsignedShortType(0),
+						Interpolation.NLINEAR,
+						camtransform,
+						alignmentTransforms,//alignments.get( channelA ),
+						Math.max( firstSliceIndex, block.from  - block.gaussOverhead ),
+						Math.min( localLastSlice, block.to + block.gaussOverhead ) );
+
+		final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
+		impA.setDimensions( 1, impA.getStackSize(), 1 );
+		impA.resetDisplayRange();
+		impA.show();
 		
-		//ImageJFunctions.show( imgA );
-		SimpleMultiThreading.threadHaltUnClean();*/
 	}
 
 	@SuppressWarnings("serial")
@@ -752,7 +671,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		if ( sparkLocal == null || sparkLocal.trim().length() == 0 )
 		{
 			System.out.println( "Spark System property not set: " + sparkLocal );
-			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 ) + "]" );
+			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() ) + "]" );
 		}
 
 		System.out.println( "Spark System property is: " + System.getProperty( "spark.master" ) );
