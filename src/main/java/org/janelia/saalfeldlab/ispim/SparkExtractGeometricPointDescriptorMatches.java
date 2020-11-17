@@ -223,7 +223,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 										true, /*findMax*/
 										minIntensity, /* min intensity */
 										maxIntensity, /* max intensity */
-										Executors.newFixedThreadPool( 1 ) );
+										Executors.newFixedThreadPool( 1 ), 1 );
 
 						/*if ( i.intValue() % 50 == 0 )
 						{
