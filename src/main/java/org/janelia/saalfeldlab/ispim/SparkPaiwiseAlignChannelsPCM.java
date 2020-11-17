@@ -30,6 +30,9 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import bdv.util.BdvFunctions;
+import bdv.util.BdvOptions;
+import bdv.util.BdvStackSource;
 import bdv.util.ConstantRandomAccessible;
 import bdv.viewer.Interpolation;
 import ij.CompositeImage;
@@ -76,6 +79,7 @@ import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.outofbounds.OutOfBoundsConstantValueFactory;
 import net.imglib2.outofbounds.OutOfBoundsFactory;
 import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
@@ -93,6 +97,7 @@ import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.downsampling.Downsample;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
+import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
@@ -268,8 +273,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 		new ImageJ();
 
-		ArrayList<InterestPoint> pointsChA = null;
-		ArrayList<InterestPoint> pointsChB = null;
+		ArrayList< PointMatch > candidates = null;
 
 		if ( tryLoadingCandidates )
 		{
@@ -283,17 +287,17 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				final String datasetNameB = id + "/" + channelB + "/Stack-PCM-candidates";
 				final DatasetAttributes datasetAttributesB = n5.getDatasetAttributes(datasetNameB);
 	
-				pointsChA = n5.readSerializedBlock(datasetNameA, datasetAttributesA, new long[] {0});
-				pointsChB = n5.readSerializedBlock(datasetNameB, datasetAttributesB, new long[] {0});
+				//pointsChA = n5.readSerializedBlock(datasetNameA, datasetAttributesA, new long[] {0});
+				///pointsChB = n5.readSerializedBlock(datasetNameB, datasetAttributesB, new long[] {0});
 			}
 			catch ( Exception e ) // java.nio.file.NoSuchFileException
 			{
-				pointsChA = pointsChB = null;
+				candidates = null;
 				e.printStackTrace();
 			}
 		}
 
-		if ( pointsChA == null || pointsChB == null )
+		if ( candidates == null )
 		{
 			if ( tryLoadingCandidates )
 				System.out.println( "could not load PCM candidates ... " );
@@ -355,8 +359,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 							"transforms",
 							new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
 
-					//if ( block.from != 200 )
-					//	return new Tuple2<>(block, new ArrayList<>());
+					if ( block.from != 200 )
+						return new Tuple2<>(block, new ArrayList<>());
 	
 					final RandomAccessible<AffineTransform2D> alignmentTransformsA = Views.extendBorder(new ListImg<>(transformsA, transformsA.size()));
 					final RandomAccessible<AffineTransform2D> alignmentTransformsB = Views.extendBorder(new ListImg<>(transformsB, transformsB.size()));
@@ -424,7 +428,6 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					final RandomAccessibleInterval< UnsignedShortType > imgA = Views.interval( Views.raster( alignedStackBoundsA.getA() ), displayInterval );
 					final RandomAccessibleInterval< UnsignedShortType > imgB = Views.interval( Views.raster( alignedStackBoundsB.getA() ), displayInterval );
 
-					/*
 					final ImagePlus impA = ImageJFunctions.wrap(imgA, block.channelA, Executors.newFixedThreadPool( 8 ) ).duplicate();
 					impA.setDimensions( 1, impA.getStackSize(), 1 );
 					impA.resetDisplayRange();
@@ -434,7 +437,6 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					impB.setDimensions( 1, impB.getStackSize(), 1 );
 					impB.resetDisplayRange();
 					impB.show();
-					*/
 
 					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): performing cross correlations." );
 
@@ -446,7 +448,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					final long[] downsampling = new long[] { 4, 4, 1 };
 
 					final ExecutorService service = Executors.newFixedThreadPool( 1 );
-					final ArrayList< PointMatch > candidates = new ArrayList<>();
+					final ArrayList< PointMatch > candidatesLocal = new ArrayList<>();
 
 					for ( double blockY = 0; blockY <= blocksY - 1; blockY += 0.5)
 						for ( double blockX = 0; blockX <= blocksX - 1; blockX += 0.5 )
@@ -477,15 +479,15 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 										p1.getL()[ 1 ] + result.getOffset( 1 ) * downsampling[ 1 ],
 										p1.getL()[ 2 ] + result.getOffset( 2 ) * downsampling[ 2 ] } );
 
-								candidates.add( new PointMatch( p1, p2 ) );
-								}
+								candidatesLocal.add( new PointMatch( p1, p2 ) );
+							}
 						}
 
 					service.shutdown();
 
-					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): candidates: " + candidates.size() );
+					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): candidates: " + candidatesLocal.size() );
 
-					/*
+
 					final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 //							new Transform.InterpolatedAffineModel2DSupplier(
 //							(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
@@ -497,7 +499,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 							0,
 							5 );
 
-					final ArrayList<PointMatch> matches = filter.filter(candidates);
+					final ArrayList<PointMatch> matches = filter.filter(candidatesLocal);
 
 					TranslationModel3D model = new TranslationModel3D();
 					model.fit(matches);
@@ -524,12 +526,15 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					final CompositeImage overlay = OverlayFusion.createOverlay( new FloatType(), images, models, 3, 1, new NLinearInterpolatorFactory<FloatType>() );
 					overlay.show();
 
-					// TODO: return candidates, run RANSAC over all blocks
-
+					final RealRandomAccessible< UnsignedShortType > tImgA = RealViews.affineReal( Views.interpolate( Views.extendZero( imgA ), new NLinearInterpolatorFactory<UnsignedShortType>() ), TransformationTools.getAffineTransform( model ).inverse() );
+					BdvOptions options =new BdvOptions();
+					BdvStackSource<?> bdv = BdvFunctions.show( tImgA, imgA, "imgA_t" );
+					//bdv = BdvFunctions.show(imgB, "imgB", options.addTo( bdv ) );
+					BdvFunctions.show(Views.extendZero( imgB ), imgB, "imgB", options.addTo( bdv ) );
 					SimpleMultiThreading.threadHaltUnClean();
-					*/
 	
-					return new Tuple2<>(block, candidates );
+					//return new Tuple2<>( block, candidatesLocal );
+					return new Tuple2<>( block, matches );
 				});
 	
 			/* cache the booleans, so features aren't regenerated every time */
@@ -537,48 +542,19 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 	
 			/* collect the results */
 			final List<Tuple2<Block, ArrayList< PointMatch >>> results = rddFeatures.collect();
-	
-			pointsChA = new ArrayList<>();
-			pointsChB = new ArrayList<>();
-	
-			final ArrayList< PointMatch > candidates = new ArrayList<>();
+
+			candidates = new ArrayList<>();
 
 			for ( final Tuple2<Block, ArrayList< PointMatch >> tuple : results )
 			{
 				candidates.addAll(tuple._2() );
 
 				if ( tuple._2().size() == 0 )
-					System.out.println( "Warning: block " + tuple._1.from + " has 0 candidates");
+					System.out.println( "Warning: block " + tuple._1.from + " has 0 matches");
 			}
 
-			System.out.println( "candidates: " + candidates.size()  );
-
-			final MultiConsensusFilter filter = new MultiConsensusFilter<>(
-//					new Transform.InterpolatedAffineModel2DSupplier(
-					(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-//					(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
-//					(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
-//					(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-					10000,
-					5,
-					0,
-					50 );
-
-			final ArrayList<PointMatch> matches = filter.filter(candidates);
-
-			TranslationModel3D model = new TranslationModel3D();
-			try {
-				model.fit(matches);
-			} catch (NotEnoughDataPointsException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-
-			System.out.println( "matches: " + matches.size() + " model: " + model );
-
-			SimpleMultiThreading.threadHaltUnClean();
-
-			System.out.println( "saving points ... " );
+			/*
+			System.out.println( "saving candidates ... " );
 
 			final N5FSWriter n5Writer = new N5FSWriter(n5Path);
 
@@ -628,34 +604,19 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 						datasetName,
 						datasetAttributes,
 						new long[] {0});
-			}
+			}*/
 		}
 
-		System.out.println( new Date(System.currentTimeMillis() ) + ": channelA: " + pointsChA.size() + " points" );
-		System.out.println( new Date(System.currentTimeMillis() ) + ": channelB: " + pointsChB.size() + " points" );
+		//System.out.println( new Date(System.currentTimeMillis() ) + ": channelA: " + pointsChA.size() + " points" );
+		//System.out.println( new Date(System.currentTimeMillis() ) + ": channelB: " + pointsChB.size() + " points" );
 
 		//
 		// alignment
 		//
 
-		final int numNeighbors = 3;
-		final int redundancy = 0;
-		final double ratioOfDistance = 2.0;
-		final double differenceThreshold = Double.MAX_VALUE;
 		final int numIterations = 10000;
 		final double maxEpsilon = 5;
-		final int minNumInliers = 25;
-
-		// not enough points to build a descriptor
-		if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
-			return;
-
-		final List< PointMatch > candidates = 
-				new FRGLDMMatcher<>().extractCorrespondenceCandidates(
-						pointsChA,
-						pointsChB,
-						redundancy,
-						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+		final int minNumInliers = 10;
 
 		double minZ = localLastSliceIndex;
 		double maxZ = firstSliceIndex;
@@ -672,9 +633,9 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 //				new Transform.InterpolatedAffineModel2DSupplier(
-				(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+//				(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
 //				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
-//				(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+				(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
 //				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
 				numIterations,
 				maxEpsilon,
@@ -694,16 +655,29 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 		System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
 
-		try {
+		try
+		{
+			/*
 			final AffineModel3D affine = new AffineModel3D();
 			affine.fit( matches );
 			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
-
+			*/
 			final TranslationModel3D translation = new TranslationModel3D();
 			translation.fit( matches );
 			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
 
-		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+			BdvStackSource<?> bdv = null;
+
+			final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( translation );//.inverse();
+			System.out.println( transformB_a );
+
+			bdv = SparkPaiwiseAlignChannelsGeo.displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
+			bdv = SparkPaiwiseAlignChannelsGeo.displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
+
+			System.out.println( "done" );
+
+
+		} catch (NotEnoughDataPointsException /*| IllDefinedDataPointsException*/ e) {
 			e.printStackTrace();
 		}
 
