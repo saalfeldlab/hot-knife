@@ -184,10 +184,10 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				"stacks",
 				new TypeToken<ArrayList<String>>() {}.getType());
 
-		// TODO: Remove - reset cam transforms to see if that is the reason
-		for ( final  HashMap<String, AffineTransform2D> c : camTransforms.values() )
-			for ( final String key : c.keySet() )
-				c.put( key, new AffineTransform2D() );
+		// reset cam transforms to see if that is the reason
+		//for ( final  HashMap<String, AffineTransform2D> c : camTransforms.values() )
+		//	for ( final String key : c.keySet() )
+		//		c.put( key, new AffineTransform2D() );
 		
 		if (!ids.contains(id))
 		{
@@ -343,7 +343,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 									slicesA,
 									new UnsignedShortType(),
 									Interpolation.NLINEAR,
-									camtransformA,
+									camtransformA.inverse(), // pass the forward transform
 									alignmentTransformsA,
 									block.from,
 									block.to,
@@ -362,7 +362,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 									slicesB,
 									new UnsignedShortType(),
 									Interpolation.NLINEAR,
-									camtransformB,
+									camtransformB.inverse(), // pass the forward transform
 									alignmentTransformsB,
 									block.from,
 									block.to,
