@@ -40,6 +40,7 @@ import loci.formats.in.TiffReader;
 import mpicbg.models.AffineModel2D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.NotEnoughDataPointsException;
+import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.RigidModel2D;
 import mpicbg.models.TranslationModel2D;
@@ -502,7 +503,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		final double differenceThreshold = Double.MAX_VALUE;
 		final int numIterations = 10000;
 		final double maxEpsilon = 5;
-		final int minNumInliers = 25;
+		final int minNumInliers = 50;
 
 		// not enough points to build a descriptor
 		if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
@@ -563,12 +564,23 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		try
 		{
+			TranslationModel3D dummy = new TranslationModel3D();
 			final AffineModel3D affine = new AffineModel3D();
 			affine.fit( matches );
+			for ( final PointMatch pm : matches )
+			{
+				pm.getP1().apply( affine );
+				pm.getP2().apply( dummy );
+			}
 			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
 
 			final TranslationModel3D translation = new TranslationModel3D();
 			translation.fit( matches );
+			for ( final PointMatch pm : matches )
+			{
+				pm.getP1().apply( translation );
+				pm.getP2().apply( dummy );
+			}
 			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
 
 			BdvStackSource<?> bdv = null;
