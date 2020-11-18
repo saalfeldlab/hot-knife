@@ -456,12 +456,13 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 								final Point p1 = new Point( new double[] {
 										blockInterval.min( 0 ) + blockSizeX / 2,
 										blockInterval.min( 1 ) + blockSizeY / 2,
-										block.from + (block.from + block.to ) / 2} );
+										block.from + (block.to - block.from ) / 2} );
 								final Point p2 = new Point( new double[] {
 										p1.getL()[ 0 ] + result.getOffset( 0 ) * downsampling[ 0 ],
 										p1.getL()[ 1 ] + result.getOffset( 1 ) * downsampling[ 1 ],
 										p1.getL()[ 2 ] + result.getOffset( 2 ) * downsampling[ 2 ] } );
 
+								//System.out.println( Util.printCoordinates( p1.getL() ) + " - " + Util.printCoordinates( p2.getL() ) );
 								candidatesLocal.add( new PointMatch( p1, p2 ) );
 							}
 						}
@@ -470,9 +471,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): candidates: " + candidatesLocal.size() );
 
-					if ( candidatesLocal.size() == 0  )
-						return new Tuple2<>(block, new ArrayList<>());
-
+					return new Tuple2<>(block, candidatesLocal);
+					/*
 					final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 							(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
 							10000,
@@ -486,7 +486,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					model.fit(matches);
 
 					System.out.println( "matches: " + matches.size() + " model: " + model );
-					/*
+
 					final ArrayList<Point> sourcePoints = new ArrayList<>();
 					PointMatch.sourcePoints(matches, sourcePoints);
 					for ( final Point p : sourcePoints )
@@ -515,7 +515,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 					*/
 	
 					//return new Tuple2<>( block, candidatesLocal );
-					return new Tuple2<>( block, matches );
+					//return new Tuple2<>( block, matches );
 				});
 	
 			/* cache the booleans, so features aren't regenerated every time */
@@ -638,13 +638,13 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 		try
 		{
-			final AffineModel3D affine = new AffineModel3D();
-			affine.fit( matches );
-			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
-
 			final TranslationModel3D translation = new TranslationModel3D();
 			translation.fit( matches );
 			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
+			
+			final AffineModel3D affine = new AffineModel3D();
+			affine.fit( matches );
+			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
 
 			BdvStackSource<?> bdv = null;
 
@@ -657,7 +657,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			System.out.println( "done" );
 
 
-		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+		} catch ( Exception e ) {
 			e.printStackTrace();
 		}
 
