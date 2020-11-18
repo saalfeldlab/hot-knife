@@ -292,8 +292,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				final int from  = i * blockSize + firstSliceIndex;
 				final int to = Math.min( localLastSliceIndex, from + blockSize - 1 );
 	
-				final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, /*0.02*/0.005, minIntensity, maxIntensity );
-				final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, /*0.01*/0.005, minIntensity, maxIntensity );
+				final Block blockChannelA = new Block(from, to, channelA, camA, camTransforms.get( channelA ).get( camA ), 2.0, /*0.02*/0.007, minIntensity, maxIntensity );
+				final Block blockChannelB = new Block(from, to, channelB, camB, camTransforms.get( channelB ).get( camB ), 2.0, /*0.01*/0.007, minIntensity, maxIntensity );
 	
 				blocks.add( blockChannelA );
 				blocks.add( blockChannelB );
@@ -344,7 +344,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 									slices,
 									new UnsignedShortType(0),
 									Interpolation.NLINEAR,
-									camtransform,
+									camtransform.inverse(), // pass the forward transform
 									alignmentTransforms,//alignments.get( channelA ),
 									Math.max( firstSliceIndex, block.from  - block.gaussOverhead ),
 									Math.min( localLastSlice, block.to + block.gaussOverhead ) );
@@ -539,10 +539,10 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 //				new Transform.InterpolatedAffineModel2DSupplier(
-				(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-//				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
-//				(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
-//				(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
+//				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
+//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
 				numIterations,
 				maxEpsilon,
 				0,
@@ -671,7 +671,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		if ( sparkLocal == null || sparkLocal.trim().length() == 0 )
 		{
 			System.out.println( "Spark System property not set: " + sparkLocal );
-			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() ) + "]" );
+			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() / 3 * 2 ) + "]" );
 		}
 
 		System.out.println( "Spark System property is: " + System.getProperty( "spark.master" ) );
