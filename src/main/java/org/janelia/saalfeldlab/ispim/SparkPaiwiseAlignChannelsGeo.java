@@ -38,14 +38,15 @@ import ij.ImagePlus;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import mpicbg.models.AffineModel2D;
+import mpicbg.models.AffineModel3D;
 import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.MovingLeastSquaresTransform;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.RigidModel2D;
 import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
-import mpicbg.trakem2.transform.AffineModel3D;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
@@ -83,6 +84,7 @@ import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.NonRigidRandomAccessible;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
@@ -565,14 +567,6 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		try
 		{
 			TranslationModel3D dummy = new TranslationModel3D();
-			final AffineModel3D affine = new AffineModel3D();
-			affine.fit( matches );
-			for ( final PointMatch pm : matches )
-			{
-				pm.getP1().apply( affine );
-				pm.getP2().apply( dummy );
-			}
-			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
 
 			final TranslationModel3D translation = new TranslationModel3D();
 			translation.fit( matches );
@@ -583,12 +577,28 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			}
 			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
 
+			final AffineModel3D affine = new AffineModel3D();
+			affine.fit( matches );
+			for ( final PointMatch pm : matches )
+			{
+				pm.getP1().apply( affine );
+				pm.getP2().apply( dummy );
+			}
+			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
+
 			BdvStackSource<?> bdv = null;
 
 			final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine ).inverse();
 
 			bdv = displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
 			bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
+
+			MovingLeastSquaresTransform mls = new MovingLeastSquaresTransform();
+			mls.setModel( new AffineModel3D() );
+			mls.setMatches( matches );
+			
+			//final NonRigidRandomAccessible< UnsignedShortType > r = new NonRigidRandomAccessible<UnsignedShortType>( img, ips, invertedModelOpener, boundingBox );
+			//bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), mls, firstSliceIndex, localLastSliceIndex );
 
 			System.out.println( "done" );
 		}
@@ -602,6 +612,10 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		// cam1 (Ch405nm) vs cam3 (Ch488+561+647nm)**
 	}
 
+	protected class MLSAffineGet
+	{
+		
+	}
 	protected static BdvStackSource<?> displayOverlap(
 			final BdvStackSource<?> bdv,
 			final String channel,
