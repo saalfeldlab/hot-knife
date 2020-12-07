@@ -3,6 +3,7 @@ package org.janelia.saalfeldlab.ispim;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +40,9 @@ import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import mpicbg.models.AffineModel2D;
 import mpicbg.models.AffineModel3D;
+import mpicbg.models.CoordinateTransform;
 import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.Model;
 import mpicbg.models.MovingLeastSquaresTransform;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
@@ -179,7 +182,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			final int firstSliceIndex,
 			final int lastSliceIndex,
 			final int blockSize,
-			final boolean tryLoadingPoints ) throws FormatException, IOException, ClassNotFoundException
+			final boolean tryLoadingPoints ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Opening N5." );
 
@@ -498,18 +501,138 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		//
 		// alignment
 		//
+		ArrayList<PointMatch> matches = match( pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 
+		TranslationModel3D translation = new TranslationModel3D();
+		translation.fit( matches );
+		error(matches, translation );
+
+		AffineModel3D affine = new AffineModel3D();
+		affine.fit( matches );
+		error(matches, affine );
+
+		MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
+		mls.setModel( new AffineModel3D() );
+		mls.setMatches( matches );
+		error( matches, mls );
+
+		for ( int i = 0; i < 10; ++i )
+		{
+			System.out.println( "\nDeforming ChA points " + i );
+	
+			final ArrayList< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
+			for ( final InterestPoint p : pointsChA )
+			{
+				final double[] l = p.getL().clone();
+				mls.applyInPlace( l );
+				pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			}
+	
+			matches = match( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+	
+			translation.fit( matches );
+			error(matches, translation );
+	
+			affine.fit( matches );
+			error(matches, affine );
+	
+			mls.setModel( new AffineModel3D() );
+			mls.setMatches( matches );
+			error( matches, mls );
+		}
+		/*
+		BdvStackSource<?> bdv = null;
+
+		final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine ).inverse();
+
+		bdv = displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
+		bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
+
+
+		*/
+		System.out.println( "done" );
+
+
+
+		// cam4 (Ch488+561+647nm) vs cam4 (Ch515+594nm)
+		// cam1 (Ch405nm) vs cam3 (Ch515+594nm)
+		// cam1 (Ch405nm) vs cam3 (Ch488+561+647nm)**
+	}
+
+	public static class MovingLeastSquaresTransform3 extends MovingLeastSquaresTransform
+	{
+		private static final long serialVersionUID = 8497961788827439986L;
+		@Override
+		public void applyInPlace( final double[] location )
+		{
+			final Collection< PointMatch > weightedMatches = new ArrayList< PointMatch >();
+			for ( final PointMatch m : matches )
+			{
+				final double[] l = m.getP1().getL();
+
+//				/* specific for 2d */
+//				final double dx = l[ 0 ] - location[ 0 ];
+//				final double dy = l[ 1 ] - location[ 1 ];
+	//
+//				final double weight = m.getWeight() * weigh( 1.0 + Math.sqrt( dx * dx + dy * dy ) );
+
+				double s = 0;
+				for ( int i = 0; i < location.length; ++i )
+				{
+					final double dx = l[ i ] - location[ i ];
+					s += dx * dx;
+				}
+				if ( s <= 0 )
+				{
+					final double[] w = m.getP2().getW();
+					for ( int i = 0; i < location.length; ++i )
+						location[ i ] = w[ i ];
+					return;
+				}
+				final double weight = m.getWeight() * weigh( s );
+				if ( weight > 0.0001 )
+				{
+					final PointMatch mw = new PointMatch( m.getP1(), m.getP2(), weight );
+					weightedMatches.add( mw );
+				}
+			}
+
+			try
+			{
+				model.fit( weightedMatches );
+				model.applyInPlace( location );
+			}
+			catch ( final IllDefinedDataPointsException e ){}
+			catch ( final NotEnoughDataPointsException e ){}
+		}
+
+	}
+
+	public static ArrayList<PointMatch> match(
+			ArrayList<InterestPoint> pointsChA,
+			ArrayList<InterestPoint> pointsChB,
+			final int firstSliceIndex,
+			final int localLastSliceIndex,
+			final String channelA,
+			final String channelB,
+			final String camA,
+			final String camB,
+			final HashMap<String, HashMap<String, AffineTransform2D>> camTransforms,
+			final HashMap<String, HashMap<String, List<Slice>>> stacks,
+			final HashMap<String, RandomAccessible<AffineTransform2D>> alignments
+			) throws FormatException, IOException
+	{
 		final int numNeighbors = 3;
 		final int redundancy = 1;
 		final double ratioOfDistance = 3;
 		final double differenceThreshold = Double.MAX_VALUE;
-		final int numIterations = 10000;
+		final int numIterations = 1000;
 		final double maxEpsilon = 5;
-		final int minNumInliers = 50;
+		final int minNumInliers = 500;
 
 		// not enough points to build a descriptor
 		if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
-			return;
+			return null;
 
 		final List< PointMatch > candidates = 
 				new FRGLDMMatcher<>().extractCorrespondenceCandidates(
@@ -564,58 +687,22 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
 
-		try
-		{
-			TranslationModel3D dummy = new TranslationModel3D();
-
-			final TranslationModel3D translation = new TranslationModel3D();
-			translation.fit( matches );
-			for ( final PointMatch pm : matches )
-			{
-				pm.getP1().apply( translation );
-				pm.getP2().apply( dummy );
-			}
-			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
-
-			final AffineModel3D affine = new AffineModel3D();
-			affine.fit( matches );
-			for ( final PointMatch pm : matches )
-			{
-				pm.getP1().apply( affine );
-				pm.getP2().apply( dummy );
-			}
-			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
-
-			BdvStackSource<?> bdv = null;
-
-			final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine ).inverse();
-
-			bdv = displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
-			bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
-
-			MovingLeastSquaresTransform mls = new MovingLeastSquaresTransform();
-			mls.setModel( new AffineModel3D() );
-			mls.setMatches( matches );
-			
-			//final NonRigidRandomAccessible< UnsignedShortType > r = new NonRigidRandomAccessible<UnsignedShortType>( img, ips, invertedModelOpener, boundingBox );
-			//bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), mls, firstSliceIndex, localLastSliceIndex );
-
-			System.out.println( "done" );
-		}
-		catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
-			e.printStackTrace();
-		}
-
-
-		// cam4 (Ch488+561+647nm) vs cam4 (Ch515+594nm)
-		// cam1 (Ch405nm) vs cam3 (Ch515+594nm)
-		// cam1 (Ch405nm) vs cam3 (Ch488+561+647nm)**
+		return matches;
 	}
 
-	protected class MLSAffineGet
+	protected static void error( ArrayList<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
+		TranslationModel3D dummy = new TranslationModel3D();
+
+		for ( final PointMatch pm : matches )
+		{
+			pm.getP1().apply( model );
+			pm.getP2().apply( dummy ); // make sure the world coordinates are ok
+		}
 		
+		System.out.println( model.getClass().getSimpleName() + " (" + PointMatch.meanDistance( matches ) + ")" + model );
 	}
+
 	protected static BdvStackSource<?> displayOverlap(
 			final BdvStackSource<?> bdv,
 			final String channel,
@@ -688,7 +775,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 	@SuppressWarnings("serial")
 	@Override
-	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException, ClassNotFoundException
+	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		// System property for locally calling spark has to be set, e.g. -Dspark.master=local[4]
 		final String sparkLocal = System.getProperty( "spark.master" );
