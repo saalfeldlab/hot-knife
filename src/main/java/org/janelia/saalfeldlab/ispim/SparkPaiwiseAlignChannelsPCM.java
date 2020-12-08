@@ -440,8 +440,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 									new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY ), displayInterval.min( 2 ) },
 									new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX + blockSizeX - 1 ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY + blockSizeY - 1 ), displayInterval.max( 2 ) });
 
-							final RandomAccessibleInterval< UnsignedShortType > blockA = Downsample.downsample( Views.interval( imgA, blockInterval ), downsampling );
-							final RandomAccessibleInterval< UnsignedShortType > blockB = Downsample.downsample( Views.interval( imgB, blockInterval ), downsampling );
+							final RandomAccessibleInterval< UnsignedShortType > blockA = Downsample.downsample( Views.interval( imgA, blockInterval ), downsampling, service );
+							final RandomAccessibleInterval< UnsignedShortType > blockB = Downsample.downsample( Views.interval( imgB, blockInterval ), downsampling, service );
 
 							final PairWiseStitchingResult result = PCMHelper.computePhaseCorrelation(
 									ImgLib2.wrapArrayUnsignedShortToImgLib1( FusionTools.copyImgNoTranslation(blockA, new ArrayImgFactory<>( new UnsignedShortType()), new UnsignedShortType(), service) ),
