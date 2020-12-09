@@ -30,68 +30,31 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import bdv.util.BdvFunctions;
 import bdv.util.BdvStackSource;
-import bdv.util.ConstantRandomAccessible;
 import bdv.viewer.Interpolation;
 import ij.ImageJ;
 import ij.ImagePlus;
 import loci.formats.FormatException;
-import loci.formats.in.TiffReader;
-import mpicbg.models.AffineModel2D;
 import mpicbg.models.AffineModel3D;
 import mpicbg.models.CoordinateTransform;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.Model;
 import mpicbg.models.MovingLeastSquaresTransform;
 import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
-import mpicbg.models.RigidModel2D;
-import mpicbg.models.TranslationModel2D;
 import mpicbg.models.TranslationModel3D;
-import net.imglib2.FinalRealInterval;
-import net.imglib2.Interval;
-import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealInterval;
-import net.imglib2.RealRandomAccessible;
-import net.imglib2.converter.Converters;
-import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.list.ListImg;
-import net.imglib2.interpolation.Interpolant;
-import net.imglib2.interpolation.InterpolatorFactory;
-import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
-import net.imglib2.interpolation.stack.LinearRealRandomAccessibleStackInterpolatorFactory;
-import net.imglib2.interpolation.stack.NearestNeighborRealRandomAccessibleStackInterpolatorFactory;
-import net.imglib2.multithreading.SimpleMultiThreading;
-import net.imglib2.outofbounds.OutOfBoundsConstantValueFactory;
-import net.imglib2.outofbounds.OutOfBoundsFactory;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.realtransform.RealViews;
-import net.imglib2.realtransform.Translation3D;
-import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.NumericType;
-import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
-import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
-import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
-import net.preibisch.mvrecon.process.fusion.FusionTools;
-import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.NonRigidRandomAccessible;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
-import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
-import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointPairwise;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointParameters;
 import picocli.CommandLine;
@@ -504,7 +467,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		// alignment
 		//
 		//ArrayList<PointMatch> matches = match( pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
-		ArrayList<PointMatch> matches = matchSteps( 20, pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+		List<PointMatch> matches = matchSteps( 10, pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 
 		System.out.println( "total matches:" + matches.size() );
 
@@ -522,37 +485,28 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		error( matches, mls );
 
 		// afterwards, compare ICP on affine transformed vs ICP on non-rigid deformed
-		//ICP
-		//Sy
+		System.out.println( "\nApplying affine to ChA points " );
 
-		final IterativeClosestPointParameters ip = new IterativeClosestPointParameters( new AffineModel3D() );
-		IterativeClosestPointPairwise<InterestPoint> icp = new IterativeClosestPointPairwise<InterestPoint>(ip);
-
-
-		for ( int i = 0; i < 10; ++i )
+		List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
+		for ( final InterestPoint p : pointsChA )
 		{
-			System.out.println( "\nDeforming ChA points " + i );
-	
-			final ArrayList< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
-			for ( final InterestPoint p : pointsChA )
-			{
-				final double[] l = p.getL().clone();
-				mls.applyInPlace( l );
-				pointsChANew.add( new InterestPoint( p.getId(), l ) );
-			}
-	
-			matches = match( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
-	
-			translation.fit( matches );
-			error(matches, translation );
-	
-			affine.fit( matches );
-			error(matches, affine );
-	
-			mls.setModel( new AffineModel3D() );
-			mls.setMatches( matches );
-			error( matches, mls );
+			final double[] l = p.getL().clone();
+			affine.applyInPlace( l );
+			pointsChANew.add( new InterestPoint( p.getId(), l ) );
 		}
+		matches = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+
+		System.out.println( "\nDeforming ChA points " );
+
+		pointsChANew = new ArrayList<InterestPoint>();
+		for ( final InterestPoint p : pointsChA )
+		{
+			final double[] l = p.getL().clone();
+			mls.applyInPlace( l );
+			pointsChANew.add( new InterestPoint( p.getId(), l ) );
+		}
+		matches = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+
 		/*
 		BdvStackSource<?> bdv = null;
 
@@ -621,9 +575,9 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 	}
 
-	public static ArrayList<PointMatch> match(
-			ArrayList<InterestPoint> pointsChA,
-			ArrayList<InterestPoint> pointsChB,
+	public static List<PointMatch> matchICP(
+			List<InterestPoint> pointsChAIn,
+			List<InterestPoint> pointsChBIn,
 			final int firstSliceIndex,
 			final int localLastSliceIndex,
 			final String channelA,
@@ -635,62 +589,32 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			final HashMap<String, RandomAccessible<AffineTransform2D>> alignments
 			) throws FormatException, IOException
 	{
-		final int numNeighbors = 3;
-		final int redundancy = 1;
-		final double ratioOfDistance = 3;
-		final double differenceThreshold = Double.MAX_VALUE;
-		final int numIterations = 1000;
-		final double maxEpsilon = 5;
-		final int minNumInliers = 500;
+		final Model< ? > model = new AffineModel3D();
+		final double maxDistance = 1.0;
+		final int maxIterations = 100;
+
+		ArrayList<InterestPoint> pointsChA = new ArrayList<InterestPoint>();
+		ArrayList<InterestPoint> pointsChB = new ArrayList<InterestPoint>();
+
+		for ( final InterestPoint ip : pointsChAIn )
+			pointsChA.add( ip.duplicate() );
+
+		for ( final InterestPoint ip : pointsChBIn )
+			pointsChB.add( ip.duplicate() );
+
+		IterativeClosestPointPairwise<InterestPoint> icp =
+				new IterativeClosestPointPairwise<>(
+						new IterativeClosestPointParameters( model, maxDistance, maxIterations ) );
 
 		// not enough points to build a descriptor
-		if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
+		if ( pointsChA.size() < model.getMinNumMatches() || pointsChB.size() < model.getMinNumMatches() )
 			return null;
 
-		final List< PointMatch > candidates = 
-				new FRGLDMMatcher<>().extractCorrespondenceCandidates(
-						pointsChA,
-						pointsChB,
-						redundancy,
-						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
-
-		/*final List< PointMatch > candidates = 
-				new RGLDMMatcher<>().extractCorrespondenceCandidates(
-						pointsChA,
-						pointsChB,
-						3,
-						redundancy,
-						ratioOfDistance,
-						Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );*/
+		final List< PointMatch > matches = 
+				icp.match( pointsChA, pointsChB ).getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() );
 
 		double minZ = localLastSliceIndex;
 		double maxZ = firstSliceIndex;
-
-		for ( final PointMatch pm : candidates )
-		{
-			//Mon Oct 19 20:26:19 EDT 2020: channelA: 60121 points
-			//Mon Oct 19 20:26:19 EDT 2020: channelB: 86909 points
-			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-		}
-
-		System.out.println( "candidates: " + candidates.size() + " from(z) " + minZ + " to(z) " + maxZ );
-
-		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
-//				new Transform.InterpolatedAffineModel2DSupplier(
-				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
-//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
-//				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
-//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
-				numIterations,
-				maxEpsilon,
-				0,
-				minNumInliers);
-
-		final ArrayList<PointMatch> matches = filter.filter(candidates);
-
-		minZ = localLastSliceIndex;
-		maxZ = firstSliceIndex;
 
 		for ( final PointMatch pm : matches )
 		{
@@ -705,8 +629,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 	public static ArrayList<PointMatch> matchSteps(
 			final int numBlocks,
-			ArrayList<InterestPoint> pointsChAIn,
-			ArrayList<InterestPoint> pointsChBIn,
+			List<InterestPoint> pointsChAIn,
+			List<InterestPoint> pointsChBIn,
 			final int firstSliceIndex,
 			final int localLastSliceIndex,
 			final String channelA,
@@ -721,10 +645,9 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		final int numNeighbors = 3;
 		final int redundancy = 1;
 		final double ratioOfDistance = 3;
-		final double differenceThreshold = Double.MAX_VALUE;
 		final int numIterations = 1000;
-		final double maxEpsilon = 2.5;
-		final int minNumInliers = 500;
+		final double maxEpsilon = 0.5;
+		final int minNumInliers = 200;
 
 		// not enough points to build a descriptor
 		if ( pointsChAIn.size() < numNeighbors + redundancy + 1 || pointsChBIn.size() < numNeighbors + redundancy + 1 )
@@ -734,20 +657,32 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		final double stepSize = (localLastSliceIndex - firstSliceIndex ) / (double)numBlocks;
 		
-		for ( double z = firstSliceIndex; z<= localLastSliceIndex; z += stepSize )
+		for ( double z = firstSliceIndex; z<= localLastSliceIndex; z += stepSize / 2 )
 		{
-			System.out.println( "matching form " + z + " to " + (z+stepSize) );
+			System.out.println( "\nmatching form " + z + " to " + (z+stepSize) );
 
 			ArrayList<InterestPoint> pointsChA = new ArrayList<InterestPoint>();
 			ArrayList<InterestPoint> pointsChB = new ArrayList<InterestPoint>();
 
 			for ( final InterestPoint ip : pointsChAIn )
 				if ( ip.getL()[ 2 ] >= z && ip.getL()[ 2 ] <= (z+stepSize) )
-					pointsChA.add( ip );
+				{
+					// copy or reset world coordinates as they are used by default to build descriptors
+					// but they are changed by the previous RANSAC run if overlapping sets of points
+					// are being used
+					//for ( int d = 0; d < ip.getL().length; ++d )
+					//	ip.getW()[ d ] = ip.getL()[ d ];
+					pointsChA.add( ip.duplicate() );
+				}
 
 			for ( final InterestPoint ip : pointsChBIn )
 				if ( ip.getL()[ 2 ] >= z && ip.getL()[ 2 ] <= (z+stepSize) )
-					pointsChB.add( ip );
+				{
+					//for ( int d = 0; d < ip.getL().length; ++d )
+					//	ip.getW()[ d ] = ip.getL()[ d ];
+
+					pointsChB.add( ip.duplicate() );
+				}
 
 			if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
 			{
@@ -776,8 +711,6 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 	
 			for ( final PointMatch pm : candidates )
 			{
-				//Mon Oct 19 20:26:19 EDT 2020: channelA: 60121 points
-				//Mon Oct 19 20:26:19 EDT 2020: channelB: 86909 points
 				minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
 				maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
 			}
@@ -805,16 +738,60 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
 				maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
 			}
-	
-			System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
-			
-			allMatches.addAll( matches );
+
+			if ( matches.size() > 0 )
+				System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
+			else
+				System.out.println( "WARNING: NO matches!" );
+
+
+			// build two lookup trees for existing Interestpoints that were matched
+			HashMap< InterestPoint, PointMatch > p1 = new HashMap<>();
+			HashMap< InterestPoint, PointMatch > p2 = new HashMap<>();
+
+			for ( final PointMatch pm : allMatches )
+			{
+				p1.put( (InterestPoint)pm.getP1(), pm );
+				p2.put( (InterestPoint)pm.getP2(), pm );
+			}
+		
+			int sameMatch = 0;
+			int differentMatch = 0;
+			int added = 0;
+
+			for ( final PointMatch pm : matches )
+			{
+				InterestPoint ip1 = (InterestPoint)pm.getP1();
+				InterestPoint ip2 = (InterestPoint)pm.getP2();
+				
+				if ( p1.containsKey( ip1 ) )
+				{
+					if ( ((InterestPoint)p1.get( ip1 ).getP2()).getId() == ip2.getId() )
+						++sameMatch;
+					else
+						++differentMatch;
+				}
+				else if ( p2.containsKey( ip2 ) )
+				{
+					if ( ((InterestPoint)p2.get( ip2 ).getP1()).getId() == ip1.getId() )
+						++sameMatch;
+					else
+						++differentMatch;
+				}
+				else
+				{
+					allMatches.add( pm );
+					++added;
+				}
+			}
+
+			System.out.println( "added: " + added  + " same: " + sameMatch + " different: " + differentMatch );
 		}
 
 		return allMatches;
 	}
 
-	protected static void error( ArrayList<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	protected static void error( List<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		TranslationModel3D dummy = new TranslationModel3D();
 
