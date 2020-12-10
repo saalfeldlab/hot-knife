@@ -8,8 +8,10 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -22,6 +24,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.MultiConsensusFilter;
+import org.janelia.saalfeldlab.ispim.imglib2.NonRigidRealRandomAccessible;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -32,6 +35,8 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import bdv.util.BdvFunctions;
+import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.viewer.Interpolation;
 import ij.ImageJ;
@@ -45,18 +50,39 @@ import mpicbg.models.MovingLeastSquaresTransform;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel3D;
+import mpicbg.spim.data.sequence.ViewId;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.img.list.ListImg;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.RealTransformRandomAccessible;
+import net.imglib2.realtransform.ThinplateSplineTransform;
+import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
+import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
+import net.preibisch.legacy.io.IOFunctions;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.CorrespondingIP;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.InterpolatingNonRigidRandomAccessible;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.NonRigidTools;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.NonrigidIP;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.SimpleReferenceIP;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.ModelGrid;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.NumericAffineModel3D;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.constellation.grouping.Group;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointPairwise;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointParameters;
@@ -522,6 +548,52 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		*/
 		System.out.println( "done" );
 
+		// Ch515+594nm (B) stays fixed, Ch488+561+647nm (A) is transformed
+		// because we align Ch405nm to Ch515+594nm
+		final double alpha = 1.0;
+		final boolean virtual = true;
+		final long[] controlPointDistance = new long[] { 10, 10, 10 };
+		final Interval boundingBox = new FinalInterval( 3 );
+
+		// interest points in the pairs of images
+		final HashSet< SimpleReferenceIP > corrIPs = new HashSet<>();
+
+		for ( final PointMatch pm : matches )
+			corrIPs.add(
+					new SimpleReferenceIP(
+							pm.getP1().getL().clone(),
+							pm.getP1().getL().clone(),
+							pm.getP2().getL().clone() ) );
+
+		// transform unique interest points ???
+
+		// compute Grid
+		//final HashMap< ViewId, ModelGrid > nonrigidGrids = NonRigidTools.computeGrids( viewsToFuse, uniquePoints, controlPointDistance, alpha, bbDS, virtualGrid, service );
+
+		IOFunctions.println(
+				new Date( System.currentTimeMillis() ) + ": Interpolating non-rigid model (a=" + alpha + ") using " + corrIPs.size() + " points and stepsize " +
+				Util.printCoordinates( controlPointDistance ) + " Interval: " + Util.printInterval( boundingBox ) );
+
+		RealRandomAccessible< NumericAffineModel3D > /*ModelGrid*/ grid = new ModelGrid( controlPointDistance, boundingBox, corrIPs, alpha, virtual );
+
+		// get the input image (same coordinate space as correspondences)
+		Pair<RealRandomAccessible<UnsignedShortType>, Interval> prepareCamSource =
+				ViewISPIMStack.prepareCamSource(
+						stacks.get( channelA ).get( camA ),
+						new UnsignedShortType(0),
+						Interpolation.NEARESTNEIGHBOR,
+						camTransforms.get( channelA ).get( camA ).inverse(), // pass the forward transform
+						new AffineTransform3D(),
+						alignments.get( channelA ),
+						firstSliceIndex,
+						localLastSliceIndex);
+
+		RealRandomAccessible< UnsignedShortType > transformedA = new NonRigidRealRandomAccessible< UnsignedShortType >(grid,  prepareCamSource.getA() );
+
+		BdvStackSource<?> bdv = null;
+
+		bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
+		BdvFunctions.show(transformedA, prepareCamSource.getB(), "non-rigid B", new BdvOptions().addTo( bdv ) );
 
 
 		// cam4 (Ch488+561+647nm) vs cam4 (Ch515+594nm)
