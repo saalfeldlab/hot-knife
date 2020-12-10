@@ -68,6 +68,7 @@ import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
@@ -312,7 +313,47 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 		return new ValuePair<>(transformedStack, boundsTransform.estimateBounds(sourceBounds));
 	}
 
+	protected static <T extends NumericType<T> & NativeType<T>> Pair< RealRandomAccessible<T>, Interval > prepareCamSource(
+			final List<Slice> slices,
+			final T background,
+			final Interpolation interpolationMethod,
+			final AffineTransform2D camTransform,
+			final AffineGet transform,
+			final RandomAccessible<AffineTransform2D> alignment,
+			final int firstSliceIndex,
+			final int lastSliceIndex) throws FormatException, IOException {
 
+			final ValuePair<RealRandomAccessible<T>, RealInterval> alignedStackBounds =
+					openAlignedStack(
+							slices,
+							background,
+							interpolationMethod,
+							camTransform,
+							alignment,
+							firstSliceIndex,
+							lastSliceIndex);
+	
+			final RealInterval realBounds2D = alignedStackBounds.getB();
+			final RealInterval realBounds3D = Intervals.createMinMax(
+					(long)Math.floor(realBounds2D.realMin(0)),
+					(long)Math.floor(realBounds2D.realMin(1)),
+					firstSliceIndex,
+					(long)Math.ceil(realBounds2D.realMax(0)),
+					(long)Math.ceil(realBounds2D.realMax(1)),
+					lastSliceIndex);
+	
+			final ValuePair<RealRandomAccessible<T>, RealInterval> transformedStackBounds =
+					transform(
+							alignedStackBounds.getA(),
+							realBounds3D,
+							transform);
+	
+	
+			final RealInterval realBounds = transformedStackBounds.getB();
+			final Interval bounds = Intervals.smallestContainingInterval(realBounds);
+
+			return new ValuePair<RealRandomAccessible<T>, Interval>( transformedStackBounds.getA(), bounds );
+		}
 
 	protected static <T extends NumericType<T> & NativeType<T>> BdvStackSource<T> showCamSource(
 			final BdvStackSource<?> bdv,
@@ -329,6 +370,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 		final BdvOptions options = bdv == null ? Bdv.options().screenScales(new double[] {1}) : Bdv.options().addTo(bdv);
 		// options.numRenderingThreads(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
 
+		/*
 		final ValuePair<RealRandomAccessible<T>, RealInterval> alignedStackBounds =
 				openAlignedStack(
 						slices,
@@ -357,10 +399,13 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 
 		final RealInterval realBounds = transformedStackBounds.getB();
 		final Interval bounds = Intervals.smallestContainingInterval(realBounds);
+		*/
+
+		final Pair< RealRandomAccessible<T>, Interval > data = prepareCamSource(slices, background, interpolationMethod, camTransform, transform, alignment, firstSliceIndex, lastSliceIndex);
 
 		final BdvStackSource<T> stackSource = BdvFunctions.show(
-				transformedStackBounds.getA(),
-				bounds,
+				data.getA(),
+				data.getB(),
 				title,
 				options);
 		stackSource.setDisplayRange(0, 2048);
