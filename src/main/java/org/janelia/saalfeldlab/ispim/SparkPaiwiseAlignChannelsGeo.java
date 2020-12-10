@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +53,7 @@ import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
@@ -532,16 +535,12 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		@Override
 		public void applyInPlace( final double[] location )
 		{
-			final Collection< PointMatch > weightedMatches = new ArrayList< PointMatch >();
+			final Collection< PointMatch > weightedMatches = new ArrayList<>();
+			final List< Pair< Double, PointMatch > > farAwayWeightedMatches = new ArrayList<>();
+
 			for ( final PointMatch m : matches )
 			{
 				final double[] l = m.getP1().getL();
-
-//				/* specific for 2d */
-//				final double dx = l[ 0 ] - location[ 0 ];
-//				final double dy = l[ 1 ] - location[ 1 ];
-	//
-//				final double weight = m.getWeight() * weigh( 1.0 + Math.sqrt( dx * dx + dy * dy ) );
 
 				double s = 0;
 				for ( int i = 0; i < location.length; ++i )
@@ -557,10 +556,22 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 					return;
 				}
 				final double weight = m.getWeight() * weigh( s );
+				final PointMatch mw = new PointMatch( m.getP1(), m.getP2(), weight );
 				if ( weight > 0.0001 )
-				{
-					final PointMatch mw = new PointMatch( m.getP1(), m.getP2(), weight );
 					weightedMatches.add( mw );
+				else
+					farAwayWeightedMatches.add( new ValuePair<Double, PointMatch>( weight, mw ) );
+			}
+
+			if ( weightedMatches.size() < model.getMinNumMatches() )
+			{
+				// sort by weight
+				Collections.sort( farAwayWeightedMatches, (o1, o2 ) -> o1.getA().compareTo( o2.getA() ) );
+
+				while ( weightedMatches.size() < model.getMinNumMatches() && farAwayWeightedMatches.size() > 0 )
+				{
+					weightedMatches.add( farAwayWeightedMatches.get( 0 ).getB() );
+					farAwayWeightedMatches.remove( 0 );
 				}
 			}
 
