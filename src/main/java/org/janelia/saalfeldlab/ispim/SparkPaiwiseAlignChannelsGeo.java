@@ -606,32 +606,12 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		// Ch515+594nm (B) stays fixed, Ch488+561+647nm (A) is transformed
 		// because we align Ch405nm to Ch515+594nm
 		final double alpha = 1.0;
-		final boolean virtual = true;
-		final long[] controlPointDistance = new long[] { 10, 10, 10 };
-		final Interval boundingBox = new FinalInterval( 3 ); // TODO: WRONG
-
-		// interest points in the pairs of images
-		final HashSet< SimpleReferenceIP > corrIPs = new HashSet<>();
-
-		for ( final PointMatch pm : matches )
-			corrIPs.add(
-					new SimpleReferenceIP(
-							pm.getP1().getL().clone(),
-							pm.getP1().getL().clone(),
-							pm.getP2().getL().clone() ) );
-
-		// transform unique interest points ???
-
-		// compute Grid
-		//final HashMap< ViewId, ModelGrid > nonrigidGrids = NonRigidTools.computeGrids( viewsToFuse, uniquePoints, controlPointDistance, alpha, bbDS, virtualGrid, service );
-
-		IOFunctions.println(
-				new Date( System.currentTimeMillis() ) + ": Interpolating non-rigid model (a=" + alpha + ") using " + corrIPs.size() + " points and stepsize " +
-				Util.printCoordinates( controlPointDistance ) + " Interval: " + Util.printInterval( boundingBox ) );
-
-		RealRandomAccessible< NumericAffineModel3D > /*ModelGrid*/ grid = new ModelGrid( controlPointDistance, boundingBox, corrIPs, alpha, virtual );
+		final boolean virtual = false;
+		final long[] controlPointDistance = new long[] { 1000, 1000, 100 };
 
 		// get the input image (same coordinate space as correspondences)
+		System.out.println( new Date( System.currentTimeMillis() ) + ": Preparing channelA: " + channelA );
+
 		Pair<RealRandomAccessible<UnsignedShortType>, Interval> prepareCamSource =
 				ViewISPIMStack.prepareCamSource(
 						stacks.get( channelA ).get( camA ),
@@ -643,14 +623,59 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 						firstSliceIndex,
 						localLastSliceIndex);
 
+		final Interval boundingBox = prepareCamSource.getB();
+
+		// interest points in the pairs of images
+		System.out.println( new Date( System.currentTimeMillis() ) + ": Setting up corresponding interest points for channelA: " + channelA );
+
+		final HashSet< SimpleReferenceIP > corrIPs = new HashSet<>();
+
+		double sumDist = 0;
+		double minDist = Double.MAX_VALUE;
+		double maxDist = -Double.MAX_VALUE;
+
+		for ( final PointMatch pm : matches )
+		{
+			double dist = Math.sqrt( (pm.getP1().getL()[0] - pm.getP2().getL()[0])*(pm.getP1().getL()[0] - pm.getP2().getL()[0]) + (pm.getP1().getL()[1] - pm.getP2().getL()[1])*(pm.getP1().getL()[1] - pm.getP2().getL()[1]) + (pm.getP1().getL()[2] - pm.getP2().getL()[2])*(pm.getP1().getL()[2] - pm.getP2().getL()[2]) );
+			corrIPs.add(
+					new SimpleReferenceIP(
+							pm.getP1().getL().clone(),
+							pm.getP1().getL().clone(),
+							pm.getP2().getL().clone() ) );
+			
+			sumDist += dist;
+			maxDist = Math.max( maxDist, dist );
+			minDist = Math.min( minDist, dist );
+		}
+
+		// TODO: this is after applying the first round of non-rigid!!
+		System.out.println( "avg=" + (sumDist/matches.size()) + ", max=" + maxDist + ", minDist=" + minDist );
+
+		// compute Grid
+		System.out.println(
+				new Date( System.currentTimeMillis() ) + ": Interpolating non-rigid model (a=" + alpha + ") using " + corrIPs.size() + " points and stepsize " +
+				Util.printCoordinates( controlPointDistance ) + " Interval: " + Util.printInterval( boundingBox ) );
+
+		RealRandomAccessible< NumericAffineModel3D > /*ModelGrid*/ grid = new ModelGrid( controlPointDistance, boundingBox, corrIPs, alpha, virtual );
+
 		RealRandomAccessible< UnsignedShortType > transformedA = new NonRigidRealRandomAccessible< UnsignedShortType >(grid,  prepareCamSource.getA() );
 
+		System.out.println( new Date( System.currentTimeMillis() ) + ": displaying" );
+		
 		BdvStackSource<?> bdv = null;
 
 		bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
-		BdvFunctions.show(transformedA, prepareCamSource.getB(), "non-rigid B", new BdvOptions().addTo( bdv ) );
+		bdv.setDisplayRange(0, 512);
+		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 
-		System.out.println( "done" );
+		//AffineModel3D affine = new AffineModel3D();
+		//affine.fit( matches );
+		//bdv = BdvFunctions.show( transformedA, prepareCamSource.getB(), "affine A", new BdvOptions().addTo( bdv ) );
+		bdv = BdvFunctions.show( transformedA, prepareCamSource.getB(), "non-rigid A", new BdvOptions().addTo( bdv ) );
+		bdv.setDisplayRange(0, 512);
+		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
+
+		System.out.println( new Date( System.currentTimeMillis() ) + ": done" );
 
 
 		// cam4 (Ch488+561+647nm) vs cam4 (Ch515+594nm)
