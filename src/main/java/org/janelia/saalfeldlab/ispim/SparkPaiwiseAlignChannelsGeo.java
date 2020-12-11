@@ -495,46 +495,104 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		//
 		// alignment
 		//
-		//ArrayList<PointMatch> matches = match( pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
-		List<PointMatch> matches = matchSteps( 10, pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+		ArrayList<PointMatch> matches = null;
 
-		System.out.println( "total matches:" + matches.size() );
-
-		TranslationModel3D translation = new TranslationModel3D();
-		translation.fit( matches );
-		error(matches, translation );
-
-		AffineModel3D affine = new AffineModel3D();
-		affine.fit( matches );
-		error(matches, affine );
-
-		MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
-		mls.setModel( new AffineModel3D() );
-		mls.setMatches( matches );
-		error( matches, mls );
-
-		// afterwards, compare ICP on affine transformed vs ICP on non-rigid deformed
-		System.out.println( "\nApplying affine to ChA points " );
-
-		List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
-		for ( final InterestPoint p : pointsChA )
+		// try to load the matches as well
+		if ( tryLoadingPoints )
 		{
-			final double[] l = p.getL().clone();
-			affine.applyInPlace( l );
-			pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			try
+			{
+				final String datasetName = id + "/matches_" + channelA + "_" + channelB;
+				final DatasetAttributes datasetAttributes = n5.getDatasetAttributes(datasetName);
+
+				matches = n5.readSerializedBlock(datasetName, datasetAttributes, new long[] {0});
+			}
+			catch ( Exception e ) // java.nio.file.NoSuchFileException
+			{
+				matches = null;
+				e.printStackTrace();
+			}
+
+			System.out.println( new Date(System.currentTimeMillis() ) + ": Loaded " + matches.size() + " matches" );
 		}
-		matches = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 
-		System.out.println( "\nDeforming ChA points " );
-
-		pointsChANew = new ArrayList<InterestPoint>();
-		for ( final InterestPoint p : pointsChA )
+		if ( matches == null )
 		{
-			final double[] l = p.getL().clone();
-			mls.applyInPlace( l );
-			pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			if ( tryLoadingPoints )
+				System.out.println( "could not load matches ... " );
+
+			System.out.println( "performing block-wise (in z) matching ... " );
+
+			//ArrayList<PointMatch> matches = match( pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+			matches = matchSteps( 10, pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+	
+			System.out.println( "total matches:" + matches.size() );
+	
+			TranslationModel3D translation = new TranslationModel3D();
+			translation.fit( matches );
+			error(matches, translation );
+	
+			AffineModel3D affine = new AffineModel3D();
+			affine.fit( matches );
+			error(matches, affine );
+	
+			MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
+			mls.setModel( new AffineModel3D() );
+			mls.setMatches( matches );
+			error( matches, mls );
+
+			/*
+			// afterwards, compare ICP on affine transformed vs ICP on non-rigid deformed
+			System.out.println( "\nApplying affine to ChA points " );
+
+			List< InterestPoint > pointsChANew = new ArrayList<>();
+
+			for ( final InterestPoint p : pointsChA )
+			{
+				final double[] l = p.getL().clone();
+				affine.applyInPlace( l );
+				pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			}
+			matches = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+			*/
+
+			System.out.println( "\nDeforming ChA points " );
+
+			List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
+			for ( final InterestPoint p : pointsChA )
+			{
+				final double[] l = p.getL().clone();
+				mls.applyInPlace( l );
+				pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			}
+			matches = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+
+			// write matches
+			if ( matches.size() > 0 )
+			{
+				final N5FSWriter n5Writer = new N5FSWriter(n5Path);
+
+				final String datasetName = id + "/matches_" + channelA + "_" + channelB;
+
+				if (n5Writer.exists(datasetName))
+					n5Writer.remove(datasetName);
+				
+				n5Writer.createDataset(
+						datasetName,
+						new long[] {1},
+						new int[] {1},
+						DataType.OBJECT,
+						new GzipCompression());
+
+				final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
+
+				n5Writer.writeSerializedBlock(
+						matches,
+						datasetName,
+						datasetAttributes,
+						new long[] {0});
+			}
 		}
-		matches = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 
 		/*
 		BdvStackSource<?> bdv = null;
@@ -543,17 +601,14 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		bdv = displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
 		bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
-
-
 		*/
-		System.out.println( "done" );
 
 		// Ch515+594nm (B) stays fixed, Ch488+561+647nm (A) is transformed
 		// because we align Ch405nm to Ch515+594nm
 		final double alpha = 1.0;
 		final boolean virtual = true;
 		final long[] controlPointDistance = new long[] { 10, 10, 10 };
-		final Interval boundingBox = new FinalInterval( 3 );
+		final Interval boundingBox = new FinalInterval( 3 ); // TODO: WRONG
 
 		// interest points in the pairs of images
 		final HashSet< SimpleReferenceIP > corrIPs = new HashSet<>();
@@ -594,6 +649,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
 		BdvFunctions.show(transformedA, prepareCamSource.getB(), "non-rigid B", new BdvOptions().addTo( bdv ) );
+
+		System.out.println( "done" );
 
 
 		// cam4 (Ch488+561+647nm) vs cam4 (Ch515+594nm)
@@ -658,7 +715,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 	}
 
-	public static List<PointMatch> matchICP(
+	public static ArrayList<PointMatch> matchICP(
 			List<InterestPoint> pointsChAIn,
 			List<InterestPoint> pointsChBIn,
 			final int firstSliceIndex,
@@ -693,8 +750,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		if ( pointsChA.size() < model.getMinNumMatches() || pointsChB.size() < model.getMinNumMatches() )
 			return null;
 
-		final List< PointMatch > matches = 
-				icp.match( pointsChA, pointsChB ).getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() );
+		final ArrayList< PointMatch > matches = new ArrayList<>(
+				icp.match( pointsChA, pointsChB ).getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() ) );
 
 		double minZ = localLastSliceIndex;
 		double maxZ = firstSliceIndex;
