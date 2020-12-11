@@ -523,23 +523,22 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 			System.out.println( "performing block-wise (in z) matching ... " );
 
-			//ArrayList<PointMatch> matches = match( pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
-			matches = matchSteps( 10, pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+			ArrayList<PointMatch> matchesTmp = matchSteps( 10, pointsChA, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 	
-			System.out.println( "total matches:" + matches.size() );
+			System.out.println( "total matches:" + matchesTmp.size() );
 	
 			TranslationModel3D translation = new TranslationModel3D();
-			translation.fit( matches );
-			error(matches, translation );
+			translation.fit( matchesTmp );
+			error(matchesTmp, translation );
 	
 			AffineModel3D affine = new AffineModel3D();
-			affine.fit( matches );
-			error(matches, affine );
+			affine.fit( matchesTmp );
+			error(matchesTmp, affine );
 	
 			MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
 			mls.setModel( new AffineModel3D() );
-			mls.setMatches( matches );
-			error( matches, mls );
+			mls.setMatches( matchesTmp );
+			error( matchesTmp, mls );
 
 			/*
 			// afterwards, compare ICP on affine transformed vs ICP on non-rigid deformed
@@ -565,8 +564,10 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				mls.applyInPlace( l );
 				pointsChANew.add( new InterestPoint( p.getId(), l ) );
 			}
-			matches = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
+			matchesTmp = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 
+			// TODO: fix matches back to use non-deformed points!
+			
 			// write matches
 			if ( matches.size() > 0 )
 			{
