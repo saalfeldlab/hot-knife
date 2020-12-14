@@ -575,37 +575,24 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			}
 			matchesTmp = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 
-			// TODO: fix matches back to use non-deformed points!
+			// fix matches back to use non-deformed points!
 			System.out.println( "\nRestoring ChA points " );
+
 			HashMap<Integer, InterestPoint > lookUpA = new HashMap<>();
 			for ( final InterestPoint p : pointsChA )
-			{
-				if ( lookUpA.containsKey( p.getId() )) 
-				{
-					System.out.println( "double id: " + p.getId() );
-					//System.exit( 0 );
-				}
 				lookUpA.put( p.getId(), p );
-			}
 
 			matches = new ArrayList<PointMatch>();
 
 			for ( final PointMatch pm : matchesTmp )
-			{
-				InterestPoint ipA = lookUpA.get( ((InterestPoint)pm.getP1()).getId() );
-				InterestPoint ipB = (InterestPoint)pm.getP2();
-				if ( ipA == null )
-				{
-					System.out.println( "cannot find " + ipA );
-					System.exit( 0 );
-				}
-
-				if ( ipA.getId() == 100 ) System.out.println( Util.printCoordinates( pm.getP1().getL() ) + " mapped back to " +  Util.printCoordinates( ipA.getL() ) );
-
-				matches.add( new PointMatch( ipA, ipB ) );
-			}
+				matches.add(
+						new PointMatch(
+								lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
+								(InterestPoint)pm.getP2() ) );
 
 			// write matches
+			System.out.println( "saving matches ... " );
+
 			if ( matches.size() > 0 )
 			{
 				final N5FSWriter n5Writer = new N5FSWriter(n5Path);
@@ -645,7 +632,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		// because we align Ch405nm to Ch515+594nm
 		final double alpha = 1.0;
 		final boolean virtual = false;
-		final long[] controlPointDistance = new long[] { 1000, 1000, 100 };
+		final long[] controlPointDistance = new long[] { 100, 100, 100 };
 
 		// get the input image (same coordinate space as correspondences)
 		System.out.println( new Date( System.currentTimeMillis() ) + ": Preparing channelA: " + channelA );
