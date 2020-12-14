@@ -506,14 +506,13 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				final DatasetAttributes datasetAttributes = n5.getDatasetAttributes(datasetName);
 
 				matches = n5.readSerializedBlock(datasetName, datasetAttributes, new long[] {0});
+
+				System.out.println( new Date(System.currentTimeMillis() ) + ": Loaded " + matches.size() + " matches" );
 			}
 			catch ( Exception e ) // java.nio.file.NoSuchFileException
 			{
 				matches = null;
-				e.printStackTrace();
 			}
-
-			System.out.println( new Date(System.currentTimeMillis() ) + ": Loaded " + matches.size() + " matches" );
 		}
 
 		if ( matches == null )
@@ -560,14 +559,44 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
 			for ( final InterestPoint p : pointsChA )
 			{
+				if ( p.getId() == 100 ) System.out.print( Util.printCoordinates( p.getL() ) + " mapped to " );
 				final double[] l = p.getL().clone();
 				mls.applyInPlace( l );
 				pointsChANew.add( new InterestPoint( p.getId(), l ) );
+				if ( p.getId() == 100 ) System.out.println( Util.printCoordinates( l ) );
 			}
 			matchesTmp = matchICP( pointsChANew, pointsChB, firstSliceIndex, localLastSliceIndex, channelA, channelB, camA, camB, camTransforms, stacks, alignments );
 
 			// TODO: fix matches back to use non-deformed points!
-			
+			System.out.println( "\nRestoring ChA points " );
+			HashMap<Integer, InterestPoint > lookUpA = new HashMap<>();
+			for ( final InterestPoint p : pointsChA )
+			{
+				if ( lookUpA.containsKey( p.getId() )) 
+				{
+					System.out.println( "double id: " + p.getId() );
+					//System.exit( 0 );
+				}
+				lookUpA.put( p.getId(), p );
+			}
+
+			matches = new ArrayList<PointMatch>();
+
+			for ( final PointMatch pm : matchesTmp )
+			{
+				InterestPoint ipA = lookUpA.get( ((InterestPoint)pm.getP1()).getId() );
+				InterestPoint ipB = (InterestPoint)pm.getP2();
+				if ( ipA == null )
+				{
+					System.out.println( "cannot find " + ipA );
+					System.exit( 0 );
+				}
+
+				if ( ipA.getId() == 100 ) System.out.println( Util.printCoordinates( pm.getP1().getL() ) + " mapped back to " +  Util.printCoordinates( ipA.getL() ) );
+
+				matches.add( new PointMatch( ipA, ipB ) );
+			}
+
 			// write matches
 			if ( matches.size() > 0 )
 			{
