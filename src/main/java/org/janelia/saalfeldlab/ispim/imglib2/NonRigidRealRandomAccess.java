@@ -51,12 +51,13 @@ public class NonRigidRealRandomAccess<T> implements RealRandomAccess<T>
 		tmp[ 2 ] = l[ 2 ];
 		model.applyInPlace( tmp );
 
+		/*
 		((RealType)type).setReal( Math.sqrt( (tmp[0] - l[0])*(tmp[0] - l[0]) + (tmp[1] - l[1])*(tmp[1] - l[1]) + (tmp[2] - l[2])*(tmp[2] - l[2]) ) );
 		
 		return type;
-		/*
+		*/
 		imgAccess.setPosition( tmp );
-		return imgAccess.get();*/
+		return imgAccess.get();
 	}
 
 	@Override
