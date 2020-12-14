@@ -697,7 +697,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		//affine.fit( matches );
 		//bdv = BdvFunctions.show( transformedA, prepareCamSource.getB(), "affine A", new BdvOptions().addTo( bdv ) );
 		bdv = BdvFunctions.show( transformedA, prepareCamSource.getB(), "non-rigid A", new BdvOptions().addTo( bdv ) );
-		bdv.setDisplayRange(0, 512);
+		bdv.setDisplayRange(0, 1024);
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
 
 		System.out.println( new Date( System.currentTimeMillis() ) + ": done" );
