@@ -436,6 +436,14 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 					System.out.println( "Warning: block " + tuple._1.from + " has 0 detections");
 			}
 
+			System.out.println( "fixing ids (they were duplicate due to paralell processing) ... " );
+
+			for ( int i = 0; i < pointsChA.size(); ++i )
+				pointsChA.set( i, new InterestPoint( i, pointsChA.get( i ).getL() ) );
+
+			for ( int i = 0; i < pointsChB.size(); ++i )
+				pointsChB.set( i, new InterestPoint( i, pointsChB.get( i ).getL() ) );
+
 			System.out.println( "saving points ... " );
 
 			final N5FSWriter n5Writer = new N5FSWriter(n5Path);
