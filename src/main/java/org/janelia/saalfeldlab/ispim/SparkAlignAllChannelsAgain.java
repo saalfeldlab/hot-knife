@@ -64,17 +64,17 @@ public class SparkAlignAllChannelsAgain implements Callable<Void>, Serializable 
 	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 10")
 	private int distance = 10;
 
-	@Option(names = "--minIntensity", required = false, description = "min intensity")
-	private double minIntensity = 0;
+	//@Option(names = "--minIntensity", required = false, description = "min intensity")
+	//private double minIntensity = 0;
 
-	@Option(names = "--maxIntensity", required = false, description = "max intensity")
-	private double maxIntensity = 4096;
+	//@Option(names = "--maxIntensity", required = false, description = "max intensity")
+	//private double maxIntensity = 4096;
 
 	@Option(names = "--lambdaModel", required = false, description = "lambda for rigid regularizer in model")
 	private double lambdaModel = 0.1;
 
-	@Option(names = "--lambdaFilter", required = false, description = "lambda for rigid regularizer in filter")
-	private double lambdaFilter = 0.1;
+	//@Option(names = "--lambdaFilter", required = false, description = "lambda for rigid regularizer in filter")
+	//private double lambdaFilter = 0.1;
 
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
 	private double maxEpsilon = 50.0;
