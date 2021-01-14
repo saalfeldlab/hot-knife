@@ -34,6 +34,7 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 
 import com.google.common.reflect.TypeToken;
+import com.google.gson.GsonBuilder;
 
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
@@ -42,8 +43,12 @@ import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel2D;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -110,7 +115,12 @@ public class SparkExtractSIFTMatches implements Callable<Void>, Serializable {
 		final ArrayList<Slice> stack;
 		final String groupName;
 		{
-			final N5FSWriter n5 = new N5FSWriter(n5Path);
+			final N5FSWriter n5 = new N5FSWriter(
+					n5Path,
+					new GsonBuilder().registerTypeAdapter(
+							AffineTransform2D.class,
+							new AffineTransform2DAdapter()));
+
 			groupName = n5.groupPath(id, channel, cam);
 
 			if (!n5.exists(groupName)) {
@@ -181,13 +191,20 @@ public class SparkExtractSIFTMatches implements Callable<Void>, Serializable {
 					final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
 
 					try (final TiffReader reader = new TiffReader()) {
-						final RandomAccessibleInterval slice =
-								(RandomAccessibleInterval)Opener.openSlice(
-										reader,
-										sliceInfo.path,
-										sliceInfo.index,
-										width,
-										height);
+						RandomAccessibleInterval slice =
+							(RandomAccessibleInterval)Opener.openSlice(
+									reader,
+									sliceInfo.path,
+									sliceInfo.index,
+									width,
+									height);
+
+						if (sliceInfo.affine != null && !sliceInfo.affineTransform().isIdentity() )
+						{
+							slice = Views.interval( Views.raster( RealViews.affineReal( Views.interpolate(Views.extendZero( slice ), new NLinearInterpolatorFactory()), sliceInfo.affineTransform() ) ), slice );
+							System.out.println( "non identify affine transform (index=" + i + "):" + sliceInfo.path + ", " + sliceInfo.index + ": " +  sliceInfo.affineTransform() );
+						}
+
 						final ArrayList<Feature> features = Align.extractFeatures(
 								Converters.convert(
 										(RandomAccessibleInterval<RealType<?>>)slice,
@@ -272,6 +289,17 @@ public class SparkExtractSIFTMatches implements Callable<Void>, Serializable {
 
 	@Override
 	public Void call() throws IOException, FormatException {
+		// System property for locally calling spark has to be set, e.g. -Dspark.master=local[4]
+		final String sparkLocal = System.getProperty( "spark.master" );
+
+		// only do that if the system property is not set
+		if ( sparkLocal == null || sparkLocal.trim().length() == 0 )
+		{
+			System.out.println( "Spark System property not set: " + sparkLocal );
+			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 ) + "]" );
+		}
+
+		System.out.println( "Spark System property is: " + System.getProperty( "spark.master" ) );
 
 		final SparkConf conf = new SparkConf().setAppName("SparkExtractSIFTMatches");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
