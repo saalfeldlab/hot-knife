@@ -109,6 +109,7 @@ public interface Opener {
 			final int height) throws IOException, FormatException {
 
 		reader.setId(path);
+		//System.out.println("Setting path " + path );
 		return openSlice(reader, slice, width, height);
 	}
 }
