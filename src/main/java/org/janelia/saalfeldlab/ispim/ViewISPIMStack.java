@@ -136,10 +136,10 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 					bounds = Intervals.union(bounds, img);
 				final ExtendedRandomAccessibleInterval<T, RandomAccessibleInterval<T>> extended = Views.extend(img, outOfBoundsFactory);
 				final RealRandomAccessible<T> interpolant = Views.interpolate(extended, interpolatorFactory);
-				if (slice.affine == null)
+				if (slice.affine == null || slice.affineTransform().isIdentity() )
 					slicesList.add(interpolant);
 				else
-					slicesList.add(RealViews.affineReal(interpolant, slice.affine));
+					slicesList.add(RealViews.affineReal(interpolant, slice.affineTransform()));
 			}
 
 			return new ValuePair<>(slicesList, bounds);
