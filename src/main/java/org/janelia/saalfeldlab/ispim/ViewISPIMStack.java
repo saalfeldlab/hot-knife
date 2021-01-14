@@ -190,10 +190,10 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 								interpolationMethod == Interpolation.NLINEAR ?
 										new NLinearInterpolatorFactory<>() :
 										new NearestNeighborInterpolatorFactory<>());
-				if (slice.affine == null)
+				if (slice.affine == null || slice.affineTransform().isIdentity() )
 					slicesList.add(interpolant);
 				else
-					slicesList.add(RealViews.affineReal(interpolant, slice.affine));
+					slicesList.add(RealViews.affineReal(interpolant, slice.affineTransform()));
 			}
 
 			return new ValuePair<>(slicesList, bounds);
