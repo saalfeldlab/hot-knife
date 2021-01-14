@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
+import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 
 /**
  *
@@ -67,7 +68,8 @@ public class MultiConsensusFilter<M extends Model<?>> implements ConsensusFilter
 						numIterations,
 						maxEpsilon,
 						minInlierRatio,
-						minNumInliers );
+						minNumInliers,
+						3f);
 			}
 			catch (final NotEnoughDataPointsException e) {
 				modelFound = false;
@@ -90,8 +92,11 @@ public class MultiConsensusFilter<M extends Model<?>> implements ConsensusFilter
 
 		multiConsensusSets.stream().forEach(consensusSet -> inliers.addAll(consensusSet));
 
-		System.out.printf("Found %d consensus sets with %d inliers", multiConsensusSets.size(), inliers.size());
-		System.out.println();
+		if ( !DoGImgLib2.silent )
+		{
+			System.out.printf("Found %d consensus sets with %d inliers", multiConsensusSets.size(), inliers.size());
+			System.out.println();
+		}
 
 		return inliers;
 	}
