@@ -190,7 +190,10 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 								interpolationMethod == Interpolation.NLINEAR ?
 										new NLinearInterpolatorFactory<>() :
 										new NearestNeighborInterpolatorFactory<>());
-				slicesList.add(interpolant);
+				if (slice.affine == null)
+					slicesList.add(interpolant);
+				else
+					slicesList.add(RealViews.affineReal(interpolant, slice.affine));
 			}
 
 			return new ValuePair<>(slicesList, bounds);
@@ -242,7 +245,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 	 * @param firstSliceIndex
 	 * @param lastSliceIndex
 	 * @param maxbounds - if true the maximal bounding box encompassing everything will be computed,
-	 * otherwise the minimal bounding box that contains where data is available for every xy location in every z slice 
+	 * otherwise the minimal bounding box that contains where data is available for every xy location in every z slice
 	 * @return
 	 * @throws FormatException
 	 * @throws IOException
@@ -332,7 +335,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 							alignment,
 							firstSliceIndex,
 							lastSliceIndex);
-	
+
 			final RealInterval realBounds2D = alignedStackBounds.getB();
 			final RealInterval realBounds3D = Intervals.createMinMax(
 					(long)Math.floor(realBounds2D.realMin(0)),
@@ -341,14 +344,14 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 					(long)Math.ceil(realBounds2D.realMax(0)),
 					(long)Math.ceil(realBounds2D.realMax(1)),
 					lastSliceIndex);
-	
+
 			final ValuePair<RealRandomAccessible<T>, RealInterval> transformedStackBounds =
 					transform(
 							alignedStackBounds.getA(),
 							realBounds3D,
 							transform);
-	
-	
+
+
 			final RealInterval realBounds = transformedStackBounds.getB();
 			final Interval bounds = Intervals.smallestContainingInterval(realBounds);
 
