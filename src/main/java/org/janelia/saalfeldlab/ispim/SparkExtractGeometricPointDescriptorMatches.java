@@ -18,11 +18,15 @@ package org.janelia.saalfeldlab.ispim;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -35,26 +39,36 @@ import org.janelia.saalfeldlab.hotknife.MultiConsensusFilter;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 
 import com.google.common.reflect.TypeToken;
+import com.google.gson.GsonBuilder;
 
 import ij.ImageJ;
 import ij.ImagePlus;
+import ij.ImageStack;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel2D;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.Views;
 import net.preibisch.legacy.io.IOFunctions;
+import net.preibisch.legacy.io.TextFileAccess;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.interestpointdetection.InterestPointTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -91,7 +105,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	private int distance = 3;
 
 	@Option(names = {"-r", "--redundancy"}, required = false, description = "redundancy for geometric descriptor matching (default: 0)")
-	private int redundancy = 0;
+	private int redundancy = 1;
 
 	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default: 25)")
 	private int minNumInliers = 25;
@@ -100,13 +114,15 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	private double minIntensity = 0;
 
 	@Option(names = "--maxIntensity", required = false, description = "max intensity, if minIntensity==maxIntensity determine min/max per slice (default: 0)")
-	private double maxIntensity = 0;
+	private double maxIntensity = 2048;
 
 	@Option(names = "--maxEpsilon", required = true, description = "residual threshold for filter in world pixels")
 	private double maxEpsilon = 5.0;
 
 	@Option(names = "--iterations", required = false, description = "number of iterations")
 	private int numIterations = 2000;
+
+	public static boolean showOnly = false;
 
 	@SuppressWarnings("serial")
 	public static void extractGeometricDescriptorMatches(
@@ -126,7 +142,12 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		final ArrayList<Slice> stack;
 		final String groupName;
 		{
-			final N5FSWriter n5 = new N5FSWriter(n5Path);
+			final N5FSWriter n5 = new N5FSWriter(
+					n5Path,
+					new GsonBuilder().registerTypeAdapter(
+							AffineTransform2D.class,
+							new AffineTransform2DAdapter()));
+
 			groupName = n5.groupPath(id, channel, cam);
 
 			if (!n5.exists(groupName)) {
@@ -176,9 +197,6 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 			}
 		}
 
-		final double sigma = 1.8;
-		final double threshold = 0.007;
-
 		final ArrayList<Integer> slices = new ArrayList<>();
 
 		for (int i = 0; i < stack.size(); ++i)
@@ -186,150 +204,344 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		System.out.println( "Stack has #slice=" + stack.size() );
 
-		final boolean limitDetections = true;
-		final int maxDetections = 1500;
-		final int maxDetectionsTypeIndex = 0; // { "Brightest", "Around median (of those above threshold)", "Weakest (above threshold)" };
+		if ( showOnly )
+		{
+			System.out.println("showing stack only" );
+			showStack( stack, slices, width, height );
+			SimpleMultiThreading.threadHaltUnClean();
+			return;
+		}
 
-		final JavaRDD<Integer> rddSlices = sc.parallelize(slices);
+		final double sigma = 2.5;
+		double thr = 0.03;
 
-		/* save features */
-		final JavaPairRDD<Integer, Integer> rddFeatures = rddSlices.mapToPair(
-				i ->  {
-					final Slice sliceInfo = stack.get(i);
-					final N5FSWriter n5Writer = new N5FSWriter(n5Path);
-					final String datasetName = groupName + "/DoG-detections";
-					final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
+		int numUnconnected = 0;
+		int lastUnconnected = Integer.MAX_VALUE;
+		int bestUnconnected = Integer.MAX_VALUE;
+		double bestThr = -1;
+		boolean extraRun = false;
 
-					try (final TiffReader reader = new TiffReader()) {
-						final RandomAccessibleInterval slice =
-								(RandomAccessibleInterval)Opener.openSlice(
+		do
+		{
+			// none was good, run the best one again for saving
+			if ( thr == bestThr )
+				extraRun = true;
+
+			System.out.println( new Date( System.currentTimeMillis() ) + ": running for thr=" + thr );
+
+			final double threshold = thr;
+			final boolean limitDetections = true;
+			final int maxDetections = 15000;
+			final int maxDetectionsTypeIndex = 0; // { "Brightest", "Around median (of those above threshold)", "Weakest (above threshold)" };
+	
+			final JavaRDD<Integer> rddSlices = sc.parallelize(slices);
+	
+			/* save features */
+			final JavaPairRDD<Integer, Integer> rddFeatures = rddSlices.mapToPair(
+					i ->  {
+						final Slice sliceInfo = stack.get(i);
+						final N5FSWriter n5Writer = new N5FSWriter(n5Path);
+						final String datasetName = groupName + "/DoG-detections";
+						final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
+	
+						try (final TiffReader reader = new TiffReader()) {
+							RandomAccessibleInterval slice = null;
+
+							try
+							{
+								slice = (RandomAccessibleInterval)Opener.openSlice(
 										reader,
 										sliceInfo.path,
 										sliceInfo.index,
 										width,
 										height);
 
-						ArrayList< InterestPoint > points =
-								DoGImgLib2.computeDoG(
+								if (sliceInfo.affine != null && !sliceInfo.affineTransform().isIdentity() )
+								{
+									slice = Views.interval( Views.raster( RealViews.affineReal( Views.interpolate(Views.extendZero( slice ), new NLinearInterpolatorFactory()), sliceInfo.affineTransform() ) ), slice );
+									System.out.println( "non identify affine transform (index=" + i + "):" + sliceInfo.path + ", " + sliceInfo.index + ": " +  sliceInfo.affineTransform() );
+								}
+							}
+							catch ( Exception e )
+							{
+								System.out.println( "e:" + e );
+								System.exit( 0 );
+								//slice = ArrayImgs.unsignedShorts( width, height );
+							}
+
+							DoGImgLib2.silent = true;
+
+							final ExecutorService service = Executors.newFixedThreadPool( 1 );
+
+							ArrayList< InterestPoint > points =
+									DoGImgLib2.computeDoG(
+											Converters.convert(
+												(RandomAccessibleInterval<RealType<?>>)slice,
+												(a, b) -> b.setReal( a.getRealFloat() ),
+											new FloatType()),
+											null,
+											sigma,
+											threshold,
+											1, /*localization*/
+											false, /*findMin*/
+											true, /*findMax*/
+											minIntensity, /* min intensity */
+											maxIntensity, /* max intensity */
+											service, 1 );
+
+							service.shutdown();
+
+							/*
+							if ( i.intValue() % 50 == 0 )
+							{
+								ImagePlus imp1 = ImageJFunctions.show(
 										Converters.convert(
-											(RandomAccessibleInterval<RealType<?>>)slice,
-											(a, b) -> b.setReal( a.getRealFloat() ),
-										new FloatType()),
-										null,
-										sigma,
-										threshold,
-										1, /*localization*/
-										false, /*findMin*/
-										true, /*findMax*/
-										minIntensity, /* min intensity */
-										maxIntensity, /* max intensity */
-										Executors.newFixedThreadPool( 1 ), 1 );
-
-						/*if ( i.intValue() % 50 == 0 )
-						{
-							ImagePlus imp1 = ImageJFunctions.show(
-									Converters.convert(
-											(RandomAccessibleInterval<RealType<?>>)slice,
-											(a, b) -> b.setReal(a.getRealFloat()),
-										new FloatType())
-									);
-							imp1.setRoi( mpicbg.ij.util.Util.pointsToPointRoi(
-									points ) );
-							imp1.resetDisplayRange();
-							imp1.setTitle( "s=" + i);
-						}*/
-
-						if ( limitDetections )
-							points = (ArrayList< InterestPoint >)InterestPointTools.limitList( maxDetections, maxDetectionsTypeIndex, points );
-
-						if (points.size() > 0) {
-							n5Writer.writeSerializedBlock(
-									points,
-									datasetName,
-									datasetAttributes,
-									new long[] {i});
+												(RandomAccessibleInterval<RealType<?>>)slice,
+												(a, b) -> b.setReal(a.getRealFloat()),
+											new FloatType())
+										);
+								imp1.setRoi( mpicbg.ij.util.Util.pointsToPointRoi(
+										points ) );
+								imp1.resetDisplayRange();
+								imp1.setTitle( "s=" + i);
+							}
+							*/
+	
+							if ( limitDetections )
+								points = (ArrayList< InterestPoint >)InterestPointTools.limitList( maxDetections, maxDetectionsTypeIndex, points );
+	
+							if (points.size() > 0) {
+								n5Writer.writeSerializedBlock(
+										points,
+										datasetName,
+										datasetAttributes,
+										new long[] {i});
+							}
+	
+							return new Tuple2<>(i, points.size());
 						}
+					});
+	
+			/* cache the booleans, so features aren't regenerated every time */
+			rddFeatures.cache();
+	
+			/* run feature extraction */
+			rddFeatures.count();
+	
+			/* match features */
+			final int numNeighbors = 3;
+			final double ratioOfDistance = 2.0;
+			final double differenceThreshold = Double.MAX_VALUE;
+	
+			//new ImageJ();
+			int max = 0, min = Integer.MAX_VALUE;
+			HashMap<Integer, Integer> matchesCount = new HashMap<>();
+	
+			for ( final Tuple2<Integer, Integer> tuple : rddFeatures.collect() )
+			{
+				min = Math.min( tuple._2(), min );
+				max = Math.max( tuple._2(), max );
+				matchesCount.put( tuple._1(), 0 );
+			}
+	
+			System.out.println( "min num detections: " + min );
+			System.out.println( "max num detections: " + max );
+			
+			final JavaRDD<Integer> rddIndices = rddFeatures.filter(pair -> pair._2() > 0).map(pair -> pair._1());
+			final JavaPairRDD<Integer, Integer> rddPairs = rddIndices.cartesian(rddIndices).filter(
+					pair -> {
+						final int diff = pair._2() - pair._1();
+						return diff > 0 && diff <= distance;
+					});
+			final JavaPairRDD<Tuple2<Integer, Integer>, Integer> rddMatches = rddPairs.mapToPair(
+					pair -> {
+						final N5FSWriter n5Writer = new N5FSWriter(n5Path);
+						final String datasetName = groupName + "/DoG-detections";
+						final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
+	
+						final ArrayList<InterestPoint> ip1 = n5Writer.readSerializedBlock(datasetName, datasetAttributes, new long[] {pair._1()});
+						final ArrayList<InterestPoint> ip2 = n5Writer.readSerializedBlock(datasetName, datasetAttributes, new long[] {pair._2()});
+	
+						// not enough points to build a descriptor
+						if ( ip1.size() < numNeighbors + redundancy + 1 || ip2.size() < numNeighbors + redundancy + 1 )
+							return new Tuple2<>( new Tuple2<>(pair._1(), pair._2()), 0 );
+	
+	
+						// only works with dim==3
+						final HashMap<InterestPoint, InterestPoint > lookup1 = new HashMap<>();
+						final HashMap<InterestPoint, InterestPoint > lookup2 = new HashMap<>();
+						final ArrayList< InterestPoint> ip1_3d = new ArrayList<>();
+						final ArrayList< InterestPoint> ip2_3d = new ArrayList<>();
+						for ( final InterestPoint ip : ip1 )
+						{
+							final double[] l = new double[ ip.getL().length + 1 ];
+							for ( int d = 0; d < ip.getL().length; ++d )
+								l[ d ] = ip.getL()[ d ];
+							l[ ip.getL().length ] = 0;
+							final InterestPoint ip_3d = new InterestPoint(ip.getId(), l);
+							ip1_3d.add( ip_3d );
+							lookup1.put( ip_3d, ip );
+						}
+						for ( final InterestPoint ip : ip2 )
+						{
+							final double[] l = new double[ ip.getL().length + 1 ];
+							for ( int d = 0; d < ip.getL().length; ++d )
+								l[ d ] = ip.getL()[ d ];
+							l[ ip.getL().length ] = 0;
+							final InterestPoint ip_3d = new InterestPoint(ip.getId(), l);
+							ip2_3d.add( ip_3d );
+							lookup2.put( ip_3d, ip );
+						}
+						final List< PointMatch > candidates_3d = 
+								new FRGLDMMatcher<>().extractCorrespondenceCandidates(
+										ip1_3d,
+										ip2_3d,
+										redundancy,
+										ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+	
+						final ArrayList< PointMatch > candidates = new ArrayList<>();
+						for ( final PointMatch pm : candidates_3d )
+							candidates.add( new PointMatch( lookup1.get( pm.getP1() ), lookup2.get( pm.getP2() ) ) );
+	
+						/*
+						final List< PointMatch > candidates = 
+								new RGLDMMatcher<>().extractCorrespondenceCandidates(
+										ip1,
+										ip2,
+										numNeighbors,
+										redundancy,
+										ratioOfDistance,
+										differenceThreshold ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );*/ 
+	
+						final MultiConsensusFilter filter = new MultiConsensusFilter<>(
+	//							new Transform.InterpolatedAffineModel2DSupplier(
+	//							(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+	//							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
+								(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
+	//							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+								numIterations,
+								maxEpsilon,
+								0,
+								minNumInliers);
+	
+						final ArrayList<PointMatch> matches = filter.filter(candidates);
+	
+						if (matches.size() > 0) {
+	
+							final String matchesDatasetName = groupName + "/matches";
+							final DatasetAttributes matchesAttributes = n5Writer.getDatasetAttributes(matchesDatasetName);
+							n5Writer.writeSerializedBlock(
+									matches,
+									matchesDatasetName,
+									matchesAttributes,
+									new long[] {pair._1(), pair._2()});
+						}
+	
+						//if ( pair._1().intValue() == 50 && pair._2().intValue() == 51 || pair._1().intValue() == 100 && pair._2().intValue() == 101 )
+						//	show( stack, width, height, candidates, pair._1().intValue(), pair._2().intValue() );
+	
+						return new Tuple2<>(
+								new Tuple2<>(pair._1(), pair._2()),
+								matches.size());
+	
+					});
+	
+			/* run matching */
+			rddMatches.count();
+	
+			for ( final Tuple2< Tuple2<Integer, Integer>, Integer > tuple : rddMatches.collect() )
+			{
+				matchesCount.put( tuple._1()._1(), matchesCount.get( tuple._1()._1() ) + tuple._2() );
+				matchesCount.put( tuple._1()._2(), matchesCount.get( tuple._1()._2() ) + tuple._2()  );
+			}
 
-						return new Tuple2<>(i, points.size());
+			numUnconnected = 0;
+			long numMatches = 0;
+
+			for ( final int key : matchesCount.keySet() )
+			{
+				if ( matchesCount.get( key ) == 0 )
+				{
+					numUnconnected++;
+					System.out.print( key + ", " );
+				}
+				else
+				{
+					numMatches += matchesCount.get( key );
+				}
+			}
+
+			System.out.println( "\nunconnected: " + numUnconnected + " (" + numMatches + "), " + " t=" + threshold );
+
+			if ( numUnconnected < bestUnconnected )
+			{
+				bestUnconnected = numUnconnected;
+				bestThr = threshold;
+				System.out.println( "new best." );
+			}
+
+			if ( numUnconnected > 0 )
+				thr /= 1.5;
+
+			// one final run, none before was good
+			if ( thr <= 0.001 || lastUnconnected < numUnconnected )
+			{
+				System.out.println( "repeating best thr=" + bestThr );
+				thr = bestThr;
+			}
+			else
+				lastUnconnected = numUnconnected;
+
+		} while ( !extraRun && numUnconnected > 0 );
+
+		if ( numUnconnected > 0 )
+		{
+			PrintWriter out = TextFileAccess.openFileWrite( id + "_" + channel +"_" + cam + "." + numUnconnected + ".txt" );
+			out.close();
+		}
+	}
+
+	private static void showStack( final ArrayList<Slice> stack, final ArrayList<Integer> slices, final int width, final int height ) throws IOException
+	{
+		ImageStack imgstack = new ImageStack(width, height);
+
+		int j = 0;
+
+		for ( final int i : slices )
+		{
+			final Slice sliceInfo = stack.get(i);
+	
+			try (final TiffReader reader = new TiffReader())
+			{
+				RandomAccessibleInterval slice = null;
+				
+				try
+				{
+					slice = (RandomAccessibleInterval)Opener.openSlice(
+									reader,
+									sliceInfo.path,
+									sliceInfo.index,
+									width,
+									height);
+
+					if (sliceInfo.affine != null && !sliceInfo.affineTransform().isIdentity() )
+					{
+						slice = Views.interval( Views.raster( RealViews.affineReal( Views.interpolate(Views.extendZero( slice ), new NLinearInterpolatorFactory()), sliceInfo.affineTransform() ) ), slice );
+						System.out.println( "non identify affine transform (index=" + j + "):" + sliceInfo.path + ", " + sliceInfo.index + ": " +  sliceInfo.affineTransform() );
 					}
-				});
+				}
+				catch ( FormatException e )
+				{
+					System.out.println( "e:" + e );
+					System.exit( 0 );
+					//slice = ArrayImgs.unsignedShorts( width, height );
+				}
+				imgstack.addSlice( ImageJFunctions.wrapUnsignedShort( slice, "z=" + i ).getProcessor() );
+			}
+			++j;
+		}
 
-		/* cache the booleans, so features aren't regenerated every time */
-		rddFeatures.cache();
-
-		/* run feature extraction */
-		rddFeatures.count();
-
-		/* match features */
-		final int numNeighbors = 3;
-		final double ratioOfDistance = 2.0;
-		final double differenceThreshold = Double.MAX_VALUE;
-
-		//new ImageJ();
-
-		final JavaRDD<Integer> rddIndices = rddFeatures.filter(pair -> pair._2() > 0).map(pair -> pair._1());
-		final JavaPairRDD<Integer, Integer> rddPairs = rddIndices.cartesian(rddIndices).filter(
-				pair -> {
-					final int diff = pair._2() - pair._1();
-					return diff > 0 && diff <= distance;
-				});
-		final JavaPairRDD<Tuple2<Integer, Integer>, Integer> rddMatches = rddPairs.mapToPair(
-				pair -> {
-					final N5FSWriter n5Writer = new N5FSWriter(n5Path);
-					final String datasetName = groupName + "/DoG-detections";
-					final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
-
-					final ArrayList<InterestPoint> ip1 = n5Writer.readSerializedBlock(datasetName, datasetAttributes, new long[] {pair._1()});
-					final ArrayList<InterestPoint> ip2 = n5Writer.readSerializedBlock(datasetName, datasetAttributes, new long[] {pair._2()});
-
-					// not enough points to build a descriptor
-					if ( ip1.size() < numNeighbors + redundancy + 1 || ip2.size() < numNeighbors + redundancy + 1 )
-						return new Tuple2<>( new Tuple2<>(pair._1(), pair._2()), 0 );
-					
-					final List< PointMatch > candidates = 
-							new RGLDMMatcher<>().extractCorrespondenceCandidates(
-									ip1,
-									ip2,
-									numNeighbors,
-									redundancy,
-									ratioOfDistance,
-									differenceThreshold ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
-
-					final MultiConsensusFilter filter = new MultiConsensusFilter<>(
-//							new Transform.InterpolatedAffineModel2DSupplier(
-//							(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-//							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
-							(Supplier<TranslationModel2D> & Serializable)TranslationModel2D::new,
-//							(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-							numIterations,
-							maxEpsilon,
-							0,
-							minNumInliers);
-
-					final ArrayList<PointMatch> matches = filter.filter(candidates);
-
-					if (matches.size() > 0) {
-
-						final String matchesDatasetName = groupName + "/matches";
-						final DatasetAttributes matchesAttributes = n5Writer.getDatasetAttributes(matchesDatasetName);
-						n5Writer.writeSerializedBlock(
-								matches,
-								matchesDatasetName,
-								matchesAttributes,
-								new long[] {pair._1(), pair._2()});
-					}
-
-					//if ( pair._1().intValue() == 50 && pair._2().intValue() == 51 || pair._1().intValue() == 100 && pair._2().intValue() == 101 )
-					//	show( stack, width, height, matches, pair._1().intValue(), pair._2().intValue() );
-
-					return new Tuple2<>(
-							new Tuple2<>(pair._1(), pair._2()),
-							matches.size());
-
-				});
-
-		/* run matching */
-		rddMatches.count();
+		new ImagePlus( "stack", imgstack ).show();
 	}
 
 	private static void show( final ArrayList<Slice> stack, final int width, final int height, final ArrayList<PointMatch> matches, final int sliceIndex0, final int sliceIndex1 ) throws IOException, FormatException
@@ -376,11 +588,11 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 						matches.stream().map( pm -> pm.getP2() ).collect( Collectors.toList() ) ) );
 		imp2.resetDisplayRange();
 		imp2.setTitle( "s=" + sliceIndex1);
+		SimpleMultiThreading.threadHaltUnClean();
 	}
 
 	@Override
 	public Void call() throws IOException, FormatException {
-
 		// System property for locally calling spark has to be set, e.g. -Dspark.master=local[4]
 		final String sparkLocal = System.getProperty( "spark.master" );
 
@@ -388,7 +600,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		if ( sparkLocal == null || sparkLocal.trim().length() == 0 )
 		{
 			System.out.println( "Spark System property not set: " + sparkLocal );
-			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 ) + "]" );
+			System.setProperty( "spark.master", "local[" + Math.max( 1, Runtime.getRuntime().availableProcessors() ) + "]" );
 		}
 
 		System.out.println( "Spark System property is: " + System.getProperty( "spark.master" ) );
