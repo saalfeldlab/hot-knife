@@ -51,9 +51,12 @@ import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel3D;
+import net.imglib2.FinalInterval;
+import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.RealPointSampleList;
 import net.imglib2.RealRandomAccessible;
@@ -548,7 +551,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		System.out.println( "performing block-wise (in z) matching ... " );
 
-		Pair< ArrayList<PointMatch>, Double > resultTmp = matchSteps( blockSizeZ, doICP, pointsChA, pointsChB, 0, n5data.lastSliceIndex, channelA, channelB, camA, camB, n5data.camTransforms, n5data.stacks, n5data.alignments );
+		Pair< ArrayList<PointMatch>, Double > resultTmp = matchZSteps( blockSizeZ, doICP, pointsChA, pointsChB, 0, n5data.lastSliceIndex );
 		ArrayList<PointMatch> matchesTmp = resultTmp.getA();
 
 		System.out.println( "total matches:" + matchesTmp.size() );
@@ -909,20 +912,13 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		return matches;
 	}
 
-	public static Pair< ArrayList<PointMatch>, Double > matchSteps(
+	public static Pair< ArrayList<PointMatch>, Double > matchZSteps(
 			final int desiredBlockSize,
 			final boolean doICP,
 			List<InterestPoint> pointsChAIn,
 			List<InterestPoint> pointsChBIn,
 			final int firstSliceIndex,
-			final int localLastSliceIndex,
-			final String channelA,
-			final String channelB,
-			final String camA,
-			final String camB,
-			final HashMap<String, HashMap<String, AffineTransform2D>> camTransforms,
-			final HashMap<String, HashMap<String, List<Slice>>> stacks,
-			final HashMap<String, RandomAccessible<AffineTransform2D>> alignments ) throws FormatException, IOException
+			final int localLastSliceIndex ) throws FormatException, IOException
 	{
 		final int numNeighbors = 3;
 		final int redundancy = 0;
@@ -954,7 +950,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		for ( double z = firstSliceIndex; Math.round( z + stepSize / 2 ) < localLastSliceIndex; z += stepSize / 2 )
 		{
-			System.out.println( "\nmatching form " + z + " to " + (z+stepSize) );
+			System.out.println( "\nmatching from " + z + " to " + (z+stepSize) );
 
 			ArrayList<InterestPoint> pointsChA = new ArrayList<InterestPoint>();
 			ArrayList<InterestPoint> pointsChB = new ArrayList<InterestPoint>();
