@@ -31,5 +31,16 @@ public class Slice implements Serializable
 
 	public String path;
 	public int index;
-	public AffineTransform2D affine = null;
+	public double[] affine = null; // needs to be serializable!
+	public AffineTransform2D affineTransform()
+	{
+		if ( affine == null )
+			return null;
+		else
+		{
+			final AffineTransform2D t = new AffineTransform2D();
+			t.set( affine[ 0 ], affine[ 1 ], affine[ 2 ], affine[ 3 ], affine[ 4 ], affine[ 5 ] );
+			return t;
+		}
+	}
 }
