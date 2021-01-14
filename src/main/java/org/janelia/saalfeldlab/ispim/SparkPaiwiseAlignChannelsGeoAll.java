@@ -74,6 +74,9 @@ public class SparkPaiwiseAlignChannelsGeoAll implements Callable<Void>, Serializ
 	@Option(names = "--camB", required = true, description = "CamB key, e.g. cam4")
 	private String camB = null;
 
+	@Option(names = {"-b", "--blocksizeZ"}, required = false, description = "blocksize in z for initial matching (default: 50)")
+	private int blocksize = 50;
+
 	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
 	private HashSet<String> excludeIds = new HashSet<>();
 
@@ -103,7 +106,10 @@ public class SparkPaiwiseAlignChannelsGeoAll implements Callable<Void>, Serializ
 		final JavaRDD<String> rddIds = sc.parallelize(getIds(n5));
 
 		final JavaPairRDD<String, Double > rddResults = rddIds.mapToPair( id -> {
-			return new Tuple2<>(id, SparkPaiwiseAlignChannelsGeo.align( n5Path, id, channelA, channelB, camA, camB ) );
+			int bs = blocksize;
+			if ( id.equals( "Pos024") )
+				bs = 25;
+			return new Tuple2<>(id, SparkPaiwiseAlignChannelsGeo.align( n5Path, id, channelA, channelB, camA, camB, bs, true ) );
 		});
 
 		rddResults.cache();

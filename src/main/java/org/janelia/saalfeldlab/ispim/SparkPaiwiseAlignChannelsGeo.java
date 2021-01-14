@@ -499,7 +499,9 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			final String channelA,
 			final String channelB,
 			final String camA,
-			final String camB ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
+			final String camB,
+			final int blockSizeZ,
+			final boolean doICP ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		IOFunctions.printIJLog = false;
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Opening N5." );
@@ -546,7 +548,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		System.out.println( "performing block-wise (in z) matching ... " );
 
-		Pair< ArrayList<PointMatch>, Double > resultTmp = matchSteps( 50, pointsChA, pointsChB, 0, n5data.lastSliceIndex, channelA, channelB, camA, camB, n5data.camTransforms, n5data.stacks, n5data.alignments );
+		Pair< ArrayList<PointMatch>, Double > resultTmp = matchSteps( blockSizeZ, doICP, pointsChA, pointsChB, 0, n5data.lastSliceIndex, channelA, channelB, camA, camB, n5data.camTransforms, n5data.stacks, n5data.alignments );
 		ArrayList<PointMatch> matchesTmp = resultTmp.getA();
 
 		System.out.println( "total matches:" + matchesTmp.size() );
@@ -909,6 +911,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 	public static Pair< ArrayList<PointMatch>, Double > matchSteps(
 			final int desiredBlockSize,
+			final boolean doICP,
 			List<InterestPoint> pointsChAIn,
 			List<InterestPoint> pointsChBIn,
 			final int firstSliceIndex,
@@ -924,9 +927,15 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		final int numNeighbors = 3;
 		final int redundancy = 0;
 		final double ratioOfDistance = 5;
-		final int numIterations = 50000;
+		final int numIterations = 100000;
 		final double maxEpsilon = 5;
 		final int minNumInliers = 20;
+
+		// ICP
+		final double maxDistance = maxEpsilon;
+		final int maxNumIterations = 100;
+		final int minNumInliersICP = 100;
+		final int numIterationsICP = 10000;
 
 		int blocksWithMatches = 0;
 		int blocksWithoutMatches = 0;
@@ -1014,7 +1023,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 					0,
 					minNumInliers);
 	
-			final ArrayList<PointMatch> matches = filter.filter(candidates);
+			ArrayList<PointMatch> matches = filter.filter(candidates);
 	
 			minZ = localLastSliceIndex;
 			maxZ = firstSliceIndex;
@@ -1034,6 +1043,45 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			{
 				System.out.println( "WARNING: NO matches!" );
 				++blocksWithoutMatches;
+			}
+
+			if ( doICP && matches.size() > 4 )
+			{
+				final AffineModel3D model = new AffineModel3D();
+				try
+				{
+					// init with current fit
+					model.fit( matches );
+					System.out.println( model );
+
+					IterativeClosestPointPairwise<InterestPoint> icp =
+							new IterativeClosestPointPairwise<>(
+									new IterativeClosestPointParameters( model, maxDistance, maxNumIterations ) );
+
+					// not enough points to build a descriptor
+					if ( pointsChA.size() < model.getMinNumMatches() || pointsChB.size() < model.getMinNumMatches() )
+						return null;
+
+					final ArrayList< PointMatch > candidatesICP = new ArrayList<>(
+							icp.match( pointsChA, pointsChB ).getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() ) );
+
+					final MultiConsensusFilter filterICP = new MultiConsensusFilter<>(
+											(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+											numIterationsICP,
+											maxEpsilon,
+											0,
+											minNumInliersICP);
+
+					matches = filterICP.filter( candidatesICP );
+
+					model.fit( matches );
+					System.out.println( matches.size() + "/" + ( candidatesICP.size() + matches.size() ) + " from ICP." );
+					System.out.println( model );
+
+				} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
 
 			// build two lookup trees for existing Interestpoints that were matched
@@ -1168,9 +1216,12 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 	@Override
 	public Void call() throws IOException, InterruptedException, ExecutionException, FormatException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
+		System.out.println( id );
+
 		//visualizeDetections(n5Path, id, channelA, camA );
 		//SimpleMultiThreading.threadHaltUnClean();
 
+		/*
 		// System property for locally calling spark has to be set, e.g. -Dspark.master=local[4]
 		final String sparkLocal = System.getProperty( "spark.master" );
 
@@ -1188,19 +1239,20 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		System.out.println( id );
 
 		final ArrayList< Block > blocks = new ArrayList<>();
-		blocks.addAll( assembleBlocks( n5Path, id, channelA, camA, blocksize, 2.0, /*0.02*/0.004, minIntensity, maxIntensity ) );
-		blocks.addAll( assembleBlocks( n5Path, id, channelB, camB, blocksize, 2.0, /*0.02*/0.004, minIntensity, maxIntensity ) );
-		//extractPoints( sc, n5Path, blocks );
+		blocks.addAll( assembleBlocks( n5Path, id, channelA, camA, blocksize, 2.0, 0.004, minIntensity, maxIntensity ) );
+		blocks.addAll( assembleBlocks( n5Path, id, channelB, camB, blocksize, 2.0, 0.004, minIntensity, maxIntensity ) );
+		extractPoints( sc, n5Path, blocks );
+
+		sc.close();
+		*/
 
 		//visualizeDetections(n5Path, id, channelA, camA );
 		//visualizeDetections(n5Path, id, channelB, camB );
 		//SimpleMultiThreading.threadHaltUnClean(); //660.9999999999999 to 727.0999999999999
-		sc.close();
 
-		align( n5Path, id, channelA, channelB, camA, camB );
+		align( n5Path, id, channelA, channelB, camA, camB, 25, true );
 
 		//visualizeAlignment( n5Path, id, channelA, channelB, camA, camB );
 
