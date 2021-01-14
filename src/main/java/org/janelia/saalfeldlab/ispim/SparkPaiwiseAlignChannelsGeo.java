@@ -82,6 +82,7 @@ import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.SimpleReference
 import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.ModelGrid;
 import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.NumericAffineModel3D;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.PairwiseResult;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointPairwise;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointParameters;
@@ -912,6 +913,154 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		return matches;
 	}
 
+	public static ArrayList<PointMatch> matchBlock(
+			final List<InterestPoint> pointsChAIn,
+			final List<InterestPoint> pointsChBIn,
+			final RealInterval intervalA,
+			final RealInterval intervalB,
+			final int numNeighbors,
+			final int redundancy,
+			final double ratioOfDistance,
+			final int numIterations,
+			final double maxEpsilon,
+			final int minNumInliers,
+			final boolean doICP,
+			final double maxDistanceICP,
+			final int maxNumIterationsICP,
+			final int minNumInliersICP,
+			final int numIterationsICP,
+			final double maxEpsilonICP )
+	{
+		final ArrayList<InterestPoint> pointsChA = new ArrayList<InterestPoint>();
+		final ArrayList<InterestPoint> pointsChB = new ArrayList<InterestPoint>();
+
+		//Intervals.contains(containing, contained)
+		for ( final InterestPoint ip : pointsChAIn )
+			if ( Intervals.contains( intervalA, ip ) )
+			{
+				// copy or reset world coordinates as they are used by default to build descriptors
+				// but they are changed by the previous RANSAC run if overlapping sets of points
+				// are being used
+				//for ( int d = 0; d < ip.getL().length; ++d )
+				//	ip.getW()[ d ] = ip.getL()[ d ];
+				pointsChA.add( ip.duplicate() );
+			}
+
+		for ( final InterestPoint ip : pointsChBIn )
+			if ( Intervals.contains( intervalB, ip ) )
+			{
+				//for ( int d = 0; d < ip.getL().length; ++d )
+				//	ip.getW()[ d ] = ip.getL()[ d ];
+
+				pointsChB.add( ip.duplicate() );
+			}
+
+		if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
+		{
+			System.out.println( "No matches." );
+			return new ArrayList<PointMatch>();
+		}
+
+		final List< PointMatch > candidates = 
+				new FRGLDMMatcher<>().extractCorrespondenceCandidates(
+						pointsChA,
+						pointsChB,
+						redundancy,
+						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+
+		/*final List< PointMatch > candidates = 
+				new RGLDMMatcher<>().extractCorrespondenceCandidates(
+						pointsChA,
+						pointsChB,
+						3,
+						redundancy,
+						ratioOfDistance,
+						Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );*/
+
+		double minZ = Double.MAX_VALUE;
+		double maxZ = -Double.MAX_VALUE;
+
+		for ( final PointMatch pm : candidates )
+		{
+			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+		}
+
+		System.out.println( "candidates (FRGDLDM): " + candidates.size() + " from(z) " + minZ + " to(z) " + maxZ );
+
+		final MultiConsensusFilter< AffineModel3D > filter = new MultiConsensusFilter<>(
+//				new Transform.InterpolatedAffineModel2DSupplier(
+				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
+//				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
+//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
+				numIterations,
+				maxEpsilon,
+				0,
+				minNumInliers);
+
+		ArrayList<PointMatch> matches = filter.filter(candidates);
+
+		minZ = Double.MAX_VALUE;
+		maxZ = -Double.MAX_VALUE;
+
+		for ( final PointMatch pm : matches )
+		{
+			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+		}
+
+		if ( matches.size() > 0 )
+			System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
+		else
+			System.out.println( "WARNING: NO matches!" );
+
+		if ( doICP && matches.size() > 4 )
+		{
+			final AffineModel3D model = new AffineModel3D();
+			final ArrayList<PointMatch> descriptorMatches = matches;
+
+			try
+			{
+				// init with current fit
+				model.fit( matches );
+				System.out.println( model );
+
+				IterativeClosestPointPairwise<InterestPoint> icp =
+						new IterativeClosestPointPairwise<>(
+								new IterativeClosestPointParameters( model, maxDistanceICP, maxNumIterationsICP ) );
+
+				// not enough points to build a descriptor
+				if ( pointsChA.size() < model.getMinNumMatches() || pointsChB.size() < model.getMinNumMatches() )
+					return new ArrayList<PointMatch>();
+
+				final PairwiseResult<InterestPoint> icpResult = icp.match( pointsChA, pointsChB );
+				final ArrayList< PointMatch > candidatesICP = new ArrayList<>(
+						icpResult.getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() ) );
+				final double avgError = icpResult.getError();
+
+				final MultiConsensusFilter< AffineModel3D > filterICP = new MultiConsensusFilter<>(
+										(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+										numIterationsICP,
+										Math.min( avgError * 3.0, maxEpsilonICP ),
+										0,
+										minNumInliersICP);
+
+				matches = filterICP.filter( candidatesICP );
+
+				model.fit( matches );
+				System.out.println( matches.size() + "/" + ( candidatesICP.size() + matches.size() ) + " from ICP." );
+				System.out.println( model );
+
+			} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+				e.printStackTrace();
+				return descriptorMatches;
+			}
+		}
+
+		return matches;
+	}
+
 	public static Pair< ArrayList<PointMatch>, Double > matchZSteps(
 			final int desiredBlockSize,
 			final boolean doICP,
@@ -928,10 +1077,11 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		final int minNumInliers = 20;
 
 		// ICP
-		final double maxDistance = maxEpsilon;
-		final int maxNumIterations = 100;
+		final double maxDistanceICP = maxEpsilon;
+		final int maxNumIterationsICP = 100;
 		final int minNumInliersICP = 100;
 		final int numIterationsICP = 10000;
+		final double maxEpsilonICP = maxDistanceICP / 2.0;
 
 		int blocksWithMatches = 0;
 		int blocksWithoutMatches = 0;
@@ -952,133 +1102,23 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		{
 			System.out.println( "\nmatching from " + z + " to " + (z+stepSize) );
 
-			ArrayList<InterestPoint> pointsChA = new ArrayList<InterestPoint>();
-			ArrayList<InterestPoint> pointsChB = new ArrayList<InterestPoint>();
+			final RealInterval matchInterval = new FinalRealInterval(
+					new double[] {
+							-Double.MAX_VALUE,
+							-Double.MAX_VALUE,
+							z },
+					new double[] {
+							Double.MAX_VALUE,
+							Double.MAX_VALUE,
+							(z+stepSize)
+					} );
 
-			for ( final InterestPoint ip : pointsChAIn )
-				if ( ip.getL()[ 2 ] >= z && ip.getL()[ 2 ] <= (z+stepSize) )
-				{
-					// copy or reset world coordinates as they are used by default to build descriptors
-					// but they are changed by the previous RANSAC run if overlapping sets of points
-					// are being used
-					//for ( int d = 0; d < ip.getL().length; ++d )
-					//	ip.getW()[ d ] = ip.getL()[ d ];
-					pointsChA.add( ip.duplicate() );
-				}
-
-			for ( final InterestPoint ip : pointsChBIn )
-				if ( ip.getL()[ 2 ] >= z && ip.getL()[ 2 ] <= (z+stepSize) )
-				{
-					//for ( int d = 0; d < ip.getL().length; ++d )
-					//	ip.getW()[ d ] = ip.getL()[ d ];
-
-					pointsChB.add( ip.duplicate() );
-				}
-
-			if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
-			{
-				System.out.println( "No matches." );
-				continue;
-			}
-
-			final List< PointMatch > candidates = 
-					new FRGLDMMatcher<>().extractCorrespondenceCandidates(
-							pointsChA,
-							pointsChB,
-							redundancy,
-							ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
-	
-			/*final List< PointMatch > candidates = 
-					new RGLDMMatcher<>().extractCorrespondenceCandidates(
-							pointsChA,
-							pointsChB,
-							3,
-							redundancy,
-							ratioOfDistance,
-							Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );*/
-	
-			double minZ = localLastSliceIndex;
-			double maxZ = firstSliceIndex;
-	
-			for ( final PointMatch pm : candidates )
-			{
-				minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-				maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-			}
-	
-			System.out.println( "candidates (FRGDLDM): " + candidates.size() + " from(z) " + minZ + " to(z) " + maxZ );
-	
-			final MultiConsensusFilter filter = new MultiConsensusFilter<>(
-	//				new Transform.InterpolatedAffineModel2DSupplier(
-					(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
-	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
-	//				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
-	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
-					numIterations,
-					maxEpsilon,
-					0,
-					minNumInliers);
-	
-			ArrayList<PointMatch> matches = filter.filter(candidates);
-	
-			minZ = localLastSliceIndex;
-			maxZ = firstSliceIndex;
-	
-			for ( final PointMatch pm : matches )
-			{
-				minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-				maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-			}
+			final ArrayList<PointMatch> matches = matchBlock(pointsChAIn, pointsChBIn, matchInterval, matchInterval, numNeighbors, redundancy, ratioOfDistance, numIterations, maxEpsilon, minNumInliers, doICP, maxDistanceICP, maxNumIterationsICP, minNumInliersICP, numIterationsICP, maxEpsilonICP );
 
 			if ( matches.size() > 0 )
-			{
-				System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
 				++blocksWithMatches;
-			}
 			else
-			{
-				System.out.println( "WARNING: NO matches!" );
 				++blocksWithoutMatches;
-			}
-
-			if ( doICP && matches.size() > 4 )
-			{
-				final AffineModel3D model = new AffineModel3D();
-				try
-				{
-					// init with current fit
-					model.fit( matches );
-					System.out.println( model );
-
-					IterativeClosestPointPairwise<InterestPoint> icp =
-							new IterativeClosestPointPairwise<>(
-									new IterativeClosestPointParameters( model, maxDistance, maxNumIterations ) );
-
-					// not enough points to build a descriptor
-					if ( pointsChA.size() < model.getMinNumMatches() || pointsChB.size() < model.getMinNumMatches() )
-						return null;
-
-					final ArrayList< PointMatch > candidatesICP = new ArrayList<>(
-							icp.match( pointsChA, pointsChB ).getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() ) );
-
-					final MultiConsensusFilter filterICP = new MultiConsensusFilter<>(
-											(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
-											numIterationsICP,
-											maxEpsilon,
-											0,
-											minNumInliersICP);
-
-					matches = filterICP.filter( candidatesICP );
-
-					model.fit( matches );
-					System.out.println( matches.size() + "/" + ( candidatesICP.size() + matches.size() ) + " from ICP." );
-					System.out.println( model );
-
-				} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
 
 			// build two lookup trees for existing Interestpoints that were matched
 			HashMap< InterestPoint, PointMatch > p1 = new HashMap<>();
