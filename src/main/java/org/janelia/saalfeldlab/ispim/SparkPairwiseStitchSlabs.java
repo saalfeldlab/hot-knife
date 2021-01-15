@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.Block;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 
@@ -23,17 +26,18 @@ import com.google.gson.stream.JsonReader;
 import loci.formats.FormatException;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.NotEnoughDataPointsException;
-import net.imglib2.Dimensions;
+import mpicbg.models.PointMatch;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
-import net.imglib2.KDTree;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.iterator.ZeroMinIntervalIterator;
-import net.imglib2.neighborsearch.RadiusNeighborSearchOnKDTree;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -71,6 +75,71 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		new CommandLine(new SparkPairwiseStitchSlabs()).execute(args);
 	}
 
+	public static Pair< ArrayList<PointMatch>, Double > alignAll(
+			final ArrayList< Interval > blocks,
+			final ArrayList<InterestPoint> pointsA,
+			final ArrayList<InterestPoint> pointsB )
+	{
+		int blocksWithMatches = 0;
+		int blocksWithoutMatches = 0;
+
+		ArrayList< PointMatch > allMatches = new ArrayList<>();
+
+		for ( final Interval block : blocks )
+		{
+			ArrayList< PointMatch > matches = align( pointsA, pointsB, block );
+
+			if ( matches.size() > 0 )
+				++blocksWithMatches;
+			else
+				++blocksWithoutMatches;
+
+			// build two lookup trees for existing Interestpoints that were matched
+			HashMap< InterestPoint, PointMatch > p1 = new HashMap<>();
+			HashMap< InterestPoint, PointMatch > p2 = new HashMap<>();
+
+			for ( final PointMatch pm : allMatches )
+			{
+				p1.put( (InterestPoint)pm.getP1(), pm );
+				p2.put( (InterestPoint)pm.getP2(), pm );
+			}
+		
+			int sameMatch = 0;
+			int differentMatch = 0;
+			int added = 0;
+
+			for ( final PointMatch pm : matches )
+			{
+				InterestPoint ip1 = (InterestPoint)pm.getP1();
+				InterestPoint ip2 = (InterestPoint)pm.getP2();
+				
+				if ( p1.containsKey( ip1 ) )
+				{
+					if ( ((InterestPoint)p1.get( ip1 ).getP2()).getId() == ip2.getId() )
+						++sameMatch;
+					else
+						++differentMatch;
+				}
+				else if ( p2.containsKey( ip2 ) )
+				{
+					if ( ((InterestPoint)p2.get( ip2 ).getP1()).getId() == ip1.getId() )
+						++sameMatch;
+					else
+						++differentMatch;
+				}
+				else
+				{
+					allMatches.add( pm );
+					++added;
+				}
+			}
+
+			System.out.println( "added: " + added  + " same: " + sameMatch + " different: " + differentMatch );
+		}
+
+		return new ValuePair<>( allMatches, (double)blocksWithMatches / (double)( blocksWithMatches + blocksWithoutMatches ) );
+	}
+
 	public static void align(
 			final String n5Path,
 			final String idA,
@@ -81,73 +150,114 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String channelB,
 			final String camA,
 			final String camB,
-			final int[] blockSize,
-			final boolean doICP ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
+			final Interval interval ) throws IOException
+	{
+		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, metaA );
+		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, metaB );
+
+		align( pairA.getA(), pairB.getA(), interval );
+	}
+
+	public static ArrayList<PointMatch> align(
+			final ArrayList<InterestPoint> pointsChA,
+			final ArrayList<InterestPoint> pointsChB,
+			final Interval interval )
+	{
+		final boolean fastMatching = false;
+		final int numNeighbors = 3;
+		final int redundancy = 1;
+		final double ratioOfDistance = 5;
+		final int numIterations = 10000;
+		final double maxEpsilon = 5;
+		final int minNumInliers = 20;
+
+		// ICP
+		final boolean doICP = true;
+		final double maxDistanceICP = maxEpsilon;
+		final int maxNumIterationsICP = 100;
+		final int minNumInliersICP = 30;
+		final int numIterationsICP = 10000;
+		final double maxEpsilonICP = maxDistanceICP / 2.0;
+
+		final ArrayList<PointMatch> matches = SparkPaiwiseAlignChannelsGeo.matchBlock(pointsChA, pointsChB, interval,
+				interval, fastMatching, numNeighbors, redundancy, ratioOfDistance, numIterations, maxEpsilon,
+				minNumInliers, doICP, maxDistanceICP, maxNumIterationsICP, minNumInliersICP, numIterationsICP,
+				maxEpsilonICP);
+
+		return matches;
+	}
+
+	public static Pair< ArrayList<InterestPoint>, N5Data > loadPoints(
+			final String n5Path,
+			final String id,
+			final String channel,
+			final String cam,
+			final MetaData meta ) throws IOException
 	{
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Opening N5." );
 
-		final N5Data n5dataA = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idA );
-		final N5Data n5dataB = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idB );
+		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
 
-		System.out.println( new Date(System.currentTimeMillis() ) + ": lastSliceIndexA=" + n5dataA.lastSliceIndex + " for " + idA );
-		System.out.println( new Date(System.currentTimeMillis() ) + ": lastSliceIndexB=" + n5dataB.lastSliceIndex + " for " + idB );
+		System.out.println( new Date(System.currentTimeMillis() ) + ": lastSliceIndexA=" + n5data.lastSliceIndex + " for " + id );
 
-		ArrayList<InterestPoint> pointsChA = null;
-		ArrayList<InterestPoint> pointsChB = null;
+		ArrayList<InterestPoint> pointsCh = null;
 
 		System.out.println( "loading points ... " );
 
 		try
 		{
-			final String datasetNameA = idA + "/" + channelA + "/Stack-DoG-detections";
-			final DatasetAttributes datasetAttributesA = n5dataA.n5.getDatasetAttributes(datasetNameA);
+			final String datasetNameA = id + "/" + channel + "/Stack-DoG-detections";
+			final DatasetAttributes datasetAttributesA = n5data.n5.getDatasetAttributes(datasetNameA);
 
-			final String datasetNameB = idB + "/" + channelB + "/Stack-DoG-detections";
-			final DatasetAttributes datasetAttributesB = n5dataB.n5.getDatasetAttributes(datasetNameB);
-
-			pointsChA = n5dataA.n5.readSerializedBlock(datasetNameA, datasetAttributesA, new long[] {0});
-			pointsChB = n5dataB.n5.readSerializedBlock(datasetNameB, datasetAttributesB, new long[] {0});
+			pointsCh = n5data.n5.readSerializedBlock(datasetNameA, datasetAttributesA, new long[] {0});
 		}
 		catch ( Exception e ) // java.nio.file.NoSuchFileException
 		{
 			e.printStackTrace();
-			System.out.println( new Date(System.currentTimeMillis() ) + ": Failed to load points for " + idA + " <> " + idB );
-			return;
+			System.out.println( new Date(System.currentTimeMillis() ) + ": Failed to load points for " + id );
+			return null;
 		}
-
-		System.out.println( new Date(System.currentTimeMillis() ) + ": channelA: " + pointsChA.size() + " points for " + idA );
-		System.out.println( new Date(System.currentTimeMillis() ) + ": channelB: " + pointsChB.size() + " points for " + idB );
-
-		RealInterval bbA = realInterval( pointsChA );
-		RealInterval bbB = realInterval( pointsChB );
-
-		System.out.println( Intervals.toString( bbA ) );
-		System.out.println( Intervals.toString( bbB ) );
 
 		System.out.println( "transforming points to stage coordinates ... " );
 
-		List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
-		for ( final InterestPoint p : pointsChA )
+		ArrayList< InterestPoint > pointsChNew = new ArrayList<>();
+		for ( final InterestPoint p : pointsCh )
 		{
 			final double[] l = p.getL().clone();
-			l[ 0 ] += metaA.position[ 0 ];
-			l[ 1 ] += metaA.position[ 1 ];
-			l[ 2 ] += metaA.position[ 2 ];
-			pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			l[ 0 ] += meta.position[ 0 ];
+			l[ 1 ] += meta.position[ 1 ];
+			l[ 2 ] += meta.position[ 2 ];
+			pointsChNew.add( new InterestPoint( p.getId(), l ) );
 		}
 
-		List< InterestPoint > pointsChBNew = new ArrayList<InterestPoint>();
-		for ( final InterestPoint p : pointsChB )
-		{
-			final double[] l = p.getL().clone();
-			l[ 0 ] += metaB.position[ 0 ];
-			l[ 1 ] += metaB.position[ 1 ];
-			l[ 2 ] += metaB.position[ 2 ];
-			pointsChBNew.add( new InterestPoint( p.getId(), l ) );
-		}
+		return new ValuePair<>( pointsChNew, n5data );
+	}
 
-		bbA = realInterval( pointsChANew );
-		bbB = realInterval( pointsChBNew );
+	public static ArrayList< Interval > findBlocks(
+			final String n5Path,
+			final String idA,
+			final String idB,
+			final MetaData metaA,
+			final MetaData metaB,
+			final String channelA,
+			final String channelB,
+			final String camA,
+			final String camB,
+			final int[] blockSize ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, metaA );
+		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, metaB );
+
+		return findBlocks( pairA.getA(), pairB.getA(), blockSize );
+	}
+
+	public static ArrayList< Interval > findBlocks(
+			final ArrayList<InterestPoint> pointsChA,
+			final ArrayList<InterestPoint> pointsChB,
+			final int[] blockSize ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		RealInterval bbA = realInterval( pointsChA );
+		RealInterval bbB = realInterval( pointsChB );
 
 		System.out.println( Intervals.toString( bbA ) );
 		System.out.println( Intervals.toString( bbB ) );
@@ -231,28 +341,28 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		for ( final Interval block : tmpIntervals )
 		{
-			final long countA = numPoints( block, pointsChANew );
-			final long countB = numPoints( block, pointsChBNew );
+			final long countA = containedPoints( block, pointsChA ).size();
+			final long countB = containedPoints( block, pointsChB ).size();
 
 			sumA += countA;
 			sumB += countB;
 
 			if ( countA > 10 && countB > 10 )
-			{
 				intervals.add( block );
-				System.out.println( Util.printInterval( block ) + ": " + countA + " -- " + countB );
-			}
 		}
 
 		System.out.println( "numBlocks with detections: " + intervals.size() + "/" + ( numBlocks + numOverlappingBlocks ) + ", #detectionsA=" + sumA + ", #detectionsB=" + sumB );
+
+		return intervals;
 	}
 
 
 	// TODO: more efficient
-	public static long numPoints( final Interval block, List<InterestPoint> points )
+	public static ArrayList<InterestPoint> containedPoints( final Interval block, List<InterestPoint> points )
 	{
 		final int n = block.numDimensions();
-		long count = 0;
+
+		final ArrayList<InterestPoint> containedPoints = new ArrayList<>();
 
 		for ( final InterestPoint point : points )
 		{
@@ -267,10 +377,10 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			}
 
 			if ( !isOutside )
-				++count;
+				containedPoints.add( point );
 		}
 
-		return count;
+		return containedPoints;
 	}
 
 	public static Interval expandToFit( final RealInterval interval, final int[] blockSize, final double[] minExpansion )
@@ -385,7 +495,15 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
 
-		align( n5Path, idA, idB, meta.get( idA ), meta.get( idB ), channelA, channelB, camA, camB, new int[] { 400, 400, 100 }, true );
+		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, meta.get( idA ) );
+		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, meta.get( idB ) );
+
+		final ArrayList< Interval > blocks =
+				findBlocks( pairA.getA(), pairB.getA(), new int[] { 600, 600, 200 } );
+
+		Pair< ArrayList<PointMatch>, Double > result = alignAll( blocks, pairA.getA(), pairB.getA() );
+
+		System.out.println( result.getA().size() + " matches ratio of blocks with matches=" + result.getB() );
 
 		return null;
 	}

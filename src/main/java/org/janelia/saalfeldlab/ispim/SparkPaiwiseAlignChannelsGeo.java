@@ -86,6 +86,7 @@ import net.preibisch.mvrecon.process.interestpointregistration.pairwise.Pairwise
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointPairwise;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointParameters;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.rgldm.RGLDMMatcher;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 import scala.Tuple2;
@@ -918,6 +919,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			final List<InterestPoint> pointsChBIn,
 			final RealInterval intervalA,
 			final RealInterval intervalB,
+			final boolean fastMatching,
 			final int numNeighbors,
 			final int redundancy,
 			final double ratioOfDistance,
@@ -961,32 +963,33 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			return new ArrayList<PointMatch>();
 		}
 
-		final List< PointMatch > candidates = 
+		final List< PointMatch > candidates;
+
+		if ( fastMatching )
+		{
+			candidates = 
 				new FRGLDMMatcher<>().extractCorrespondenceCandidates(
 						pointsChA,
 						pointsChB,
 						redundancy,
 						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
 
-		/*final List< PointMatch > candidates = 
+			System.out.println( "candidates (FRGDLDM): " + candidates.size() );
+		}
+		else
+		{
+			candidates = 
 				new RGLDMMatcher<>().extractCorrespondenceCandidates(
 						pointsChA,
 						pointsChB,
 						3,
 						redundancy,
 						ratioOfDistance,
-						Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );*/
+						Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
 
-		double minZ = Double.MAX_VALUE;
-		double maxZ = -Double.MAX_VALUE;
-
-		for ( final PointMatch pm : candidates )
-		{
-			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
+			System.out.println( "candidates (RGLDMMatcher): " + candidates.size() );
 		}
 
-		System.out.println( "candidates (FRGDLDM): " + candidates.size() + " from(z) " + minZ + " to(z) " + maxZ );
 
 		final MultiConsensusFilter< AffineModel3D > filter = new MultiConsensusFilter<>(
 //				new Transform.InterpolatedAffineModel2DSupplier(
@@ -1001,17 +1004,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		ArrayList<PointMatch> matches = filter.filter(candidates);
 
-		minZ = Double.MAX_VALUE;
-		maxZ = -Double.MAX_VALUE;
-
-		for ( final PointMatch pm : matches )
-		{
-			minZ = Math.min( minZ, Math.min( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-			maxZ = Math.max( maxZ, Math.max( pm.getP1().getL()[ 2 ], pm.getP2().getL()[ 2 ] ) );
-		}
-
 		if ( matches.size() > 0 )
-			System.out.println( "matches: " + matches.size() + " from(z) " + minZ + " to(z) " + maxZ );
+			System.out.println( "matches: " + matches.size() );
 		else
 			System.out.println( "WARNING: NO matches!" );
 
@@ -1025,7 +1019,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				// init with current fit
 				model.fit( matches );
 				System.out.println( model );
-
+	
 				IterativeClosestPointPairwise<InterestPoint> icp =
 						new IterativeClosestPointPairwise<>(
 								new IterativeClosestPointParameters( model, maxDistanceICP, maxNumIterationsICP ) );
@@ -1048,9 +1042,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 				matches = filterICP.filter( candidatesICP );
 
-				model.fit( matches );
 				System.out.println( matches.size() + "/" + ( candidatesICP.size() + matches.size() ) + " from ICP." );
-				System.out.println( model );
 
 			} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
 				e.printStackTrace();
@@ -1113,7 +1105,9 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 							(z+stepSize)
 					} );
 
-			final ArrayList<PointMatch> matches = matchBlock(pointsChAIn, pointsChBIn, matchInterval, matchInterval, numNeighbors, redundancy, ratioOfDistance, numIterations, maxEpsilon, minNumInliers, doICP, maxDistanceICP, maxNumIterationsICP, minNumInliersICP, numIterationsICP, maxEpsilonICP );
+			final ArrayList<PointMatch> matches = matchBlock(pointsChAIn, pointsChBIn, matchInterval, matchInterval,
+					true, numNeighbors, redundancy, ratioOfDistance, numIterations, maxEpsilon, minNumInliers, doICP,
+					maxDistanceICP, maxNumIterationsICP, minNumInliersICP, numIterationsICP, maxEpsilonICP);
 
 			if ( matches.size() > 0 )
 				++blocksWithMatches;
