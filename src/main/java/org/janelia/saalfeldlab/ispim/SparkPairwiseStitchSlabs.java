@@ -29,6 +29,7 @@ import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
+import net.imglib2.iterator.ZeroMinIntervalIterator;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
@@ -78,7 +79,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String channelB,
 			final String camA,
 			final String camB,
-			final int blockSize,
+			final int[] blockSize,
 			final boolean doICP ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Opening N5." );
@@ -150,10 +151,90 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		System.out.println( Intervals.toString( bbB ) );
 
 		RealInterval overlap = Intervals.intersect( bbA, bbB );
-		RealInterval expanded = expand( overlap, new double[] { 50, 50, 50 } );
 
-		System.out.println( "overlap: " + Intervals.toString( overlap ) );
-		System.out.println( "expanded: " + Intervals.toString( expanded ) + ", size=" + Util.printCoordinates( size( expanded ) ) );
+		double[] size = size( overlap );
+
+		System.out.println( "overlap: " + Intervals.toString( overlap ) + ", size=" + Util.printCoordinates( size ) );
+
+		// now expand till it is a multiple of the blockSize, but at least ...
+		Interval interval = expandToFit( overlap, blockSize, new double[] { 40, 40, 10 } );
+
+		System.out.println( "final interval for testing: " + Util.printInterval( interval ) );
+
+		// creating blocks for testing
+		final int n = interval.numDimensions();
+		final long[] numBlocks = new long[ n ];
+
+		// only the not 50%overlapping blocks
+		for ( int d = 0; d < n; ++d )
+			numBlocks[ d ] = interval.dimension( d ) / blockSize[ d ];
+
+		final ArrayList< Interval > intervals = new ArrayList<>();
+		final ZeroMinIntervalIterator i = new ZeroMinIntervalIterator( numBlocks );
+
+		while ( i.hasNext() )
+		{
+			i.fwd();
+
+			long[] min = new long[ n ];
+			long[] max = new long[ n ];
+
+			for ( int d = 0; d < n; ++d )
+			{
+				min[ d ] = i.getIntPosition( d ) * blockSize[ d ];
+				max[ d ] = min[ d ] + blockSize[ d ] - 1;
+			}
+
+			intervals.add( new FinalInterval(min, max) );
+
+			// add the 50% overlapping intervals if we are not the last block in any dimension
+			boolean isLast = false;
+	
+			for ( int d = 0; d < n; ++d )
+				if ( i.getIntPosition( d ) == numBlocks[ d ] - 1 )
+					isLast = true;
+
+			if ( !isLast )
+			{
+				min = new long[ n ];
+				max = new long[ n ];
+
+				for ( int d = 0; d < n; ++d )
+				{
+					min[ d ] = i.getIntPosition( d ) * blockSize[ d ] + blockSize[ d ] / 2;
+					max[ d ] = min[ d ] + blockSize[ d ] - 1;
+				}
+
+				intervals.add( new FinalInterval(min, max) );
+			}
+		}
+	}
+
+	public static Interval expandToFit( final RealInterval interval, final int[] blockSize, final double[] minExpansion )
+	{
+		final double[] size = size( interval );
+
+		final int n = size.length;
+
+		final long[] min = new long[ n ];
+		final long[] max = new long[ n ];
+
+		for ( int d = 0; d < n; ++d )
+		{
+			final double factor = ( size[ d ] / blockSize[ d ] );
+
+			long factorL = Math.round( Math.floor( factor ) ) + 1;
+
+			while ( factorL * blockSize[ d ] - size[ d ] < minExpansion[ d ] * 2 )
+				++factorL;
+	
+			final double expansion = ( factorL * blockSize[ d ] - size[ d ] - 1 ) / 2.0;
+
+			min[ d ] = Math.round( interval.realMin( d ) - expansion );
+			max[ d ] = Math.round( interval.realMax( d ) + expansion );
+		}
+
+		return new FinalInterval(min, max);
 	}
 
 	public static double[] size( final RealInterval interval )
@@ -241,7 +322,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
 
-		align( n5Path, idA, idB, meta.get( idA ), meta.get( idB ), channelA, channelB, camA, camB, 50, true );
+		align( n5Path, idA, idB, meta.get( idA ), meta.get( idB ), channelA, channelB, camA, camB, new int[] { 400, 400, 100 }, true );
 
 		return null;
 	}
