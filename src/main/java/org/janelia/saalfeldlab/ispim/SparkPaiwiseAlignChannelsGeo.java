@@ -672,7 +672,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		BdvStackSource<?> bdv = null;
 
-		bdv = displayOverlap( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
+		bdv = displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
 		bdv = BdvFunctions.show( renderPoints( pointsCh ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 	}
 
@@ -774,7 +774,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		BdvStackSource<?> bdv = null;
 
-		bdv = displayOverlap( bdv, channelB, camB, n5data.stacks.get( channelB ).get( camB ), n5data.alignments.get( channelB ), n5data.camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
+		bdv = displayCam( bdv, channelB, camB, n5data.stacks.get( channelB ).get( camB ), n5data.alignments.get( channelB ), n5data.camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
 		bdv.setDisplayRange(0, 512);
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 		bdv = BdvFunctions.show( renderPoints( pointsChB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "points ch B", new BdvOptions().addTo( bdv ) );
@@ -1173,7 +1173,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		System.out.println( model.getClass().getSimpleName() + " (" + PointMatch.meanDistance( matches ) + ")" + model );
 	}
 
-	protected static BdvStackSource<?> displayOverlap(
+	protected static BdvStackSource<?> displayCam(
 			final BdvStackSource<?> bdv,
 			final String channel,
 			final String cam, 
