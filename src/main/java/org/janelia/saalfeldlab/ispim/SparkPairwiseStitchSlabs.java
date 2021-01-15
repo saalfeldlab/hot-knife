@@ -12,10 +12,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.Block;
+import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.MovingLeastSquaresTransform3;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 
@@ -24,25 +23,33 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
 
 import loci.formats.FormatException;
+import mpicbg.models.AffineModel3D;
 import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
+import mpicbg.models.TranslationModel3D;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.iterator.ZeroMinIntervalIterator;
-import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointPairwise;
+import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointParameters;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
 public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
+
+	private static final long serialVersionUID = -7726815061775332505L;
 
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
@@ -356,31 +363,55 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		return intervals;
 	}
 
-
-	// TODO: more efficient
-	public static ArrayList<InterestPoint> containedPoints( final Interval block, List<InterestPoint> points )
+	public static ArrayList<InterestPoint> containedPoints( final ArrayList< Interval > blocks, final List<InterestPoint> points )
 	{
-		final int n = block.numDimensions();
-
 		final ArrayList<InterestPoint> containedPoints = new ArrayList<>();
 
 		for ( final InterestPoint point : points )
 		{
-			boolean isOutside = false;
+			boolean anyContains = false;
 
-			for ( int d = 0; d < n && !isOutside; ++d )
+			for ( final Interval block : blocks )
 			{
-				final double p = point.getL()[ d ];
-
-				if ( p < block.min( d ) || p > block.max( d ) )
-					isOutside = true;
+				if ( contains( point, block ) )
+				{
+					anyContains = true;
+					break;
+				}
 			}
 
-			if ( !isOutside )
+			if ( anyContains )
 				containedPoints.add( point );
 		}
 
 		return containedPoints;
+	}
+
+	// TODO: more efficient
+	public static ArrayList<InterestPoint> containedPoints( final Interval block, List<InterestPoint> points )
+	{
+		final ArrayList<InterestPoint> containedPoints = new ArrayList<>();
+
+		for ( final InterestPoint point : points )
+			if ( contains( point, block ) )
+				containedPoints.add( point );
+
+		return containedPoints;
+	}
+
+	protected static boolean contains( final InterestPoint point, final Interval block )
+	{
+		boolean isOutside = false;
+
+		for ( int d = 0; d < point.numDimensions() && !isOutside; ++d )
+		{
+			final double p = point.getL()[ d ];
+
+			if ( p < block.min( d ) || p > block.max( d ) )
+				isOutside = true;
+		}
+
+		return !isOutside;
 	}
 
 	public static Interval expandToFit( final RealInterval interval, final int[] blockSize, final double[] minExpansion )
@@ -416,6 +447,40 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		for ( int d = 0; d < interval.numDimensions(); ++d )
 			size[ d ] = interval.realMax( d ) - interval.realMin( d );
 		return size;
+	}
+
+	public static ArrayList<PointMatch> matchICP(
+			List<InterestPoint> pointsChAIn,
+			List<InterestPoint> pointsChBIn,
+			final Model< ? > model,
+			final double maxDistance,
+			final int maxIterations ) throws FormatException, IOException
+	{
+		//final Model< ? > model = new AffineModel3D();
+		//final double maxDistance = 1.0;
+		//final int maxIterations = 100;
+
+		ArrayList<InterestPoint> pointsChA = new ArrayList<InterestPoint>();
+		ArrayList<InterestPoint> pointsChB = new ArrayList<InterestPoint>();
+
+		for ( final InterestPoint ip : pointsChAIn )
+			pointsChA.add( ip.duplicate() );
+
+		for ( final InterestPoint ip : pointsChBIn )
+			pointsChB.add( ip.duplicate() );
+
+		IterativeClosestPointPairwise<InterestPoint> icp =
+				new IterativeClosestPointPairwise<>(
+						new IterativeClosestPointParameters( model, maxDistance, maxIterations ) );
+
+		// not enough points to build a descriptor
+		if ( pointsChA.size() < model.getMinNumMatches() || pointsChB.size() < model.getMinNumMatches() )
+			return null;
+
+		final ArrayList< PointMatch > matches = new ArrayList<>(
+				icp.match( pointsChA, pointsChB ).getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() ) );
+
+		return matches;
 	}
 
 	public static FinalRealInterval expand( final RealInterval interval, final double[] border )
@@ -501,9 +566,63 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final ArrayList< Interval > blocks =
 				findBlocks( pairA.getA(), pairB.getA(), new int[] { 600, 600, 200 } );
 
-		Pair< ArrayList<PointMatch>, Double > result = alignAll( blocks, pairA.getA(), pairB.getA() );
+		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAll( blocks, pairA.getA(), pairB.getA() );
 
-		System.out.println( result.getA().size() + " matches ratio of blocks with matches=" + result.getB() );
+		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
+
+		// do ICP on transformed 
+		
+		ArrayList<PointMatch> matchesTmp = resultTmp.getA();
+
+		System.out.println( "Total matches:" + matchesTmp.size() );
+
+		TranslationModel3D translation = new TranslationModel3D();
+		translation.fit( matchesTmp );
+		SparkPaiwiseAlignChannelsGeo.error(matchesTmp, translation );
+
+		AffineModel3D affine = new AffineModel3D();
+		affine.fit( matchesTmp );
+		SparkPaiwiseAlignChannelsGeo.error(matchesTmp, affine );
+
+		MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
+		mls.setModel( new AffineModel3D() );
+		mls.setMatches( matchesTmp );
+		SparkPaiwiseAlignChannelsGeo.error( matchesTmp, mls );
+
+		List< InterestPoint > pointsChATmp = containedPoints( blocks, pairA.getA() );
+		System.out.println( "Deforming " + pointsChATmp.size() + " ChA points " );
+
+		List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
+		for ( final InterestPoint p : pointsChATmp )
+		{
+			final double[] l = p.getL().clone();
+			mls.applyInPlace( l );
+			pointsChANew.add( new InterestPoint( p.getId(), l ) );
+		}
+
+		final Model< ? > model = new AffineModel3D();
+		final double maxDistance = 1.0;
+		final int maxIterations = 100;
+
+		matchesTmp = matchICP( pointsChANew, pairB.getA(), model, maxDistance, maxIterations );
+		System.out.println( "Total matches:" + matchesTmp.size() );
+
+		// fix matches back to use non-deformed points!
+		System.out.println( "Restoring ChA points " );
+
+		HashMap<Integer, InterestPoint > lookUpA = new HashMap<>();
+		for ( final InterestPoint p : pairA.getA() )
+			lookUpA.put( p.getId(), p );
+
+		ArrayList<PointMatch> matches = new ArrayList<PointMatch>();
+
+		for ( final PointMatch pm : matchesTmp )
+			matches.add(
+					new PointMatch(
+							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
+							(InterestPoint)pm.getP2() ) );
+
+		// write matches
 
 		return null;
 	}
