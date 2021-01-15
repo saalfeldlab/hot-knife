@@ -27,9 +27,11 @@ import net.imglib2.Dimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
+import net.imglib2.KDTree;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.iterator.ZeroMinIntervalIterator;
+import net.imglib2.neighborsearch.RadiusNeighborSearchOnKDTree;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
@@ -163,14 +165,26 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		// creating blocks for testing
 		final int n = interval.numDimensions();
-		final long[] numBlocks = new long[ n ];
+		final long[] blockIndicies = new long[ n ];
 
 		// only the not 50%overlapping blocks
-		for ( int d = 0; d < n; ++d )
-			numBlocks[ d ] = interval.dimension( d ) / blockSize[ d ];
+		long numBlocks = 1;
+		long numOverlappingBlocks = 1;
 
-		final ArrayList< Interval > intervals = new ArrayList<>();
-		final ZeroMinIntervalIterator i = new ZeroMinIntervalIterator( numBlocks );
+		for ( int d = 0; d < n; ++d )
+		{
+			blockIndicies[ d ] = interval.dimension( d ) / blockSize[ d ];
+			numBlocks *= blockIndicies[ d ];
+			numOverlappingBlocks *= blockIndicies[ d ] - 1;
+		}
+
+		System.out.println( "blocks: " + Util.printCoordinates( blockIndicies ) );
+		System.out.println( "numBlocks: " + numBlocks );
+		System.out.println( "numOverlappingBlocks: " + numOverlappingBlocks );
+		System.out.println( "total numBlocks: " + ( numBlocks + numOverlappingBlocks ) );
+
+		final ArrayList< Interval > tmpIntervals = new ArrayList<>();
+		final ZeroMinIntervalIterator i = new ZeroMinIntervalIterator( blockIndicies );
 
 		while ( i.hasNext() )
 		{
@@ -181,17 +195,17 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 			for ( int d = 0; d < n; ++d )
 			{
-				min[ d ] = i.getIntPosition( d ) * blockSize[ d ];
+				min[ d ] = i.getIntPosition( d ) * blockSize[ d ] + interval.min( d );
 				max[ d ] = min[ d ] + blockSize[ d ] - 1;
 			}
 
-			intervals.add( new FinalInterval(min, max) );
+			tmpIntervals.add( new FinalInterval( min, max ) );
 
 			// add the 50% overlapping intervals if we are not the last block in any dimension
 			boolean isLast = false;
 	
 			for ( int d = 0; d < n; ++d )
-				if ( i.getIntPosition( d ) == numBlocks[ d ] - 1 )
+				if ( i.getIntPosition( d ) == blockIndicies[ d ] - 1 )
 					isLast = true;
 
 			if ( !isLast )
@@ -201,13 +215,62 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 				for ( int d = 0; d < n; ++d )
 				{
-					min[ d ] = i.getIntPosition( d ) * blockSize[ d ] + blockSize[ d ] / 2;
+					min[ d ] = i.getIntPosition( d ) * blockSize[ d ] + interval.min( d ) + blockSize[ d ] / 2;
 					max[ d ] = min[ d ] + blockSize[ d ] - 1;
 				}
 
-				intervals.add( new FinalInterval(min, max) );
+				tmpIntervals.add( new FinalInterval( min, max ) );
 			}
 		}
+
+		// check which blocks actually contain points in both images
+		long sumA = 0;
+		long sumB = 0;
+
+		final ArrayList< Interval > intervals = new ArrayList<>();
+
+		for ( final Interval block : tmpIntervals )
+		{
+			final long countA = numPoints( block, pointsChANew );
+			final long countB = numPoints( block, pointsChBNew );
+
+			sumA += countA;
+			sumB += countB;
+
+			if ( countA > 10 && countB > 10 )
+			{
+				intervals.add( block );
+				System.out.println( Util.printInterval( block ) + ": " + countA + " -- " + countB );
+			}
+		}
+
+		System.out.println( "numBlocks with detections: " + intervals.size() + "/" + ( numBlocks + numOverlappingBlocks ) + ", #detectionsA=" + sumA + ", #detectionsB=" + sumB );
+	}
+
+
+	// TODO: more efficient
+	public static long numPoints( final Interval block, List<InterestPoint> points )
+	{
+		final int n = block.numDimensions();
+		long count = 0;
+
+		for ( final InterestPoint point : points )
+		{
+			boolean isOutside = false;
+
+			for ( int d = 0; d < n && !isOutside; ++d )
+			{
+				final double p = point.getL()[ d ];
+
+				if ( p < block.min( d ) || p > block.max( d ) )
+					isOutside = true;
+			}
+
+			if ( !isOutside )
+				++count;
+		}
+
+		return count;
 	}
 
 	public static Interval expandToFit( final RealInterval interval, final int[] blockSize, final double[] minExpansion )
