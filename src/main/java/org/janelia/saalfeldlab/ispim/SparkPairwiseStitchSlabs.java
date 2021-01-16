@@ -39,6 +39,7 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.iterator.ZeroMinIntervalIterator;
+import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.util.Intervals;
@@ -466,7 +467,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			List<InterestPoint> pointsChBIn,
 			final Model< ? > model,
 			final double maxDistance,
-			final int maxIterations ) throws FormatException, IOException
+			final int maxIterations )
 	{
 		//final Model< ? > model = new AffineModel3D();
 		//final double maxDistance = 1.0;
@@ -570,13 +571,14 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String id,
 			final String channel,
 			final String cam,
+			final AffineGet transform,
 			final List<InterestPoint> points ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
 
 		BdvStackSource<?> bdv = null;
 
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), transform, 0, n5data.lastSliceIndex );
 		bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( points ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 	}
 
@@ -603,6 +605,64 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 	}
 
+	public static ArrayList<PointMatch> globalICP(
+			ArrayList<PointMatch> matchesTmp,
+			final ArrayList<InterestPoint> pointsA,
+			final ArrayList<InterestPoint> pointsB,
+			final ArrayList< Interval > blocks ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		System.out.println( "Total matches:" + matchesTmp.size() );
+
+		TranslationModel3D translation = new TranslationModel3D();
+		translation.fit( matchesTmp );
+		SparkPaiwiseAlignChannelsGeo.error(matchesTmp, translation );
+
+		AffineModel3D affine = new AffineModel3D();
+		affine.fit( matchesTmp );
+		SparkPaiwiseAlignChannelsGeo.error(matchesTmp, affine );
+
+		MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
+		mls.setModel( new AffineModel3D() );
+		mls.setMatches( matchesTmp );
+		SparkPaiwiseAlignChannelsGeo.error( matchesTmp, mls );
+
+		List< InterestPoint > pointsChATmp = containedPoints( blocks, pointsA );
+		System.out.println( "Deforming " + pointsChATmp.size() + " ChA points " );
+
+		List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
+		for ( final InterestPoint p : pointsChATmp )
+		{
+			final double[] l = p.getL().clone();
+			mls.applyInPlace( l );
+			pointsChANew.add( new InterestPoint( p.getId(), l ) );
+		}
+
+		// Total matches:10723 -- 1.0
+		final Model< ? > model = new AffineModel3D();
+		final double maxDistance = 2.0;
+		final int maxIterations = 100;
+
+		matchesTmp = matchICP( pointsChANew, pointsB, model, maxDistance, maxIterations );
+		System.out.println( "Total matches:" + matchesTmp.size() );
+
+		// fix matches back to use non-deformed points!
+		System.out.println( "Restoring ChA points " );
+
+		HashMap<Integer, InterestPoint > lookUpA = new HashMap<>();
+		for ( final InterestPoint p : pointsA )
+			lookUpA.put( p.getId(), p );
+
+		ArrayList<PointMatch> matches = new ArrayList<PointMatch>();
+
+		for ( final PointMatch pm : matchesTmp )
+			matches.add(
+					new PointMatch(
+							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
+							(InterestPoint)pm.getP2() ) );
+
+		return matches;
+	}
+
 	@Override
 	public Void call() throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException
 	{
@@ -620,68 +680,27 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
-		// do ICP on transformed 
-		
-		ArrayList<PointMatch> matchesTmp = resultTmp.getA();
-
-		System.out.println( "Total matches:" + matchesTmp.size() );
-
-		TranslationModel3D translation = new TranslationModel3D();
-		translation.fit( matchesTmp );
-		SparkPaiwiseAlignChannelsGeo.error(matchesTmp, translation );
-
-		AffineModel3D affine = new AffineModel3D();
-		affine.fit( matchesTmp );
-		SparkPaiwiseAlignChannelsGeo.error(matchesTmp, affine );
-
-		MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
-		mls.setModel( new AffineModel3D() );
-		mls.setMatches( matchesTmp );
-		SparkPaiwiseAlignChannelsGeo.error( matchesTmp, mls );
-
-		List< InterestPoint > pointsChATmp = containedPoints( blocks, pairA.getA() );
-		System.out.println( "Deforming " + pointsChATmp.size() + " ChA points " );
-
-		List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
-		for ( final InterestPoint p : pointsChATmp )
-		{
-			final double[] l = p.getL().clone();
-			mls.applyInPlace( l );
-			pointsChANew.add( new InterestPoint( p.getId(), l ) );
-		}
-
-		final Model< ? > model = new AffineModel3D();
-		final double maxDistance = 1.0;
-		final int maxIterations = 100;
-
-		matchesTmp = matchICP( pointsChANew, pairB.getA(), model, maxDistance, maxIterations );
-		System.out.println( "Total matches:" + matchesTmp.size() );
-
-		// fix matches back to use non-deformed points!
-		System.out.println( "Restoring ChA points " );
-
-		HashMap<Integer, InterestPoint > lookUpA = new HashMap<>();
-		for ( final InterestPoint p : pairA.getA() )
-			lookUpA.put( p.getId(), p );
-
-		ArrayList<PointMatch> matches = new ArrayList<PointMatch>();
-
-		for ( final PointMatch pm : matchesTmp )
-			matches.add(
-					new PointMatch(
-							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
-							(InterestPoint)pm.getP2() ) );
+		// do ICP on non-rigidly transformed points
+		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks);
 
 		// TODO: points are shifted by the metadata derived translation!
-		// visualize
-		visualizeDetections( n5Path, idB, channelB, camB, matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
+		AffineTransform3D tmpTransform = new AffineTransform3D();
+		tmpTransform.translate( meta.get( idB ).position[ 0 ], meta.get( idB ).position[ 1 ], meta.get( idB ).position[ 2 ] );
 
+		// visualize
+		visualizeDetections(
+				n5Path, idB, channelB, camB,
+				tmpTransform,
+				matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
+
+		/*
+		final AffineModel3D affine = new AffineModel3D();
 		affine.fit( matches );
 		visualizeAlignment(
 				n5Path,
 				idA, channelA, camA, TransformationTools.getAffineTransform( affine ).inverse(),
 				idB, channelB, camB, matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
-
+		*/
 		// TODO: write matches
 		return null;
 	}

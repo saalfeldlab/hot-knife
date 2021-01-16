@@ -1170,7 +1170,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			pm.getP2().apply( dummy ); // make sure the world coordinates are ok
 		}
 		
-		System.out.println( model.getClass().getSimpleName() + " (" + PointMatch.meanDistance( matches ) + ")" + model );
+		System.out.println( model.getClass().getSimpleName() + " (" + PointMatch.meanDistance( matches ) + ") " + model );
 	}
 
 	protected static BdvStackSource<?> displayCam(
