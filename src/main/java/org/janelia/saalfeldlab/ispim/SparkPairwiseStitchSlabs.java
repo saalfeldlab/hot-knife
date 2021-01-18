@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.MovingLeastSquaresTransform3;
@@ -42,6 +43,7 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.iterator.ZeroMinIntervalIterator;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -85,7 +87,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 	private String camB = null;
 
 	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 600,600,200)")
-	private int[] blocksize = new int[]{ 600, 600, 200 };
+	private int[] blocksize = new int[]{ 250, 250, 100 };
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 		new CommandLine(new SparkPairwiseStitchSlabs()).execute(args);
@@ -93,17 +95,44 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 	public static Pair< ArrayList<PointMatch>, Double > alignAllBlocks(
 			final ArrayList< Interval > blocks,
+			final TranslationModel3D blockATransform, // can be null
 			final ArrayList<InterestPoint> pointsA,
-			final ArrayList<InterestPoint> pointsB )
+			final ArrayList<InterestPoint> pointsB,
+			final Supplier matchingModel,
+			final Supplier icpModel ) throws NotEnoughDataPointsException
 	{
 		int blocksWithMatches = 0;
 		int blocksWithoutMatches = 0;
 
 		ArrayList< PointMatch > allMatches = new ArrayList<>();
 
+		int i = 0;
 		for ( final Interval block : blocks )
 		{
-			ArrayList< PointMatch > matches = alignBlock( pointsA, pointsB, block );
+			System.out.println( "aligning block " + (++i) + "/" + blocks.size() );
+
+			final RealInterval blockA;
+
+			if ( blockATransform == null )
+			{
+				blockA = block;
+			}
+			else
+			{
+				final double[] min = new double[ 3 ];
+				final double[] max = new double[ 3 ];
+	
+				block.realMin( min );
+				block.realMax( max );
+	
+				blockATransform.applyInverseInPlace( min );
+				blockATransform.applyInverseInPlace( max );
+
+				blockA = new FinalRealInterval( min, max );
+			}
+
+			//Supplier modelSupplier = (Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new;
+			ArrayList< PointMatch > matches = alignBlock( pointsA, pointsB, blockA, block, matchingModel, icpModel );
 
 			if ( matches.size() > 0 )
 				++blocksWithMatches;
@@ -150,7 +179,8 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 				}
 			}
 
-			System.out.println( "added: " + added  + " same: " + sameMatch + " different: " + differentMatch );
+			if ( matches.size() > 0 )
+				System.out.println( "added: " + added  + " same: " + sameMatch + " different: " + differentMatch );
 		}
 
 		return new ValuePair<>( allMatches, (double)blocksWithMatches / (double)( blocksWithMatches + blocksWithoutMatches ) );
@@ -166,18 +196,24 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String channelB,
 			final String camA,
 			final String camB,
-			final Interval interval ) throws IOException
+			final RealInterval intervalA,
+			final RealInterval intervalB,
+			final Supplier matchingModel,
+			final Supplier icpModel ) throws IOException
 	{
 		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, metaA );
 		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, metaB );
 
-		alignBlock( pairA.getA(), pairB.getA(), interval );
+		alignBlock( pairA.getA(), pairB.getA(), intervalA, intervalB, matchingModel, icpModel );
 	}
 
 	public static ArrayList<PointMatch> alignBlock(
 			final ArrayList<InterestPoint> pointsChA,
 			final ArrayList<InterestPoint> pointsChB,
-			final Interval interval )
+			final RealInterval intervalA,
+			final RealInterval intervalB,
+			final Supplier matchingModel,
+			final Supplier icpModel )
 	{
 		final boolean fastMatching = false;
 		final int numNeighbors = 3;
@@ -195,10 +231,10 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final int numIterationsICP = 10000;
 		final double maxEpsilonICP = maxDistanceICP / 2.0;
 
-		final ArrayList<PointMatch> matches = SparkPaiwiseAlignChannelsGeo.matchBlock(pointsChA, pointsChB, interval,
-				interval, fastMatching, numNeighbors, redundancy, ratioOfDistance, numIterations, maxEpsilon,
-				minNumInliers, doICP, maxDistanceICP, maxNumIterationsICP, minNumInliersICP, numIterationsICP,
-				maxEpsilonICP);
+		final ArrayList<PointMatch> matches = SparkPaiwiseAlignChannelsGeo.matchBlock(pointsChA, pointsChB, intervalA,
+				intervalB, fastMatching, numNeighbors, redundancy, ratioOfDistance, numIterations, maxEpsilon,
+				minNumInliers, matchingModel, doICP, maxDistanceICP, maxNumIterationsICP, minNumInliersICP, numIterationsICP,
+				maxEpsilonICP, icpModel);
 
 		return matches;
 	}
@@ -243,7 +279,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			for ( final InterestPoint p : pointsCh )
 			{
 				final double[] l = p.getL().clone();
-				l[ 0 ] += meta.position[ 0 ];
+				l[ 0 ] += meta.position[ 0 ] - meta.position[ 2 ] * 13; // it is z along the sheared volume
 				l[ 1 ] += meta.position[ 1 ];
 				l[ 2 ] += meta.position[ 2 ];
 				pointsChNew.add( new InterestPoint( p.getId(), l ) );
@@ -570,7 +606,8 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		int index;
 	}
 
-	public static void visualizeDetections(
+	public static BdvStackSource<?> visualizeDetections(
+			BdvStackSource<?> bdv,
 			final String n5Path,
 			final String id,
 			final String channel,
@@ -580,10 +617,10 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 	{
 		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
 
-		BdvStackSource<?> bdv = null;
-
 		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), transform, 0, n5data.lastSliceIndex );
 		bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( points ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+
+		return bdv;
 	}
 
 	public static void visualizeAlignment(
@@ -742,9 +779,29 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final ArrayList< Interval > blocks =
 				findBlocks( pairA.getA(), pairB.getA(), blockSize );
 
-		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, pairA.getA(), pairB.getA() );
+		final Supplier translationSupplier = (Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new;
+		final Supplier affineSupplier = (Supplier<AffineModel3D> & Serializable)AffineModel3D::new;
 
+		// align all blocks with translation
+		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, null, pairA.getA(), pairB.getA(), translationSupplier, translationSupplier );
+
+		// if matches were found, adjust block positions and re-run
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
+
+		if ( resultTmp.getA().size() > 0 )
+		{
+			final TranslationModel3D blockAtransform = new TranslationModel3D();
+			blockAtransform.fit( resultTmp.getA() );
+
+			System.out.println( "Adjusting block offset to: " + blockAtransform );
+
+			resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), translationSupplier, translationSupplier );
+
+			System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
+		}
+
+		if ( resultTmp != null )
+			return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
 
 		// do ICP on non-rigidly transformed points
 		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks);
@@ -780,20 +837,37 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final Pair< ArrayList< PointMatch >, Pair< Integer, Double > > result =
 				align( positionFile, n5Path, idA, idB, channelA, channelB, camA, camB, blocksize );
 		final ArrayList< PointMatch > matches = result.getA();
+		//final ArrayList< PointMatch > matches = new ArrayList<PointMatch>();
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
 
 		// TODO: points are shifted by the metadata derived translation, so we transform the input images into the global space
 		AffineTransform3D metaTransformA = new AffineTransform3D();
-		metaTransformA.translate( meta.get( idA ).position[ 0 ], meta.get( idA ).position[ 1 ], meta.get( idA ).position[ 2 ] );
+		metaTransformA.translate( meta.get( idA ).position[ 0 ] - meta.get( idA ).position[ 2 ]*13, meta.get( idA ).position[ 1 ], meta.get( idA ).position[ 2 ] );
 		AffineTransform3D metaTransformB = new AffineTransform3D();
-		metaTransformB.translate( meta.get( idB ).position[ 0 ], meta.get( idB ).position[ 1 ], meta.get( idB ).position[ 2 ] );
+		metaTransformB.translate( meta.get( idB ).position[ 0 ] - meta.get( idB ).position[ 2 ]*13, meta.get( idB ).position[ 1 ], meta.get( idB ).position[ 2 ] );
 
 		// visualize
-		//visualizeDetections(
-		//		n5Path, idB, channelB, camB,
-		//		metaTransformB,
-		//		matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
+		/*
+		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, meta.get( idA ) );
+		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, meta.get( idB ) );
+
+		BdvStackSource<?> bdv = visualizeDetections(
+				null, n5Path, idA, channelA, camA,
+				metaTransformA,
+				pairA.getA() );
+
+		bdv = visualizeDetections(
+				bdv, n5Path, idB, channelB, camB,
+				metaTransformB,
+				pairB.getA() );
+
+		SimpleMultiThreading.threadHaltUnClean(); */
+
+		final TranslationModel3D translation = new TranslationModel3D();
+		if ( matches.size() > 4)
+			translation.fit( matches );
+		System.out.println( translation );
 
 		final AffineModel3D affine = new AffineModel3D();
 		if ( matches.size() > 4)

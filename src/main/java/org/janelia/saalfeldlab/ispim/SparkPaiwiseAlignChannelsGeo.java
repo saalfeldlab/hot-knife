@@ -933,10 +933,38 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			final int numIterationsICP,
 			final double maxEpsilonICP )
 	{
+		final Supplier matchingModel = (Supplier<AffineModel3D> & Serializable)AffineModel3D::new;
+		final Supplier icpModel = (Supplier<AffineModel3D> & Serializable)AffineModel3D::new;
+
+		return matchBlock(pointsChAIn, pointsChBIn, intervalA, intervalB, fastMatching, numNeighbors, redundancy,
+				ratioOfDistance, numIterations, maxEpsilon, minNumInliers, matchingModel, doICP, maxDistanceICP,
+				maxNumIterationsICP, minNumInliersICP, numIterationsICP, maxEpsilonICP, icpModel);
+	}
+
+	public static ArrayList<PointMatch> matchBlock(
+			final List<InterestPoint> pointsChAIn,
+			final List<InterestPoint> pointsChBIn,
+			final RealInterval intervalA,
+			final RealInterval intervalB,
+			final boolean fastMatching,
+			final int numNeighbors,
+			final int redundancy,
+			final double ratioOfDistance,
+			final int numIterations,
+			final double maxEpsilon,
+			final int minNumInliers,
+			final Supplier<Model> matchingModel,
+			final boolean doICP,
+			final double maxDistanceICP,
+			final int maxNumIterationsICP,
+			final int minNumInliersICP,
+			final int numIterationsICP,
+			final double maxEpsilonICP,
+			final Supplier<Model> icpModel )
+	{
 		final ArrayList<InterestPoint> pointsChA = new ArrayList<InterestPoint>();
 		final ArrayList<InterestPoint> pointsChB = new ArrayList<InterestPoint>();
 
-		//Intervals.contains(containing, contained)
 		for ( final InterestPoint ip : pointsChAIn )
 			if ( Intervals.contains( intervalA, ip ) )
 			{
@@ -957,9 +985,15 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				pointsChB.add( ip.duplicate() );
 			}
 
+		if ( Math.min( pointsChA.size(), pointsChB.size() ) < minNumInliersICP )
+		{
+			System.out.println( "Not enough points to start with (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
+			return new ArrayList<PointMatch>();
+		}
+
 		if ( pointsChA.size() < numNeighbors + redundancy + 1 || pointsChB.size() < numNeighbors + redundancy + 1 )
 		{
-			System.out.println( "No matches." );
+			System.out.println( "Not enough points (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
 			return new ArrayList<PointMatch>();
 		}
 
@@ -974,7 +1008,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 						redundancy,
 						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
 
-			System.out.println( "candidates (FRGDLDM): " + candidates.size() );
+			System.out.println( "candidates (FRGDLDM): " + candidates.size() + " (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
 		}
 		else
 		{
@@ -990,10 +1024,16 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			System.out.println( "candidates (RGLDMMatcher): " + candidates.size() );
 		}
 
+		if ( candidates.size() < minNumInliers )
+		{
+			System.out.println( "Not enough candidates=" + candidates.size() + " (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
+			return new ArrayList<PointMatch>();
+		}
 
-		final MultiConsensusFilter< AffineModel3D > filter = new MultiConsensusFilter<>(
+		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
+				matchingModel,
 //				new Transform.InterpolatedAffineModel2DSupplier(
-				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+//				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
 //				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
 //				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
 //				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
@@ -1011,7 +1051,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		if ( doICP && matches.size() > 4 )
 		{
-			final AffineModel3D model = new AffineModel3D();
+			final Model model = icpModel.get();
 			final ArrayList<PointMatch> descriptorMatches = matches;
 
 			try
@@ -1033,8 +1073,10 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 						icpResult.getInliers().stream().map( v -> (PointMatch)v ).collect( Collectors.toList() ) );
 				final double avgError = icpResult.getError();
 
-				final MultiConsensusFilter< AffineModel3D > filterICP = new MultiConsensusFilter<>(
-										(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+				final MultiConsensusFilter filterICP = new MultiConsensusFilter<>(
+										icpModel,
+										//(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+										//(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
 										numIterationsICP,
 										Math.min( avgError * 3.0, maxEpsilonICP ),
 										0,
