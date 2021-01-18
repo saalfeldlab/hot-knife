@@ -237,7 +237,8 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		if ( meta != null )
 		{
 			System.out.println( "transforming points to stage coordinates ... " );
-	
+			System.out.println( Util.printInterval( SparkPaiwiseStitchAllSlabs.interval( meta ) ) );
+
 			ArrayList< InterestPoint > pointsChNew = new ArrayList<>();
 			for ( final InterestPoint p : pointsCh )
 			{
@@ -605,7 +606,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5dataA.stacks.get( channelA ).get( camA ), n5dataA.alignments.get( channelA ), n5dataA.camTransforms.get( channelA ).get( camA ), transformA, 0, n5dataA.lastSliceIndex );
 		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
 	
-		if ( pointsB != null )
+		if ( pointsB != null && pointsB.size() > 0 )
 			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 	}
 
@@ -616,6 +617,9 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final ArrayList< Interval > blocks ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		System.out.println( "Total matches:" + matchesTmp.size() );
+
+		if ( matchesTmp.size() < 4 )
+			return new ArrayList<>();
 
 		TranslationModel3D translation = new TranslationModel3D();
 		translation.fit( matchesTmp );
@@ -679,6 +683,12 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String camB ) throws IOException
 	{
 		// TODO: locations include metadata, remove to be consistent
+
+		if ( matches.size() < 4 )
+		{
+			System.out.println( "NO matches to save for " + idA + "<>" + idB + " ... " );
+			return;
+		}
 
 		// write matches
 		System.out.println( "saving matches for " + idA + "<>" + idB + " ... " );
@@ -780,13 +790,15 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		metaTransformB.translate( meta.get( idB ).position[ 0 ], meta.get( idB ).position[ 1 ], meta.get( idB ).position[ 2 ] );
 
 		// visualize
-		visualizeDetections(
-				n5Path, idB, channelB, camB,
-				metaTransformB,
-				matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
+		//visualizeDetections(
+		//		n5Path, idB, channelB, camB,
+		//		metaTransformB,
+		//		matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
 
 		final AffineModel3D affine = new AffineModel3D();
-		affine.fit( matches );
+		if ( matches.size() > 4)
+			affine.fit( matches );
+
 		metaTransformA = metaTransformA.preConcatenate( TransformationTools.getAffineTransform( affine ) );
 
 		visualizeAlignment(
