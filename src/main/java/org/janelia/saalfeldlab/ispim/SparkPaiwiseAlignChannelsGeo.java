@@ -997,69 +997,81 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			return new ArrayList<PointMatch>();
 		}
 
-		final List< PointMatch > candidates;
+		ArrayList<PointMatch> matches;
 
-		if ( fastMatching )
+		if ( matchingModel != null )
 		{
-			candidates = 
-				new FRGLDMMatcher<>().extractCorrespondenceCandidates(
-						pointsChA,
-						pointsChB,
-						redundancy,
-						ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+			final List< PointMatch > candidates;
+	
+			if ( fastMatching )
+			{
+				candidates = 
+					new FRGLDMMatcher<>().extractCorrespondenceCandidates(
+							pointsChA,
+							pointsChB,
+							redundancy,
+							ratioOfDistance ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+	
+				System.out.println( "candidates (FRGDLDM): " + candidates.size() + " (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
+			}
+			else
+			{
+				candidates = 
+					new RGLDMMatcher<>().extractCorrespondenceCandidates(
+							pointsChA,
+							pointsChB,
+							3,
+							redundancy,
+							ratioOfDistance,
+							Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
+	
+				System.out.println( "candidates (RGLDMMatcher): " + candidates.size() );
+			}
+	
+			if ( candidates.size() < minNumInliers )
+			{
+				System.out.println( "Not enough candidates=" + candidates.size() + " (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
+				return new ArrayList<PointMatch>();
+			}
+	
+			final MultiConsensusFilter filter = new MultiConsensusFilter<>(
+					matchingModel,
+	//				new Transform.InterpolatedAffineModel2DSupplier(
+	//				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
+	//				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
+	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
+					numIterations,
+					maxEpsilon,
+					0,
+					minNumInliers);
 
-			System.out.println( "candidates (FRGDLDM): " + candidates.size() + " (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
+			matches = filter.filter(candidates);
+
+			if ( matches.size() > 0 )
+				System.out.println( "matches: " + matches.size() );
+			else
+				System.out.println( "WARNING: NO matches!" );
 		}
 		else
 		{
-			candidates = 
-				new RGLDMMatcher<>().extractCorrespondenceCandidates(
-						pointsChA,
-						pointsChB,
-						3,
-						redundancy,
-						ratioOfDistance,
-						Double.MAX_VALUE ).stream().map( v -> (PointMatch)v).collect( Collectors.toList() );
-
-			System.out.println( "candidates (RGLDMMatcher): " + candidates.size() );
+			matches = null;
 		}
 
-		if ( candidates.size() < minNumInliers )
-		{
-			System.out.println( "Not enough candidates=" + candidates.size() + " (" + pointsChA.size() + " <> " + pointsChB.size() + ")" );
-			return new ArrayList<PointMatch>();
-		}
-
-		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
-				matchingModel,
-//				new Transform.InterpolatedAffineModel2DSupplier(
-//				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
-//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
-//				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
-//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
-				numIterations,
-				maxEpsilon,
-				0,
-				minNumInliers);
-
-		ArrayList<PointMatch> matches = filter.filter(candidates);
-
-		if ( matches.size() > 0 )
-			System.out.println( "matches: " + matches.size() );
-		else
-			System.out.println( "WARNING: NO matches!" );
-
-		if ( doICP && matches.size() > 4 )
+		if ( doICP && ( matches == null || matches.size() > 4 ) )
 		{
 			final Model model = icpModel.get();
 			final ArrayList<PointMatch> descriptorMatches = matches;
 
 			try
 			{
-				// init with current fit
-				model.fit( matches );
-				System.out.println( model );
-	
+				if ( matches != null )
+				{
+					// init with current fit
+					model.fit( matches );
+					System.out.println( model );
+				}
+
 				IterativeClosestPointPairwise<InterestPoint> icp =
 						new IterativeClosestPointPairwise<>(
 								new IterativeClosestPointParameters( model, maxDistanceICP, maxNumIterationsICP ) );

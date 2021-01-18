@@ -221,13 +221,13 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final double ratioOfDistance = 3;
 		final int numIterations = 10000;
 		final double maxEpsilon = 5;
-		final int minNumInliers = 20;
+		final int minNumInliers = 12;
 
 		// ICP
 		final boolean doICP = true;
 		final double maxDistanceICP = maxEpsilon;
 		final int maxNumIterationsICP = 100;
-		final int minNumInliersICP = 30;
+		final int minNumInliersICP = 20;
 		final int numIterationsICP = 10000;
 		final double maxEpsilonICP = maxDistanceICP / 2.0;
 
@@ -799,28 +799,36 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final Supplier affineSupplier = (Supplier<AffineModel3D> & Serializable)AffineModel3D::new;
 
 		// align all blocks with translation
-		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, null, pairA.getA(), pairB.getA(), translationSupplier, translationSupplier );
+		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, null, pairA.getA(), pairB.getA(), translationSupplier, affineSupplier );
 
 		// if matches were found, adjust block positions and re-run
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
-		if ( resultTmp.getA().size() > 0 )
+		if ( resultTmp.getA().size() <= 4 )
 		{
-			final TranslationModel3D blockAtransform = new TranslationModel3D();
-			blockAtransform.fit( resultTmp.getA() );
-
-			System.out.println( "Adjusting block offset to: " + blockAtransform );
-
-			resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), translationSupplier, translationSupplier );
-
-			System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
+			// fail
+			return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
 		}
+
+		// re-match with updated blocks
+		final TranslationModel3D blockAtransform = new TranslationModel3D();
+		blockAtransform.fit( resultTmp.getA() );
+		System.out.println( "Adjusting block offset to: " + blockAtransform );
+
+		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), translationSupplier, affineSupplier );
+
+		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
+
+		// block align ICP only ...
+		blockAtransform.fit( resultTmp.getA() );
+		System.out.println( "Adjusting block offset to: " + blockAtransform );
+		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), null, translationSupplier );
 
 		//if ( resultTmp != null )
 		//	return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
 
 		// do ICP on affine or non-rigidly transformed points
-		final boolean nonRigid = false;
+		final boolean nonRigid = true;
 		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks, nonRigid );
 
 		// fix matches to have the same locations as the channel matches
