@@ -91,7 +91,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		new CommandLine(new SparkPairwiseStitchSlabs()).execute(args);
 	}
 
-	public static Pair< ArrayList<PointMatch>, Double > alignAll(
+	public static Pair< ArrayList<PointMatch>, Double > alignAllBlocks(
 			final ArrayList< Interval > blocks,
 			final ArrayList<InterestPoint> pointsA,
 			final ArrayList<InterestPoint> pointsB )
@@ -103,7 +103,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		for ( final Interval block : blocks )
 		{
-			ArrayList< PointMatch > matches = align( pointsA, pointsB, block );
+			ArrayList< PointMatch > matches = alignBlock( pointsA, pointsB, block );
 
 			if ( matches.size() > 0 )
 				++blocksWithMatches;
@@ -156,7 +156,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		return new ValuePair<>( allMatches, (double)blocksWithMatches / (double)( blocksWithMatches + blocksWithoutMatches ) );
 	}
 
-	public static void align(
+	public static void alignBlock(
 			final String n5Path,
 			final String idA,
 			final String idB,
@@ -171,10 +171,10 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, metaA );
 		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, metaB );
 
-		align( pairA.getA(), pairB.getA(), interval );
+		alignBlock( pairA.getA(), pairB.getA(), interval );
 	}
 
-	public static ArrayList<PointMatch> align(
+	public static ArrayList<PointMatch> alignBlock(
 			final ArrayList<InterestPoint> pointsChA,
 			final ArrayList<InterestPoint> pointsChB,
 			final Interval interval )
@@ -711,8 +711,15 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		System.out.println( "saved" + idA + "<>" + idB );
 	}
 
-	@Override
-	public Void call() throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException
+	public static Pair< ArrayList< PointMatch >, Pair< Integer, Double > > align(
+			final String positionFile,
+			final String n5Path,
+			final String idA,
+			final String idB,
+			final String channelA,
+			final String channelB,
+			final String camA,
+			final String camB ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		System.out.println( idA + " <> " + idB );
 
@@ -724,12 +731,25 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final ArrayList< Interval > blocks =
 				findBlocks( pairA.getA(), pairB.getA(), new int[] { 600, 600, 200 } );
 
-		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAll( blocks, pairA.getA(), pairB.getA() );
+		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, pairA.getA(), pairB.getA() );
 
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
 		// do ICP on non-rigidly transformed points
 		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks);
+
+		writeMatches(matches, n5Path, idA, idB, channelA, channelB, camA, camB);
+
+		return new ValuePair<>( matches, new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
+	}
+
+	@Override
+	public Void call() throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException
+	{
+		final Pair< ArrayList< PointMatch >, Pair< Integer, Double > > result = align(positionFile, n5Path, idA, idB, channelA, channelB, camA, camB);
+		final ArrayList< PointMatch > matches = result.getA();
+
+		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
 
 		// TODO: points are shifted by the metadata derived translation, so we transform the input images into the global space
 		AffineTransform3D metaTransformA = new AffineTransform3D();
@@ -752,7 +772,6 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 				idA, channelA, camA, metaTransformA,
 				idB, channelB, camB, metaTransformB, matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
 
-		// TODO: write matches
 		return null;
 	}
 
