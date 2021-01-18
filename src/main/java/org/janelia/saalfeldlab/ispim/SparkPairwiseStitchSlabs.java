@@ -16,7 +16,10 @@ import java.util.stream.Collectors;
 
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.MovingLeastSquaresTransform3;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
+import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -591,15 +594,16 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String idB,
 			final String channelB,
 			final String camB,
+			final AffineTransform3D transformB,
 			final List<InterestPoint> pointsB ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		final N5Data n5dataA = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idA );
-		final N5Data n5dataB = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idA );
+		final N5Data n5dataB = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idB );
 
 		BdvStackSource<?> bdv = null;
 
 		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5dataA.stacks.get( channelA ).get( camA ), n5dataA.alignments.get( channelA ), n5dataA.camTransforms.get( channelA ).get( camA ), transformA, 0, n5dataA.lastSliceIndex );
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), 0, n5dataB.lastSliceIndex );
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
 	
 		if ( pointsB != null )
 			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
@@ -638,6 +642,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		}
 
 		// Total matches:10723 -- 1.0
+		// Total matches:11918 -- 2.0
 		final Model< ? > model = new AffineModel3D();
 		final double maxDistance = 2.0;
 		final int maxIterations = 100;
@@ -663,6 +668,49 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		return matches;
 	}
 
+	public static void writeMatches(
+			final ArrayList<PointMatch> matches,
+			final String n5Path,
+			final String idA,
+			final String idB,
+			final String channelA,
+			final String channelB,
+			final String camA,
+			final String camB ) throws IOException
+	{
+		// TODO: locations include metadata, remove to be consistent
+
+		// write matches
+		System.out.println( "saving matches for " + idA + "<>" + idB + " ... " );
+
+		if ( matches.size() > 0 )
+		{
+			final N5FSWriter n5Writer = new N5FSWriter(n5Path);
+
+			final String datasetName = idA + "/matches_" + idA + "_" + channelA + "_" + camA + "__" + idB + "_" + channelB + "_" + camB;
+
+			if (n5Writer.exists(datasetName))
+				n5Writer.remove(datasetName);
+			
+			n5Writer.createDataset(
+					datasetName,
+					new long[] {1},
+					new int[] {1},
+					DataType.OBJECT,
+					new GzipCompression());
+
+			final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
+
+			n5Writer.writeSerializedBlock(
+					matches,
+					datasetName,
+					datasetAttributes,
+					new long[] {0});
+		}
+
+		System.out.println( "saved" + idA + "<>" + idB );
+	}
+
 	@Override
 	public Void call() throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException
 	{
@@ -683,24 +731,27 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		// do ICP on non-rigidly transformed points
 		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks);
 
-		// TODO: points are shifted by the metadata derived translation!
-		AffineTransform3D tmpTransform = new AffineTransform3D();
-		tmpTransform.translate( meta.get( idB ).position[ 0 ], meta.get( idB ).position[ 1 ], meta.get( idB ).position[ 2 ] );
+		// TODO: points are shifted by the metadata derived translation, so we transform the input images into the global space
+		AffineTransform3D metaTransformA = new AffineTransform3D();
+		metaTransformA.translate( meta.get( idA ).position[ 0 ], meta.get( idA ).position[ 1 ], meta.get( idA ).position[ 2 ] );
+		AffineTransform3D metaTransformB = new AffineTransform3D();
+		metaTransformB.translate( meta.get( idB ).position[ 0 ], meta.get( idB ).position[ 1 ], meta.get( idB ).position[ 2 ] );
 
 		// visualize
 		visualizeDetections(
 				n5Path, idB, channelB, camB,
-				tmpTransform,
+				metaTransformB,
 				matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
 
-		/*
 		final AffineModel3D affine = new AffineModel3D();
 		affine.fit( matches );
+		metaTransformA = metaTransformA.preConcatenate( TransformationTools.getAffineTransform( affine ) );
+
 		visualizeAlignment(
 				n5Path,
-				idA, channelA, camA, TransformationTools.getAffineTransform( affine ).inverse(),
-				idB, channelB, camB, matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
-		*/
+				idA, channelA, camA, metaTransformA,
+				idB, channelB, camB, metaTransformB, matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
+
 		// TODO: write matches
 		return null;
 	}
