@@ -651,8 +651,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine );//.inverse();
 			System.out.println( transformB_a );
 
-			bdv = SparkPaiwiseAlignChannelsGeo.displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
-			bdv = SparkPaiwiseAlignChannelsGeo.displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
+			bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
+			bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
 
 			System.out.println( "done" );
 
