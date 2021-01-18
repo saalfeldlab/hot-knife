@@ -218,7 +218,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final boolean fastMatching = false;
 		final int numNeighbors = 3;
 		final int redundancy = 1;
-		final double ratioOfDistance = 5;
+		final double ratioOfDistance = 3;
 		final int numIterations = 10000;
 		final double maxEpsilon = 5;
 		final int minNumInliers = 20;
@@ -651,7 +651,8 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			ArrayList<PointMatch> matchesTmp,
 			final ArrayList<InterestPoint> pointsA,
 			final ArrayList<InterestPoint> pointsB,
-			final ArrayList< Interval > blocks ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+			final ArrayList< Interval > blocks,
+			final boolean nonRigid ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		System.out.println( "Total matches:" + matchesTmp.size() );
 
@@ -672,20 +673,35 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		SparkPaiwiseAlignChannelsGeo.error( matchesTmp, mls );
 
 		List< InterestPoint > pointsChATmp = containedPoints( blocks, pointsA );
-		System.out.println( "Deforming " + pointsChATmp.size() + " ChA points " );
-
 		List< InterestPoint > pointsChANew = new ArrayList<InterestPoint>();
-		for ( final InterestPoint p : pointsChATmp )
+
+		if ( nonRigid )
 		{
-			final double[] l = p.getL().clone();
-			mls.applyInPlace( l );
-			pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			System.out.println( "Deforming " + pointsChATmp.size() + " ChA points " );
+	
+			for ( final InterestPoint p : pointsChATmp )
+			{
+				final double[] l = p.getL().clone();
+				mls.applyInPlace( l );
+				pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			}
+		}
+		else
+		{
+			System.out.println( "affine transforming " + pointsChATmp.size() + " ChA points " );
+			
+			for ( final InterestPoint p : pointsChATmp )
+			{
+				final double[] l = p.getL().clone();
+				affine.applyInPlace( l );
+				pointsChANew.add( new InterestPoint( p.getId(), l ) );
+			}
 		}
 
 		// Total matches:10723 -- 1.0
 		// Total matches:11918 -- 2.0
 		final Model< ? > model = new AffineModel3D();
-		final double maxDistance = 2.0;
+		final double maxDistance = nonRigid ? 2.0 : 5.0;
 		final int maxIterations = 100;
 
 		matchesTmp = matchICP( pointsChANew, pointsB, model, maxDistance, maxIterations );
@@ -800,11 +816,12 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 		}
 
-		if ( resultTmp != null )
-			return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
+		//if ( resultTmp != null )
+		//	return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
 
-		// do ICP on non-rigidly transformed points
-		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks);
+		// do ICP on affine or non-rigidly transformed points
+		final boolean nonRigid = false;
+		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks, nonRigid );
 
 		// fix matches to have the same locations as the channel matches
 		System.out.println( "Restoring matches to raw coordinates " );
@@ -872,6 +889,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final AffineModel3D affine = new AffineModel3D();
 		if ( matches.size() > 4)
 			affine.fit( matches );
+		System.out.println( affine );
 
 		metaTransformA = metaTransformA.preConcatenate( TransformationTools.getAffineTransform( affine ) );
 
