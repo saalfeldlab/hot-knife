@@ -159,7 +159,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			this.cam = cam;
 			this.sigma = sigma;
 			this.threshold = threshold;
-			this.gaussOverhead = DoGImgLib2.radiusDoG(2.0);
+			this.gaussOverhead = DoGImgLib2.radiusDoG( sigma );
 			this.transform = camtransform.getRowPackedCopy();
 			this.minIntensity = minIntensity;
 			this.maxIntensity = maxIntensity;
