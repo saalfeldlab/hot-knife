@@ -84,8 +84,8 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 	@Option(names = "--camB", required = true, description = "CamB key, e.g. cam1")
 	private String camB = null;
 
-	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize in z for point extraction (default: 20)")
-	private int blocksize = 50;
+	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 600,600,200)")
+	private int[] blocksize = new int[]{ 600, 600, 200 };
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 		new CommandLine(new SparkPairwiseStitchSlabs()).execute(args);
@@ -719,7 +719,8 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String channelA,
 			final String channelB,
 			final String camA,
-			final String camB ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
+			final String camB,
+			final int[] blockSize ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		System.out.println( idA + " <> " + idB );
 
@@ -729,7 +730,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, meta.get( idB ) );
 
 		final ArrayList< Interval > blocks =
-				findBlocks( pairA.getA(), pairB.getA(), new int[] { 600, 600, 200 } );
+				findBlocks( pairA.getA(), pairB.getA(), blockSize );
 
 		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, pairA.getA(), pairB.getA() );
 
@@ -738,15 +739,36 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		// do ICP on non-rigidly transformed points
 		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks);
 
-		writeMatches(matches, n5Path, idA, idB, channelA, channelB, camA, camB);
+		// fix matches to have the same locations as the channel matches
+		System.out.println( "Restoring matches to raw coordinates " );
 
+		HashMap<Integer, InterestPoint > lookUpA = new HashMap<>();
+		for ( final InterestPoint p : loadPoints( n5Path, idA, channelA, camA, null ).getA() )
+			lookUpA.put( p.getId(), p );
+
+		HashMap<Integer, InterestPoint > lookUpB = new HashMap<>();
+		for ( final InterestPoint p : loadPoints( n5Path, idB, channelB, camB, null ).getA() )
+			lookUpB.put( p.getId(), p );
+
+		ArrayList<PointMatch> matches2 = new ArrayList<PointMatch>();
+
+		for ( final PointMatch pm : matches )
+			matches2.add(
+					new PointMatch(
+							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
+							lookUpB.get( ((InterestPoint)pm.getP1()).getId() ) ) );
+
+		writeMatches( matches2, n5Path, idA, idB, channelA, channelB, camA, camB);
+
+		// return 
 		return new ValuePair<>( matches, new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
 	}
 
 	@Override
 	public Void call() throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException
 	{
-		final Pair< ArrayList< PointMatch >, Pair< Integer, Double > > result = align(positionFile, n5Path, idA, idB, channelA, channelB, camA, camB);
+		final Pair< ArrayList< PointMatch >, Pair< Integer, Double > > result =
+				align( positionFile, n5Path, idA, idB, channelA, channelB, camA, camB, blocksize );
 		final ArrayList< PointMatch > matches = result.getA();
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
