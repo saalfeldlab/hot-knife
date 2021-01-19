@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
 import org.janelia.saalfeldlab.hotknife.MultiConsensusFilter;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.MovingLeastSquaresTransform3;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
+import org.janelia.saalfeldlab.ispim.imglib2.NonRigidRealRandomAccessible;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -30,6 +32,7 @@ import com.google.gson.stream.JsonReader;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import bdv.viewer.Interpolation;
 import loci.formats.FormatException;
 import mpicbg.models.AffineModel3D;
 import mpicbg.models.IllDefinedDataPointsException;
@@ -45,16 +48,22 @@ import net.imglib2.Interval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
+import net.imglib2.RealRandomAccessible;
 import net.imglib2.iterator.ZeroMinIntervalIterator;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.SimpleReferenceIP;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.ModelGrid;
+import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.NumericAffineModel3D;
 import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointPairwise;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointParameters;
@@ -615,47 +624,6 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		int index;
 	}
 
-	public static BdvStackSource<?> visualizeDetections(
-			BdvStackSource<?> bdv,
-			final String n5Path,
-			final String id,
-			final String channel,
-			final String cam,
-			final AffineGet transform,
-			final List<InterestPoint> points ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
-	{
-		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
-
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), transform, 0, n5data.lastSliceIndex );
-		bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( points ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
-
-		return bdv;
-	}
-
-	public static void visualizeAlignment(
-			final String n5Path,
-			final String idA,
-			final String channelA,
-			final String camA,
-			final AffineTransform3D transformA,
-			final String idB,
-			final String channelB,
-			final String camB,
-			final AffineTransform3D transformB,
-			final List<InterestPoint> pointsB ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
-	{
-		final N5Data n5dataA = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idA );
-		final N5Data n5dataB = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idB );
-
-		BdvStackSource<?> bdv = null;
-
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5dataA.stacks.get( channelA ).get( camA ), n5dataA.alignments.get( channelA ), n5dataA.camTransforms.get( channelA ).get( camA ), transformA, 0, n5dataA.lastSliceIndex );
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
-	
-		if ( pointsB != null && pointsB.size() > 0 )
-			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
-	}
-
 	public static ArrayList<PointMatch> globalICP(
 			ArrayList<PointMatch> matchesTmp,
 			final ArrayList<InterestPoint> pointsA,
@@ -877,6 +845,129 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		return new ValuePair<>( matches, new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
 	}
 
+	public static BdvStackSource<?> visualizeDetections(
+			BdvStackSource<?> bdv,
+			final String n5Path,
+			final String id,
+			final String channel,
+			final String cam,
+			final AffineGet transform,
+			final List<InterestPoint> points ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
+
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), transform, 0, n5data.lastSliceIndex );
+		bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( points ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+
+		return bdv;
+	}
+
+	public static void visualizeAlignment(
+			final String n5Path,
+			final String idA,
+			final String channelA,
+			final String camA,
+			final AffineTransform3D transformA,
+			final String idB,
+			final String channelB,
+			final String camB,
+			final AffineTransform3D transformB,
+			final List<InterestPoint> pointsB ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		final N5Data n5dataA = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idA );
+		final N5Data n5dataB = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idB );
+
+		BdvStackSource<?> bdv = null;
+
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5dataA.stacks.get( channelA ).get( camA ), n5dataA.alignments.get( channelA ), n5dataA.camTransforms.get( channelA ).get( camA ), transformA, 0, n5dataA.lastSliceIndex );
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
+	
+		if ( pointsB != null && pointsB.size() > 0 )
+			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+	}
+
+	public static void visualizeAlignmentNonRigid(
+			final String n5Path,
+			final String idA,
+			final String channelA,
+			final String camA,
+			final AffineTransform3D transformA,
+			final String idB,
+			final String channelB,
+			final String camB,
+			final AffineTransform3D transformB,
+			final ArrayList<PointMatch> matches ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		final N5Data n5dataA = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idA );
+		final N5Data n5dataB = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idB );
+
+		final double alpha = 1.0;
+		final boolean virtual = false;
+		final long[] controlPointDistance = new long[] { 100, 100, 20 };
+
+		// get the input image (same coordinate space as correspondences)
+		System.out.println( new Date( System.currentTimeMillis() ) + ": Preparing idA: " + idA );
+
+		Pair<RealRandomAccessible<UnsignedShortType>, Interval> prepareCamSource =
+				ViewISPIMStack.prepareCamSource(
+						n5dataA.stacks.get( channelA ).get( camA ),
+						new UnsignedShortType(0),
+						Interpolation.NEARESTNEIGHBOR,
+						n5dataA.camTransforms.get( channelA ).get( camA ).inverse(), // pass the forward transform
+						transformA,
+						n5dataA.alignments.get( channelA ),
+						0,
+						n5dataA.lastSliceIndex );
+
+		final Interval boundingBox = prepareCamSource.getB();
+
+		// interest points in the pairs of images
+		System.out.println( new Date( System.currentTimeMillis() ) + ": Setting up corresponding interest points for idA: " + idA );
+
+		final HashSet< SimpleReferenceIP > corrIPs = new HashSet<>();
+
+		double sumDist = 0;
+		double minDist = Double.MAX_VALUE;
+		double maxDist = -Double.MAX_VALUE;
+
+		for ( final PointMatch pm : matches )
+		{
+			double dist = Math.sqrt( (pm.getP1().getL()[0] - pm.getP2().getL()[0])*(pm.getP1().getL()[0] - pm.getP2().getL()[0]) + (pm.getP1().getL()[1] - pm.getP2().getL()[1])*(pm.getP1().getL()[1] - pm.getP2().getL()[1]) + (pm.getP1().getL()[2] - pm.getP2().getL()[2])*(pm.getP1().getL()[2] - pm.getP2().getL()[2]) );
+			corrIPs.add(
+					new SimpleReferenceIP(
+							pm.getP1().getL().clone(),
+							pm.getP1().getL().clone(),
+							pm.getP2().getL().clone() ) );
+			
+			sumDist += dist;
+			maxDist = Math.max( maxDist, dist );
+			minDist = Math.min( minDist, dist );
+		}
+
+		// TODO: this is after applying the first round of non-rigid!!
+		System.out.println( "avg=" + (sumDist/matches.size()) + ", max=" + maxDist + ", minDist=" + minDist );
+
+		// compute Grid
+		System.out.println(
+				new Date( System.currentTimeMillis() ) + ": Interpolating non-rigid model (a=" + alpha + ") using " + corrIPs.size() + " points and stepsize " +
+				Util.printCoordinates( controlPointDistance ) + " Interval: " + Util.printInterval( boundingBox ) );
+
+		RealRandomAccessible< NumericAffineModel3D > /*ModelGrid*/ grid = new ModelGrid( controlPointDistance, boundingBox, corrIPs, alpha, virtual );
+		RealRandomAccessible< UnsignedShortType > transformedA = new NonRigidRealRandomAccessible< UnsignedShortType >(grid,  prepareCamSource.getA() );
+
+		System.out.println( new Date( System.currentTimeMillis() ) + ": displaying" );
+
+		BdvStackSource<?> bdv = null;
+
+		bdv = BdvFunctions.show( transformedA, prepareCamSource.getB(), "non-rigid A", new BdvOptions().addTo( bdv ) );
+		bdv.setDisplayRange(0, 1024);
+		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
+
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
+		bdv.setDisplayRange(0, 1024);
+		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
+	}
+
 	@Override
 	public Void call() throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException
 	{
@@ -920,13 +1011,19 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			affine.fit( matches );
 		SparkPaiwiseAlignChannelsGeo.error( matches, affine );
 
+		visualizeAlignmentNonRigid(
+				n5Path,
+				idA, channelA, camA, metaTransformA,
+				idB, channelB, camB, metaTransformB,
+				matches );
+/*
 		metaTransformA = metaTransformA.preConcatenate( TransformationTools.getAffineTransform( affine ) );
 
 		visualizeAlignment(
 				n5Path,
 				idA, channelA, camA, metaTransformA,
 				idB, channelB, camB, metaTransformB, matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
-
+*/
 		return null;
 	}
 
