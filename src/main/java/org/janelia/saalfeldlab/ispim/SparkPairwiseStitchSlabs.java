@@ -98,7 +98,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 	@Option(names = "--camB", required = true, description = "CamB key, e.g. cam1")
 	private String camB = null;
 
-	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 600,600,200)")
+	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 250, 250, 100)")
 	private int[] blocksize = new int[]{ 250, 250, 100 };
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
