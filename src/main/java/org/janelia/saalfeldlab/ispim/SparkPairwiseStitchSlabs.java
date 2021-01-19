@@ -98,7 +98,9 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final TranslationModel3D blockATransform, // can be null
 			final ArrayList<InterestPoint> pointsA,
 			final ArrayList<InterestPoint> pointsB,
+			final int minNumInliers, //12
 			final Supplier matchingModel,
+			final int minNumInliersICP, //20
 			final Supplier icpModel ) throws NotEnoughDataPointsException
 	{
 		int blocksWithMatches = 0;
@@ -132,7 +134,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			}
 
 			//Supplier modelSupplier = (Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new;
-			ArrayList< PointMatch > matches = alignBlock( pointsA, pointsB, blockA, block, matchingModel, icpModel );
+			ArrayList< PointMatch > matches = alignBlock( pointsA, pointsB, blockA, block, minNumInliers, matchingModel, minNumInliersICP, icpModel );
 
 			if ( matches.size() > 0 )
 				++blocksWithMatches;
@@ -198,13 +200,15 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String camB,
 			final RealInterval intervalA,
 			final RealInterval intervalB,
+			final int minNumInliers, //12
 			final Supplier matchingModel,
+			final int minNumInliersICP, //20
 			final Supplier icpModel ) throws IOException
 	{
 		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, metaA );
 		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, metaB );
 
-		alignBlock( pairA.getA(), pairB.getA(), intervalA, intervalB, matchingModel, icpModel );
+		alignBlock( pairA.getA(), pairB.getA(), intervalA, intervalB, minNumInliers, matchingModel, minNumInliersICP, icpModel );
 	}
 
 	public static ArrayList<PointMatch> alignBlock(
@@ -212,7 +216,9 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final ArrayList<InterestPoint> pointsChB,
 			final RealInterval intervalA,
 			final RealInterval intervalB,
+			final int minNumInliers, //12
 			final Supplier matchingModel,
+			final int minNumInliersICP, //20
 			final Supplier icpModel )
 	{
 		final boolean fastMatching = false;
@@ -221,13 +227,13 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final double ratioOfDistance = 3;
 		final int numIterations = 10000;
 		final double maxEpsilon = 5;
-		final int minNumInliers = 12;
+		//final int minNumInliers = 12;
 
 		// ICP
 		final boolean doICP = true;
 		final double maxDistanceICP = maxEpsilon;
 		final int maxNumIterationsICP = 100;
-		final int minNumInliersICP = 20;
+		//final int minNumInliersICP = 20;
 		final int numIterationsICP = 10000;
 		final double maxEpsilonICP = maxDistanceICP / 2.0;
 
@@ -799,7 +805,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final Supplier affineSupplier = (Supplier<AffineModel3D> & Serializable)AffineModel3D::new;
 
 		// align all blocks with translation
-		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, null, pairA.getA(), pairB.getA(), translationSupplier, affineSupplier );
+		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, null, pairA.getA(), pairB.getA(), 12, translationSupplier, 20, affineSupplier );
 
 		// if matches were found, adjust block positions and re-run
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
@@ -815,14 +821,24 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		blockAtransform.fit( resultTmp.getA() );
 		System.out.println( "Adjusting block offset to: " + blockAtransform );
 
-		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), translationSupplier, affineSupplier );
+		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), 12, translationSupplier, 20, affineSupplier );
 
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
 		// block align ICP only ...
 		blockAtransform.fit( resultTmp.getA() );
 		System.out.println( "Adjusting block offset to: " + blockAtransform );
-		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), null, translationSupplier );
+
+		final Supplier initalizedSupplier = new Supplier() {
+			@Override
+			public Model get() {
+				return blockAtransform.copy();
+			}
+		};
+
+		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), 12, null, 40, initalizedSupplier );
+
+		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
 		//if ( resultTmp != null )
 		//	return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
