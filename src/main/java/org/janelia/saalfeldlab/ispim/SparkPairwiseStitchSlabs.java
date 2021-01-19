@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.janelia.saalfeldlab.hotknife.MultiConsensusFilter;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.MovingLeastSquaresTransform3;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -32,7 +33,9 @@ import bdv.util.BdvStackSource;
 import loci.formats.FormatException;
 import mpicbg.models.AffineModel3D;
 import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.Model;
+import mpicbg.models.MovingLeastSquaresTransform;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.PointMatch;
 import mpicbg.models.TranslationModel3D;
@@ -673,7 +676,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		affine.fit( matchesTmp );
 		SparkPaiwiseAlignChannelsGeo.error(matchesTmp, affine );
 
-		MovingLeastSquaresTransform3 mls = new MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
+		MovingLeastSquaresTransform mls = new MovingLeastSquaresTransform();// MovingLeastSquaresTransform3(); // cuts of correspondences if weight is too small
 		mls.setModel( new AffineModel3D() );
 		mls.setMatches( matchesTmp );
 		SparkPaiwiseAlignChannelsGeo.error( matchesTmp, mls );
@@ -706,7 +709,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		// Total matches:10723 -- 1.0
 		// Total matches:11918 -- 2.0
-		final Model< ? > model = new AffineModel3D();
+		final Model< ? > model = new InterpolatedAffineModel3D<>(new AffineModel3D(), new TranslationModel3D(), 0.1 ); //new AffineModel3D();
 		final double maxDistance = nonRigid ? 2.0 : 5.0;
 		final int maxIterations = 100;
 
@@ -829,23 +832,25 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		blockAtransform.fit( resultTmp.getA() );
 		System.out.println( "Adjusting block offset to: " + blockAtransform );
 
-		final Supplier initalizedSupplier = new Supplier() {
-			@Override
-			public Model get() {
-				return blockAtransform.copy();
-			}
-		};
-
-		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), 12, null, 40, initalizedSupplier );
+		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), 12, null, 40, () -> blockAtransform.copy() );
 
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
-		//if ( resultTmp != null )
-		//	return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
+		// global consistency check!
+		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
+				() -> new InterpolatedAffineModel3D<>(new AffineModel3D(), new TranslationModel3D(), 0.1 ),
+				10000,
+				50.0,
+				0,
+				400 );
+
+		ArrayList<PointMatch> matches = filter.filter( resultTmp.getA() );
+
+		System.out.println( matches.size() + " matches remaining after global consistency check of candidates=" + resultTmp.getA().size() );
 
 		// do ICP on affine or non-rigidly transformed points
 		final boolean nonRigid = false;
-		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks, nonRigid );
+		//matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks, nonRigid );
 
 		// fix matches to have the same locations as the channel matches
 		System.out.println( "Restoring matches to raw coordinates " );
