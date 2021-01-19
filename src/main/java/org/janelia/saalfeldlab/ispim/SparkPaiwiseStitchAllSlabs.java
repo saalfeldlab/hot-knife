@@ -85,8 +85,8 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 	@Option(names = "--camB", required = true, description = "CamB key, e.g. cam1")
 	private String camB = null;
 
-	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 600,600,200)")
-	private int[] blocksize = new int[]{ 600, 600, 200 };
+	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 250, 250, 100)")
+	private int[] blocksize = new int[]{ 250, 250, 100 };
 
 	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
 	private HashSet<String> excludeIds = new HashSet<>();
@@ -153,11 +153,13 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 
 		final ArrayList< Tuple2< String, String > > pairs = overlappingStacks( ids, meta );
 
-		for ( final Tuple2< String, String > pair : pairs )
-			System.out.println( pair._1() + " <> " + pair._2() );
+		int i = 0;
 
-		System.exit( 0 );
-		
+		for ( final Tuple2< String, String > pair : pairs )
+			System.out.println( ++i + ": " + pair._1() + " <> " + pair._2() );
+
+		//System.exit( 0 );
+
 		final JavaRDD<Tuple2< String, String >> rddIds = sc.parallelize( pairs );
 
 		final JavaPairRDD<Tuple2< String, String >, AlignStatistics > rddResults = rddIds.mapToPair( pair -> {
