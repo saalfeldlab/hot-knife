@@ -31,6 +31,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs.AlignStatistics;
 import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs.MetaData;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.Block;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
@@ -159,23 +160,23 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 		
 		final JavaRDD<Tuple2< String, String >> rddIds = sc.parallelize( pairs );
 
-		final JavaPairRDD<Tuple2< String, String >, Tuple3<ArrayList< PointMatch >, Integer, Double > > rddResults = rddIds.mapToPair( pair -> {
+		final JavaPairRDD<Tuple2< String, String >, AlignStatistics > rddResults = rddIds.mapToPair( pair -> {
 
-			final Pair< ArrayList< PointMatch >, Pair< Integer, Double > > result =
+			final AlignStatistics result =
 					SparkPairwiseStitchSlabs.align( positionFile, n5Path, pair._1(), pair._2(), channelA, channelB, camA, camB, blocksize );
 
-			return new Tuple2<>(pair, new Tuple3<>( result.getA(), result.getB().getA(), result.getB().getB() ) );
+			return new Tuple2<>(pair, result );
 		});
 
 		rddResults.cache();
 
-		final ArrayList<Tuple2<Tuple2< String, String >, Tuple3<ArrayList< PointMatch >, Integer, Double > > > results = new ArrayList<>();
+		final ArrayList<Tuple2<Tuple2< String, String >, AlignStatistics > > results = new ArrayList<>();
 		results.addAll( rddResults.collect() );
 
 		Collections.sort( results, (o1, o2 ) -> { return o1._1()._1().compareTo( o2._1()._1() ); } );
 
-		for ( final Tuple2<Tuple2< String, String >, Tuple3<ArrayList< PointMatch >, Integer, Double > > tuple : results )
-			System.out.println( tuple._1()._1() + "<>" + tuple._1()._1() + ": " + tuple._2()._1().size() + " matches, by geo " + tuple._2()._2() + ", ratio=" + tuple._2()._3() );
+		for ( final Tuple2<Tuple2< String, String >, AlignStatistics > tuple : results )
+			System.out.println( tuple._1()._1() + "<>" + tuple._1()._1() + ": " + tuple._2() );
 
 		sc.close();
 

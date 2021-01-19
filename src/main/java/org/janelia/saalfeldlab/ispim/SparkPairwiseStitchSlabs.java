@@ -682,7 +682,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final int maxIterations = 100;
 
 		matchesTmp = matchICP( pointsChANew, pointsB, model, maxDistance, maxIterations );
-		System.out.println( "Total matches:" + matchesTmp.size() );
+		System.out.println( "Total matches after non-rigid ICP:" + matchesTmp.size() );
 
 		// fix matches back to use non-deformed points!
 		System.out.println( "Restoring ChA points " );
@@ -751,7 +751,33 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		System.out.println( "saved" + idA + "<>" + idB );
 	}
 
-	public static Pair< ArrayList< PointMatch >, Pair< Integer, Double > > align(
+	public static class AlignStatistics implements Serializable
+	{
+		private static final long serialVersionUID = -8074811409462717119L;
+
+		String idA, idB, channelA, channelB, camA, camB;
+
+		int firstPassInliers = -1, secondPassInliers = -1, thirdPassInliers = -1;
+		double firstPassRatio = -1, secondPassRatio = -1, thirdPassRatio = -1;
+
+		ArrayList< PointMatch > matches = null;
+
+		@Override
+		public String toString()
+		{
+			if ( matches == null )
+			{
+				return idA + "<>" + idB + ": FAILED: " + firstPassInliers + " (" + firstPassRatio + ") -> "+ secondPassInliers + " (" + secondPassRatio + ") -> "+ thirdPassInliers + " (" + thirdPassRatio + ")";
+			}
+			else
+			{
+				return idA + "<>" + idB + ": SUCCESS [" + matches.size() + " matches]: " + firstPassInliers + " (" + firstPassRatio + ") -> "+ secondPassInliers + " (" + secondPassRatio + ") -> "+ thirdPassInliers + " (" + thirdPassRatio + ")";
+			}
+			
+		}
+	}
+
+	public static AlignStatistics align(
 			final String positionFile,
 			final String n5Path,
 			final String idA,
@@ -762,6 +788,14 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String camB,
 			final int[] blockSize ) throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
+		final AlignStatistics statistics = new AlignStatistics();
+		statistics.idA = idA;
+		statistics.idB = idB;
+		statistics.channelA = channelA;
+		statistics.channelB = channelB;
+		statistics.camA = camA;
+		statistics.camB = camB;
+
 		System.out.println( idA + " <> " + idB );
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
@@ -778,13 +812,16 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		// align all blocks with translation
 		Pair< ArrayList<PointMatch>, Double > resultTmp = alignAllBlocks( blocks, null, pairA.getA(), pairB.getA(), 12, translationSupplier, 20, affineSupplier );
 
+		statistics.firstPassInliers = resultTmp.getA().size();
+		statistics.firstPassRatio = resultTmp.getB();
+
 		// if matches were found, adjust block positions and re-run
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
 		if ( resultTmp.getA().size() <= 4 )
 		{
 			// fail
-			return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
+			return statistics;
 		}
 
 		// re-match with updated blocks
@@ -794,6 +831,9 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), 12, translationSupplier, 20, affineSupplier );
 
+		statistics.secondPassInliers = resultTmp.getA().size();
+		statistics.secondPassRatio = resultTmp.getB();
+
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
 		// block align ICP only ...
@@ -801,6 +841,9 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		System.out.println( "Adjusting block offset to: " + blockAtransform );
 
 		resultTmp = alignAllBlocks( blocks, blockAtransform, pairA.getA(), pairB.getA(), 12, null, 40, () -> blockAtransform.copy() );
+
+		statistics.thirdPassInliers = resultTmp.getA().size();
+		statistics.thirdPassRatio = resultTmp.getB();
 
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
@@ -812,13 +855,13 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 				0,
 				400 );
 
-		ArrayList<PointMatch> matches = filter.filter( resultTmp.getA() );
+		ArrayList< PointMatch > matches = filter.filter( resultTmp.getA() );
 
-		System.out.println( matches.size() + " matches remaining after global consistency check of candidates=" + resultTmp.getA().size() );
+		System.out.println( matches.size() + " matches remaining after global consistency check of candidates=" + ( matches.size() + resultTmp.getA().size() ) );
 
 		// do ICP on affine or non-rigidly transformed points
-		final boolean nonRigid = false;
-		//matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks, nonRigid );
+		//final boolean nonRigid = true;
+		//matches = globalICP( matches, pairA.getA(), pairB.getA(), blocks, nonRigid );
 
 		// fix matches to have the same locations as the channel matches
 		System.out.println( "Restoring matches to raw coordinates " );
@@ -831,18 +874,20 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		for ( final InterestPoint p : loadPoints( n5Path, idB, channelB, camB, null ).getA() )
 			lookUpB.put( p.getId(), p );
 
-		ArrayList<PointMatch> matches2 = new ArrayList<PointMatch>();
+		ArrayList<PointMatch> matchesTmp = new ArrayList<PointMatch>();
 
 		for ( final PointMatch pm : matches )
-			matches2.add(
+			matchesTmp.add(
 					new PointMatch(
 							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
 							lookUpB.get( ((InterestPoint)pm.getP1()).getId() ) ) );
 
-		writeMatches( matches2, n5Path, idA, idB, channelA, channelB, camA, camB);
+		writeMatches( matchesTmp, n5Path, idA, idB, channelA, channelB, camA, camB);
+
+		statistics.matches = matches; // without metadata -> matchesTmp;
 
 		// return 
-		return new ValuePair<>( matches, new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
+		return statistics;
 	}
 
 	public static BdvStackSource<?> visualizeDetections(
@@ -883,7 +928,11 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
 	
 		if ( pointsB != null && pointsB.size() > 0 )
+		{
 			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+			bdv.setDisplayRange(0, 256);
+			bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 0, 0)));
+		}
 	}
 
 	public static void visualizeAlignmentNonRigid(
@@ -896,7 +945,8 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			final String channelB,
 			final String camB,
 			final AffineTransform3D transformB,
-			final ArrayList<PointMatch> matches ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
+			final ArrayList<PointMatch> matches,
+			final List<InterestPoint> pointsB ) throws FormatException, IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		final N5Data n5dataA = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idA );
 		final N5Data n5dataB = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, idB );
@@ -966,14 +1016,23 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
 		bdv.setDisplayRange(0, 1024);
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
+
+		if ( pointsB != null && pointsB.size() > 0 )
+		{
+			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+			bdv.setDisplayRange(0, 256);
+		}
 	}
 
 	@Override
 	public Void call() throws IOException, FormatException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException
 	{
-		final Pair< ArrayList< PointMatch >, Pair< Integer, Double > > result =
+		final AlignStatistics result =
 				align( positionFile, n5Path, idA, idB, channelA, channelB, camA, camB, blocksize );
-		final ArrayList< PointMatch > matches = result.getA();
+
+		System.out.println( result );
+
+		final ArrayList< PointMatch > matches = result.matches;
 		//final ArrayList< PointMatch > matches = new ArrayList<PointMatch>();
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
@@ -1011,19 +1070,20 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			affine.fit( matches );
 		SparkPaiwiseAlignChannelsGeo.error( matches, affine );
 
-		visualizeAlignmentNonRigid(
+/*		visualizeAlignmentNonRigid(
 				n5Path,
 				idA, channelA, camA, metaTransformA,
 				idB, channelB, camB, metaTransformB,
-				matches );
-/*
+				matches,
+				matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );*/
+
 		metaTransformA = metaTransformA.preConcatenate( TransformationTools.getAffineTransform( affine ) );
 
 		visualizeAlignment(
 				n5Path,
 				idA, channelA, camA, metaTransformA,
 				idB, channelB, camB, metaTransformB, matches.stream().map( pm -> ((InterestPoint)pm.getP2()) ).collect( Collectors.toList() ) );
-*/
+
 		return null;
 	}
 
