@@ -231,11 +231,11 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		// ICP
 		final boolean doICP = true;
-		final double maxDistanceICP = maxEpsilon;
+		final double maxDistanceICP = maxEpsilon; // for ICP
 		final int maxNumIterationsICP = 100;
 		//final int minNumInliersICP = 20;
 		final int numIterationsICP = 10000;
-		final double maxEpsilonICP = maxDistanceICP / 2.0;
+		final double maxEpsilonICP = maxDistanceICP / 2.0; // for RANSAC
 
 		final ArrayList<PointMatch> matches = SparkPaiwiseAlignChannelsGeo.matchBlock(pointsChA, pointsChB, intervalA,
 				intervalB, fastMatching, numNeighbors, redundancy, ratioOfDistance, numIterations, maxEpsilon,
@@ -844,7 +844,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		//	return new ValuePair<>( resultTmp.getA(), new ValuePair<>( resultTmp.getA().size(), resultTmp.getB() ) );
 
 		// do ICP on affine or non-rigidly transformed points
-		final boolean nonRigid = true;
+		final boolean nonRigid = false;
 		final ArrayList<PointMatch> matches = globalICP(resultTmp.getA(), pairA.getA(), pairB.getA(), blocks, nonRigid );
 
 		// fix matches to have the same locations as the channel matches
@@ -908,12 +908,12 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final TranslationModel3D translation = new TranslationModel3D();
 		if ( matches.size() > 4)
 			translation.fit( matches );
-		System.out.println( translation );
+		SparkPaiwiseAlignChannelsGeo.error( matches, translation );
 
 		final AffineModel3D affine = new AffineModel3D();
 		if ( matches.size() > 4)
 			affine.fit( matches );
-		System.out.println( affine );
+		SparkPaiwiseAlignChannelsGeo.error( matches, affine );
 
 		metaTransformA = metaTransformA.preConcatenate( TransformationTools.getAffineTransform( affine ) );
 
