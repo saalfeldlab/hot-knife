@@ -142,7 +142,7 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
-		final SparkConf conf = new SparkConf().setAppName("SparkPaiwiseAlignChannelsGeoAll");
+		final SparkConf conf = new SparkConf().setAppName("SparkPaiwiseStitchAllSlabs");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
