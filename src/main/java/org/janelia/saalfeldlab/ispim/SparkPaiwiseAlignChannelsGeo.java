@@ -673,7 +673,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		BdvStackSource<?> bdv = null;
 
 		bdv = displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
-		bdv = BdvFunctions.show( renderPoints( pointsCh ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+		bdv = BdvFunctions.show( renderPoints( pointsCh, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 	}
 
 	public static void visualizeAlignment(
@@ -777,8 +777,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		bdv = displayCam( bdv, channelB, camB, n5data.stacks.get( channelB ).get( camB ), n5data.alignments.get( channelB ), n5data.camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
 		bdv.setDisplayRange(0, 512);
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
-		bdv = BdvFunctions.show( renderPoints( pointsChB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "points ch B", new BdvOptions().addTo( bdv ) );
-		bdv = BdvFunctions.show( renderPoints( matches.stream().map( pm -> pm.getP2() ).collect( Collectors.toList()) ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "matches ch B", new BdvOptions().addTo( bdv ) );
+		bdv = BdvFunctions.show( renderPoints( pointsChB, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "points ch B", new BdvOptions().addTo( bdv ) );
+		bdv = BdvFunctions.show( renderPoints( matches.stream().map( pm -> pm.getP2() ).collect( Collectors.toList()), false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "matches ch B", new BdvOptions().addTo( bdv ) );
 
 		//AffineModel3D affine = new AffineModel3D();
 		//affine.fit( matches );
@@ -795,14 +795,32 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		// cam1 (Ch405nm) vs cam3 (Ch488+561+647nm)**
 	}
 
-	public static RealRandomAccessible< DoubleType > renderPoints( final Collection< ? extends Point > points )
+	public static RealRandomAccessible< DoubleType > renderPoints( final Collection< ? extends Point > points, final boolean useW )
 	{
-		RealPointSampleList< UnsignedByteType > list = new RealPointSampleList<UnsignedByteType>( 3 );
+		RealPointSampleList< UnsignedByteType > list = new RealPointSampleList<UnsignedByteType>( points.iterator().next().getL().length );
 
 		for ( final Point p : points )
-			list.add( new RealPoint( p.getL() ), new UnsignedByteType( 255 ) );
+			list.add( new RealPoint( useW ? p.getW() : p.getL() ), new UnsignedByteType( 255 ) );
 
 		return Render.render( list, new GaussianFilterFactory<>( new DoubleType(), 2, WeightType.NONE ) );
+	}
+
+	public static class MyRealPoint extends RealPoint
+	{
+		public MyRealPoint( final double[] position, final boolean copy )
+		{
+			super( position, false );
+		}
+	}
+
+	public static RealRandomAccessible< DoubleType > renderPointsNoCopy( final Collection< ? extends Point > points, final double sigma, final boolean useW )
+	{
+		RealPointSampleList< UnsignedByteType > list = new RealPointSampleList<UnsignedByteType>( points.iterator().next().getL().length );
+
+		for ( final Point p : points )
+			list.add( new MyRealPoint( useW ? p.getW() : p.getL(), false ), new UnsignedByteType( 255 ) );
+
+		return Render.render( list, new GaussianFilterFactory<>( new DoubleType(), sigma, WeightType.NONE ) );
 	}
 
 	public static class MovingLeastSquaresTransform3 extends MovingLeastSquaresTransform
