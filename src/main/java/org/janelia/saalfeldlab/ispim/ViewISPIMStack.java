@@ -38,6 +38,7 @@ import bdv.util.BdvStackSource;
 import bdv.viewer.Interpolation;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
+import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
@@ -143,6 +144,20 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 			}
 
 			return new ValuePair<>(slicesList, bounds);
+		}
+	}
+
+	public static Interval openStackSize(
+			final List<Slice> slices,
+			final int firstSliceIndex ) throws FormatException, IOException {
+
+		try (TiffReader reader = new TiffReader()) {
+
+			reader.setId(slices.get(firstSliceIndex).path);
+			final int width = reader.getSizeX();
+			final int height = reader.getSizeY();
+
+			return new FinalInterval( new long[] { 0, 0 }, new long[] { width - 1, height - 1 } );
 		}
 	}
 
@@ -297,6 +312,35 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 		return new ValuePair<>(interpolatedStack, bounds);
 	}
 
+	public static RealInterval estimateStackBounds(
+			final List<Slice> slices,
+			final AffineTransform2D camTransform,
+			final RandomAccessible<AffineTransform2D> alignment,
+			final int firstSliceIndex,
+			final int lastSliceIndex,
+			final boolean maxBounds ) throws FormatException, IOException {
+
+		/* get slices interval*/
+		final RealInterval inputBounds = openStackSize( slices, firstSliceIndex );
+
+		/* transform bounds */
+		final RandomAccess<AffineTransform2D> alignmentAccess = alignment.randomAccess();
+		//final ArrayList<RealRandomAccessible<T>> transformedRealSlices = new ArrayList<>();
+		RealInterval bounds = null;
+		alignmentAccess.setPosition(firstSliceIndex, 0);
+		for ( int i = firstSliceIndex; i <= lastSliceIndex; ++i ) {
+			final AffineTransform2D combinedTransform = camTransform.copy();
+			combinedTransform.preConcatenate(alignmentAccess.get());
+			final FinalRealInterval sliceBounds = combinedTransform.estimateBounds(inputBounds);
+			if (bounds == null)
+				bounds = sliceBounds;
+			else
+				bounds = maxBounds ? Intervals.union(bounds, sliceBounds) : Intervals.intersect(bounds, sliceBounds);
+			alignmentAccess.fwd(0);
+		}
+
+		return bounds;
+	}
 
 	public static <T extends NumericType<T> & NativeType<T>> ValuePair<RealRandomAccessible<T>, RealInterval> transform(
 			final RealRandomAccessible<T> source,
@@ -316,7 +360,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 		return new ValuePair<>(transformedStack, boundsTransform.estimateBounds(sourceBounds));
 	}
 
-	protected static <T extends NumericType<T> & NativeType<T>> Pair< RealRandomAccessible<T>, Interval > prepareCamSource(
+	public static <T extends NumericType<T> & NativeType<T>> Pair< RealRandomAccessible<T>, Interval > prepareCamSource(
 			final List<Slice> slices,
 			final T background,
 			final Interpolation interpolationMethod,
