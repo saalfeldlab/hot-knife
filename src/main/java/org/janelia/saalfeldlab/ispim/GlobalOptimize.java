@@ -182,6 +182,10 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		for ( final String id : ids )
 			System.out.println( id + ": " + idToTile.get( id ).getModel() );
 
+		double minError = Double.MAX_VALUE;
+		double maxError = 0;
+		double avgError = 0;
+
 		for ( final Pair< Pair< String, String >, ArrayList< PointMatch > > entry : matches )
 		{
 			final String idA = entry.getA().getA();
@@ -192,10 +196,17 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 			final double localError = getError( entry.getB(), translation, new TranslationModel3D() );
 			final double globalError = getError( entry.getB(), idToTile.get( idA ).getModel(), idToTile.get( idB ).getModel() );
-			
+
+			minError = Math.min( globalError, minError );
+			maxError = Math.max( globalError, maxError );
+			avgError += globalError;
+
 			System.out.println( idA + " <> " + idB + " global error=" + globalError + ", local error (Translation3D)=" + localError );
-			
 		}
+
+		avgError /= matches.size();
+
+		System.out.println( minError + "," + avgError + "," + maxError );
 
 		return null;
 	}
