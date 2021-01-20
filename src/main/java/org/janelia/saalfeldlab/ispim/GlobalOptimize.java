@@ -54,8 +54,25 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 			{
 				if ( dataset.startsWith( "matches_" + idA ) )
 				{
-					final int index = dataset.indexOf( "__" );
-					final String idB = dataset.substring( index + 2, index + 8 );
+					// TODO: store in dataset attributes!!!
+					final int indexA = dataset.indexOf( "matches_" ) + 8;
+					final int indexB = dataset.indexOf( "__" ) + 2;
+					final String idB = dataset.substring( indexB, indexB + 6 );
+
+					if (!dataset.substring( indexA, indexA + 6 ).equals( idA ) )
+						throw new RuntimeException( "wrong matches object found for " + idA + ": " + dataset );
+
+					final int indexChA = dataset.indexOf( "_Ch" ) + 1 ;
+					final int indexChB = dataset.indexOf( "_Ch", indexChA ) + 1;
+
+					final int indexCamA = dataset.indexOf( "_cam" ) + 1;
+					final int indexCamB = dataset.indexOf( "_cam", indexCamA ) + 1;
+
+					final String channelA = dataset.substring( indexChA, indexCamA - 1);
+					final String channelB = dataset.substring( indexChB, indexCamB - 1);
+
+					final String camA = dataset.substring( indexCamA, indexCamA + 4 );
+					final String camB = dataset.substring( indexCamB, indexCamB + 4 );
 
 					final String datasetName = idA + "/" + dataset;
 					final DatasetAttributes datasetAttributes = n5.getDatasetAttributes(datasetName);
@@ -68,11 +85,14 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					if ( matchesLocal.size() > 4)
 						translation.fit( matchesLocal );
 
+					final double localError = getError( matchesLocal, translation, new TranslationModel3D() );
+
 					System.out.println(
 							new Date(System.currentTimeMillis() ) + ": " + 
-							idA + " <> " + idB + ", Loaded " + matchesLocal.size() + " matches, error=" + SparkPaiwiseAlignChannelsGeo.getError( matchesLocal, translation ) );
+							idA + "," + channelA + "," + camA + " <> " + idB + "," + channelB + "," + camB + ", Loaded " + matchesLocal.size() + " matches, localError=" + localError );
 
-					//return matches;
+					if ( localError > 5.0 )
+						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
 				}
 			}
 		}
@@ -170,10 +190,10 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 			final TranslationModel3D translation = new TranslationModel3D();
 			translation.fit( entry.getB() );
 
-			final double localError = SparkPaiwiseAlignChannelsGeo.getError( entry.getB(), translation );
+			final double localError = getError( entry.getB(), translation, new TranslationModel3D() );
 			final double globalError = getError( entry.getB(), idToTile.get( idA ).getModel(), idToTile.get( idB ).getModel() );
 			
-			System.out.println( idA + " <> " + idB + " global error=" + globalError + ", local error=" + localError );
+			System.out.println( idA + " <> " + idB + " global error=" + globalError + ", local error (Translation3D)=" + localError );
 			
 		}
 
