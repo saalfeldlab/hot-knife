@@ -16,6 +16,7 @@ import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 
 import mpicbg.models.Affine3D;
+import mpicbg.models.CoordinateTransform;
 import mpicbg.models.ErrorStatistic;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.Model;
@@ -43,7 +44,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
 
-	public static ArrayList< Pair< Pair< String, String >, ArrayList< PointMatch > > > loadPairwiseMatches( final N5Reader n5, final List<String> ids ) throws IOException, ClassNotFoundException
+	public static ArrayList< Pair< Pair< String, String >, ArrayList< PointMatch > > > loadPairwiseMatches( final N5Reader n5, final List<String> ids ) throws IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		final ArrayList< Pair< Pair< String, String >, ArrayList< PointMatch > > > matches = new ArrayList<>();
 
@@ -62,7 +63,16 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					final ArrayList<PointMatch> matchesLocal = n5.readSerializedBlock(datasetName, datasetAttributes, new long[] {0});
 
 					matches.add( new ValuePair<>( new ValuePair<>(idA, idB),  matchesLocal ) );
-					System.out.println( new Date(System.currentTimeMillis() ) + ": " + idA + " <> " + idB + ", Loaded " + matchesLocal.size() + " matches" );
+
+					final TranslationModel3D translation = new TranslationModel3D();
+					if ( matchesLocal.size() > 4)
+						translation.fit( matchesLocal );
+
+					System.out.println(
+							new Date(System.currentTimeMillis() ) + ": " + 
+							idA + " <> " + idB + ", Loaded " + matchesLocal.size() + " matches, error=" + SparkPaiwiseAlignChannelsGeo.getError( matchesLocal, translation ) );
+
+					//return matches;
 				}
 			}
 		}
@@ -121,6 +131,20 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 				tileConfig.getTiles(),
 				tileConfig.getFixedTiles(),
 				numThreads );
+
+		System.out.println( tileConfig.getMinError() + "," + tileConfig.getError() + "," + tileConfig.getMaxError() );
+		System.out.println( observer.min + ", " + observer.mean + ", " + observer.max );
+	}
+
+	protected static double getError( List<PointMatch> matches, final CoordinateTransform modelA, final CoordinateTransform modelB ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		for ( final PointMatch pm : matches )
+		{
+			pm.getP1().apply( modelA );
+			pm.getP2().apply( modelB ); // make sure the world coordinates are ok
+		}
+		
+		return PointMatch.meanDistance( matches );
 	}
 
 	@Override
@@ -137,6 +161,21 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 		for ( final String id : ids )
 			System.out.println( id + ": " + idToTile.get( id ).getModel() );
+
+		for ( final Pair< Pair< String, String >, ArrayList< PointMatch > > entry : matches )
+		{
+			final String idA = entry.getA().getA();
+			final String idB = entry.getA().getB();
+
+			final TranslationModel3D translation = new TranslationModel3D();
+			translation.fit( entry.getB() );
+
+			final double localError = SparkPaiwiseAlignChannelsGeo.getError( entry.getB(), translation );
+			final double globalError = getError( entry.getB(), idToTile.get( idA ).getModel(), idToTile.get( idB ).getModel() );
+			
+			System.out.println( idA + " <> " + idB + " global error=" + globalError + ", local error=" + localError );
+			
+		}
 
 		return null;
 	}

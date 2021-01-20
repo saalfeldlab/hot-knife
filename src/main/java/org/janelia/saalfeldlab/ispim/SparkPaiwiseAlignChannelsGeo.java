@@ -1214,7 +1214,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		return new ValuePair<>( allMatches, (double)blocksWithMatches / (double)( blocksWithMatches + blocksWithoutMatches ) );
 	}
 
-	protected static void error( List<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	protected static double getError( List<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		TranslationModel3D dummy = new TranslationModel3D();
 
@@ -1224,7 +1224,12 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			pm.getP2().apply( dummy ); // make sure the world coordinates are ok
 		}
 		
-		System.out.println( model.getClass().getSimpleName() + " (" + PointMatch.meanDistance( matches ) + ") " + model );
+		return PointMatch.meanDistance( matches );
+	}
+
+	protected static void error( List<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		System.out.println( model.getClass().getSimpleName() + " (" + getError( matches, model ) + ") " + model );
 	}
 
 	protected static BdvStackSource<?> displayCam(
