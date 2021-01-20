@@ -760,7 +760,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		int firstPassInliers = -1, secondPassInliers = -1, thirdPassInliers = -1;
 		double firstPassRatio = -1, secondPassRatio = -1, thirdPassRatio = -1;
 
-		ArrayList< PointMatch > matches = null;
+		ArrayList< PointMatch > matches = new ArrayList<>();
 
 		@Override
 		public String toString()
@@ -836,6 +836,12 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
 
+		if ( resultTmp.getA().size() <= 4 )
+		{
+			// fail
+			return statistics;
+		}
+
 		// block align ICP only ...
 		blockAtransform.fit( resultTmp.getA() );
 		System.out.println( "Adjusting block offset to: " + blockAtransform );
@@ -846,6 +852,12 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		statistics.thirdPassRatio = resultTmp.getB();
 
 		System.out.println( resultTmp.getA().size() + " matches ratio of blocks with matches=" + resultTmp.getB() );
+
+		if ( resultTmp.getA().size() <= 4 )
+		{
+			// fail
+			return statistics;
+		}
 
 		// global consistency check!
 		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
@@ -1033,7 +1045,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		System.out.println( result );
 
 		final ArrayList< PointMatch > matches = result.matches;
-		//final ArrayList< PointMatch > matches = new ArrayList<PointMatch>();
+
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
 

@@ -178,7 +178,7 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 		Collections.sort( results, (o1, o2 ) -> { return o1._1()._1().compareTo( o2._1()._1() ); } );
 
 		for ( final Tuple2<Tuple2< String, String >, AlignStatistics > tuple : results )
-			System.out.println( tuple._1()._1() + "<>" + tuple._1()._1() + ": " + tuple._2() );
+			System.out.println( tuple._1()._1() + "<>" + tuple._1()._2() + ": " + tuple._2() );
 
 		sc.close();
 
