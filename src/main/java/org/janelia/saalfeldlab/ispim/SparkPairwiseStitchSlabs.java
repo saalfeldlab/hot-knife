@@ -892,7 +892,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 			matchesTmp.add(
 					new PointMatch(
 							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
-							lookUpB.get( ((InterestPoint)pm.getP1()).getId() ) ) );
+							lookUpB.get( ((InterestPoint)pm.getP2()).getId() ) ) );
 
 		writeMatches( matchesTmp, n5Path, idA, idB, channelA, channelB, camA, camB);
 
