@@ -914,7 +914,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
 
 		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), transform, 0, n5data.lastSliceIndex );
-		bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( points ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+		bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( points, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 
 		return bdv;
 	}
@@ -941,7 +941,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 	
 		if ( pointsB != null && pointsB.size() > 0 )
 		{
-			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 			bdv.setDisplayRange(0, 256);
 			bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 0, 0)));
 		}
@@ -1031,7 +1031,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		if ( pointsB != null && pointsB.size() > 0 )
 		{
-			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
 			bdv.setDisplayRange(0, 256);
 		}
 	}
