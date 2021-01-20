@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -15,7 +16,11 @@ import java.util.stream.Collectors;
 
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
+
+import com.google.gson.GsonBuilder;
 
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
@@ -38,6 +43,8 @@ import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RealPoint;
 import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
@@ -45,6 +52,7 @@ import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.explorer.util.ColorStream;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
+import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -61,9 +69,63 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
 
-	public static ArrayList< Pair< Pair< String, String >, ArrayList< PointMatch > > > loadPairwiseMatches( final N5Reader n5, final List<String> ids ) throws IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
+	public static class Description
 	{
-		final ArrayList< Pair< Pair< String, String >, ArrayList< PointMatch > > > matches = new ArrayList<>();
+		String id, channel, cam;
+
+		public Description( final String id, final String channel, final String cam )
+		{
+			this.id = id;
+			this.channel = channel;
+			this.cam = cam;
+		}
+
+		@Override
+		public String toString() { return id + "," + channel + "," + cam; }
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((cam == null) ? 0 : cam.hashCode());
+			result = prime * result + ((channel == null) ? 0 : channel.hashCode());
+			result = prime * result + ((id == null) ? 0 : id.hashCode());
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			Description other = (Description) obj;
+			if (cam == null) {
+				if (other.cam != null)
+					return false;
+			} else if (!cam.equals(other.cam))
+				return false;
+			if (channel == null) {
+				if (other.channel != null)
+					return false;
+			} else if (!channel.equals(other.channel))
+				return false;
+			if (id == null) {
+				if (other.id != null)
+					return false;
+			} else if (!id.equals(other.id))
+				return false;
+			return true;
+		}
+	}
+
+	public static ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > loadPairwiseMatches(
+			final N5Reader n5,
+			final List<String> ids ) throws IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches = new ArrayList<>();
 
 		for ( final String idA : ids )
 		{
@@ -96,7 +158,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 					final ArrayList<PointMatch> matchesLocal = n5.readSerializedBlock(datasetName, datasetAttributes, new long[] {0});
 
-					matches.add( new ValuePair<>( new ValuePair<>(idA, idB),  matchesLocal ) );
+					matches.add( new ValuePair<>( new ValuePair<>( new Description(idA, channelA, camA), new Description(idB, channelB, camB ) ),  matchesLocal ) );
 
 					final TranslationModel3D translation = new TranslationModel3D();
 					if ( matchesLocal.size() > 4)
@@ -115,13 +177,13 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		return matches;
 	}
 
-	public static < M extends Model< M > > HashMap< String, Tile< M > > createAndConnectTiles(
+	public static < M extends Model< M > > HashMap< Description, Tile< M > > createAndConnectTiles(
 			final M model,
-			final ArrayList< Pair< Pair< String, String >, ArrayList< PointMatch > > > matches )
+			final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches )
 	{
-		final HashMap< String, Tile< M > > idToTile = new HashMap<>();
+		final HashMap< Description, Tile< M > > idToTile = new HashMap<>();
 
-		for ( final Pair< Pair< String, String >, ArrayList< PointMatch > > entry : matches )
+		for ( final Pair< Pair< Description, Description >, ArrayList< PointMatch > > entry : matches )
 		{
 			if ( !idToTile.containsKey( entry.getA().getA() ) )
 				idToTile.put( entry.getA().getA(), new Tile<M>( model.copy() ) );
@@ -130,10 +192,10 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 				idToTile.put( entry.getA().getB(), new Tile<M>( model.copy() ) );
 		}
 
-		for ( final Pair< Pair< String, String >, ArrayList< PointMatch > > entry : matches )
+		for ( final Pair< Pair< Description, Description >, ArrayList< PointMatch > > entry : matches )
 		{
-			final String idA = entry.getA().getA();
-			final String idB = entry.getA().getB();
+			final Description idA = entry.getA().getA();
+			final Description idB = entry.getA().getB();
 
 			idToTile.get( idA ).connect( idToTile.get( idB ),  entry.getB() );
 		}
@@ -182,7 +244,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	}
 
 	public < M extends Model< M > > void solve(
-			final HashMap< String, Tile< M > > idToTile,
+			final HashMap< Description, Tile< M > > idToTile,
 			final OptimizationParameters<M> paramPreAlign,
 			final OptimizationParameters<M> param ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
@@ -193,7 +255,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	}
 
 	public < M extends Model< M > > void solve(
-			final HashMap< String, Tile< M > > idToTile,
+			final HashMap< Description, Tile< M > > idToTile,
 			final OptimizationParameters<M> paramPreAlign,
 			final List<? extends OptimizationParameters<M>> params ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
 	{
@@ -237,7 +299,6 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					tileConfig.getFixedTiles(),
 					numThreads );
 		}
-
 	}
 
 	protected static double getError( List<PointMatch> matches, final CoordinateTransform modelA, final CoordinateTransform modelB ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
@@ -252,20 +313,20 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	}
 
 	public static < M extends Model< M > & Affine3D< M > > void visualizeMatches(
-			final List< Pair< Pair< String, String >, ArrayList< PointMatch > > > matches,
-			final Map< String, Tile< M > > models )
+			final List< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches,
+			final Map< Description, Tile< M > > models )
 	{
 		BdvStackSource< ? > bdv = null;
 
-		final List< Pair< Pair< String, String >, List< ? extends Point > > > allPoints = new ArrayList<>();
+		final List< Pair< Pair< Description, Description >, List< ? extends Point > > > allPoints = new ArrayList<>();
 
 		final long[] min = new long[] { Long.MAX_VALUE, Long.MAX_VALUE };//, Long.MAX_VALUE };
 		final long[] max = new long[] { -Long.MAX_VALUE, -Long.MAX_VALUE };//, -Long.MAX_VALUE };
 
-		for ( final Pair< Pair< String, String >, ArrayList< PointMatch > > entry : matches )
+		for ( final Pair< Pair< Description, Description >, ArrayList< PointMatch > > entry : matches )
 		{
-			final String idA = entry.getA().getA();
-			final String idB = entry.getA().getB();
+			final Description idA = entry.getA().getA();
+			final Description idB = entry.getA().getB();
 
 			final M model = models.get( idA ).getModel();
 
@@ -308,7 +369,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 		System.out.println( "interval=" + Util.printInterval( interval ) );
 
-		for ( final Pair< Pair< String, String >, List< ? extends Point > > points : allPoints )
+		for ( final Pair< Pair< Description, Description >, List< ? extends Point > > points : allPoints )
 		{
 			bdv = BdvFunctions.show(
 					SparkPaiwiseAlignChannelsGeo.renderPointsNoCopy( points.getB(), 10, true ),
@@ -320,19 +381,52 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		}
 	}
 
+	public static ArrayList< Description > allDescriptions( final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches )
+	{
+		final HashSet< Description > descriptionsMap = new HashSet<>();
+		descriptionsMap.addAll( matches.stream().map( pair -> pair.getA().getA() ).collect( Collectors.toList() ) );
+		descriptionsMap.addAll( matches.stream().map( pair -> pair.getA().getB() ).collect( Collectors.toList() ) );
+
+		final ArrayList< Description > descriptions = new ArrayList<>();
+		descriptions.addAll( descriptionsMap );
+
+		Collections.sort( descriptions, (o1, o2 ) ->
+			{
+				final int id = o1.id.compareTo( o2.id );
+
+				if ( id != 0 )
+					return id;
+
+				final int channel = o1.channel.compareTo( o2.channel );
+
+				if ( channel != 0 )
+					return channel;
+
+				return o1.cam.compareTo( o2.cam );
+			});
+
+		return descriptions;
+	}
+
 	@Override
 	public Void call() throws Exception
 	{
-		final N5Reader n5 = new N5FSReader(n5Path);
+		final N5Writer n5 = new N5FSWriter(
+				n5Path,
+				new GsonBuilder().registerTypeAdapter(
+					AffineTransform3D.class,
+					new AffineTransform3DAdapter()));
 
-		final List<String> ids = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
-		Collections.sort( ids );
+		final List<String> allIds = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
+		Collections.sort( allIds );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading matches." );
-		final ArrayList< Pair< Pair< String, String >, ArrayList< PointMatch > > > matches = loadPairwiseMatches( n5, ids );
+		final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches = loadPairwiseMatches( n5, allIds );
+
+		final List<Description> allDesc = allDescriptions( matches );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Setting up tiles." );
-		final HashMap< String, Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> > > idToTile =
+		final HashMap< Description, Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> > > idToTile =
 				createAndConnectTiles(
 						new InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D>(new AffineModel3D(), new TranslationModel3D(), 0.1 ), matches );
 
@@ -350,8 +444,13 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 		solve( idToTile, preAlign, params );
 
-		for ( final String id : ids )
-			System.out.println( id + ": " + idToTile.get( id ).getModel() );
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Saving transformations ... " );
+
+		for ( final Description desc : allDesc )
+		{
+			System.out.println( desc + ": " + idToTile.get( desc ).getModel().createAffineModel3D() );
+			n5.setAttribute( desc.id + "/" + desc.channel, "3d-affine", TransformationTools.getAffineTransform( idToTile.get( desc ).getModel().createAffineModel3D() ) );
+		}
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Computing errors." );
 
@@ -359,10 +458,10 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		double maxError = 0;
 		double avgError = 0;
 
-		for ( final Pair< Pair< String, String >, ArrayList< PointMatch > > entry : matches )
+		for ( final Pair< Pair< Description, Description >, ArrayList< PointMatch > > entry : matches )
 		{
-			final String idA = entry.getA().getA();
-			final String idB = entry.getA().getB();
+			final Description idA = entry.getA().getA();
+			final Description idB = entry.getA().getB();
 
 			final TranslationModel3D translation = new TranslationModel3D();
 			translation.fit( entry.getB() );
