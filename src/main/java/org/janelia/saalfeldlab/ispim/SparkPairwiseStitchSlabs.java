@@ -765,7 +765,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 		@Override
 		public String toString()
 		{
-			if ( matches == null )
+			if ( matches == null || matches.size() == 0 )
 			{
 				return idA + "<>" + idB + ": FAILED: " + firstPassInliers + " (" + firstPassRatio + ") -> "+ secondPassInliers + " (" + secondPassRatio + ") -> "+ thirdPassInliers + " (" + thirdPassRatio + ")";
 			}
