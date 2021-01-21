@@ -31,6 +31,7 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.N5Writer;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
@@ -82,6 +83,7 @@ import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.SimpleReference
 import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.ModelGrid;
 import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.NumericAffineModel3D;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
+import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.PairwiseResult;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.fastrgldm.FRGLDMMatcher;
 import net.preibisch.mvrecon.process.interestpointregistration.pairwise.methods.icp.IterativeClosestPointPairwise;
@@ -181,6 +183,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		HashMap<String, HashMap<String, List<Slice>>> stacks;
 		HashMap<String, RandomAccessible<AffineTransform2D>> alignments;
 
+		HashMap<String, AffineTransform3D > affine3D;
+
 		N5FSReader n5;
 
 		String n5path;
@@ -196,9 +200,13 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		n5data.n5path = n5Path;
 		n5data.n5 = new N5FSReader(
 				n5Path,
-				new GsonBuilder().registerTypeAdapter(
-						AffineTransform2D.class,
-						new AffineTransform2DAdapter()));
+				new GsonBuilder().
+				registerTypeAdapter(
+					AffineTransform3D.class,
+					new AffineTransform3DAdapter()).
+				registerTypeAdapter(
+					AffineTransform2D.class,
+					new AffineTransform2DAdapter()));
 
 		n5data.camTransforms = n5data.n5.getAttribute(
 				"/",
@@ -219,12 +227,24 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		n5data.stacks = new HashMap<>();
 		n5data.alignments = new HashMap<>();
+		n5data.affine3D = new HashMap<>();
 
 		n5data.lastSliceIndex = Integer.MAX_VALUE;
 
 		for (final Entry<String, HashMap<String, AffineTransform2D>> channel : n5data.camTransforms.entrySet()) {
 			final HashMap<String, List<Slice>> channelStacks = new HashMap<>();
 			n5data.stacks.put(channel.getKey(), channelStacks);
+
+			/* 3d affine if it exists */
+			final String affine3dGroupName = id + "/" + channel.getKey();
+			if (n5data.n5.exists(affine3dGroupName)) {
+				n5data.affine3D.put(
+						channel.getKey(),
+						n5data.n5.getAttribute( affine3dGroupName, "3d-affine", new TypeToken<AffineTransform3D>(){}.getType() ) );
+			}
+			else {
+				n5data.affine3D.put( channel.getKey(), new AffineTransform3D() );
+			}
 
 			/* stack alignment transforms */
 			final ArrayList<AffineTransform2D> transforms = n5data.n5.getAttribute(
