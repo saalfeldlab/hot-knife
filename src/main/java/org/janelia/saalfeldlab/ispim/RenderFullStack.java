@@ -29,6 +29,7 @@ import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.volatiles.VolatileUnsignedShortType;
@@ -162,15 +163,18 @@ public class RenderFullStack implements Callable<Void>, Serializable
 
 		System.out.println( "Loaded all stacks." );
 
-		BdvOptions options = BdvOptions.options().numRenderingThreads( numFetchThreads );
+		//final AffineTransform3D anisotropy = new AffineTransform3D();
+		final Scale3D anisotropy = new Scale3D(0.2, 0.2, 0.85);
+
+		BdvOptions options;
 		BdvStackSource<?> bdv;
 
-		options = options.sourceTransform( stack0.getB().affine3D.get( channel ) );
+		options = BdvOptions.options().sourceTransform( stack0.getB().affine3D.get( channel ).preConcatenate( anisotropy ) ).numRenderingThreads( numFetchThreads );
 		bdv = BdvFunctions.show( Views.extendValue( stack0.getA(), 0 ), new FinalInterval( stack0.getA() ), allIds.get( 0 ) + "," + channel + "," + cam, options );
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
 
-		options = options.sourceTransform( stack1.getB().affine3D.get( channel ) ).addTo( bdv );
+		options = BdvOptions.options().sourceTransform( stack1.getB().affine3D.get( channel ).preConcatenate( anisotropy ) ).numRenderingThreads( numFetchThreads ).addTo( bdv );
 		bdv = BdvFunctions.show( Views.extendValue( stack1.getA(), 0 ), new FinalInterval( stack1.getA() ), allIds.get( 1 ) + "," + channel + "," + cam, options );
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
