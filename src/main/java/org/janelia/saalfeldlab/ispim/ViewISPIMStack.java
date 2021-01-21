@@ -323,6 +323,18 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 		/* get slices interval*/
 		final RealInterval inputBounds = openStackSize( slices, firstSliceIndex );
 
+		return estimateStackBounds( inputBounds, slices, camTransform, alignment, firstSliceIndex, lastSliceIndex, maxBounds );
+	}
+
+	public static RealInterval estimateStackBounds(
+			final RealInterval inputBounds,
+			final List<Slice> slices,
+			final AffineTransform2D camTransform,
+			final RandomAccessible<AffineTransform2D> alignment,
+			final int firstSliceIndex,
+			final int lastSliceIndex,
+			final boolean maxBounds ) throws FormatException, IOException {
+
 		/* transform bounds */
 		final RandomAccess<AffineTransform2D> alignmentAccess = alignment.randomAccess();
 		//final ArrayList<RealRandomAccessible<T>> transformedRealSlices = new ArrayList<>();
