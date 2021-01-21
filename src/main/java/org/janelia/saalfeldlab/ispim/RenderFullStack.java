@@ -66,12 +66,11 @@ public class RenderFullStack implements Callable<Void>, Serializable
 	@Option(names = "--cam", required = true, description = "Cam key, e.g. cam1")
 	private String cam = null;
 
-	public static Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > loadStack(
+	public static Pair< RandomAccessibleInterval< UnsignedShortType >, N5Data > loadStack(
 			final String n5Path,
 			final String id,
 			final String channel,
-			final String cam,
-			final SharedQueue queue ) throws IOException, FormatException
+			final String cam ) throws IOException, FormatException
 	{
 		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
 
@@ -122,10 +121,10 @@ public class RenderFullStack implements Callable<Void>, Serializable
 								loader ),
 						min );
 
-		final RandomAccessibleInterval< VolatileUnsignedShortType > volatileRA =
-				VolatileViews.wrapAsVolatile( cachedImg, queue );
+		//final RandomAccessibleInterval< VolatileUnsignedShortType > volatileRA =
+		//		VolatileViews.wrapAsVolatile( cachedImg, queue );
 
-		return new ValuePair<>( volatileRA, n5data );
+		return new ValuePair<>( cachedImg, n5data );
 	}
 
 	protected static void testRendering( final String n5Path, final String id, final String channel, final String cam ) throws IOException, FormatException
@@ -134,10 +133,12 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		System.out.println("building SharedQueue with " + numFetchThreads + " FetcherThreads" );
 		final SharedQueue queue = new SharedQueue(numFetchThreads, 1 );
 
-		RandomAccessibleInterval< VolatileUnsignedShortType > stack = loadStack( n5Path, id, channel, cam, queue ).getA();
+		RandomAccessibleInterval< UnsignedShortType > stack = loadStack( n5Path, id, channel, cam ).getA();
 
 		BdvOptions options = BdvOptions.options().numRenderingThreads( numFetchThreads );
-		BdvStackSource<?> bdv = BdvFunctions.show( Views.extendValue( stack, 0 ), new FinalInterval( stack ), id + "," + channel + "," + cam, options );
+
+		RandomAccessibleInterval< VolatileUnsignedShortType > vstack = VolatileViews.wrapAsVolatile( stack, queue );
+		BdvStackSource<?> bdv = BdvFunctions.show( Views.extendValue( vstack, 0 ), new FinalInterval( stack ), id + "," + channel + "," + cam, options );
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
 
@@ -156,8 +157,8 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		System.out.println("building SharedQueue with " + numFetchThreads + " FetcherThreads" );
 		final SharedQueue queue = new SharedQueue(numFetchThreads, 1 );
 
-		Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > stackA = loadStack( n5Path, idA, channelA, camA, queue );
-		Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > stackB = loadStack( n5Path, idB, channelB, camB, queue );
+		Pair< RandomAccessibleInterval< UnsignedShortType >, N5Data > stackA = loadStack( n5Path, idA, channelA, camA );
+		Pair< RandomAccessibleInterval< UnsignedShortType >, N5Data > stackB = loadStack( n5Path, idB, channelB, camB );
 
 		System.out.println( "Loaded all stacks." );
 
@@ -166,13 +167,15 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		BdvOptions options;
 		BdvStackSource<?> bdv;
 
+		RandomAccessibleInterval< VolatileUnsignedShortType > vstackA = VolatileViews.wrapAsVolatile( stackA.getA(), queue );
 		options = BdvOptions.options().sourceTransform( stackA.getB().affine3D.get( channelA ).preConcatenate( anisotropy ) ).numRenderingThreads( numFetchThreads );
-		bdv = BdvFunctions.show( Views.extendValue( stackA.getA(), 0 ), new FinalInterval( stackA.getA() ), idA + "," + channelA + "," + camA, options );
+		bdv = BdvFunctions.show( Views.extendValue( vstackA, 0 ), new FinalInterval( stackA.getA() ), idA + "," + channelA + "," + camA, options );
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
 
+		RandomAccessibleInterval< VolatileUnsignedShortType > vstackB = VolatileViews.wrapAsVolatile( stackB.getA(), queue );
 		options = BdvOptions.options().sourceTransform( stackB.getB().affine3D.get( channelB ).preConcatenate( anisotropy ) ).numRenderingThreads( numFetchThreads ).addTo( bdv );
-		bdv = BdvFunctions.show( Views.extendValue( stackB.getA(), 0 ), new FinalInterval( stackB.getA() ), idB + "," + channelB + "," + camB, options );
+		bdv = BdvFunctions.show( Views.extendValue( vstackB, 0 ), new FinalInterval( stackB.getA() ), idB + "," + channelB + "," + camB, options );
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 
@@ -263,18 +266,19 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		Collections.sort( allIds );
 
 		//testRendering( n5Path, allIds.get( 0 ), channel, cam );
-		testTwoStacks( n5Path, allIds.get( 0 ), channel, cam, allIds.get( 1 ), channel, cam );
-
-		SimpleMultiThreading.threadHaltUnClean();
+		//testTwoStacks( n5Path, allIds.get( 0 ), channel, cam, allIds.get( 1 ), channel, cam );
+		//SimpleMultiThreading.threadHaltUnClean();
 
 		final int numFetchThreads = Runtime.getRuntime().availableProcessors() / 2;
 		System.out.println( new Date(System.currentTimeMillis() ) + ": building SharedQueue with " + numFetchThreads + " FetcherThreads" );
 		final SharedQueue queue = new SharedQueue(numFetchThreads, 1 );
 
-		final ArrayList< Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > > stacks = new ArrayList<>();
+		//VolatileViews.wrapAsVolatile( cachedImg, queue );
+
+		final ArrayList< Pair< RandomAccessibleInterval< UnsignedShortType >, N5Data > > stacks = new ArrayList<>();
 
 		for ( final String id : allIds )
-			stacks.add( loadStack( n5Path, id, channel, cam, queue ) );
+			stacks.add( loadStack( n5Path, id, channel, cam ) );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loaded all stacks." );
 
@@ -282,11 +286,12 @@ public class RenderFullStack implements Callable<Void>, Serializable
 
 		BdvStackSource<?> bdv = null;
 
-		for ( final Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > stack : stacks )
+		for ( final Pair< RandomAccessibleInterval< UnsignedShortType >, N5Data > stack : stacks )
 		{
 			BdvOptions options = BdvOptions.options().sourceTransform( stack.getB().affine3D.get( channel ).preConcatenate( anisotropy ) ).numRenderingThreads( numFetchThreads ).addTo( bdv );
 
-			bdv = BdvFunctions.show( Views.extendValue( stack.getA(), 0 ), new FinalInterval( stack.getA() ), stack.getB().id + "," + channel + "," + cam, options );
+			RandomAccessibleInterval< VolatileUnsignedShortType > vstack = VolatileViews.wrapAsVolatile( stack.getA() );
+			bdv = BdvFunctions.show( Views.extendValue( vstack, 0 ), new FinalInterval( stack.getA() ), stack.getB().id + "," + channel + "," + cam, options );
 			bdv.setDisplayRange( 0, 1000 );
 			bdv.setColor( new ARGBType( ColorStream.next() ) );
 		}
