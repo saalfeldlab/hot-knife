@@ -23,7 +23,6 @@ import bdv.util.volatiles.VolatileViews;
 import loci.formats.FormatException;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
-import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.img.basictypeaccess.AccessFlags;
@@ -34,7 +33,9 @@ import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.volatiles.VolatileUnsignedShortType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -52,7 +53,7 @@ public class RenderFullStack implements Callable<Void>, Serializable
 	@Option(names = "--cam", required = true, description = "Cam key, e.g. cam1")
 	private String cam = null;
 
-	public static RandomAccessibleInterval< VolatileUnsignedShortType > loadStack(
+	public static Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > loadStack(
 			final String n5Path,
 			final String id,
 			final String channel,
@@ -111,7 +112,27 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		final RandomAccessibleInterval< VolatileUnsignedShortType > volatileRA =
 				VolatileViews.wrapAsVolatile( cachedImg, queue );
 
-		return volatileRA;
+		return new ValuePair<>( volatileRA, n5data );
+	}
+
+	protected static void testRendering( final String n5Path, final String id, final String channel, final String cam ) throws IOException, FormatException
+	{
+		final int numFetchThreads = Runtime.getRuntime().availableProcessors() / 2;
+		System.out.println("building SharedQueue with " + numFetchThreads + " FetcherThreads" );
+		final SharedQueue queue = new SharedQueue(numFetchThreads, 1 );
+
+		RandomAccessibleInterval< VolatileUnsignedShortType > stack = loadStack( n5Path, id, channel, cam, queue ).getA();
+
+		BdvOptions options = BdvOptions.options().numRenderingThreads( numFetchThreads );
+		BdvStackSource<?> bdv = BdvFunctions.show( Views.extendValue( stack, 0 ), new FinalInterval( stack ), id + "," + channel + "," + cam, options );
+		bdv.setDisplayRange( 0, 1000 );
+		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
+
+		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
+		bdv.setDisplayRange( 0, 1000 );
+		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
+		
 	}
 
 	@Override
@@ -130,19 +151,27 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		final List<String> allIds = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
 		Collections.sort( allIds );
 
+		//testRendering( n5Path, allIds.get( 0 ), channel, cam );
+
 		final int numFetchThreads = Runtime.getRuntime().availableProcessors() / 2;
 		System.out.println("building SharedQueue with " + numFetchThreads + " FetcherThreads" );
 		final SharedQueue queue = new SharedQueue(numFetchThreads, 1 );
 
-		RandomAccessibleInterval< VolatileUnsignedShortType > stack = loadStack( n5Path, allIds.get( 0 ), channel, cam, queue );
+		Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > stack0 = loadStack( n5Path, allIds.get( 0 ), channel, cam, queue );
+		Pair< RandomAccessibleInterval< VolatileUnsignedShortType >, N5Data > stack1 = loadStack( n5Path, allIds.get( 1 ), channel, cam, queue );
+
+		System.out.println( "Loaded all stacks." );
 
 		BdvOptions options = BdvOptions.options().numRenderingThreads( numFetchThreads );
-		BdvStackSource<?> bdv = BdvFunctions.show( Views.extendValue( stack, 0 ), new FinalInterval( stack ), allIds.get( 0 ) + "," + channel + "," + cam );
+		BdvStackSource<?> bdv;
+
+		options = options.sourceTransform( stack0.getB().affine3D.get( channel ) );
+		bdv = BdvFunctions.show( Views.extendValue( stack0.getA(), 0 ), new FinalInterval( stack0.getA() ), allIds.get( 0 ) + "," + channel + "," + cam, options );
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
 
-		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, allIds.get( 0 ) );
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
+		options = options.sourceTransform( stack1.getB().affine3D.get( channel ) ).addTo( bdv );
+		bdv = BdvFunctions.show( Views.extendValue( stack1.getA(), 0 ), new FinalInterval( stack1.getA() ), allIds.get( 1 ) + "," + channel + "," + cam, options );
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 
