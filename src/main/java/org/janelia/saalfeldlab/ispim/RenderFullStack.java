@@ -24,6 +24,7 @@ import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.io.InputTriggerDescription;
 import org.scijava.ui.behaviour.util.AbstractNamedAction;
 
+import com.adobe.xmp.impl.Utils;
 import com.google.gson.GsonBuilder;
 
 import bdv.util.BdvFunctions;
@@ -36,6 +37,7 @@ import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
@@ -43,6 +45,7 @@ import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
+import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.type.volatiles.VolatileUnsignedShortType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
@@ -50,6 +53,11 @@ import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.explorer.util.ColorStream;
+import net.preibisch.mvrecon.process.fusion.FusionTools;
+import net.preibisch.mvrecon.process.fusion.transformed.FusedRandomAccessibleInterval;
+import net.preibisch.mvrecon.process.fusion.transformed.TransformView;
+import net.preibisch.mvrecon.process.fusion.transformed.TransformWeight;
+import net.preibisch.mvrecon.process.fusion.transformed.FusedRandomAccessibleInterval.Fusion;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
@@ -249,6 +257,59 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		bdvSource.getBdvHandle().getKeybindings().addInputMap("persistence", ksInputMap);
 	}
 
+	public static RandomAccessibleInterval< UnsignedShortType > fuseMax(final String n5Path, final List<String> ids, final String channel, final String cam ) throws IOException, FormatException
+	{
+		final ArrayList< Pair< RandomAccessibleInterval< UnsignedShortType >, AffineTransform3D > > toFuse = new ArrayList<>();
+
+		//final Scale3D anisotropy = new Scale3D(1, 1, 0.85/0.2);
+
+		for ( final String id : ids )
+		{
+			Pair< RandomAccessibleInterval< UnsignedShortType >, N5Data > stack = loadStack( n5Path, id, channel, cam );
+			AffineTransform3D transformA = stack.getB().affine3D.get( channel );//.preConcatenate( anisotropy );
+			toFuse.add( new ValuePair<>( stack.getA(), transformA ) );
+		}
+
+		final long[] min = new long[] { Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE };
+		final long[] max = new long[] { -Long.MAX_VALUE, -Long.MAX_VALUE, -Long.MAX_VALUE };
+
+		for ( final Pair< RandomAccessibleInterval< UnsignedShortType >, AffineTransform3D > data : toFuse )
+		{
+			Interval interval = Intervals.smallestContainingInterval( data.getB().estimateBounds( data.getA() ) );
+			
+			for ( int d = 0; d < interval.numDimensions(); ++d )
+			{
+				min[ d ] = Math.min( min[ d ], interval.min( d ) );
+				max[ d ] = Math.max( max[ d ], interval.max( d ) );
+			}
+		}
+
+		final Interval bb = new FinalInterval(min, max);
+
+		System.out.println( "bb: " + Util.printInterval( bb ) );
+
+		final ArrayList< RandomAccessibleInterval< FloatType > > images = new ArrayList<>();
+
+		for ( final Pair< RandomAccessibleInterval< UnsignedShortType >, AffineTransform3D > data : toFuse )
+			images.add( TransformView.transformView( data.getA(), data.getB(), bb, 0, 1 ) );
+
+		FusedRandomAccessibleInterval f = new FusedRandomAccessibleInterval( FusionTools.getFusedZeroMinInterval( bb ), images, null );
+		f.setFusion( Fusion.MAX );
+
+		RandomAccessibleInterval< UnsignedShortType > output = Views.translate( Converters.convert( f, (i,o) -> { o.set( Math.round( i.get() ) );}, new UnsignedShortType() ), min );
+
+		System.out.println( "bb: " + Util.printInterval( f ) );
+
+		return output;
+		/*
+		BdvOptions options = BdvOptions.options().numRenderingThreads( 8 );
+		BdvStackSource< ? > bdv = null;
+
+		bdv = BdvFunctions.show( Views.extendValue( output, 0 ), new FinalInterval( output ), "max", options );
+		bdv.setDisplayRange( 0, 500 );
+		*/
+	}
+
 	@Override
 	public Void call() throws Exception {
 
@@ -265,9 +326,7 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		final List<String> allIds = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
 		Collections.sort( allIds );
 
-		//testRendering( n5Path, allIds.get( 0 ), channel, cam );
-		//testTwoStacks( n5Path, allIds.get( 0 ), channel, cam, allIds.get( 1 ), channel, cam );
-		//SimpleMultiThreading.threadHaltUnClean();
+		SimpleMultiThreading.threadHaltUnClean();
 
 		final int numFetchThreads = Runtime.getRuntime().availableProcessors() / 2;
 		System.out.println( new Date(System.currentTimeMillis() ) + ": building SharedQueue with " + numFetchThreads + " FetcherThreads" );
