@@ -85,12 +85,12 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 				max[ 1 ] < bounds.realMin( 1 ) || min[ 1 ] > bounds.realMax( 1 ) ||
 				max[ 0 ] < bounds.realMin( 0 ) || min[ 0 ] > bounds.realMax( 0 ) )
 			{
-				System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is all black (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
+				//System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is all black (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
 				fillZero(output);
 				return;
 			}
 
-			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is loading... (" + numLoading + " total)." );
+			//System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is loading... (" + numLoading + " total)." );
 
 			final Pair< RealRandomAccessible<UnsignedShortType>, Interval > data =
 					ViewISPIMStack.prepareCamSource(
@@ -118,7 +118,7 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 				tOut.setReal( tIn.get() );
 			}
 
-			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " loaded... (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
+			//System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " loaded... (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
 		}
 		catch ( IOException | FormatException e )
 		{

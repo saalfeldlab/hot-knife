@@ -26,6 +26,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -53,7 +54,7 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 	{
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
-		final String outDatasetName = "maxfusion_"+channel+"_"+cam;
+		final String outDatasetName = "maxfusion_"+channel+"_"+cam + "/s0";
 
 		final long[] dimensions = new long[ fused.numDimensions() ];
 		fused.dimensions( dimensions );
@@ -75,6 +76,8 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 						Grid.create(
 								dimensions,
 								outBlockSize));
+
+		System.out.println( "numBlocks = " + Grid.create( dimensions, outBlockSize).size() );
 
 		rdd.foreach(
 				gridBlock -> {
@@ -108,12 +111,14 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 
 		RandomAccessibleInterval< UnsignedShortType > fused = RenderFullStack.fuseMax( n5Path, list, channel, cam );
 
+		System.out.println( "bounding box: " + Util.printInterval( fused ) );
+
 		final SparkConf conf = new SparkConf().setAppName("SparkFusionSaveN5");
 
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		saveN5( sc, fused, n5Path, new int[] { 256, 256, 64 }, list, channel, cam );
+		saveN5( sc, fused, n5Path, new int[] { 512, 512, 64 }, list, channel, cam );
 
 		sc.close();
 
@@ -126,31 +131,4 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 
 		System.exit(new CommandLine(new SparkFusionSaveN5()).execute(args));
 	}
-	/*
-	 * 		final N5Writer n5 = new N5FSWriter(n5Path);
-
-		final DatasetAttributes attributes = n5.getDatasetAttributes(datasetName);
-		final int n = attributes.getNumDimensions();
-		final int[] blockSize = attributes.getBlockSize();
-
-		n5.createDataset(
-				outDatasetName,
-				attributes.getDimensions(),
-				outBlockSize,
-				attributes.getDataType(),
-				attributes.getCompression());
-
-		// grid block size for parallelization to minimize double loading of blocks 
-		final int[] gridBlockSize = new int[outBlockSize.length];
-		Arrays.setAll(gridBlockSize, i -> Math.max(blockSize[i], outBlockSize[i]));
-
-		final JavaRDD<long[][]> rdd =
-				sc.parallelize(
-						Grid.create(
-								attributes.getDimensions(),
-								gridBlockSize,
-								outBlockSize));
-
-	 */
-
 }

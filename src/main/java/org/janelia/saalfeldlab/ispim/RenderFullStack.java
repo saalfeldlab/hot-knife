@@ -286,8 +286,6 @@ public class RenderFullStack implements Callable<Void>, Serializable
 
 		final Interval bb = new FinalInterval(min, max);
 
-		System.out.println( "bb: " + Util.printInterval( bb ) );
-
 		final ArrayList< RandomAccessibleInterval< FloatType > > images = new ArrayList<>();
 
 		for ( final Pair< RandomAccessibleInterval< UnsignedShortType >, AffineTransform3D > data : toFuse )
@@ -297,8 +295,6 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		f.setFusion( Fusion.MAX );
 
 		RandomAccessibleInterval< UnsignedShortType > output = Views.translate( Converters.convert( f, (i,o) -> { o.set( Math.round( i.get() ) );}, new UnsignedShortType() ), min );
-
-		System.out.println( "bb: " + Util.printInterval( f ) );
 
 		return output;
 		/*
