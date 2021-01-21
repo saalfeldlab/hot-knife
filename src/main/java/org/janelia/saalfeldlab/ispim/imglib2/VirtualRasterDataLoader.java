@@ -2,6 +2,7 @@ package org.janelia.saalfeldlab.ispim.imglib2;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.janelia.saalfeldlab.ispim.Slice;
@@ -27,6 +28,8 @@ import net.imglib2.view.Views;
 
 public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> implements Consumer<RandomAccessibleInterval<T>>
 {
+	public static AtomicInteger currentlyLoading = new AtomicInteger( 0 );
+
 	final T type;
 	final long[] globalMin;
 	final int firstSliceIndex, lastSliceIndex; // global first and last slice of the stack
@@ -60,6 +63,8 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 	{
 		try
 		{
+			final int numLoading = currentlyLoading.addAndGet( 1 );
+
 			final long[] min = new long[ output.numDimensions() ];
 			final long[] max = new long[ output.numDimensions() ];
 
@@ -80,12 +85,12 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 				max[ 1 ] < bounds.realMin( 1 ) || min[ 1 ] > bounds.realMax( 1 ) ||
 				max[ 0 ] < bounds.realMin( 0 ) || min[ 0 ] > bounds.realMax( 0 ) )
 			{
-				System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is all black." );
+				System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is all black (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
 				fillZero(output);
 				return;
 			}
 
-			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is loading..." );
+			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is loading... (" + numLoading + " total)." );
 
 			final Pair< RealRandomAccessible<UnsignedShortType>, Interval > data =
 					ViewISPIMStack.prepareCamSource(
@@ -113,7 +118,7 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 				tOut.setReal( tIn.get() );
 			}
 
-			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " loaded..." );
+			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " loaded... (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
 		}
 		catch ( IOException | FormatException e )
 		{
