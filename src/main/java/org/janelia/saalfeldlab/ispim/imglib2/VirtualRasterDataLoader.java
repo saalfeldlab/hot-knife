@@ -22,6 +22,7 @@ import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 
 public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> implements Consumer<RandomAccessibleInterval<T>>
@@ -32,8 +33,10 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 	final AffineTransform2D invCamtransform;
 	final List< Slice > slices;
 	final RandomAccessible<AffineTransform2D> alignmentTransforms;
+	final RealInterval inputBounds;
 
 	public VirtualRasterDataLoader(
+			final RealInterval inputBounds,
 			final List< Slice > slices,
 			final RandomAccessible<AffineTransform2D> alignmentTransforms,
 			final int firstSliceIndex,
@@ -49,6 +52,7 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 		this.invCamtransform = camtransform.inverse();
 		this.slices = slices;
 		this.alignmentTransforms = alignmentTransforms;
+		this.inputBounds = inputBounds;
 	}
 
 	@Override
@@ -65,17 +69,23 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 				max[ d ] = min[ d ] + output.dimension( d ) - 1;
 			}
 
+			final int myFirstSlice = Math.max( firstSliceIndex, (int)min[ 2 ] );
+			final int myLastSlice = Math.min( lastSliceIndex, (int)max[ 2 ] );
+
 			// test whether the block is outside the image area
-			final RealInterval bounds = ViewISPIMStack.estimateStackBounds( slices, invCamtransform, alignmentTransforms, firstSliceIndex, lastSliceIndex, true );
+			final RealInterval bounds = ViewISPIMStack.estimateStackBounds( inputBounds, slices, invCamtransform, alignmentTransforms, myFirstSlice, myLastSlice, true );
 
 			if (
 				max[ 2 ] < firstSliceIndex || min[ 2 ] > lastSliceIndex ||
 				max[ 1 ] < bounds.realMin( 1 ) || min[ 1 ] > bounds.realMax( 1 ) ||
 				max[ 0 ] < bounds.realMin( 0 ) || min[ 0 ] > bounds.realMax( 0 ) )
 			{
+				System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is all black." );
 				fillZero(output);
 				return;
 			}
+
+			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is loading..." );
 
 			final Pair< RealRandomAccessible<UnsignedShortType>, Interval > data =
 					ViewISPIMStack.prepareCamSource(
@@ -85,9 +95,10 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 							invCamtransform, // pass the forward transform
 							new AffineTransform3D(),
 							alignmentTransforms,
-							Math.max( firstSliceIndex, (int)min[ 2 ] ),
-							Math.min( lastSliceIndex, (int)max[ 2 ] ) );
+							myFirstSlice,
+							myLastSlice );
 
+			// TODO: do we have to load +-1 for proper interpolation?
 			final RandomAccessibleInterval< UnsignedShortType > img =
 					Views.interval( Views.raster( data.getA() ), new FinalInterval( min, max ) );
 
