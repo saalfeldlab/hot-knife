@@ -30,9 +30,11 @@ import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.volatiles.VolatileUnsignedShortType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -93,8 +95,8 @@ public class RenderFullStack implements Callable<Void>, Serializable
 						new UnsignedShortType() );
 
 		final int blockSizeXY = (int)Math.min( interval.dimension( 0 ), interval.dimension( 1 ) );
-		final int[] blockSize = new int[] { blockSizeXY, blockSizeXY, 10 };
-		System.out.println( id + "," + channel + "," + cam + ": blocksize=" + blockSize );
+		final int[] blockSize = new int[] { blockSizeXY, blockSizeXY, 40 };
+		System.out.println( id + "," + channel + "," + cam + ": blocksize=" + Util.printCoordinates( blockSize ) );
 
 		final RandomAccessibleInterval<UnsignedShortType> cachedImg =
 				Views.translate(
@@ -128,15 +130,21 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		final List<String> allIds = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
 		Collections.sort( allIds );
 
-		final int numFetchThreads = 8;
+		final int numFetchThreads = Runtime.getRuntime().availableProcessors() / 2;
 		System.out.println("building SharedQueue with " + numFetchThreads + " FetcherThreads" );
 		final SharedQueue queue = new SharedQueue(numFetchThreads, 1 );
 
 		RandomAccessibleInterval< VolatileUnsignedShortType > stack = loadStack( n5Path, allIds.get( 0 ), channel, cam, queue );
 
-		BdvOptions options = BdvOptions.options().numRenderingThreads( 8 );
-		BdvStackSource<?> source = BdvFunctions.show( Views.extendValue( stack, 0 ), new FinalInterval( stack ), allIds.get( 0 ) + "," + channel + "," + cam );
-		source.setDisplayRange( 0, 1000 );
+		BdvOptions options = BdvOptions.options().numRenderingThreads( numFetchThreads );
+		BdvStackSource<?> bdv = BdvFunctions.show( Views.extendValue( stack, 0 ), new FinalInterval( stack ), allIds.get( 0 ) + "," + channel + "," + cam );
+		bdv.setDisplayRange( 0, 1000 );
+		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
+
+		final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, allIds.get( 0 ) );
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channel, cam, n5data.stacks.get( channel ).get( cam ), n5data.alignments.get( channel ), n5data.camTransforms.get( channel ).get( cam ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
+		bdv.setDisplayRange( 0, 1000 );
+		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 
 		SimpleMultiThreading.threadHaltUnClean();
 		return null;

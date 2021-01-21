@@ -112,17 +112,8 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 
 				tOut.setReal( tIn.get() );
 			}
-			/*
-			final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
-					PairwiseAlignChannelsUtil.openRandomAccessibleIntervals(
-							slices,
-							new UnsignedShortType(0),
-							Interpolation.NLINEAR,
-							invCamtransform, // pass the forward transform
-							alignmentTransforms,//alignments.get( channelA ),
-							Math.max( firstSliceIndex, (int)min[ 2 ] ),
-							Math.min( lastSliceIndex, (int)max[ 2 ] ) );
-			*/
+
+			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " loaded..." );
 		}
 		catch ( IOException | FormatException e )
 		{
