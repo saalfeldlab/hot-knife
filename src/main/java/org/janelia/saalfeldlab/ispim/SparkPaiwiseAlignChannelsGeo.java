@@ -179,7 +179,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 	public static class N5Data
 	{
 		HashMap<String, HashMap<String, AffineTransform2D>> camTransforms;
-		ArrayList<String> ids;
+		//ArrayList<String> ids;
 		HashMap<String, HashMap<String, List<Slice>>> stacks;
 		HashMap<String, RandomAccessible<AffineTransform2D>> alignments;
 
@@ -187,7 +187,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		N5FSReader n5;
 
-		String n5path;
+		String n5path, id;
 		int lastSliceIndex;
 	}
 
@@ -197,6 +197,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 	{
 		final N5Data n5data = new N5Data();
 
+		n5data.id = id;
 		n5data.n5path = n5Path;
 		n5data.n5 = new N5FSReader(
 				n5Path,
@@ -212,12 +213,12 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				"/",
 				"camTransforms",
 				new TypeToken<HashMap<String, HashMap<String, AffineTransform2D>>>() {}.getType());
-		n5data.ids = n5data.n5.getAttribute(
+		ArrayList<String> ids = n5data.n5.getAttribute(
 				"/",
 				"stacks",
 				new TypeToken<ArrayList<String>>() {}.getType());
 
-		if (!n5data.ids.contains(id))
+		if (!ids.contains(id))
 		{
 			System.err.println("Id '" + id + "' does not exist in '" + n5Path + "'.");
 			return null;
@@ -540,7 +541,6 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				new AffineTransform2DAdapter()).create();
 
 		System.out.println(gson.toJson(n5data.camTransforms));
-		System.out.println(gson.toJson(n5data.ids));
 		// System.out.println(new Gson().toJson(stacks));
 
 		//new ImageJ();
