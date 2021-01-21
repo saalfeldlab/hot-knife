@@ -413,9 +413,13 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	{
 		final N5Writer n5 = new N5FSWriter(
 				n5Path,
-				new GsonBuilder().registerTypeAdapter(
-					AffineTransform3D.class,
-					new AffineTransform3DAdapter()));
+				new GsonBuilder().
+					registerTypeAdapter(
+						AffineTransform3D.class,
+						new AffineTransform3DAdapter()).
+					registerTypeAdapter(
+						AffineTransform2D.class,
+						new AffineTransform2DAdapter()));
 
 		final List<String> allIds = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
 		Collections.sort( allIds );
