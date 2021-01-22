@@ -10,12 +10,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -41,7 +42,6 @@ import mpicbg.models.TileUtil;
 import mpicbg.models.TranslationModel3D;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
-import net.imglib2.RealPoint;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -51,8 +51,6 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.explorer.util.ColorStream;
-import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
-import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -123,9 +121,12 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 	public static ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > loadPairwiseMatches(
 			final N5Reader n5,
-			final List<String> ids ) throws IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
+			final List<String> ids,
+			final int maxNumMatches ) throws IOException, ClassNotFoundException, NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches = new ArrayList<>();
+
+		Random rnd = new Random( 23 );
 
 		for ( final String idA : ids )
 		{
@@ -144,8 +145,8 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					final int indexChA = dataset.indexOf( "_Ch" ) + 1 ;
 					final int indexChB = dataset.indexOf( "_Ch", indexChA ) + 1;
 
-					final int indexCamA = dataset.indexOf( "_cam" ) + 1;
-					final int indexCamB = dataset.indexOf( "_cam", indexCamA ) + 1;
+					final int indexCamA = dataset.indexOf( "_cam" ) + 1; // fake for now, always cam1
+					final int indexCamB = dataset.indexOf( "_cam", indexCamA ) + 1; // fake for now, always cam1
 
 					final String channelA = dataset.substring( indexChA, indexCamA - 1);
 					final String channelB = dataset.substring( indexChB, indexCamB - 1);
@@ -157,6 +158,9 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					final DatasetAttributes datasetAttributes = n5.getDatasetAttributes(datasetName);
 
 					final ArrayList<PointMatch> matchesLocal = n5.readSerializedBlock(datasetName, datasetAttributes, new long[] {0});
+
+					while ( matchesLocal.size() > maxNumMatches )
+						matchesLocal.remove( rnd.nextInt( matchesLocal.size() ) );
 
 					matches.add( new ValuePair<>( new ValuePair<>( new Description(idA, channelA, camA), new Description(idB, channelB, camB ) ),  matchesLocal ) );
 
@@ -170,6 +174,44 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 					if ( localError > 5.0 )
 						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
+				}
+				else if (dataset.startsWith( "matches_Ch" ) ) //e.g. matches_Ch488+561+647nm_Ch515+594nm
+				{
+					// TODO: store in dataset attributes!!!
+					final int indexChA = dataset.indexOf( "_Ch" ) + 1 ;
+					final int indexChB = dataset.indexOf( "_Ch", indexChA ) + 1;
+
+					final String channelA = dataset.substring( indexChA, indexChB - 1);
+					final String channelB = dataset.substring( indexChB, dataset.length() );
+
+					if ( channelA.contains( "405" ) || channelB.contains( "405" ) )
+							continue;
+
+					final String camA = "cam1"; // fake for now
+					final String camB = "cam1"; // fake for now
+
+					final String datasetName = idA + "/" + dataset;
+					final DatasetAttributes datasetAttributes = n5.getDatasetAttributes(datasetName);
+
+					final ArrayList<PointMatch> matchesLocal = n5.readSerializedBlock(datasetName, datasetAttributes, new long[] {0});
+
+					while ( matchesLocal.size() > maxNumMatches )
+						matchesLocal.remove( rnd.nextInt( matchesLocal.size() ) );
+
+					matches.add( new ValuePair<>( new ValuePair<>( new Description(idA, channelA, camA), new Description(idA, channelB, camB ) ),  matchesLocal ) );
+
+					final TranslationModel3D translation = new TranslationModel3D();
+					if ( matchesLocal.size() > 4)
+						translation.fit( matchesLocal );
+
+					final double localError = getError( matchesLocal, translation, new TranslationModel3D() );
+
+					System.out.println( idA + ": " + channelA + "," + camA + " <> " + channelB + "," + camB + ", Loaded " + matchesLocal.size() + " matches, localError=" + localError );
+
+					if ( localError > 5.0 )
+						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
+
+					//System.exit( 0 );
 				}
 			}
 		}
@@ -217,7 +259,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 			this.blockMaxAllowedError = blockMaxAllowedError;
 		}
 
-		public void updateModel( M model ) {}
+		public void updateModel( Tile<M> tile ) {}
 
 		@Override
 		public String toString() { return "numIterations=" + numIterations + ", maxPlateauWidth=" + maxPlateauWidth + ", blockMaxAllowedError=" + blockMaxAllowedError; }
@@ -226,10 +268,16 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	public static class InterpolatedModel3DOptimizationParameters<A extends Model< A > & Affine3D< A >,B extends Model< B > & Affine3D< B >> extends OptimizationParameters< InterpolatedAffineModel3D<A,B> >
 	{
 		double lambda = 0.1;
+		final HashMap< Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> >, Description > tileToId;
 
-		public InterpolatedModel3DOptimizationParameters() {}
-		public InterpolatedModel3DOptimizationParameters( final int numIterations, final int maxPlateauWidth, final double blockMaxAllowedError, final double lambda )
+		public InterpolatedModel3DOptimizationParameters(
+				final HashMap< Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> >, Description > tileToId,
+				final int numIterations,
+				final int maxPlateauWidth,
+				final double blockMaxAllowedError,
+				final double lambda )
 		{
+			this.tileToId = tileToId;
 			this.numIterations = numIterations;
 			this.maxPlateauWidth = maxPlateauWidth;
 			this.blockMaxAllowedError = blockMaxAllowedError;
@@ -237,7 +285,10 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		}
 
 		@Override
-		public void updateModel( final InterpolatedAffineModel3D<A,B> model ) { model.setLambda( this.lambda ); };
+		public void updateModel( final Tile<InterpolatedAffineModel3D<A,B>> tile )
+		{
+			tile.getModel().setLambda( this.lambda );
+		};
 
 		@Override
 		public String toString() { return "lambda=" + lambda + ", " + super.toString(); }
@@ -269,7 +320,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 			// update model parameters such as lambdas
 			for ( final Tile< M > tile : idToTile.values() )
-				paramPreAlign.updateModel( tile.getModel() );
+				paramPreAlign.updateModel( tile );
 
 			tileConfig.preAlign();
 		}
@@ -284,7 +335,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 			// update model parameters such as lambdas
 			for ( final Tile< M > tile : idToTile.values() )
-				param.updateModel( tile.getModel() );
+				param.updateModel( tile );
 
 			final ErrorStatistic observer = new ErrorStatistic( param.maxPlateauWidth + 1 );
 			final float damp = 1.0f;
@@ -425,37 +476,41 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		Collections.sort( allIds );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading matches." );
-		final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches = loadPairwiseMatches( n5, allIds );
-
-		final List<Description> allDesc = allDescriptions( matches );
+		final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches = loadPairwiseMatches( n5, allIds, 1000 );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Setting up tiles." );
 		final HashMap< Description, Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> > > idToTile =
 				createAndConnectTiles(
 						new InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D>(new AffineModel3D(), new TranslationModel3D(), 0.1 ), matches );
 
+		final HashMap< Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> >, Description > tileToId = new HashMap<>();
+		for ( final Entry<Description, Tile<InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D>>> entry : idToTile.entrySet() )
+			tileToId.put( entry.getValue(), entry.getKey() );
+
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Solving." );
 
 		// parameters for pre-align (translation-only)
 		InterpolatedModel3DOptimizationParameters<AffineModel3D, TranslationModel3D> preAlign =
-				new InterpolatedModel3DOptimizationParameters<>( 0, 0, 0.0, 1.0 );
+				new InterpolatedModel3DOptimizationParameters<>( tileToId, 0, 0, 0.0, 1.0 );
 
 		List< InterpolatedModel3DOptimizationParameters<AffineModel3D, TranslationModel3D> > params = new ArrayList<>();
-		params.add( new InterpolatedModel3DOptimizationParameters<>( 1000, 250, 5.0, 1.0 ) );
-		params.add( new InterpolatedModel3DOptimizationParameters<>( 500, 250, 5.0, 0.5 ) );
-		params.add( new InterpolatedModel3DOptimizationParameters<>( 200, 100, 5.0, 0.1 ) );
-		params.add( new InterpolatedModel3DOptimizationParameters<>( 100, 25, 5.0, 0.01 ) );
+		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 1000, 250, 5.0, 1.0 ) );
+		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 500, 250, 5.0, 0.5 ) );
+		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 200, 100, 5.0, 0.1 ) );
+		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 100, 25, 5.0, 0.01 ) );
 
 		solve( idToTile, preAlign, params );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Saving transformations ... " );
+		/*
+		final List<Description> allDesc = allDescriptions( matches );
 
 		for ( final Description desc : allDesc )
 		{
 			System.out.println( desc + ": " + idToTile.get( desc ).getModel().createAffineModel3D() );
 			n5.setAttribute( desc.id + "/" + desc.channel, "3d-affine", TransformationTools.getAffineTransform( idToTile.get( desc ).getModel().createAffineModel3D() ) );
 		}
-
+		*/
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Computing errors." );
 
 		double minError = Double.MAX_VALUE;
@@ -468,6 +523,8 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 			final Description idB = entry.getA().getB();
 
 			final TranslationModel3D translation = new TranslationModel3D();
+			for ( final PointMatch pm : entry.getB() )
+				pm.getP2().apply( translation );
 			translation.fit( entry.getB() );
 
 			final double localError = getError( entry.getB(), translation, new TranslationModel3D() );
