@@ -54,6 +54,8 @@ import scala.Tuple2;
 
 public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializable {
 
+	private static final long serialVersionUID = 7771836820788861570L;
+
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
 
