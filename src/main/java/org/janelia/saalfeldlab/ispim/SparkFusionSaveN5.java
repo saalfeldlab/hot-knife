@@ -102,14 +102,17 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 						AffineTransform2D.class,
 						new AffineTransform2DAdapter()));
 
-		final List<String> allIds = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
+		final ArrayList<String> allIds = new ArrayList<String>();
+		allIds.addAll( SparkPaiwiseAlignChannelsGeoAll.getIds(n5) );
 		Collections.sort( allIds );
 
+		/*
 		ArrayList< String > list = new ArrayList<>();
 		list.add( allIds.get( 0 ) );
 		list.add( allIds.get( 1 ) );
+		*/
 
-		RandomAccessibleInterval< UnsignedShortType > fused = RenderFullStack.fuseMax( n5Path, list, channel, cam );
+		RandomAccessibleInterval< UnsignedShortType > fused = RenderFullStack.fuseMax( n5Path, allIds, channel, cam );
 
 		System.out.println( "bounding box: " + Util.printInterval( fused ) );
 
@@ -118,7 +121,7 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		saveN5( sc, fused, n5Path, new int[] { 512, 512, 64 }, list, channel, cam );
+		saveN5( sc, fused, n5Path, new int[] { 2048, 2048, 32 }, allIds, channel, cam );
 
 		sc.close();
 
