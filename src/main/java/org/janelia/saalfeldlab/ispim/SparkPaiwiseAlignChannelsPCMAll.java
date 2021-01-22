@@ -102,7 +102,7 @@ public class SparkPaiwiseAlignChannelsPCMAll implements Callable<Void>, Serializ
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
-		final SparkConf conf = new SparkConf().setAppName("SparkPaiwiseAlignChannelsGeoAll");
+		final SparkConf conf = new SparkConf().setAppName("SparkPaiwiseAlignChannelsPCMAll");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
