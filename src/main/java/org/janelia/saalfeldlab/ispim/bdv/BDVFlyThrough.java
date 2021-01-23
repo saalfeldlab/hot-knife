@@ -56,6 +56,7 @@ import bdv.viewer.render.awt.BufferedImageRenderResult;
 import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
+import ij.io.FileSaver;
 import ij.process.ColorProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.RealPoint;
@@ -65,6 +66,7 @@ import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListLocalizingCursor;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.view.Views;
@@ -317,6 +319,8 @@ public class BDVFlyThrough
 
 		for ( int i = 0; i < transforms.size(); ++i )
 		{
+			target.clear();
+
 			IOFunctions.println( (i+1) + "/" + transforms.size() + ": " + transforms.get( i ) );
 
 			renderState.setViewerTransform( transforms.get( i ) );
@@ -332,9 +336,11 @@ public class BDVFlyThrough
 				final File file = new File( String.format( "%s/img-%05d.png", dir, i ) );
 				IOFunctions.println( "Writing file: " + file.getAbsolutePath() );
 
-				ImageIO.write( target.accumulated.image(), "png", file );
+				ImagePlus imp = new ImagePlus( "BDV Screenshot", new ColorProcessor( target.accumulated.image() ) );
+				new FileSaver( imp ).saveAsPng( file.getAbsolutePath() );
+				//ImageIO.write( target.accumulated.image(), "png", file ); // writes only white images
 			}
-			catch ( IOException e )
+			catch ( Exception e )
 			{
 				// TODO Auto-generated catch block
 				e.printStackTrace();
