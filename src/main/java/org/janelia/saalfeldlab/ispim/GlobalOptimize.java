@@ -51,6 +51,7 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.explorer.util.ColorStream;
+import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -165,6 +166,8 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					matches.add( new ValuePair<>( new ValuePair<>( new Description(idA, channelA, camA), new Description(idB, channelB, camB ) ),  matchesLocal ) );
 
 					final TranslationModel3D translation = new TranslationModel3D();
+					for ( final PointMatch pm : matchesLocal )
+						pm.getP2().apply( translation );
 					if ( matchesLocal.size() > 4)
 						translation.fit( matchesLocal );
 
@@ -172,7 +175,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 					System.out.println( idA + "," + channelA + "," + camA + " <> " + idB + "," + channelB + "," + camB + ", Loaded " + matchesLocal.size() + " matches, localError=" + localError );
 
-					if ( localError > 5.0 )
+					if ( localError > 6.0 )
 						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
 				}
 				else if (dataset.startsWith( "matches_Ch" ) ) //e.g. matches_Ch488+561+647nm_Ch515+594nm
@@ -184,8 +187,8 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					final String channelA = dataset.substring( indexChA, indexChB - 1);
 					final String channelB = dataset.substring( indexChB, dataset.length() );
 
-					if ( channelA.contains( "405" ) || channelB.contains( "405" ) )
-							continue;
+					//if ( channelA.contains( "405" ) || channelB.contains( "405" ) )
+					//	continue;
 
 					final String camA = "cam1"; // fake for now
 					final String camB = "cam1"; // fake for now
@@ -200,15 +203,17 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 					matches.add( new ValuePair<>( new ValuePair<>( new Description(idA, channelA, camA), new Description(idA, channelB, camB ) ),  matchesLocal ) );
 
-					final TranslationModel3D translation = new TranslationModel3D();
+					final AffineModel3D model = new AffineModel3D();
+					for ( final PointMatch pm : matchesLocal )
+						pm.getP2().apply( model );
 					if ( matchesLocal.size() > 4)
-						translation.fit( matchesLocal );
+						model.fit( matchesLocal );
 
-					final double localError = getError( matchesLocal, translation, new TranslationModel3D() );
+					final double localError = getError( matchesLocal, model, new TranslationModel3D() );
 
 					System.out.println( idA + ": " + channelA + "," + camA + " <> " + channelB + "," + camB + ", Loaded " + matchesLocal.size() + " matches, localError=" + localError );
 
-					if ( localError > 5.0 )
+					if ( localError > 6.0 )
 						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
 
 					//System.exit( 0 );
@@ -459,6 +464,95 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		return descriptions;
 	}
 
+	private void addMissingCh405Tiles(
+			final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches,
+			final List<String> ids )
+	{
+		final HashSet<Description> allDesc = new HashSet<>( allDescriptions( matches ) );
+		final HashSet<String> allIds = new HashSet<>( ids );
+
+		final HashMap<String, Description > all = new HashMap<>();
+		final HashSet<String > missing = new HashSet<>();
+
+		for ( final Description d : allDesc )
+			if ( d.channel.contains( "Ch405nm" ) )
+				all.put( d.id, d );
+
+		for ( final String id : allIds )
+			if ( !all.containsKey( id ) )
+				missing.add( id );
+
+			for ( final String id : missing )
+			{
+				System.out.println( "Creating fake matches for: " + id );
+	
+				Description oldA = null, oldB = null;
+				Description newA = null, newB = null;
+				ArrayList< PointMatch > matchesA = null;
+	
+				for ( final Pair< Pair< Description, Description >, ArrayList< PointMatch > > pair : matches )
+				{
+					if ( pair.getA().getB().id.equals( id ) && !pair.getA().getA().id.equals( id ) && pair.getA().getA().channel.equals( pair.getA().getB().channel ) )
+					{
+						oldA = pair.getA().getA();
+						oldB = pair.getA().getB();
+						for ( final Description desc : allDesc )
+							if ( desc.channel.equals( "Ch405nm" ) && desc.id.equals( pair.getA().getA().id ) )
+								newA = desc;
+	
+						if ( newA == null )
+							continue;
+	
+						newB = new Description( id, "Ch405nm", "cam1" );
+						matchesA = new ArrayList<>();
+						for ( final PointMatch pm : pair.getB() )
+							matchesA.add( new PointMatch( pm.getP1().clone(), pm.getP2().clone() ) );
+						break;
+					}
+	
+					if ( pair.getA().getA().id.equals( id ) && !pair.getA().getB().id.equals( id ) && pair.getA().getA().channel.equals( pair.getA().getB().channel ) )
+					{
+						oldA = pair.getA().getA();
+						oldB = pair.getA().getB();
+						for ( final Description desc : allDesc )
+							if ( desc.channel.equals( "Ch405nm" ) && desc.id.equals( pair.getA().getB().id ) )
+								newB = desc;
+	
+						if ( newB == null )
+							continue;
+	
+						newA = new Description( id, "Ch405nm", "cam1" );
+						matchesA = new ArrayList<>();
+						for ( final PointMatch pm : pair.getB() )
+							matchesA.add( new PointMatch( pm.getP1().clone(), pm.getP2().clone() ) );
+						break;
+					}
+				}
+	
+				if ( matchesA != null )
+				{
+					System.out.println( "added: " + newA + "," + newB + ": " + matchesA.size() + " from " + oldA + ", " + oldB );
+					matches.add( new ValuePair<>( new ValuePair<>( newA, newB ), matchesA ) );
+				}
+				else
+				{
+					newA = new Description( id, "Ch405nm", "cam1" );
+					newB = new Description( id, "Ch488+561+647nm", "cam1" );
+					matchesA = new ArrayList<>();
+					matchesA.add( new PointMatch( new Point( new double[] { 0, 0, 0 }), new Point( new double[] { 0, 0, 0 } ) ) );
+					matchesA.add( new PointMatch( new Point( new double[] { 1, 0, 0 }), new Point( new double[] { 1, 0, 0 } ) ) );
+					matchesA.add( new PointMatch( new Point( new double[] { 0, 1, 0 }), new Point( new double[] { 0, 1, 0 } ) ) );
+					matchesA.add( new PointMatch( new Point( new double[] { 0, 0, 1 }), new Point( new double[] { 0, 0, 1 } ) ) );
+					matchesA.add( new PointMatch( new Point( new double[] { 10, 0, 10 }), new Point( new double[] { 10, 0, 10 } ) ) );
+					matchesA.add( new PointMatch( new Point( new double[] { 0, 10, 0 }), new Point( new double[] { 0, 10, 0 } ) ) );
+					matchesA.add( new PointMatch( new Point( new double[] { 10, 0, 10 }), new Point( new double[] { 10, 0, 10 } ) ) );
+					
+					System.out.println( "added: " + newA + "," + newB + ": " + matchesA.size() + " from " + oldA + ", " + oldB );
+					matches.add( new ValuePair<>( new ValuePair<>( newA, newB ), matchesA ) );
+				}
+			}
+	}
+
 	@Override
 	public Void call() throws Exception
 	{
@@ -477,6 +571,8 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading matches." );
 		final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches = loadPairwiseMatches( n5, allIds, 1000 );
+
+		addMissingCh405Tiles( matches, allIds );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Setting up tiles." );
 		final HashMap< Description, Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> > > idToTile =
@@ -502,15 +598,13 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		solve( idToTile, preAlign, params );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Saving transformations ... " );
-		/*
-		final List<Description> allDesc = allDescriptions( matches );
 
-		for ( final Description desc : allDesc )
+		for ( final Description desc : allDescriptions( matches ) )
 		{
 			System.out.println( desc + ": " + idToTile.get( desc ).getModel().createAffineModel3D() );
 			n5.setAttribute( desc.id + "/" + desc.channel, "3d-affine", TransformationTools.getAffineTransform( idToTile.get( desc ).getModel().createAffineModel3D() ) );
 		}
-		*/
+
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Computing errors." );
 
 		double minError = Double.MAX_VALUE;
