@@ -11,6 +11,7 @@ import java.util.concurrent.Callable;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeriesToN5;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -18,6 +19,8 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 
 import com.google.gson.GsonBuilder;
 
@@ -54,7 +57,7 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 	{
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
-		final String outDatasetName = "maxfusion_"+channel+"_"+cam + "/s0";
+		final String outDatasetName = "maxfusion4_"+channel+"_"+cam;// + "/s0";
 
 		final long[] dimensions = new long[ fused.numDimensions() ];
 		fused.dimensions( dimensions );
@@ -87,6 +90,29 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 					final RandomAccessibleInterval sourceGridBlock = Views.offsetInterval(source, gridBlock[0], gridBlock[1]);
 					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
 				});
+
+	     // SP: add this ...
+        final String reSlicedDataSetPath = outDatasetName + "__reSlice";
+        final String reSlicedDataSetZeroPath = reSlicedDataSetPath + "/s0";
+        final int[] reSlicedBlockSize = new int[] { 128, 128, 128 };
+        SparkConvertTiffSeriesToN5.reSave(
+                sc,
+                n5Path,
+                outDatasetName,
+                reSlicedDataSetZeroPath,
+                reSlicedBlockSize);
+
+        final int[] downSamplingFactors = new int[] { 2, 2, 2 };
+        final N5WriterSupplier n5Supplier = () -> new N5FSWriter( n5Path );
+        N5ScalePyramidSpark.downsampleScalePyramid(
+                sc,
+                n5Supplier,
+                reSlicedDataSetZeroPath,
+                reSlicedDataSetPath,
+                downSamplingFactors );
+
+		n5.setAttribute( reSlicedDataSetPath, "min", min);
+		n5.setAttribute( reSlicedDataSetZeroPath, "min", min);
 	}
 
 	@Override
