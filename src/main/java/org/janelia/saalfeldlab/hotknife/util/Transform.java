@@ -37,7 +37,9 @@ import bdv.viewer.Source;
 import bdv.viewer.render.DefaultMipmapOrdering;
 import bdv.viewer.render.MipmapOrdering;
 import mpicbg.models.Affine2D;
+import mpicbg.models.Affine3D;
 import mpicbg.models.InterpolatedAffineModel2D;
+import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
 import mpicbg.spim.data.sequence.VoxelDimensions;
@@ -238,6 +240,24 @@ public class Transform {
 		public InterpolatedAffineModel2D<A, B> get() {
 
 			return new InterpolatedAffineModel2D<>(aSupplier.get(), bSupplier.get(), lambda);
+		}
+	}
+
+	@SuppressWarnings("serial")
+	public static class InterpolatedAffineModel3DSupplier<A extends Model<A> & Affine3D<A>, B extends Model<B> & Affine3D<B>> extends AbstractInterpolatedModelSupplier<A, B, InterpolatedAffineModel3D<A, B>> {
+
+		public <SA extends Supplier<A> & Serializable, SB extends Supplier<B> & Serializable> InterpolatedAffineModel3DSupplier(
+				final SA aSupplier,
+				final SB bSupplier,
+				final double lambda) {
+
+			super(aSupplier, bSupplier, lambda);
+		}
+
+		@Override
+		public InterpolatedAffineModel3D<A, B> get() {
+
+			return new InterpolatedAffineModel3D<>(aSupplier.get(), bSupplier.get(), lambda);
 		}
 	}
 

@@ -426,11 +426,11 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 		System.out.println( "candidates: " + candidates.size() + " from(z) " + minZ + " to(z) " + maxZ );
 
 		final MultiConsensusFilter filter = new MultiConsensusFilter<>(
-				new Transform.InterpolatedAffineModel2DSupplier(
-				(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
-//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
-				(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new, 0.25 ),
-//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
+				new Transform.InterpolatedAffineModel3DSupplier(
+					(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
+	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
+					(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new, 0.25 ),
+	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
 				numIterations,
 				maxEpsilon,
 				0,
@@ -503,11 +503,11 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 		{
 			final TranslationModel3D translation = new TranslationModel3D();
 			translation.fit( matches );
-			System.out.println( "translation(" + PointMatch.meanDistance( matches ) + ")" + translation );
-			
+			SparkPaiwiseAlignChannelsGeo.error(matches, translation );
+
 			final AffineModel3D affine = new AffineModel3D();
 			affine.fit( matches );
-			System.out.println( "affine (" + PointMatch.meanDistance( matches ) + "): " + affine );
+			SparkPaiwiseAlignChannelsGeo.error(matches, affine );
 
 			BdvStackSource<?> bdv = null;
 
