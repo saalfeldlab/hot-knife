@@ -50,6 +50,22 @@ public class ViewISPIMStacksN5
 
 		final KeyStrokeAdder ksKeyStrokeAdder = config.keyStrokeAdder(ksInputMap, "persistence");
 
+		new AbstractNamedAction( "Screenshot" )
+		{
+			private static final long serialVersionUID = 3640052275162419689L;
+
+			@Override
+			public void actionPerformed(ActionEvent e)
+			{
+				new Thread( ()-> BDVFlyThrough.renderScreenshot( bdvSource.getBdvHandle().getViewerPanel() ) ).start();
+			}
+
+			public void register() {
+				put(ksActionMap);
+				ksKeyStrokeAdder.put(name(), "ctrl C" );
+			}
+		}.register();
+
 		new AbstractNamedAction( "Record movie" )
 		{
 			private static final long serialVersionUID = 3640052275162419689L;
@@ -250,15 +266,15 @@ public class ViewISPIMStacksN5
 		final AffineTransform3D t = new AffineTransform3D();
 		t.scale(0.2, 0.2, 0.85);
 
-		bdv = run(n5Path, "maxfusion2_Ch488+561+647nm_cam1", bdv, null, t, true );
+		bdv = run(n5Path, "maxfusion2_Ch488+561+647nm_cam1", bdv, null, t, false );
 		bdv.setDisplayRange( 100, 800 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
 
-		bdv = run(n5Path, "maxfusion2_Ch515+594nm_cam1", bdv, null, t, true );
+		bdv = run(n5Path, "maxfusion2_Ch515+594nm_cam1", bdv, null, t, false );
 		bdv.setDisplayRange( 100, 300 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 
-		bdv = run(n5Path, "maxfusion3_Ch405nm_cam1", bdv, null, t, true );
+		bdv = run(n5Path, "maxfusion3_Ch405nm_cam1", bdv, null, t, false );
 		bdv.setDisplayRange( 100, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 0, 255, 0)));
 
