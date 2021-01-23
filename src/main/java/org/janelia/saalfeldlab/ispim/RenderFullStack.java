@@ -187,74 +187,7 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		bdv.setDisplayRange( 0, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 
-		setupRecordMovie( bdv );
-	}
-
-	public static void setupRecordMovie( final BdvStackSource<?> bdvSource )
-	{
-		final ActionMap ksActionMap = new ActionMap();
-		final InputMap ksInputMap = new InputMap();
-
-		// default input trigger config, disables "control button1" drag in bdv
-		// (collides with default of "move annotation")
-		final InputTriggerConfig config = new InputTriggerConfig(
-				Arrays.asList(
-						new InputTriggerDescription[]{
-								new InputTriggerDescription(
-										new String[]{"not mapped"}, "drag rotate slow", "bdv")}));
-
-		final KeyStrokeAdder ksKeyStrokeAdder = config.keyStrokeAdder(ksInputMap, "persistence");
-
-		new AbstractNamedAction( "Record movie" )
-		{
-			private static final long serialVersionUID = 3640052275162419689L;
-
-			@Override
-			public void actionPerformed(ActionEvent e)
-			{
-				new Thread( ()-> BDVFlyThrough.record( bdvSource.getBdvHandle().getViewerPanel() ) ).start();
-			}
-
-			public void register() {
-				put(ksActionMap);
-				ksKeyStrokeAdder.put(name(), "ctrl R" );
-			}
-		}.register();
-
-		new AbstractNamedAction( "Add Current Viewer Transform" )
-		{
-			private static final long serialVersionUID = 3620052275162419689L;
-
-			@Override
-			public void actionPerformed(ActionEvent e)
-			{
-				BDVFlyThrough.addCurrentViewerTransform( bdvSource.getBdvHandle().getViewerPanel() );
-			}
-
-			public void register() {
-				put(ksActionMap);
-				ksKeyStrokeAdder.put(name(), "ctrl A" );
-			}
-		}.register();
-
-		new AbstractNamedAction( "Clear All Viewer Transforms" )
-		{
-			private static final long serialVersionUID = 3620052275162419689L;
-
-			@Override
-			public void actionPerformed(ActionEvent e)
-			{
-				BDVFlyThrough.clearAllViewerTransform();
-			}
-
-			public void register() {
-				put(ksActionMap);
-				ksKeyStrokeAdder.put(name(), "ctrl X" );
-			}
-		}.register();
-
-		bdvSource.getBdvHandle().getKeybindings().addActionMap("persistence", ksActionMap);
-		bdvSource.getBdvHandle().getKeybindings().addInputMap("persistence", ksInputMap);
+		ViewISPIMStacksN5.setupRecordMovie( bdv );
 	}
 
 	public static RandomAccessibleInterval< UnsignedShortType > fuseMax(final String n5Path, final List<String> ids, final String channel, final String cam ) throws IOException, FormatException
@@ -353,7 +286,7 @@ public class RenderFullStack implements Callable<Void>, Serializable
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Displayed all stacks." );
 
-		setupRecordMovie( bdv );
+		ViewISPIMStacksN5.setupRecordMovie( bdv );
 
 		SimpleMultiThreading.threadHaltUnClean();
 		return null;

@@ -26,10 +26,24 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 
 import javax.imageio.ImageIO;
+
+import org.janelia.saalfeldlab.ispim.AffineTransform3DAdapter;
+import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs.MetaData;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 
 import bdv.cache.CacheControl;
 import bdv.viewer.ViewerPanel;
@@ -80,6 +94,60 @@ public class BDVFlyThrough
 		viewer.state().getViewerTransform( currentViewerTransform );
 		viewerTransforms.add( currentViewerTransform );
 		IOFunctions.println( "Added transform: " + currentViewerTransform  + ", #transforms=" + viewerTransforms.size() );
+	}
+
+	public static void deleteLastViewerTransform()
+	{
+		if ( viewerTransforms.size() > 0 )
+		{
+			viewerTransforms.remove( viewerTransforms.size() - 1 );
+			IOFunctions.println( "removed last transform, #transforms=" + viewerTransforms.size() );
+		}
+	}
+
+	public static void jumpToLastViewerTransform( final ViewerPanel viewer )
+	{
+		if ( viewerTransforms.size() > 0 )
+		{
+			viewer.state().setViewerTransform( viewerTransforms.get( viewerTransforms.size() - 1 ) );
+			IOFunctions.println( "Jumped to transform " + viewerTransforms.get( viewerTransforms.size() - 1 )  + ", #transforms=" + viewerTransforms.size() );
+		}
+	}
+
+	public static void loadViewerTransforms( final File file ) throws FileNotFoundException
+	{
+		final GsonBuilder gsonBuilder = new GsonBuilder().
+				registerTypeAdapter(
+						AffineTransform3D.class,
+						new AffineTransform3DAdapter());
+		final Gson gson = gsonBuilder.create();
+
+		final JsonReader reader = new JsonReader( new FileReader( file ) );
+
+		List< AffineTransform3D > transforms = Arrays.asList( gson.fromJson( reader, AffineTransform3D[].class ) );
+
+		IOFunctions.println( "loaded " + transforms.size() + " transforms." );
+
+		viewerTransforms.clear();
+		viewerTransforms.addAll( transforms );
+	}
+
+	public static void saveViewerTransforms( final File file ) throws IOException
+	{
+		final GsonBuilder gsonBuilder = new GsonBuilder().
+				registerTypeAdapter(
+						AffineTransform3D.class,
+						new AffineTransform3DAdapter());
+		final Gson gson = gsonBuilder.create();
+
+		System.out.println( gson.toJson(viewerTransforms) );
+		FileWriter w = new FileWriter(file);
+		gson.toJson(viewerTransforms, w );
+		w.close();
+
+		IOFunctions.println( "saved " + viewerTransforms.size() + " transforms." );
+		//gson.to
+		//gson.toJson( gson.toJson(transforms ), writer);
 	}
 
 	public static void clearAllViewerTransform()
