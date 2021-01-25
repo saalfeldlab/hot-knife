@@ -226,7 +226,6 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			else
 				new ImageJ();
 			*/
-
 			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): opening images." );
 
 			ValuePair<RealRandomAccessible<UnsignedShortType>, RealInterval> alignedStackBoundsA = null;
@@ -345,11 +344,11 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 								blockInterval.min( 0 ) + blockSizeX / 2,
 								blockInterval.min( 1 ) + blockSizeY / 2,
 								block.from + (block.to - block.from ) / 2} );
-						// TODO: fix direction -offset!
+						// done > TODO: fix direction -offset!
 						final Point p2 = new Point( new double[] {
-								p1.getL()[ 0 ] + result.getOffset( 0 ) * downsampling[ 0 ],
-								p1.getL()[ 1 ] + result.getOffset( 1 ) * downsampling[ 1 ],
-								p1.getL()[ 2 ] + result.getOffset( 2 ) * downsampling[ 2 ] } );
+								p1.getL()[ 0 ] - result.getOffset( 0 ) * downsampling[ 0 ],
+								p1.getL()[ 1 ] - result.getOffset( 1 ) * downsampling[ 1 ],
+								p1.getL()[ 2 ] - result.getOffset( 2 ) * downsampling[ 2 ] } );
 
 						//System.out.println( result.getCrossCorrelation() + ": " + Util.printCoordinates( result.getOffset() ) + ", " + Util.printCoordinates( p1.getL() ) + " - " + Util.printCoordinates( p2.getL() ) );
 						candidatesLocal.add( new PointMatch( p1, p2 ) );
@@ -401,8 +400,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			}
 			impA.setRoi(mpicbg.ij.util.Util.pointsToPointRoi(sourcePoints));
 			final ArrayList models = new ArrayList<>();
-			models.add( new TranslationModel3D() );
 			models.add( model );
+			models.add( new TranslationModel3D() );
 	
 			final ArrayList<ImagePlus> images = new ArrayList< ImagePlus >();
 			images.add( impA );
@@ -411,12 +410,13 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			final CompositeImage overlay = OverlayFusion.createOverlay( new FloatType(), images, models, 3, 1, new NLinearInterpolatorFactory<FloatType>() );
 			overlay.show();
 
-			final RealRandomAccessible< UnsignedShortType > tImgA = RealViews.affineReal( Views.interpolate( Views.extendZero( imgA ), new NLinearInterpolatorFactory<UnsignedShortType>() ), TransformationTools.getAffineTransform( model ).inverse() );
+			final RealRandomAccessible< UnsignedShortType > tImgA = RealViews.affineReal( Views.interpolate( Views.extendZero( imgA ), new NLinearInterpolatorFactory<UnsignedShortType>() ), TransformationTools.getAffineTransform( model ) );
 			BdvOptions options = new BdvOptions();
 			BdvStackSource<?> bdv = BdvFunctions.show( tImgA, imgA, "imgA_t" );
 			bdv.setDisplayRange(0, 750);
 			//bdv = BdvFunctions.show(imgB, "imgB", options.addTo( bdv ) );
-			BdvFunctions.show(Views.extendZero( imgB ), imgB, "imgB", options.addTo( bdv ) );
+			bdv = BdvFunctions.show(Views.extendZero( imgB ), imgB, "imgB", options.addTo( bdv ) );
+			bdv.setDisplayRange(0, 750);
 			SimpleMultiThreading.threadHaltUnClean();
 			*/
 
@@ -464,7 +464,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				new Transform.InterpolatedAffineModel3DSupplier(
 					(Supplier<AffineModel3D> & Serializable)AffineModel3D::new,
 	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new, 0.25),
-					(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new, 0.5 ),
+					(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new, 0.25 ),
 	//				(Supplier<RigidModel3D> & Serializable)RigidModel3D::new,
 				numIterations,
 				maxEpsilon,
@@ -537,6 +537,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 		try
 		{
 			final TranslationModel3D translation = new TranslationModel3D();
+			for ( final PointMatch pm : matches )
+				pm.getP2().apply( translation );
 			translation.fit( matches );
 			SparkPaiwiseAlignChannelsGeo.error(matches, translation );
 
@@ -546,13 +548,13 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 			BdvStackSource<?> bdv = null;
 
-			final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine );//.inverse();
-			System.out.println( transformB_a );
+			final AffineTransform3D stitchingTransform = TransformationTools.getAffineTransform( affine );//.inverse();
+			System.out.println( stitchingTransform );
 
 			final N5Data n5data = SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id );
 
-			bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5data.stacks.get( channelA ).get( camA ), n5data.alignments.get( channelA ), n5data.camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
-			bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5data.stacks.get( channelB ).get( camB ), n5data.alignments.get( channelB ), n5data.camTransforms.get( channelB ).get( camB ), transformB_a, 0, n5data.lastSliceIndex );
+			bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5data.stacks.get( channelA ).get( camA ), n5data.alignments.get( channelA ), n5data.camTransforms.get( channelA ).get( camA ), stitchingTransform, 0, n5data.lastSliceIndex );
+			bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5data.stacks.get( channelB ).get( camB ), n5data.alignments.get( channelB ), n5data.camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
 
 			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( matches.stream().map( pm -> pm.getP1() ).collect( Collectors.toList() ), false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "matches", new BdvOptions().addTo( bdv ) );
 

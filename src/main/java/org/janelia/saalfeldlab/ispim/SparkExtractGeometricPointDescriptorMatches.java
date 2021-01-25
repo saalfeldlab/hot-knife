@@ -61,6 +61,7 @@ import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 import net.preibisch.legacy.io.IOFunctions;
@@ -501,11 +502,11 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		}
 	}
 
-	public static void showStack( final List<Slice> stack, final List<Integer> slices, final int width, final int height ) throws IOException
+	public static ArrayList< RandomAccessibleInterval< UnsignedShortType> > loadStack( final List<Slice> stack, final List<Integer> slices, final int width, final int height ) throws IOException
 	{
-		ImageStack imgstack = new ImageStack(width, height);
-
 		int j = 0;
+
+		ArrayList< RandomAccessibleInterval< UnsignedShortType> > imgStack = new ArrayList<>();
 
 		for ( final int i : slices )
 		{
@@ -537,10 +538,22 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 					System.exit( 0 );
 					//slice = ArrayImgs.unsignedShorts( width, height );
 				}
-				imgstack.addSlice( ImageJFunctions.wrapUnsignedShort( slice, "z=" + i ).getProcessor() );
+				imgStack.add( slice );
 			}
 			++j;
 		}
+
+		return imgStack;
+	}
+
+	public static void showStack( final List<Slice> stack, final List<Integer> slices, final int width, final int height ) throws IOException
+	{
+		ArrayList< RandomAccessibleInterval< UnsignedShortType> > imgs = loadStack(stack, slices, width, height);
+
+		ImageStack imgstack = new ImageStack(width, height);
+
+		for ( int i = 0; i < imgs.size(); ++i )
+			imgstack.addSlice( ImageJFunctions.wrapUnsignedShort( imgs.get( i ), "z=" + slices.get( i ) ).getProcessor() );
 
 		new ImagePlus( "stack", imgstack ).show();
 	}
