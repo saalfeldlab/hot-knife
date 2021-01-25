@@ -42,6 +42,6 @@ public class PresentationTools {
 		final String n5Path = "/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5";
 
 		new ImageJ();
-		loadStackRaw( n5Path, "Pos001", "Ch488+561+647nm", "cam1");
+		loadStackRaw( n5Path, "Pos007", "Ch515+594nm", "cam1");
 	}
 }
