@@ -501,7 +501,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		}
 	}
 
-	private static void showStack( final ArrayList<Slice> stack, final ArrayList<Integer> slices, final int width, final int height ) throws IOException
+	public static void showStack( final List<Slice> stack, final List<Integer> slices, final int width, final int height ) throws IOException
 	{
 		ImageStack imgstack = new ImageStack(width, height);
 
@@ -509,6 +509,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		for ( final int i : slices )
 		{
+			System.out.println( new Date( System.currentTimeMillis() ) + ": Loading slice " + i );
 			final Slice sliceInfo = stack.get(i);
 	
 			try (final TiffReader reader = new TiffReader())

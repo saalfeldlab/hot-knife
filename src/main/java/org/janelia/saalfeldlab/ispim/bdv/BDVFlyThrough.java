@@ -26,10 +26,24 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 
 import javax.imageio.ImageIO;
+
+import org.janelia.saalfeldlab.ispim.AffineTransform3DAdapter;
+import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs.MetaData;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 
 import bdv.cache.CacheControl;
 import bdv.viewer.ViewerPanel;
@@ -42,8 +56,10 @@ import bdv.viewer.render.awt.BufferedImageRenderResult;
 import fiji.util.gui.GenericDialogPlus;
 import ij.IJ;
 import ij.ImagePlus;
+import ij.io.FileSaver;
 import ij.process.ColorProcessor;
 import net.imglib2.Cursor;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.display.screenimage.awt.ARGBScreenImage;
@@ -51,6 +67,8 @@ import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListLocalizingCursor;
+import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.outofbounds.OutOfBoundsBorderFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.view.Views;
@@ -80,6 +98,60 @@ public class BDVFlyThrough
 		viewer.state().getViewerTransform( currentViewerTransform );
 		viewerTransforms.add( currentViewerTransform );
 		IOFunctions.println( "Added transform: " + currentViewerTransform  + ", #transforms=" + viewerTransforms.size() );
+	}
+
+	public static void deleteLastViewerTransform()
+	{
+		if ( viewerTransforms.size() > 0 )
+		{
+			viewerTransforms.remove( viewerTransforms.size() - 1 );
+			IOFunctions.println( "removed last transform, #transforms=" + viewerTransforms.size() );
+		}
+	}
+
+	public static void jumpToLastViewerTransform( final ViewerPanel viewer )
+	{
+		if ( viewerTransforms.size() > 0 )
+		{
+			viewer.state().setViewerTransform( viewerTransforms.get( viewerTransforms.size() - 1 ) );
+			IOFunctions.println( "Jumped to transform " + viewerTransforms.get( viewerTransforms.size() - 1 )  + ", #transforms=" + viewerTransforms.size() );
+		}
+	}
+
+	public static void loadViewerTransforms( final File file ) throws FileNotFoundException
+	{
+		final GsonBuilder gsonBuilder = new GsonBuilder().
+				registerTypeAdapter(
+						AffineTransform3D.class,
+						new AffineTransform3DAdapter());
+		final Gson gson = gsonBuilder.create();
+
+		final JsonReader reader = new JsonReader( new FileReader( file ) );
+
+		List< AffineTransform3D > transforms = Arrays.asList( gson.fromJson( reader, AffineTransform3D[].class ) );
+
+		IOFunctions.println( "loaded " + transforms.size() + " transforms." );
+
+		viewerTransforms.clear();
+		viewerTransforms.addAll( transforms );
+	}
+
+	public static void saveViewerTransforms( final File file ) throws IOException
+	{
+		final GsonBuilder gsonBuilder = new GsonBuilder().
+				registerTypeAdapter(
+						AffineTransform3D.class,
+						new AffineTransform3DAdapter());
+		final Gson gson = gsonBuilder.create();
+
+		System.out.println( gson.toJson(viewerTransforms) );
+		FileWriter w = new FileWriter(file);
+		gson.toJson(viewerTransforms, w );
+		w.close();
+
+		IOFunctions.println( "saved " + viewerTransforms.size() + " transforms." );
+		//gson.to
+		//gson.toJson( gson.toJson(transforms ), writer);
 	}
 
 	public static void clearAllViewerTransform()
@@ -249,6 +321,8 @@ public class BDVFlyThrough
 
 		for ( int i = 0; i < transforms.size(); ++i )
 		{
+			target.clear();
+
 			IOFunctions.println( (i+1) + "/" + transforms.size() + ": " + transforms.get( i ) );
 
 			renderState.setViewerTransform( transforms.get( i ) );
@@ -264,9 +338,11 @@ public class BDVFlyThrough
 				final File file = new File( String.format( "%s/img-%05d.png", dir, i ) );
 				IOFunctions.println( "Writing file: " + file.getAbsolutePath() );
 
-				ImageIO.write( target.accumulated.image(), "png", file );
+				ImagePlus imp = new ImagePlus( "BDV Screenshot", new ColorProcessor( target.accumulated.image() ) );
+				new FileSaver( imp ).saveAsPng( file.getAbsolutePath() );
+				//ImageIO.write( target.accumulated.image(), "png", file ); // writes only white images
 			}
-			catch ( IOException e )
+			catch ( Exception e )
 			{
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -368,7 +444,7 @@ public class BDVFlyThrough
 
 			if ( sigma > 0 )
 			{
-				IOFunctions.println( "Smoothing transforms with sigma=" + sigma );
+				IOFunctions.println( "Smoothing " + interpolated.size() + " transforms with sigma=" + sigma );
 
 				final ListImg< NumericAffineTransform3D > transformImg = new ListImg< NumericAffineTransform3D >( new long[]{ interpolated.size() }, new NumericAffineTransform3D( new AffineTransform3D() ) );
 				final ListLocalizingCursor< NumericAffineTransform3D > it = transformImg.localizingCursor();
@@ -379,11 +455,22 @@ public class BDVFlyThrough
 					it.set( new NumericAffineTransform3D( model.copy() ) );
 				}
 
-				Gauss3.gauss( sigma, Views.extendBorder( transformImg ), transformImg );
+				RandomAccessibleInterval< NumericAffineTransform3D > expanded = 
+						Views.expand( transformImg, new OutOfBoundsBorderFactory<>(), Gauss3.halfkernelsizes( new double[] { sigma } )[ 0 ] );
 
+				Gauss3.gauss( sigma, expanded /*Views.extendBorder( transformImg )*/, transformImg );
+
+				interpolated.clear();
+				for ( final NumericAffineTransform3D model : Views.iterable( expanded ) )
+					interpolated.add( model.getTransform().copy() );
+
+				IOFunctions.println( "New #transforms=" + interpolated.size() + " (extended due to kernelsize)" );
+
+				/*
 				it.reset();
 				for ( int i = 0; i < interpolated.size(); ++i )
 					interpolated.set( i, it.next().getTransform().copy() ); // could be a native type, so copy in necessary
+				*/
 			}
 
 			return interpolated;
