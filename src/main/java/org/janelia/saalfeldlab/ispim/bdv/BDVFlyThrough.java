@@ -59,6 +59,7 @@ import ij.ImagePlus;
 import ij.io.FileSaver;
 import ij.process.ColorProcessor;
 import net.imglib2.Cursor;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.display.screenimage.awt.ARGBScreenImage;
@@ -67,6 +68,7 @@ import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.img.list.ListLocalizingCursor;
 import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.outofbounds.OutOfBoundsBorderFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.view.Views;
@@ -442,7 +444,7 @@ public class BDVFlyThrough
 
 			if ( sigma > 0 )
 			{
-				IOFunctions.println( "Smoothing transforms with sigma=" + sigma );
+				IOFunctions.println( "Smoothing " + interpolated.size() + " transforms with sigma=" + sigma );
 
 				final ListImg< NumericAffineTransform3D > transformImg = new ListImg< NumericAffineTransform3D >( new long[]{ interpolated.size() }, new NumericAffineTransform3D( new AffineTransform3D() ) );
 				final ListLocalizingCursor< NumericAffineTransform3D > it = transformImg.localizingCursor();
@@ -453,11 +455,22 @@ public class BDVFlyThrough
 					it.set( new NumericAffineTransform3D( model.copy() ) );
 				}
 
-				Gauss3.gauss( sigma, Views.extendBorder( transformImg ), transformImg );
+				RandomAccessibleInterval< NumericAffineTransform3D > expanded = 
+						Views.expand( transformImg, new OutOfBoundsBorderFactory<>(), Gauss3.halfkernelsizes( new double[] { sigma } )[ 0 ] );
 
+				Gauss3.gauss( sigma, expanded /*Views.extendBorder( transformImg )*/, transformImg );
+
+				interpolated.clear();
+				for ( final NumericAffineTransform3D model : Views.iterable( expanded ) )
+					interpolated.add( model.getTransform().copy() );
+
+				IOFunctions.println( "New #transforms=" + interpolated.size() + " (extended due to kernelsize)" );
+
+				/*
 				it.reset();
 				for ( int i = 0; i < interpolated.size(); ++i )
 					interpolated.set( i, it.next().getTransform().copy() ); // could be a native type, so copy in necessary
+				*/
 			}
 
 			return interpolated;
