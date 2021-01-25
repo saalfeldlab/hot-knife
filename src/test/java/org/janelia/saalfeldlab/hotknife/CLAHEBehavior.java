@@ -59,12 +59,12 @@ public class CLAHEBehavior implements Callable<Void> {
 
 		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
 
-		final int scaleIndex = 5;
+		final int scaleIndex = 4;
 		final double scale = 1.0 / Math.pow(2, scaleIndex);
 		final N5Reader n5 = new N5FSReader("/nrs/flyem/tmp/VNC-export.n5");
 		final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/2-26/s" + scaleIndex);
 
-		final int blockRadius = (int)Math.round(1023 * scale);
+		final int blockRadius = (int)Math.round(511 * scale);
 
 		final ImageJStackOp<UnsignedByteType> clahe =
 				new ImageJStackOp<>(
@@ -89,7 +89,7 @@ public class CLAHEBehavior implements Callable<Void> {
 						255);
 		final RandomAccessibleInterval<UnsignedByteType> lcned = Lazy.process(
 				img,
-				new int[] {256, 256, 32},
+				new int[] {512, 512, 32},
 				new UnsignedByteType(),
 				AccessFlags.setOf(AccessFlags.VOLATILE),
 				lcn);
@@ -97,13 +97,14 @@ public class CLAHEBehavior implements Callable<Void> {
 		final ImageJStackOp<UnsignedByteType> cllcn =
 				new ImageJStackOp<>(
 						Views.extendZero(img),
+//						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
 						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
 						blockRadius,
 						0,
 						255);
 		final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
 				img,
-				new int[] {256, 256, 32},
+				new int[] {512, 512, 32},
 				new UnsignedByteType(),
 				AccessFlags.setOf(AccessFlags.VOLATILE),
 				cllcn);
