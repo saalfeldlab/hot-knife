@@ -266,15 +266,17 @@ public class ViewISPIMStacksN5
 		final AffineTransform3D t = new AffineTransform3D();
 		t.scale(0.2, 0.2, 0.85);
 
-		bdv = run(n5Path, "maxfusion2_Ch488+561+647nm_cam1", bdv, null, t, false );
+		final boolean useVolatile = true;
+
+		bdv = run(n5Path, "maxfusion4_Ch488+561+647nm_cam1__reSlice"/*"maxfusion2_Ch488+561+647nm_cam1"*/, bdv, null, t, useVolatile );
 		bdv.setDisplayRange( 100, 800 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
 
-		bdv = run(n5Path, "maxfusion2_Ch515+594nm_cam1", bdv, null, t, false );
+		bdv = run(n5Path, "maxfusion2_Ch515+594nm_cam1", bdv, null, t, useVolatile );
 		bdv.setDisplayRange( 100, 300 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
 
-		bdv = run(n5Path, "maxfusion3_Ch405nm_cam1", bdv, null, t, false );
+		bdv = run(n5Path, "maxfusion3_Ch405nm_cam1", bdv, null, t, useVolatile );
 		bdv.setDisplayRange( 100, 1000 );
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 0, 255, 0)));
 
