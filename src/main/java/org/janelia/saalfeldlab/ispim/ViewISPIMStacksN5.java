@@ -266,7 +266,7 @@ public class ViewISPIMStacksN5
 		final AffineTransform3D t = new AffineTransform3D();
 		t.scale(0.2, 0.2, 0.85);
 
-		final boolean useVolatile = true;
+		final boolean useVolatile = false;
 
 		bdv = run(n5Path, "maxfusion4_Ch488+561+647nm_cam1__reSlice"/*"maxfusion2_Ch488+561+647nm_cam1"*/, bdv, null, t, useVolatile );
 		bdv.setDisplayRange( 100, 800 );
