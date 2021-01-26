@@ -1264,6 +1264,19 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		return PointMatch.meanDistance( matches );
 	}
 
+	protected static double getMaxError( List<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
+	{
+		TranslationModel3D dummy = new TranslationModel3D();
+
+		for ( final PointMatch pm : matches )
+		{
+			pm.getP1().apply( model );
+			pm.getP2().apply( dummy ); // make sure the world coordinates are ok
+		}
+		
+		return PointMatch.maxDistance( matches );
+	}
+
 	protected static void error( List<PointMatch> matches, final CoordinateTransform model ) throws NotEnoughDataPointsException, IllDefinedDataPointsException
 	{
 		System.out.println( model.getClass().getSimpleName() + " (" + getError( matches, model ) + ") " + model );
