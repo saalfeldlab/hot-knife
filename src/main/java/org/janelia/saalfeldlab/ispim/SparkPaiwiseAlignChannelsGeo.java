@@ -179,17 +179,16 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 	public static class N5Data
 	{
-		HashMap<String, HashMap<String, AffineTransform2D>> camTransforms;
-		//ArrayList<String> ids;
-		HashMap<String, HashMap<String, List<Slice>>> stacks;
-		HashMap<String, RandomAccessible<AffineTransform2D>> alignments;
+		public HashMap<String, HashMap<String, AffineTransform2D>> camTransforms;
+		public HashMap<String, HashMap<String, List<Slice>>> stacks;
+		public HashMap<String, RandomAccessible<AffineTransform2D>> alignments;
 
-		HashMap<String, AffineTransform3D > affine3D;
+		public HashMap<String, AffineTransform3D > affine3D;
 
-		N5FSReader n5;
+		public N5FSReader n5;
 
-		String n5path, id;
-		int lastSliceIndex;
+		public String n5path, id;
+		public int lastSliceIndex;
 	}
 
 	public static N5Data openN5(

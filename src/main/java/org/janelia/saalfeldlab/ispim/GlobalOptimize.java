@@ -16,6 +16,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -71,6 +72,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	public static class Description
 	{
 		String id, channel, cam;
+		double[] p0a, p1a, p2a, p3a, p0b, p1b, p2b, p3b;
 
 		public Description( final String id, final String channel, final String cam )
 		{
@@ -178,7 +180,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 					if ( localError > 6.0 )
 						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
 				}
-				else if (dataset.startsWith( "matches_Ch" ) ) //e.g. matches_Ch488+561+647nm_Ch515+594nm
+				/*else if (dataset.startsWith( "matches_Ch" ) ) //e.g. matches_Ch488+561+647nm_Ch515+594nm
 				{
 					// TODO: store in dataset attributes!!!
 					final int indexChA = dataset.indexOf( "_Ch" ) + 1 ;
@@ -217,7 +219,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
 
 					//System.exit( 0 );
-				}
+				}*/
 			}
 		}
 
@@ -572,7 +574,9 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loading matches." );
 		final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches = loadPairwiseMatches( n5, allIds, 1000 );
 
-		addMissingCh405Tiles( matches, allIds );
+		//addMissingCh405Tiles( matches, allIds );
+
+		ArrayList< Description > allDesc = allDescriptions( matches );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Setting up tiles." );
 		final HashMap< Description, Tile< InterpolatedAffineModel3D<AffineModel3D, TranslationModel3D> > > idToTile =
