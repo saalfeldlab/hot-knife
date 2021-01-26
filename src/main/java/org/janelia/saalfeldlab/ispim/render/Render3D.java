@@ -47,14 +47,14 @@ public class Render3D {
 		line.add(new Line(new Vertex(p2a[0], p2a[1], p2a[2]), new Vertex(p3a[0], p3a[1], p3a[2]), Color.BLACK));
 		line.add(new Line(new Vertex(p3a[0], p3a[1], p3a[2]), new Vertex(p0a[0], p0a[1], p0a[2]), Color.BLACK));
 
-		line.add(new Line(new Vertex(p0a[0], p0a[1], p0a[2]), new Vertex(p0b[0], p0b[1], p0b[2]), Color.GRAY));
-		line.add(new Line(new Vertex(p1a[0], p1a[1], p1a[2]), new Vertex(p1b[0], p1b[1], p1b[2]), Color.GRAY));
-		line.add(new Line(new Vertex(p2a[0], p2a[1], p2a[2]), new Vertex(p2b[0], p2b[1], p2b[2]), Color.GRAY));
-		line.add(new Line(new Vertex(p3a[0], p3a[1], p3a[2]), new Vertex(p3b[0], p3b[1], p3b[2]), Color.GRAY));
+		line.add(new Line(new Vertex(p0a[0], p0a[1], p0a[2]), new Vertex(p0b[0], p0b[1], p0b[2]), Color.BLACK));
+		line.add(new Line(new Vertex(p1a[0], p1a[1], p1a[2]), new Vertex(p1b[0], p1b[1], p1b[2]), Color.BLACK));
+		line.add(new Line(new Vertex(p2a[0], p2a[1], p2a[2]), new Vertex(p2b[0], p2b[1], p2b[2]), Color.LIGHT_GRAY));
+		line.add(new Line(new Vertex(p3a[0], p3a[1], p3a[2]), new Vertex(p3b[0], p3b[1], p3b[2]), Color.BLACK));
 
 		line.add(new Line(new Vertex(p0b[0], p0b[1], p0b[2]), new Vertex(p1b[0], p1b[1], p1b[2]), Color.BLACK));
-		line.add(new Line(new Vertex(p1b[0], p1b[1], p1b[2]), new Vertex(p2b[0], p2b[1], p2b[2]), Color.BLACK));
-		line.add(new Line(new Vertex(p2b[0], p2b[1], p2b[2]), new Vertex(p3b[0], p3b[1], p3b[2]), Color.BLACK));
+		line.add(new Line(new Vertex(p1b[0], p1b[1], p1b[2]), new Vertex(p2b[0], p2b[1], p2b[2]), Color.LIGHT_GRAY));
+		line.add(new Line(new Vertex(p2b[0], p2b[1], p2b[2]), new Vertex(p3b[0], p3b[1], p3b[2]), Color.LIGHT_GRAY));
 		line.add(new Line(new Vertex(p3b[0], p3b[1], p3b[2]), new Vertex(p0b[0], p0b[1], p0b[2]), Color.BLACK));
 
 		return line;
@@ -121,71 +121,8 @@ public class Render3D {
 
 			line.add( p );
 
-			//if ( line.size() == 10)
+			//if ( line.size() == 5)
 			//return line;
-		}
-
-		System.out.println( "done" );
-
-		return line;
-	}
-
-	public static List<Line> loadMetaData() throws IOException
-	{
-		List<Line> line = new ArrayList<>();
-
-		final HashMap< String, MetaData > meta =
-				SparkPairwiseStitchSlabs.readPositionMetaData( "/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json" );
-
-		double minX = Double.MAX_VALUE;
-		double minY = Double.MAX_VALUE;
-		double minZ = Double.MAX_VALUE;
-
-		for ( final String id : meta.keySet() )
-		{
-			final MetaData m = meta.get( id );
-
-			double tx = m.position[ 0 ] - m.position[ 2 ] * 13; // it is z along the sheared volume
-			double ty = m.position[ 1 ];
-			double tz = m.position[ 2 ];
-
-			minX = Math.min( minX, tx );
-			minY = Math.min( minY, ty );
-			minZ = Math.min( minZ, tz );
-		}
-
-		minX -= 1500;
-		minY -= 2000;
-		//minZ -= 1000;
-		System.out.println( minX + "," + minY + ", " + minZ );
-
-		for ( final String id : meta.keySet() )
-		{
-			System.out.println( id );
-
-			final MetaData m = meta.get( id );
-
-			N5Data n5 = SparkPaiwiseAlignChannelsGeo.openN5( "/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5", id );
-
-			double tx = m.position[ 0 ] - m.position[ 2 ] * 13; // it is z along the sheared volume
-			double ty = m.position[ 1 ];
-			double tz = m.position[ 2 ];
-			
-			tx -= minX; ty -= minY; tz -= minZ;
-			//System.out.println( tx + "," + ty + ", " + tz);
-			double scaleZ = 0.85/0.2;
-
-			double[] p0a = new double[] { (tx+0)*s, (ty+0)*s, tz*s };
-			double[] p1a = new double[] { (tx+2048)*s, (ty+0)*s, tz*s };
-			double[] p2a = new double[] { (tx+2048)*s, (ty+2048)*s, tz*s };
-			double[] p3a = new double[] { (tx+0)*s, (ty+2048)*s, tz*s };
-
-			double[] p0b = new double[] { (n5.lastSliceIndex*13+tx+0)*s, (ty+0)*s, (tz+n5.lastSliceIndex*scaleZ)*s };
-			double[] p1b = new double[] { (n5.lastSliceIndex*13+tx+2048)*s, (ty+0)*s, (tz+n5.lastSliceIndex*scaleZ)*s };
-			double[] p2b = new double[] { (n5.lastSliceIndex*13+tx+2048)*s, (ty+2048)*s, (tz+n5.lastSliceIndex*scaleZ)*s };
-			double[] p3b = new double[] { (n5.lastSliceIndex*13+tx+0)*s, (ty+2048)*s, (tz+n5.lastSliceIndex*scaleZ)*s };
-
-			line.addAll( drawParallel(p0a, p1a, p2a, p3a, p0b, p1b, p2b, p3b) );
 		}
 
 		System.out.println( "done" );
@@ -217,8 +154,10 @@ public class Render3D {
 
 		moveX.setValue( 400 );
 		moveY.setValue( 400 );
-		headingSlider.setValue( -8 /*-34*/ );
-		pitchSlider.setValue( 21 /*25*/ );
+		//headingSlider.setValue( 2 /*-8 */);
+		//pitchSlider.setValue( -35 /*21*/ );
+		headingSlider.setValue( -8);
+		pitchSlider.setValue( 21 );
 
 		//List<Line> line = loadMetaData();
 		List<Parallelogram> pars = loadAlignmnts();
@@ -227,6 +166,8 @@ public class Render3D {
 		JPanel renderPanel = new JPanel() {
 			public void paintComponent(Graphics g) {
 				Graphics2D g2 = (Graphics2D) g;
+				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
+				g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY );
 				g2.setColor(Color.WHITE);
 				g2.fillRect(0, 0, getWidth(), getHeight());
 
@@ -298,8 +239,10 @@ public class Render3D {
 		moveX.addChangeListener(e -> renderPanel.repaint());
 		moveY.addChangeListener(e -> renderPanel.repaint());
 
-		frame.setSize(1400, 800);
+		frame.setSize(1800, 900);
 		frame.setVisible(true);
+
+		SimpleMultiThreading.threadWait( 3000 );
 
 		for ( maxP = 1; maxP < 55; ++maxP )
 		{
@@ -308,10 +251,11 @@ public class Render3D {
 
 			BufferedImage awtImage = new Robot().createScreenCapture(new Rectangle(Toolkit.getDefaultToolkit().getScreenSize()));
 
-			//ImageIO.write(image, "png", new File("/screenshot.png"));
-			//BufferedImage awtImage = new BufferedImage(renderPanel.getWidth(), renderPanel.getHeight(), BufferedImage.TYPE_INT_ARGB);
-			//Graphics g = awtImage.getGraphics();
-			//renderPanel.printAll(g);
+			/*BufferedImage awtImage = new BufferedImage(renderPanel.getWidth(), renderPanel.getHeight(), BufferedImage.TYPE_INT_ARGB);
+			Graphics g = awtImage.getGraphics();
+			((Graphics2D)g).setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
+			((Graphics2D)g).setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY );
+			renderPanel.printAll(g);*/
 
 			ImagePlus imp = new ImagePlus( "render", new ColorProcessor( awtImage ) );
 			new FileSaver( imp ).saveAsPng( "i_"+maxP +".png" );
