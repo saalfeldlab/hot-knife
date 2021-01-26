@@ -618,10 +618,10 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 	public static class MetaData
 	{
-		String type = "", file = "";
-		int[] position, size;
-		double[] pixelResolution;
-		int index;
+		public String type = "", file = "";
+		public int[] position, size;
+		public double[] pixelResolution;
+		public int index;
 	}
 
 	public static ArrayList<PointMatch> globalICP(
