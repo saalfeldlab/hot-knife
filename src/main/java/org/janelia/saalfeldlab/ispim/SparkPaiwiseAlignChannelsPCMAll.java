@@ -110,7 +110,7 @@ public class SparkPaiwiseAlignChannelsPCMAll implements Callable<Void>, Serializ
 
 		final JavaPairRDD<String, Tuple3<Integer, Double, Double > > rddResults = rddIds.mapToPair( id -> {
 			
-			final ArrayList< PointMatch > matches = SparkPaiwiseAlignChannelsPCM.alignChannels( n5Path, id, channelA, channelB, camA, camB, blocksize, rThreshold, 1 );
+			final ArrayList< PointMatch > matches = SparkPaiwiseAlignChannelsPCM.alignChannels( n5Path, id, channelA, channelB, camA, camB, blocksize, rThreshold, null, 1 );
 	
 			double errorTranslation = -1.0;
 			double errorAffine = -1.0;
