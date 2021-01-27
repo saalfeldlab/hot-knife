@@ -1,5 +1,7 @@
 package org.janelia.saalfeldlab.ispim;
 
+import java.awt.AWTException;
+import java.awt.HeadlessException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -16,7 +18,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
+import org.janelia.saalfeldlab.ispim.render.Render3D.MyTileConfig;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -27,6 +29,7 @@ import com.google.gson.GsonBuilder;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import loci.formats.FormatException;
 import mpicbg.models.Affine3D;
 import mpicbg.models.AffineModel3D;
 import mpicbg.models.CoordinateTransform;
@@ -52,7 +55,6 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.explorer.util.ColorStream;
-import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -71,8 +73,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 	public static class Description
 	{
-		String id, channel, cam;
-		double[] p0a, p1a, p2a, p3a, p0b, p1b, p2b, p3b;
+		public String id, channel, cam;
 
 		public Description( final String id, final String channel, final String cam )
 		{
@@ -135,7 +136,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		{
 			for ( final String dataset : n5.list( idA ) )
 			{
-				if ( dataset.startsWith( "matches_" + idA ) )
+				if ( dataset.startsWith( "matches_" + idA ) && dataset.contains( "Ch488+561+647nm" ) )
 				{
 					// TODO: store in dataset attributes!!!
 					final int indexA = dataset.indexOf( "matches_" ) + 8;
@@ -179,6 +180,9 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 
 					if ( localError > 6.0 )
 						System.out.println( "WARNING, ERROR ABOVE HIGH!" );
+
+					//if ( matches.size() > 4 )
+					//	return matches;
 				}
 				/*else if (dataset.startsWith( "matches_Ch" ) ) //e.g. matches_Ch488+561+647nm_Ch515+594nm
 				{
@@ -304,21 +308,30 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 	public < M extends Model< M > > void solve(
 			final HashMap< Description, Tile< M > > idToTile,
 			final OptimizationParameters<M> paramPreAlign,
-			final OptimizationParameters<M> param ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
+			final OptimizationParameters<M> param,
+			final boolean render ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException, HeadlessException, IOException, FormatException, AWTException
 	{
 		List< OptimizationParameters<M> > params = new ArrayList<>();
 		params.add( param );
 
-		solve(idToTile, paramPreAlign, params);
+		solve(idToTile, paramPreAlign, params, render );
 	}
 
 	public < M extends Model< M > > void solve(
 			final HashMap< Description, Tile< M > > idToTile,
 			final OptimizationParameters<M> paramPreAlign,
-			final List<? extends OptimizationParameters<M>> params ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException
+			final List<? extends OptimizationParameters<M>> params,
+			final boolean render ) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InterruptedException, ExecutionException, HeadlessException, IOException, FormatException, AWTException
 	{
-		final TileConfiguration tileConfig = new TileConfiguration();
+		final TileConfiguration tileConfig = render ? new MyTileConfig( idToTile ) : new TileConfiguration();
 		tileConfig.addTiles( idToTile.values() );
+
+		if ( render )
+		{
+			// for initial visualization
+			((MyTileConfig)tileConfig).setModelString( "Model: Translation");
+			((MyTileConfig)tileConfig).drawState();
+		}
 
 		// pre-align with translation only
 		if ( paramPreAlign != null )
@@ -340,11 +353,18 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		{
 			System.out.println( "Solving with: " + param );
 
+			if ( render && ((InterpolatedModel3DOptimizationParameters)param).lambda < 1.0 )
+				((MyTileConfig)tileConfig).setModelString( "Model: Affine regularized with Translation (" + ((InterpolatedModel3DOptimizationParameters)param).lambda + ")");
+
 			// update model parameters such as lambdas
 			for ( final Tile< M > tile : idToTile.values() )
 				param.updateModel( tile );
 
 			final ErrorStatistic observer = new ErrorStatistic( param.maxPlateauWidth + 1 );
+
+			if ( render )
+				((MyTileConfig)tileConfig).setObserver( observer );
+
 			final float damp = 1.0f;
 			TileUtil.optimizeConcurrently(
 					observer,
@@ -466,95 +486,6 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		return descriptions;
 	}
 
-	private void addMissingCh405Tiles(
-			final ArrayList< Pair< Pair< Description, Description >, ArrayList< PointMatch > > > matches,
-			final List<String> ids )
-	{
-		final HashSet<Description> allDesc = new HashSet<>( allDescriptions( matches ) );
-		final HashSet<String> allIds = new HashSet<>( ids );
-
-		final HashMap<String, Description > all = new HashMap<>();
-		final HashSet<String > missing = new HashSet<>();
-
-		for ( final Description d : allDesc )
-			if ( d.channel.contains( "Ch405nm" ) )
-				all.put( d.id, d );
-
-		for ( final String id : allIds )
-			if ( !all.containsKey( id ) )
-				missing.add( id );
-
-			for ( final String id : missing )
-			{
-				System.out.println( "Creating fake matches for: " + id );
-	
-				Description oldA = null, oldB = null;
-				Description newA = null, newB = null;
-				ArrayList< PointMatch > matchesA = null;
-	
-				for ( final Pair< Pair< Description, Description >, ArrayList< PointMatch > > pair : matches )
-				{
-					if ( pair.getA().getB().id.equals( id ) && !pair.getA().getA().id.equals( id ) && pair.getA().getA().channel.equals( pair.getA().getB().channel ) )
-					{
-						oldA = pair.getA().getA();
-						oldB = pair.getA().getB();
-						for ( final Description desc : allDesc )
-							if ( desc.channel.equals( "Ch405nm" ) && desc.id.equals( pair.getA().getA().id ) )
-								newA = desc;
-	
-						if ( newA == null )
-							continue;
-	
-						newB = new Description( id, "Ch405nm", "cam1" );
-						matchesA = new ArrayList<>();
-						for ( final PointMatch pm : pair.getB() )
-							matchesA.add( new PointMatch( pm.getP1().clone(), pm.getP2().clone() ) );
-						break;
-					}
-	
-					if ( pair.getA().getA().id.equals( id ) && !pair.getA().getB().id.equals( id ) && pair.getA().getA().channel.equals( pair.getA().getB().channel ) )
-					{
-						oldA = pair.getA().getA();
-						oldB = pair.getA().getB();
-						for ( final Description desc : allDesc )
-							if ( desc.channel.equals( "Ch405nm" ) && desc.id.equals( pair.getA().getB().id ) )
-								newB = desc;
-	
-						if ( newB == null )
-							continue;
-	
-						newA = new Description( id, "Ch405nm", "cam1" );
-						matchesA = new ArrayList<>();
-						for ( final PointMatch pm : pair.getB() )
-							matchesA.add( new PointMatch( pm.getP1().clone(), pm.getP2().clone() ) );
-						break;
-					}
-				}
-	
-				if ( matchesA != null )
-				{
-					System.out.println( "added: " + newA + "," + newB + ": " + matchesA.size() + " from " + oldA + ", " + oldB );
-					matches.add( new ValuePair<>( new ValuePair<>( newA, newB ), matchesA ) );
-				}
-				else
-				{
-					newA = new Description( id, "Ch405nm", "cam1" );
-					newB = new Description( id, "Ch488+561+647nm", "cam1" );
-					matchesA = new ArrayList<>();
-					matchesA.add( new PointMatch( new Point( new double[] { 0, 0, 0 }), new Point( new double[] { 0, 0, 0 } ) ) );
-					matchesA.add( new PointMatch( new Point( new double[] { 1, 0, 0 }), new Point( new double[] { 1, 0, 0 } ) ) );
-					matchesA.add( new PointMatch( new Point( new double[] { 0, 1, 0 }), new Point( new double[] { 0, 1, 0 } ) ) );
-					matchesA.add( new PointMatch( new Point( new double[] { 0, 0, 1 }), new Point( new double[] { 0, 0, 1 } ) ) );
-					matchesA.add( new PointMatch( new Point( new double[] { 10, 0, 10 }), new Point( new double[] { 10, 0, 10 } ) ) );
-					matchesA.add( new PointMatch( new Point( new double[] { 0, 10, 0 }), new Point( new double[] { 0, 10, 0 } ) ) );
-					matchesA.add( new PointMatch( new Point( new double[] { 10, 0, 10 }), new Point( new double[] { 10, 0, 10 } ) ) );
-					
-					System.out.println( "added: " + newA + "," + newB + ": " + matchesA.size() + " from " + oldA + ", " + oldB );
-					matches.add( new ValuePair<>( new ValuePair<>( newA, newB ), matchesA ) );
-				}
-			}
-	}
-
 	@Override
 	public Void call() throws Exception
 	{
@@ -590,17 +521,19 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Solving." );
 
 		// parameters for pre-align (translation-only)
-		InterpolatedModel3DOptimizationParameters<AffineModel3D, TranslationModel3D> preAlign =
+		InterpolatedModel3DOptimizationParameters<AffineModel3D, TranslationModel3D> preAlign = 
 				new InterpolatedModel3DOptimizationParameters<>( tileToId, 0, 0, 0.0, 1.0 );
 
 		List< InterpolatedModel3DOptimizationParameters<AffineModel3D, TranslationModel3D> > params = new ArrayList<>();
 		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 1000, 250, 5.0, 1.0 ) );
-		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 500, 250, 5.0, 0.5 ) );
-		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 200, 100, 5.0, 0.1 ) );
+		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 500, 100, 5.0, 0.5 ) );
+		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 200, 75, 5.0, 0.1 ) );
 		params.add( new InterpolatedModel3DOptimizationParameters<>( tileToId, 100, 25, 5.0, 0.01 ) );
 
-		solve( idToTile, preAlign, params );
+		final boolean render = false;
+		solve( idToTile, preAlign, params, render );
 
+		/*
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Saving transformations ... " );
 
 		for ( final Description desc : allDescriptions( matches ) )
@@ -608,6 +541,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 			System.out.println( desc + ": " + idToTile.get( desc ).getModel().createAffineModel3D() );
 			n5.setAttribute( desc.id + "/" + desc.channel, "3d-affine", TransformationTools.getAffineTransform( idToTile.get( desc ).getModel().createAffineModel3D() ) );
 		}
+		*/
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Computing errors." );
 
@@ -640,10 +574,10 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		System.out.println( minError + "," + avgError + "," + maxError );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Visualizing." );
-		visualizeMatches( matches, idToTile );
+		//visualizeMatches( matches, idToTile );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Done." );
-		SimpleMultiThreading.threadHaltUnClean();
+		//SimpleMultiThreading.threadHaltUnClean();
 		return null;
 	}
 

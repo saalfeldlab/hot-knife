@@ -5,8 +5,13 @@ import javax.swing.*;
 import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo;
 import org.janelia.saalfeldlab.ispim.ViewISPIMStack;
+import org.janelia.saalfeldlab.ispim.GlobalOptimize.Description;
 
 import loci.formats.FormatException;
+import mpicbg.models.ErrorStatistic;
+import mpicbg.models.InterpolatedAffineModel3D;
+import mpicbg.models.Tile;
+import mpicbg.models.TileConfiguration;
 
 import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs.MetaData;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
@@ -21,6 +26,7 @@ import net.imglib2.RealInterval;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 
 import java.awt.*;
 import java.util.List;
@@ -31,6 +37,7 @@ import java.awt.geom.*;
 import java.awt.image.BufferedImage;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.text.DecimalFormat;
 
 public class Render3D {
 
@@ -60,15 +67,80 @@ public class Render3D {
 		return line;
 	}
 
+	public static class MyTileConfig extends TileConfiguration
+	{
+		private static final long serialVersionUID = 7076852945147946374L;
+
+		ErrorStatistic observer;
+		JPanel renderPanel;
+		HashMap< String, Parallelogram> pars;
+		HashMap< String, Tile< ? > > idToTile;
+		int i = 0;
+
+		public MyTileConfig( final HashMap< Description, ? extends Tile< ? > > descToTile ) throws IOException, FormatException, HeadlessException, AWTException
+		{
+			pars = loadAlignmnts();
+			renderPanel = setup( pars );
+			idToTile = new HashMap<>();
+
+			for ( final Description desc : descToTile.keySet() )
+				idToTile.put( desc.id, descToTile.get( desc ) );
+		}
+
+		public void setObserver( final ErrorStatistic observer ) { this.observer = observer; }
+		public void setModelString( String s ) { modelString = s; }
+		public void setErrorString( String s ) { errorString = s; }
+		public void setIterationString( String s ) { iterationString = s; }
+
+		public void drawState()
+		{
+			System.out.println( "update rendering...." );
+
+			if ( observer != null )
+				setErrorString( "Error: " + String.format("%.2f", observer.mean) + " px" );
+
+			setIterationString( "Iteration: " + i );
+
+			i++;
+
+			for ( final String id : idToTile.keySet() )
+			{
+				InterpolatedAffineModel3D<?, ?> model = ((InterpolatedAffineModel3D<?, ?>)idToTile.get( id ).getModel());
+				pars.get( id ).t = TransformationTools.getAffineTransform( model.createAffineModel3D() );
+			}
+
+			renderPanel.repaint();
+			SimpleMultiThreading.threadWait( 50 );
+
+			try {
+				BufferedImage awtImage = new Robot().createScreenCapture(new Rectangle(Toolkit.getDefaultToolkit().getScreenSize()));
+				ImagePlus imp = new ImagePlus( "render", new ColorProcessor( awtImage ) );
+				new FileSaver( imp ).saveAsPng( "globalOpt_"+i +".png" );
+
+				SimpleMultiThreading.threadWait( 50 );
+			} catch (HeadlessException | AWTException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		@Override
+		protected void updateErrors()
+		{
+			super.updateErrors();
+			drawState();
+		}
+	}
+
 	public static class Parallelogram
 	{
 		double[] p0a, p1a, p2a, p3a, p0b, p1b, p2b, p3b;
 		AffineTransform3D t;
 	}
 
-	public static List<Parallelogram> loadAlignmnts() throws IOException, FormatException
+	public static HashMap<String, Parallelogram> loadAlignmnts() throws IOException, FormatException
 	{
-		List<Parallelogram> line = new ArrayList<>();
+		HashMap<String,Parallelogram> line = new HashMap<>();
 
 		final HashMap< String, MetaData > meta =
 				SparkPairwiseStitchSlabs.readPositionMetaData( "/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json" );
@@ -119,10 +191,10 @@ public class Render3D {
 
 			p.t = n5data.affine3D.get( channel ).copy();
 
-			line.add( p );
+			line.put( id, p );
 
 			//if ( line.size() == 5)
-			//return line;
+			//	return line;
 		}
 
 		System.out.println( "done" );
@@ -131,8 +203,12 @@ public class Render3D {
 	}
 
 	public static int maxP = Integer.MAX_VALUE;
+	public static String modelString = null;
+	public static String errorString = null;
+	public static String iterationString = null;
 
-	public static void main(String[] args) throws IOException, FormatException, HeadlessException, AWTException {
+	public static JPanel setup( HashMap<String, Parallelogram> pars ) throws HeadlessException, AWTException
+	{
 		JFrame frame = new JFrame();
 		Container pane = frame.getContentPane();
 		pane.setLayout(new BorderLayout());
@@ -146,28 +222,26 @@ public class Render3D {
 		pane.add(pitchSlider, BorderLayout.EAST);
 
 		// slider to control horizontal rotation
-		JSlider moveX = new JSlider(-1000, 1000, 0);
+		JSlider moveX = new JSlider(-2000, 2000, 0);
 		pane.add(moveX, BorderLayout.NORTH);
 
-		JSlider moveY = new JSlider(SwingConstants.VERTICAL, -1000, 1000, 0);
+		JSlider moveY = new JSlider(SwingConstants.VERTICAL, -2000, 2000, 0);
 		pane.add(moveY, BorderLayout.WEST);
 
-		moveX.setValue( 400 );
-		moveY.setValue( 400 );
+		//moveX.setValue( 400 );
+		//moveY.setValue( 400 );
+		moveX.setValue( 1000 );
+		moveY.setValue( 1000 );
+
 		//headingSlider.setValue( 2 /*-8 */);
 		//pitchSlider.setValue( -35 /*21*/ );
 		headingSlider.setValue( -8);
 		pitchSlider.setValue( 21 );
 
-		//List<Line> line = loadMetaData();
-		List<Parallelogram> pars = loadAlignmnts();
-
 		// panel to display render results
 		JPanel renderPanel = new JPanel() {
 			public void paintComponent(Graphics g) {
 				Graphics2D g2 = (Graphics2D) g;
-				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
-				g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY );
 				g2.setColor(Color.WHITE);
 				g2.fillRect(0, 0, getWidth(), getHeight());
 
@@ -183,7 +257,9 @@ public class Render3D {
 
 				int i = 0;
 
-				for ( final Parallelogram p : pars )
+				//System.out.println( moveX.getValue() + ", " + moveY.getValue() + "," + headingSlider.getValue() + ","+ pitchSlider.getValue() );
+
+				for ( final Parallelogram p : pars.values() )
 				{
 					double[] p0a = new double[3];
 					double[] p1a = new double[3];
@@ -195,12 +271,10 @@ public class Render3D {
 					double[] p3b = new double[3];
 
 					AffineTransform3D scale = new AffineTransform3D();
-					scale.scale( 0.2 * s * 5, 0.2 * s * 5, 0.85 * s * 5 );
+					scale.scale( 0.2 * s * 10, 0.2 * s * 10, 0.85 * s * 10 );
 
 					AffineTransform3D translation = new AffineTransform3D();
 					translation.translate( moveX.getValue(), moveY.getValue(), 0 );
-
-					System.out.println( moveX.getValue() + ", " + moveY.getValue() + "," + headingSlider.getValue() + ","+ pitchSlider.getValue() );
 
 					AffineTransform3D t = p.t.copy().preConcatenate( scale ).preConcatenate( translation );
 
@@ -221,6 +295,13 @@ public class Render3D {
 
 				for (Line t : line) {
 					g2.setColor(t.color);
+					g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
+					/*g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY );
+					g2.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
+					g2.setRenderingHint(RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_ENABLE);
+					g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_NORMALIZE );*/
+					g2.setStroke( new BasicStroke( 1.5f ));
+
 					Vertex v1 = transform.transform(t.v1);
 					Vertex v2 = transform.transform(t.v2);
 
@@ -228,7 +309,26 @@ public class Render3D {
 					path.moveTo(v1.x, v1.y);
 					path.lineTo(v2.x, v2.y);
 					path.closePath();
+					
 					g2.draw(path);
+				}
+
+				if ( modelString != null )
+				{
+					g2.setFont( new Font( "Times", Font.BOLD, 48 ) );
+					g2.drawString( modelString, 200, 1900 );
+				}
+
+				if ( errorString != null )
+				{
+					g2.setFont( new Font( "Times", Font.PLAIN, 30 ) );
+					g2.drawString( errorString, 200, 1940 );
+				}
+
+				if ( iterationString != null )
+				{
+					g2.setFont( new Font( "Times", Font.PLAIN, 30 ) );
+					g2.drawString( iterationString, 200, 1970 );
 				}
 			}
 		};
@@ -239,10 +339,20 @@ public class Render3D {
 		moveX.addChangeListener(e -> renderPanel.repaint());
 		moveY.addChangeListener(e -> renderPanel.repaint());
 
-		frame.setSize(1800, 900);
+		frame.setSize(2400, 2400);
 		frame.setVisible(true);
 
-		SimpleMultiThreading.threadWait( 3000 );
+		return renderPanel;
+	}
+
+	public static void main(String[] args) throws IOException, FormatException, HeadlessException, AWTException {
+
+		//List<Line> line = loadMetaData();
+		HashMap<String, Parallelogram> pars = loadAlignmnts();
+
+		JPanel renderPanel = setup( pars );
+
+		SimpleMultiThreading.threadWait( 300000 );
 
 		for ( maxP = 1; maxP < 55; ++maxP )
 		{
@@ -262,6 +372,7 @@ public class Render3D {
 
 			SimpleMultiThreading.threadWait( 250 );
 		}
+
 	}
 
 	public static Color getShade(Color color, double shade) {
