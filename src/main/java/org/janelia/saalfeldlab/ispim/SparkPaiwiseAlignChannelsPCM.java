@@ -207,12 +207,15 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 		final long[] tA = new long[3 ];
 		if ( initialTransformA != null )
 		{
-			tA[ 0 ] = Math.round( initialTransformA.getRowPackedCopy()[ 3 ] );
-			tA[ 1 ] = Math.round( initialTransformA.getRowPackedCopy()[ 7 ] );
-			tA[ 2 ] = Math.round( initialTransformA.getRowPackedCopy()[ 11 ] );
+			// we need to use the inverse as we are moving the interval and not the image,
+			// which results in the inverse transformation (imagine moving a bounding box
+			// from 0,0 to -10,0 -- the cropped image moves 10 to the right)
+			tA[ 0 ] = -Math.round( initialTransformA.getRowPackedCopy()[ 3 ] );
+			tA[ 1 ] = -Math.round( initialTransformA.getRowPackedCopy()[ 7 ] );
+			tA[ 2 ] = -Math.round( initialTransformA.getRowPackedCopy()[ 11 ] );
 		}
 
-		System.out.println( "Initial translation: " + Util.printCoordinates( tA ) );
+		System.out.println( "Inverse of initial translation: " + Util.printCoordinates( tA ) );
 
 		final ForkJoinPool pool = new ForkJoinPool( numThreads );
 
@@ -230,12 +233,10 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			final AffineTransform2D camtransformA = n5data.camTransforms.get( block.channelA ).get( block.camA );
 			final AffineTransform2D camtransformB = n5data.camTransforms.get( block.channelB ).get( block.camB );
 
-			/*
 			if ( block.from != 200 )
 				return new Tuple2<>(block, new ArrayList< PointMatch >());
 			else
 				new ImageJ();
-			*/
 
 			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): opening images." );
 
@@ -316,7 +317,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 			//System.out.println( Util.printInterval( displayInterval ) );
 
-			final RandomAccessibleInterval< UnsignedShortType > imgA = Views.interval( Views.raster( alignedStackBoundsA.getA() ), Intervals.translate( displayInterval, tA ) );
+			final RandomAccessibleInterval< UnsignedShortType > imgA = Views.interval( Views.raster( alignedStackBoundsA.getA() ), displayInterval );
 			final RandomAccessibleInterval< UnsignedShortType > imgB = Views.interval( Views.raster( alignedStackBoundsB.getA() ), displayInterval );
 
 			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): performing cross correlations." );
@@ -328,7 +329,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			final int blocksY = (int)(displayInterval.dimension( 1 ) / blockSizeX);
 			final long[] downsampling = new long[] { 4, 4, 1 };
 
-			final ExecutorService service = Executors.newFixedThreadPool( 1 /*numThreads*/ );
+			final ExecutorService service = Executors.newFixedThreadPool( numThreads );
 			final ArrayList< PointMatch > candidatesLocal = new ArrayList<>();
 
 			for ( double blockY = 0; blockY <= blocksY - 1; blockY += 0.5)
@@ -338,9 +339,11 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 							new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY ), displayInterval.min( 2 ) },
 							new long[] { displayInterval.min( 0 ) + Math.round( blockX * blockSizeX + blockSizeX - 1 ), displayInterval.min( 1 ) + Math.round( blockY * blockSizeY + blockSizeY - 1 ), displayInterval.max( 2 ) });
 
-					final RandomAccessibleInterval< UnsignedShortType > blockA = Downsample.downsample( Views.interval( imgA, blockInterval ), downsampling, service );
+					// locally move the block interval according to the initial transformation
+					final RandomAccessibleInterval< UnsignedShortType > blockA = Downsample.downsample( Views.interval( imgA, Intervals.translate( blockInterval, tA ) ), downsampling, service );
 					final RandomAccessibleInterval< UnsignedShortType > blockB = Downsample.downsample( Views.interval( imgB, blockInterval ), downsampling, service );
 
+					// now working with zero-min images, hence the translation above is materialized
 					final PairWiseStitchingResult result = PCMHelper.computePhaseCorrelation(
 							ImgLib2.wrapArrayUnsignedShortToImgLib1( FusionTools.copyImgNoTranslation(blockA, new ArrayImgFactory<>( new UnsignedShortType()), new UnsignedShortType(), service) ),
 							ImgLib2.wrapArrayUnsignedShortToImgLib1( FusionTools.copyImgNoTranslation(blockB, new ArrayImgFactory<>( new UnsignedShortType()), new UnsignedShortType(), service) ),
@@ -355,7 +358,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 								blockInterval.min( 0 ) + blockSizeX / 2,
 								blockInterval.min( 1 ) + blockSizeY / 2,
 								block.from + (block.to - block.from ) / 2} );
-						// done > TODO: fix direction -offset!
+
 						final Point p2 = new Point( new double[] {
 								p1.getL()[ 0 ] - result.getOffset( 0 ) * downsampling[ 0 ] - tA[ 0 ],
 								p1.getL()[ 1 ] - result.getOffset( 1 ) * downsampling[ 1 ] - tA[ 1 ],
@@ -379,7 +382,6 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): candidates: " + ( matches.size() + candidatesLocal.size() ) + ", matches=" + matches.size() );
 
-			/*
 			TranslationModel3D model = new TranslationModel3D();
 			try {
 				model.fit(matches);
@@ -428,7 +430,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			bdv = BdvFunctions.show(Views.extendZero( imgB ), imgB, "imgB", options.addTo( bdv ) );
 			bdv.setDisplayRange(0, 750);
 			SimpleMultiThreading.threadHaltUnClean();
-			*/
+
 
 			return new Tuple2<>(block, matches );
 			//return new Tuple2<>(block, candidatesLocal);
@@ -542,7 +544,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				camB,
 				blocksize,
 				rThreshold,
-				new Translation3D( -100, 0, 0 ),
+				new Translation3D( -136.41358693440748,-8.021219412485834,0.10043059673625976 ),
 				Runtime.getRuntime().availableProcessors() );
 
 		try
