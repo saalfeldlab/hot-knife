@@ -894,7 +894,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
 							lookUpB.get( ((InterestPoint)pm.getP2()).getId() ) ) );
 
-		writeMatches( matchesTmp, n5Path, idA, idB, channelA, channelB, camA, camB);
+		//writeMatches( matchesTmp, n5Path, idA, idB, channelA, channelB, camA, camB);
 
 		statistics.matches = matches; // without metadata -> matchesTmp;
 
@@ -936,15 +936,20 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		BdvStackSource<?> bdv = null;
 
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5dataA.stacks.get( channelA ).get( camA ), n5dataA.alignments.get( channelA ), n5dataA.camTransforms.get( channelA ).get( camA ), transformA, 0, n5dataA.lastSliceIndex );
-		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB, 0, n5dataB.lastSliceIndex );
+		final AffineTransform3D scale = new AffineTransform3D();
+		scale.scale( 0.2, 0.2, 0.85 );
+
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelA, camA, n5dataA.stacks.get( channelA ).get( camA ), n5dataA.alignments.get( channelA ), n5dataA.camTransforms.get( channelA ).get( camA ), transformA.preConcatenate( scale ), 0, n5dataA.lastSliceIndex );
+		bdv = SparkPaiwiseAlignChannelsGeo.displayCam( bdv, channelB, camB, n5dataB.stacks.get( channelB ).get( camB ), n5dataB.alignments.get( channelB ), n5dataB.camTransforms.get( channelB ).get( camB ), transformB.preConcatenate( scale ), 0, n5dataB.lastSliceIndex );
 	
 		if ( pointsB != null && pointsB.size() > 0 )
 		{
-			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ) );
+			bdv = BdvFunctions.show( SparkPaiwiseAlignChannelsGeo.renderPoints( pointsB, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "detections", new BdvOptions().addTo( bdv ).sourceTransform( scale ) );
 			bdv.setDisplayRange(0, 256);
 			bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 0, 0)));
 		}
+
+		ViewISPIMStacksN5.setupRecordMovie( bdv );
 	}
 
 	public static void visualizeAlignmentNonRigid(

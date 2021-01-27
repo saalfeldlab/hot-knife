@@ -70,6 +70,7 @@ import net.imglib2.img.list.ListLocalizingCursor;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.outofbounds.OutOfBoundsBorderFactory;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.view.Views;
 import net.preibisch.legacy.io.IOFunctions;
@@ -132,6 +133,13 @@ public class BDVFlyThrough
 
 		IOFunctions.println( "loaded " + transforms.size() + " transforms." );
 
+		/*
+		IOFunctions.println( "scaling " + transforms.size() + " transforms." );
+
+		Scale3D scale = new Scale3D( 2, 2, 2 );
+		for ( int i = 0; i < transforms.size(); ++i )
+			transforms.set(i, transforms.get( i ).preConcatenate( scale ) );
+		*/
 		viewerTransforms.clear();
 		viewerTransforms.addAll( transforms );
 	}
@@ -229,6 +237,13 @@ public class BDVFlyThrough
 			return;
 		}
 
+		final ViewerState renderState = viewer.state();
+		final int canvasW = viewer.getDisplay().getWidth();
+		final int canvasH = viewer.getDisplay().getHeight();
+
+		int width = canvasW;
+		int height = canvasH;
+
 		final ArrayList< AffineTransform3D > viewerTransformsLocal = new ArrayList<>();
 
 		for ( int i = 0; i < viewerTransforms.size(); ++i )
@@ -236,8 +251,12 @@ public class BDVFlyThrough
 
 		if ( !skipDialog )
 		{
+			if ( defaultWidth <= 0 )
+				defaultWidth = width;
+
 			final GenericDialogPlus gd = new GenericDialogPlus( "Options for movie recording" );
 			gd.addDirectoryField( "Movie directory", defaultPath, 45 );
+			gd.addNumericField( "Width (current width=" + width + ", height scaled accordingly)", defaultWidth, 0 );
 			gd.addNumericField( "Interpolation steps between keypoints", interpolateSteps, 0 );
 			gd.addChoice( "Transformation_interpolation method", interpolationMethods, interpolationMethods[ defaultMethod ] );
 			gd.addCheckbox( "Go_back to initial transform", goBackToInitialTransform );
@@ -250,6 +269,8 @@ public class BDVFlyThrough
 				return;
 
 			defaultPath = gd.getNextString();
+			width = defaultWidth = (int)Math.round( gd.getNextNumber() );
+			height = (int)Math.round( ( (double)width / (double)canvasW ) * height );
 			interpolateSteps = (int)Math.round( gd.getNextNumber() );
 			defaultMethod = gd.getNextChoiceIndex();
 			goBackToInitialTransform = gd.getNextBoolean();
@@ -274,14 +295,7 @@ public class BDVFlyThrough
 
 		IOFunctions.println( "Recording images for " + viewerTransformsLocal.size() + " transforms, interpolated with " + interpolateSteps + " steps using '" + interpolationMethods[ defaultMethod ] + "' in between to directory " + defaultPath );
 
-		final ViewerState renderState = viewer.state();
-		final int canvasW = viewer.getDisplay().getWidth();
-		final int canvasH = viewer.getDisplay().getHeight();
-
-		final int width = canvasW;
-		final int height = canvasH;
-		
-		final AffineTransform3D affine = new AffineTransform3D();
+		AffineTransform3D affine = new AffineTransform3D();
 		renderState.getViewerTransform( affine );
 		affine.set( affine.get( 0, 3 ) - canvasW / 2, 0, 3 );
 		affine.set( affine.get( 1, 3 ) - canvasH / 2, 1, 3 );
@@ -325,7 +339,15 @@ public class BDVFlyThrough
 
 			IOFunctions.println( (i+1) + "/" + transforms.size() + ": " + transforms.get( i ) );
 
-			renderState.setViewerTransform( transforms.get( i ) );
+			affine = transforms.get( i );
+			affine.set( affine.get( 0, 3 ) - canvasW / 2, 0, 3 );
+			affine.set( affine.get( 1, 3 ) - canvasH / 2, 1, 3 );
+			affine.scale( ( double ) width / canvasW );
+			affine.set( affine.get( 0, 3 ) + width / 2, 0, 3 );
+			affine.set( affine.get( 1, 3 ) + height / 2, 1, 3 );
+			renderState.setViewerTransform( affine );
+
+			//renderState.setViewerTransform( transforms.get( i ) );
 
 			renderer.requestRepaint();
 			renderer.paint( renderState );
@@ -537,12 +559,5 @@ public class BDVFlyThrough
 		{
 			return height;
 		}
-	}
-
-	public static void main (String[] args )
-	{
-		// test spline3
-
-		
 	}
 }

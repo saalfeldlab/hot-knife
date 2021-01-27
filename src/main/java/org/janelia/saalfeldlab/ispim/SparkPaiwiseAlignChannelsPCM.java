@@ -149,6 +149,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			final String camB,
 			final int blockSize,
 			final double rThreshold,
+			final Translation3D initialTransformA,
 			final int numThreads ) throws FormatException, IOException, ClassNotFoundException, InterruptedException, ExecutionException
 	{
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Opening N5." );
@@ -203,6 +204,15 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 		//final JavaPairRDD<Block, ArrayList< PointMatch >> rddFeatures = rddSlices.mapToPair(
 		//	block ->
 
+		final long[] tA = new long[3 ];
+		if ( initialTransformA != null )
+		{
+			tA[ 0 ] = Math.round( initialTransformA.getRowPackedCopy()[ 3 ] );
+			tA[ 1 ] = Math.round( initialTransformA.getRowPackedCopy()[ 7 ] );
+			tA[ 2 ] = Math.round( initialTransformA.getRowPackedCopy()[ 11 ] );
+		}
+
+		System.out.println( "Initial translation: " + Util.printCoordinates( tA ) );
 
 		final ForkJoinPool pool = new ForkJoinPool( numThreads );
 
@@ -226,6 +236,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 			else
 				new ImageJ();
 			*/
+
 			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): opening images." );
 
 			ValuePair<RealRandomAccessible<UnsignedShortType>, RealInterval> alignedStackBoundsA = null;
@@ -305,7 +316,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 			//System.out.println( Util.printInterval( displayInterval ) );
 
-			final RandomAccessibleInterval< UnsignedShortType > imgA = Views.interval( Views.raster( alignedStackBoundsA.getA() ), displayInterval );
+			final RandomAccessibleInterval< UnsignedShortType > imgA = Views.interval( Views.raster( alignedStackBoundsA.getA() ), Intervals.translate( displayInterval, tA ) );
 			final RandomAccessibleInterval< UnsignedShortType > imgB = Views.interval( Views.raster( alignedStackBoundsB.getA() ), displayInterval );
 
 			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): performing cross correlations." );
@@ -346,9 +357,9 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 								block.from + (block.to - block.from ) / 2} );
 						// done > TODO: fix direction -offset!
 						final Point p2 = new Point( new double[] {
-								p1.getL()[ 0 ] - result.getOffset( 0 ) * downsampling[ 0 ],
-								p1.getL()[ 1 ] - result.getOffset( 1 ) * downsampling[ 1 ],
-								p1.getL()[ 2 ] - result.getOffset( 2 ) * downsampling[ 2 ] } );
+								p1.getL()[ 0 ] - result.getOffset( 0 ) * downsampling[ 0 ] - tA[ 0 ],
+								p1.getL()[ 1 ] - result.getOffset( 1 ) * downsampling[ 1 ] - tA[ 1 ],
+								p1.getL()[ 2 ] - result.getOffset( 2 ) * downsampling[ 2 ] - tA[ 2 ] } );
 
 						//System.out.println( result.getCrossCorrelation() + ": " + Util.printCoordinates( result.getOffset() ) + ", " + Util.printCoordinates( p1.getL() ) + " - " + Util.printCoordinates( p2.getL() ) );
 						candidatesLocal.add( new PointMatch( p1, p2 ) );
@@ -356,7 +367,6 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				}
 
 			service.shutdown();
-
 
 			final MultiConsensusFilter filter = new MultiConsensusFilter<>(
 					(Supplier<TranslationModel3D> & Serializable)TranslationModel3D::new,
@@ -367,7 +377,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 
 			final ArrayList<PointMatch> matches = filter.filter(candidatesLocal);
 
-			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): candidates: " + candidatesLocal.size() + ", matches=" + matches.size() );
+			System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + "): candidates: " + ( matches.size() + candidatesLocal.size() ) + ", matches=" + matches.size() );
 
 			/*
 			TranslationModel3D model = new TranslationModel3D();
@@ -532,6 +542,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				camB,
 				blocksize,
 				rThreshold,
+				new Translation3D( -100, 0, 0 ),
 				Runtime.getRuntime().availableProcessors() );
 
 		try

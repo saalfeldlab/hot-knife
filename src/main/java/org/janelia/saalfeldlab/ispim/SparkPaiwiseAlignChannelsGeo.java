@@ -67,6 +67,7 @@ import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
@@ -724,13 +725,22 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loaded " + matches.size() + " matches" );
 
-		/*
 		BdvStackSource<?> bdv = null;
+		/*
+		AffineModel3D affine = new AffineModel3D();
+		//affine.fit( matches );
 
-		final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine ).inverse();
+		final AffineTransform3D scale = new AffineTransform3D();
+		//scale.scale( 0.2, 0.2, 0.85 );
+		final AffineTransform3D transformB_a = TransformationTools.getAffineTransform( affine ).preConcatenate( scale );
 
-		bdv = displayOverlap( bdv, channelA, camA, stacks.get( channelA ).get( camA ), alignments.get( channelA ), camTransforms.get( channelA ).get( camA ), new AffineTransform3D(), firstSliceIndex, localLastSliceIndex );
-		bdv = displayOverlap( bdv, channelB, camB, stacks.get( channelB ).get( camB ), alignments.get( channelB ), camTransforms.get( channelB ).get( camB ), transformB_a, firstSliceIndex, localLastSliceIndex );
+		bdv = displayCam( bdv, channelA, camA, n5data.stacks.get( channelA ).get( camA ), n5data.alignments.get( channelA ), n5data.camTransforms.get( channelA ).get( camA ), transformB_a, 0, n5data.lastSliceIndex );
+		bdv = displayCam( bdv, channelB, camB, n5data.stacks.get( channelB ).get( camB ), n5data.alignments.get( channelB ), n5data.camTransforms.get( channelB ).get( camB ), scale, 0, n5data.lastSliceIndex );
+		bdv = BdvFunctions.show( renderPoints( matches.stream().map( pm -> pm.getP2() ).collect( Collectors.toList()), false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "matches ch B", new BdvOptions().addTo( bdv ).sourceTransform( scale ) );
+
+		ViewISPIMStacksN5.setupRecordMovie( bdv );
+
+		SimpleMultiThreading.threadHaltUnClean();
 		*/
 
 		// Ch515+594nm (B) stays fixed, Ch488+561+647nm (A) is transformed
@@ -791,13 +801,13 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 
 		System.out.println( new Date( System.currentTimeMillis() ) + ": displaying" );
 
-		BdvStackSource<?> bdv = null;
+		//BdvStackSource<?> bdv = null;
 
 		bdv = displayCam( bdv, channelB, camB, n5data.stacks.get( channelB ).get( camB ), n5data.alignments.get( channelB ), n5data.camTransforms.get( channelB ).get( camB ), new AffineTransform3D(), 0, n5data.lastSliceIndex );
 		bdv.setDisplayRange(0, 512);
 		bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 255, 0)));
-		bdv = BdvFunctions.show( renderPoints( pointsChB, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "points ch B", new BdvOptions().addTo( bdv ) );
-		bdv = BdvFunctions.show( renderPoints( matches.stream().map( pm -> pm.getP2() ).collect( Collectors.toList()), false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "matches ch B", new BdvOptions().addTo( bdv ) );
+		//bdv = BdvFunctions.show( renderPoints( pointsChB, false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "points ch B", new BdvOptions().addTo( bdv ) );
+		//bdv = BdvFunctions.show( renderPoints( matches.stream().map( pm -> pm.getP2() ).collect( Collectors.toList()), false ), Intervals.createMinMax( 0, 0, 0, 1, 1, 1), "matches ch B", new BdvOptions().addTo( bdv ) );
 
 		//AffineModel3D affine = new AffineModel3D();
 		//affine.fit( matches );
@@ -805,6 +815,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		bdv = BdvFunctions.show( transformedA, prepareCamSource.getB(), "non-rigid A", new BdvOptions().addTo( bdv ) );
 		bdv.setDisplayRange(0, 1024);
 		bdv.setColor( new ARGBType( ARGBType.rgba(0, 255, 0, 0)));
+
+		ViewISPIMStacksN5.setupRecordMovie( bdv );
 
 		System.out.println( new Date( System.currentTimeMillis() ) + ": done with " + id );
 
@@ -1391,9 +1403,9 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		//visualizeDetections(n5Path, id, channelB, camB );
 		//SimpleMultiThreading.threadHaltUnClean(); //660.9999999999999 to 727.0999999999999
 
-		align( n5Path, id, channelA, channelB, camA, camB, 25, true );
+		//align( n5Path, id, channelA, channelB, camA, camB, 25, true );
 
-		//visualizeAlignment( n5Path, id, channelA, channelB, camA, camB );
+		visualizeAlignment( n5Path, id, channelA, channelB, camA, camB );
 
 		return null;
 	}
