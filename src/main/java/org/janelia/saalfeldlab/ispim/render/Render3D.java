@@ -1,43 +1,50 @@
 package org.janelia.saalfeldlab.ispim.render;
 
-import javax.swing.*;
+import java.awt.AWTException;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Container;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.HeadlessException;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.Robot;
+import java.awt.Toolkit;
+import java.awt.geom.Path2D;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 
-import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs;
-import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo;
-import org.janelia.saalfeldlab.ispim.ViewISPIMStack;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JSlider;
+import javax.swing.SwingConstants;
+
 import org.janelia.saalfeldlab.ispim.GlobalOptimize.Description;
-
-import loci.formats.FormatException;
-import mpicbg.models.ErrorStatistic;
-import mpicbg.models.InterpolatedAffineModel3D;
-import mpicbg.models.Tile;
-import mpicbg.models.TileConfiguration;
-
+import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs;
 import org.janelia.saalfeldlab.ispim.SparkPairwiseStitchSlabs.MetaData;
+import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo;
 import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
 
 import ij.ImagePlus;
 import ij.io.FileSaver;
 import ij.process.ColorProcessor;
-import net.imglib2.FinalInterval;
-import net.imglib2.Interval;
+import loci.formats.FormatException;
+import mpicbg.models.ErrorStatistic;
+import mpicbg.models.InterpolatedAffineModel3D;
+import mpicbg.models.Tile;
+import mpicbg.models.TileConfiguration;
 import net.imglib2.RandomAccess;
-import net.imglib2.RealInterval;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
-
-import java.awt.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.awt.geom.*;
-import java.awt.image.BufferedImage;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.text.DecimalFormat;
 
 public class Render3D {
 
