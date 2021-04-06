@@ -364,7 +364,8 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 								p1.getL()[ 1 ] - result.getOffset( 1 ) * downsampling[ 1 ] - tA[ 1 ],
 								p1.getL()[ 2 ] - result.getOffset( 2 ) * downsampling[ 2 ] - tA[ 2 ] } );
 
-						//System.out.println( result.getCrossCorrelation() + ": " + Util.printCoordinates( result.getOffset() ) + ", " + Util.printCoordinates( p1.getL() ) + " - " + Util.printCoordinates( p2.getL() ) );
+						double dist = Math.sqrt( Math.pow( result.getOffset( 0 ) * downsampling[ 0 ], 2 ) + Math.pow( result.getOffset( 1 ) * downsampling[ 1 ], 2 ) + Math.pow( result.getOffset( 2 ) * downsampling[ 2 ], 2 ) );
+						System.out.println( result.getCrossCorrelation() + ": " + dist + " -- " + result.getOffset( 0 ) * downsampling[ 0 ] + ", " + result.getOffset( 1 ) * downsampling[ 1 ] + ", " + result.getOffset( 2 ) * downsampling[ 2 ] + ")" );
 						candidatesLocal.add( new PointMatch( p1, p2 ) );
 					}
 				}
@@ -544,7 +545,7 @@ public class SparkPaiwiseAlignChannelsPCM implements Callable<Void>, Serializabl
 				camB,
 				blocksize,
 				rThreshold,
-				new Translation3D( -136.41358693440748,-8.021219412485834,0.10043059673625976 ),
+				new Translation3D( -139.01793343680265,-7.109975133623493,0.021933370868538304 ),
 				Runtime.getRuntime().availableProcessors() );
 
 		try
