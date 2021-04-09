@@ -16,6 +16,7 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import ij.process.ByteProcessor;
 import ij.process.ColorProcessor;
 
 import java.awt.image.BufferedImage;
@@ -32,6 +33,7 @@ import org.janelia.alignment.ArgbRenderer;
 import org.janelia.alignment.RenderParameters;
 import org.janelia.alignment.util.ImageProcessorCache;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.ThicknessCorrectionData;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
@@ -60,12 +62,7 @@ import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePy
  */
 public class SparkConvertRenderStackToN5 {
 
-	final static public String ownerFormat = "%s/owner/%s";
-	final static public String stackFormat = ownerFormat + "/project/%s/stack/%s";
-	final static public String boundingBoxFormat = stackFormat + "/z/%d/box/%d,%d,%d,%d,%f";
-	final static public String renderParametersFormat = boundingBoxFormat + "/render-parameters";
-
-	@SuppressWarnings({"serial", "FieldCanBeLocal"})
+	@SuppressWarnings({"FieldCanBeLocal", "FieldMayBeFinal"})
 	public static class Options extends AbstractOptions implements Serializable {
 
 		@Option(name = "--baseUrl", required = true, usage = "Render stack base URL")
@@ -112,6 +109,9 @@ public class SparkConvertRenderStackToN5 {
 		@Option(name = "--factors", usage = "Specifies generates a scale pyramid with given factors with relative scaling between factors, e.g. 2,2,2")
 		private String downsamplingFactorsString = null;
 		private int[] downsamplingFactors;
+
+		@Option(name = "--z_coords", usage = "Path of Zcoords.txt file")
+		private String zCoordsPath = null;
 
 		public Options(final String[] args) {
 
@@ -242,54 +242,50 @@ public class SparkConvertRenderStackToN5 {
 		public int[] getDownsamplingFactors() { return downsamplingFactors; }
 	}
 
-	static private BufferedImage renderImage(
-			final ImageProcessorCache ipCache,
-			final String baseUrl,
-			final String owner,
-			final String project,
-			final String stack,
-			final long x,
-			final long y,
-			final long z,
-			final long w,
-			final long h,
-			final double scale,
-			final boolean filter) {
+	public static class BoxRenderer implements Serializable {
 
-		final String renderParametersUrlString = String.format(
-				renderParametersFormat,
-				baseUrl,
-				owner,
-				project,
-				stack,
-				z,
-				x,
-				y,
-				w,
-				h,
-				scale);
+		private final String stackUrl;
+		private final String boxUrlSuffix;
+		private final boolean filter;
 
-		final RenderParameters renderParameters = RenderParameters.loadFromUrl(renderParametersUrlString);
-		renderParameters.setDoFilter(filter);
-        final BufferedImage image = renderParameters.openTargetImage();
-        ArgbRenderer.render(renderParameters, image, ipCache);
+		public BoxRenderer(final String baseUrl,
+						   final String owner,
+						   final String project,
+						   final String stack,
+						   final long width,
+						   final long height,
+						   final double scale,
+						   final boolean filter) {
+			this.stackUrl = String.format("%s/owner/%s/project/%s/stack/%s", baseUrl, owner, project, stack);
+			this.boxUrlSuffix = String.format("%d,%d,%f/render-parameters", width, height, scale);
+			this.filter = filter;
+		}
 
-        return image;
+		public ByteProcessor render(final long x,
+									final long y,
+									final long z,
+									final ImageProcessorCache ipCache) {
+			final String renderParametersUrlString = String.format("%s/z/%d/box/%d,%d,%s",
+																   stackUrl, z, x, y, boxUrlSuffix);
+			final RenderParameters renderParameters = RenderParameters.loadFromUrl(renderParametersUrlString);
+			renderParameters.setDoFilter(filter);
+			final BufferedImage image = renderParameters.openTargetImage();
+			ArgbRenderer.render(renderParameters, image, ipCache);
+			return new ColorProcessor(image).convertToByteProcessor();
+		}
 	}
 
 	public static void saveRenderStack(
 			final JavaSparkContext sc,
-			final String baseUrl,
-			final String owner,
-			final String project,
-			final String stack,
-			final boolean filter,
-			final int[] tileSize,
+			final BoxRenderer boxRenderer,
+			final int tileWidth,
+			final int tileHeight,
 			final String n5Path,
 			final String datasetName,
 			final long[] min,
 			final long[] size,
-			final int[] blockSize) throws IOException {
+			final int[] blockSize,
+			final ThicknessCorrectionData thicknessCorrectionData) throws IOException {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
@@ -305,8 +301,8 @@ public class SparkConvertRenderStackToN5 {
 		 * blocks
 		 */
 		final int[] gridBlockSize = new int[] {
-				Math.max(blockSize[0], tileSize[0]),
-				Math.max(blockSize[1], tileSize[1]),
+				Math.max(blockSize[0], tileWidth),
+				Math.max(blockSize[1], tileHeight),
 				blockSize[2] };
 
 		final JavaRDD<long[][]> rdd = sc.parallelize(
@@ -330,30 +326,73 @@ public class SparkConvertRenderStackToN5 {
 			/* assume we can fit it in an array */
 			final ArrayImg<UnsignedByteType, ByteArray> block = ArrayImgs.unsignedBytes(gridBlock[1]);
 //			final boolean hasData = false;
-			for (int z = 0; z < block.dimension(2); ++z) {
 
-				final BufferedImage image = renderImage(
-						ipCache,
-						baseUrl,
-						owner,
-						project,
-						stack,
-						gridBlock[0][0] + min[0],
-						gridBlock[0][1] + min[1],
-						gridBlock[0][2] + min[2] + z,
-						tileSize[0],
-						tileSize[1],
-						1,
-						filter);
+			final long x = gridBlock[0][0] + min[0];
+			final long y = gridBlock[0][1] + min[1];
 
-				final IntervalView<UnsignedByteType> outSlice = Views.hyperSlice(block, 2, z);
+			ThicknessCorrectionData.LayerInterpolator priorInterpolator = null;
+			ByteProcessor currentProcessor;
+			ByteProcessor priorProcessor = null;
+			ByteProcessor nextProcessor = null;
+			for (int zIndex = 0; zIndex < block.dimension(2); zIndex++) {
+
+				final long z = gridBlock[0][2] + min[2] + zIndex;
+
+				if (thicknessCorrectionData == null) {
+					currentProcessor = boxRenderer.render(x, y, z, ipCache);
+				} else {
+
+					final ThicknessCorrectionData.LayerInterpolator interpolator =
+							thicknessCorrectionData.getInterpolator(z);
+
+					if (priorInterpolator != null) {
+						if (interpolator.getPriorStackZ() == priorInterpolator.getNextStackZ()) {
+							priorProcessor = nextProcessor;
+							nextProcessor = null;
+						} else if (interpolator.getPriorStackZ() != priorInterpolator.getPriorStackZ()) {
+							priorProcessor = null;
+							nextProcessor = null;
+						} // else priorStackZ and nextStackZ have not changed, so reuse processors
+					}
+					priorInterpolator = interpolator;
+
+					if (priorProcessor == null) {
+						priorProcessor = boxRenderer.render(x, y, interpolator.getPriorStackZ(), ipCache);
+//					} else {
+//						System.out.println("priorProcessor already exists for z " + z + " (" + x + "," + y + ")");
+					}
+
+					if (interpolator.needsInterpolation()) {
+
+						currentProcessor = new ByteProcessor(priorProcessor.getWidth(), priorProcessor.getHeight());
+
+						if (nextProcessor == null) {
+							nextProcessor = boxRenderer.render(x, y, interpolator.getNextStackZ(), ipCache);
+//						} else {
+//							System.out.println("nextProcessor already exists for z " + z + " (" + x + "," + y + ")");
+						}
+
+						final int totalPixels = currentProcessor.getWidth() * currentProcessor.getHeight();
+						for (int pixelIndex = 0; pixelIndex < totalPixels; pixelIndex++) {
+							final double intensity = interpolator.deriveIntensity(priorProcessor.get(pixelIndex),
+																				  nextProcessor.get(pixelIndex));
+							currentProcessor.set(pixelIndex, (int) intensity);
+						}
+
+					} else {
+						currentProcessor = priorProcessor;
+					}
+
+				}
+
+				final IntervalView<UnsignedByteType> outSlice = Views.hyperSlice(block, 2, zIndex);
 				final IterableInterval<UnsignedByteType> inSlice = Views
 						.flatIterable(
 								Views.interval(
 										ArrayImgs.unsignedBytes(
-												(byte[])new ColorProcessor(image).convertToByteProcessor().getPixels(),
-												image.getWidth(),
-												image.getHeight()),
+												(byte[]) currentProcessor.getPixels(),
+												currentProcessor.getWidth(),
+												currentProcessor.getHeight()),
 										outSlice));
 
 				final Cursor<UnsignedByteType> in = inSlice.cursor();
@@ -394,20 +433,33 @@ public class SparkConvertRenderStackToN5 {
 											   "Please move (or remove) the existing dataset before regenerating it.");
 		}
 
+		final int tileWidth = options.getTileSize()[0];
+		final int tileHeight = options.getTileSize()[1];
+
+		final BoxRenderer boxRenderer = new BoxRenderer(options.getBaseUrl(),
+														options.getOwner(),
+														options.getProject(),
+														options.getStack(),
+														tileWidth,
+														tileHeight,
+														1.0,
+														options.getFilter());
+
+		ThicknessCorrectionData thicknessCorrectionData =
+				options.zCoordsPath == null ? null : new ThicknessCorrectionData(options.zCoordsPath);
+
 		// save full scale first ...
 		saveRenderStack(
 				sc,
-				options.getBaseUrl(),
-				options.getOwner(),
-				options.getProject(),
-				options.getStack(),
-				options.getFilter(),
-				options.getTileSize(),
+				boxRenderer,
+				tileWidth,
+				tileHeight,
 				options.getN5Path(),
 				fullScaleName,
 				options.getMin(),
 				options.getSize(),
-				blockSize);
+				blockSize,
+				thicknessCorrectionData);
 
 		if (downsampleStack) {
 
