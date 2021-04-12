@@ -319,17 +319,16 @@ public class SparkComputeCost {
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] + " costAxis: " + axisMode);
 
 		RandomAccessibleInterval<UnsignedByteType> cost;
-		if (axisMode == "2") {// This is the original mode
+		if (axisMode.equals("2")) {// This is the original mode
 			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-		} else if (axisMode == "0") {// Compute along axis 0
+		} else if (axisMode.equals("0")) {// Compute along axis 0
 			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-		} else if (axisMode == "02") {// Compute along both 0 and 2 then combine
+		} else if (axisMode.equals("02")) {// Compute along both 0 and 2 then combine
 			RandomAccessibleInterval<UnsignedByteType> cost2 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 			RandomAccessibleInterval<UnsignedByteType> cost0 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 			cost = mergeCosts(cost0, cost2);
 		} else {
-			System.err.println("axisMode unknown: " + axisMode);
-			return;
+			throw new IllegalArgumentException("axisMode unknown: " + axisMode);
 		}
 
 		System.out.println("Writing blocks");
