@@ -16,25 +16,6 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
-import org.janelia.saalfeldlab.hotknife.cost.CostUtils;
-import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
-import net.imglib2.*;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.view.SubsampleIntervalView;
-import net.imglib2.view.Views;
-import net.imglib2.util.Intervals;
-import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.n5.*;
-import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.kohsuke.args4j.CmdLineException;
-import org.kohsuke.args4j.CmdLineParser;
-import org.kohsuke.args4j.Option;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -42,6 +23,40 @@ import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.cost.CostUtils;
+import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.GzipCompression;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
+
+import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
+import net.imglib2.RandomAccess;
+import net.imglib2.RandomAccessible;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
+import net.imglib2.view.SubsampleIntervalView;
+import net.imglib2.view.Views;
 
 /**
  * Export a render stack to N5.
@@ -331,6 +346,9 @@ public class SparkComputeCost {
 			throw new IllegalArgumentException("axisMode unknown: " + axisMode);
 		}
 
+		//ImageJFunctions.show( cost );
+		//SimpleMultiThreading.threadHaltUnClean();
+
 		System.out.println("Writing blocks");
 
 		final N5Writer n5w = new N5FSWriter(costN5Path);
@@ -414,6 +432,10 @@ public class SparkComputeCost {
 		System.out.println("Zcorr interval dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(zcorr)) );
 		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
 
+		//new ij.ImageJ();
+		//ImageJFunctions.show( zcorr );
+		//SimpleMultiThreading.threadHaltUnClean();
+
 		// Loop over slices and populate cost
 		int maxZ = (int) Math.min(zcorrInterval.dimension(2), (zcorrSize[2] - gridCoord[1] * zcorrInterval.dimension(2)));// handle remaining boundary
 		for( int zIdx = 0; zIdx < maxZ; zIdx += costSteps[2] ) {
@@ -437,6 +459,8 @@ public class SparkComputeCost {
 			    e.printStackTrace();
 			}
 
+		    //ImageJFunctions.show( sliceCopy );
+
 			System.out.println("Compute resin.");
 
 			DagmarCost costFn = new DagmarCost();
@@ -453,11 +477,27 @@ public class SparkComputeCost {
 			// Compute cost on subsampled
 			//Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
 
+			final Img<FloatType> costSliceFullResRaw = costFn.computeResin(sliceCopy, executorService);
+
+			// TODO? if an entire column is full of zeros, cost should be uniformly 255
+			// right now: wherever the intensity is 0 the cost is 255
+			final RandomAccessibleInterval< FloatType > costSliceFullRes =
+					Converters.convertRAI(
+							sliceCopy,
+							costSliceFullResRaw,
+							(i0, i1, o) -> { if ( i0.get() == 0 ) o.set( 255 ); else o.set( i1.get() ); },
+							new FloatType() );
+
+			//ImageJFunctions.show( costSliceFullRes );
+
 			SubsampleIntervalView<FloatType> costSlice =
 					Views.subsample(
-							costFn.computeResin(sliceCopy, executorService),
+							costSliceFullRes,
 							costSteps[0],
 							1);
+
+			//ImageJFunctions.show( costSlice );
+			//SimpleMultiThreading.threadHaltUnClean();
 
 			//System.out.println("Cost slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(costSlice)));
 
@@ -470,6 +510,9 @@ public class SparkComputeCost {
 
 				costAccess.get().set((int) csCur.get().get());
 			}
+
+			//ImageJFunctions.show( cost );
+			//SimpleMultiThreading.threadHaltUnClean();
 		}
 
 		return CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
