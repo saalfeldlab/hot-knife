@@ -429,7 +429,7 @@ public class SparkComputeCost {
 		RandomAccess<UnsignedByteType> costAccess = cost.randomAccess();
 
 		System.out.println("Zcorr block size: " + Arrays.toString( zcorrBlockSize ) );
-		System.out.println("Zcorr interval dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(zcorr)) );
+		System.out.println("Zcorr interval: " + Util.printInterval( zcorrInterval ) );
 		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
 
 		//new ij.ImageJ();
@@ -515,7 +515,7 @@ public class SparkComputeCost {
 			//SimpleMultiThreading.threadHaltUnClean();
 		}
 
-		return CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
+		return cost;//CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
 	}
 
 	private static Interval getZcorrInterval(Long gridX, Long gridZ, long[] zcorrSize, int[] zcorrBlockSize, int[] costSteps) {
