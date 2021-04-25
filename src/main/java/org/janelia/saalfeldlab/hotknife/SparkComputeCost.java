@@ -354,10 +354,10 @@ public class SparkComputeCost {
 		final N5Writer n5w = new N5FSWriter(costN5Path);
 
 		// Now loop over blocks and write
-		for( int yGrid = 0; yGrid < Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
+		for( int yGrid = 0; yGrid <= Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
 			long[] gridOffset = new long[]{gridCoord[0], yGrid, gridCoord[1]};
 			RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
-					cost,
+					Views.extendZero( cost ),
 					new FinalInterval(
 							new long[]{0, yGrid * zcorrBlockSize[1], 0},
 							new long[]{cost.dimension(0) - 1, (yGrid + 1) * zcorrBlockSize[1] - 1, cost.dimension(2) - 1}));
