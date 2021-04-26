@@ -21,6 +21,7 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
+import ij.ImageJ;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
@@ -34,6 +35,9 @@ import net.imglib2.util.Util;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.multithreading.SimpleMultiThreading;
+
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
@@ -111,7 +115,7 @@ public class ViewCost {
 		if (!options.parsedSuccessfully)
 			return;
 
-//		new ImageJ();
+		new ImageJ();
 
 		final N5Reader n5 = new N5FSReader(options.getN5Path());
 
@@ -123,19 +127,33 @@ public class ViewCost {
 
 		RandomAccessibleInterval<UnsignedByteType> raw = Views.zeroMin(N5Utils.open(n5, options.getRawGroup(), new UnsignedByteType()));
 		RandomAccessibleInterval<UnsignedByteType> cost = Views.zeroMin(N5Utils.open(n5, options.getCostGroup(), new UnsignedByteType()));
-		long[] costDownsample = n5.getAttribute(options.getCostGroup(), "downsamplingFactors", long[].class);
+		long[] rawDownsampleFactors = n5.getAttribute(options.getRawGroup(), "downsamplingFactors", long[].class);
+		long[] costDownsampleFactors = n5.getAttribute(options.getCostGroup(), "downsamplingFactors", long[].class);
 
-		System.out.println( Util.printCoordinates( costDownsample ));
+		// not stored in s0
+		if ( rawDownsampleFactors == null )
+			rawDownsampleFactors = new long[] { 1, 1, 1 };
+
+		//ImageJFunctions.show( Views.hyperSlice( raw, 2, 10000 ));
+		//ImageJFunctions.show( Views.hyperSlice( cost, 2, 10000/6 ));
+		//ImageJFunctions.show( cost );
+		//SimpleMultiThreading.threadHaltUnClean();
+		System.out.println( Util.printCoordinates( costDownsampleFactors ));
 		RandomAccessibleInterval<UnsignedByteType> costInvert = Converters.convert(cost,
 											   (a,b) -> b.set(255 - a.get()),
 											   new UnsignedByteType());
 
-		System.out.println("vals: " + raw + " " + cost + " " + costDownsample);
+		System.out.println( "Raw downsampling: " + Util.printCoordinates( rawDownsampleFactors ) );
+		System.out.println( "Cost downsampling: " + Util.printCoordinates( costDownsampleFactors ) );
+		System.out.println("intervals: " + raw + " " + cost );
 
-		RandomAccessible<UnsignedByteType> rawDownsample = Views.subsample(Views.extendZero(raw), costDownsample);
+		//RandomAccessible<UnsignedByteType> rawDownsample = Views.subsample(Views.extendZero(raw), costDownsampleFactors);
 
-		BdvOptions bdvOpt = Bdv.options().sourceTransform( 6, 1, 6 );
-		bdv = BdvFunctions.show(rawDownsample, cost, "input", bdvOpt);
+		BdvOptions bdvOpt = Bdv.options().numRenderingThreads( Runtime.getRuntime().availableProcessors() / 2 ).sourceTransform( rawDownsampleFactors[ 0 ], rawDownsampleFactors[ 1 ], rawDownsampleFactors[ 2 ] );
+		//bdv = BdvFunctions.show(rawDownsample, cost, "input", bdvOpt);
+		bdv = BdvFunctions.show(raw, "input", bdvOpt);
+
+		bdvOpt = Bdv.options().sourceTransform( costDownsampleFactors[ 0 ], costDownsampleFactors[ 1 ], costDownsampleFactors[ 2 ] );//6, 1, 6 );
 		bdv = BdvFunctions.show(costInvert, "cost", bdvOpt.addTo(bdv));
 	}
 }
