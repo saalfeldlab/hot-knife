@@ -36,6 +36,8 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -88,9 +90,22 @@ public class SparkComputeCost {
 		@Option(name = "--costN5Group", required = true, usage = "N5 dataset, e.g. /cost/Sec26")
 		private String costDatasetName = null;
 
-		@Option(name = "--costSteps", required = true, usage = "Step size for computing cost, e.g. 6,1,6")
-		private String costStepString = null;
-		private int[] costSteps;
+		@Option(name = "--firstStepScaleNumber",
+				usage = "scale number for first cost step, e.g. 1 for s1")
+		private int firstStepScaleNumber = 1;
+
+		public String getCostDatasetName(final int index) {
+			return costDatasetName + "/s" + (firstStepScaleNumber + index);
+		}
+
+		@Option(name = "--costSteps",
+				aliases = { "-f", "--factors" },
+				usage = "Step sizes for computing cost, e.g. 6,1,6. " +
+						"Specify multiple values for downsampling where each factor builds on the last.")
+		private String[] costStepsStrings = {
+				"6,1,6", "3,1,3", "3,1,3", "3,1,3", "3,1,3", "1,4,1", "1,4,1", "1,4,1"
+		};
+		private int[][] costSteps;
 
 		@Option(name = "--axisMode", required = true, usage = "Which axis to compute along (or both)? 0, 2, or 02")
 		private String axisMode = null;
@@ -123,12 +138,13 @@ public class SparkComputeCost {
 
 			final CmdLineParser parser = new CmdLineParser(this);
 
-			costSteps = new int[3];
-
 			try {
 				parser.parseArgument(args);
+				costSteps = new int[costStepsStrings.length][3];
 
-				parseCSIntArray(costStepString, costSteps);
+				for (int i = 0; i < costStepsStrings.length; i++) {
+					parseCSIntArray(costStepsStrings[i], costSteps[i]);
+				}
 
 				parsedSuccessfully = true;
 			} catch (final CmdLineException e) {
@@ -137,78 +153,21 @@ public class SparkComputeCost {
 			}
 		}
 
-		/**
-		 * @return the n5Path
-		 */
-		public String getN5Path() {
-			return n5Path;
+		public int[] getCostSteps(final int index) {
+			return costSteps[index];
 		}
-
-		public String getOutputN5Path() {
-			return outputN5Path;
-		}
-
-		public String getInputDatasetName() {
-			return inputDatasetName;
-		}
-
-		public String getCostDatasetName() {
-			return costDatasetName;
-		}
-
-		public String getCostStepString() {
-			return costStepString;
-		}
-
-		public int[] getCostSteps() {
-			return costSteps;
-		}
-
-		public int getBandSize() {
-			return bandSize;
-		}
-
-		public int getMinGradient() {
-			return minGradient;
-		}
-
-		public int getSlopeCorrXRange() {
-			return slopeCorrXRange;
-		}
-
-		public float getSlopeCorrBandFactor() {
-			return slopeCorrBandFactor;
-		}
-
-		public float getMaxSlope() {
-			return maxSlope;
-		}
-
-		public float getMinSlope() {
-			return minSlope;
-		}
-
-		public int getStartThresh() {
-			return startThresh;
-		}
-
-		public int getKernelSize() {
-			return kernelSize;
-		}
-
-		public String getAxisMode() { return axisMode; }
 	}
 
 	public static void computeCost(
-			final JavaSparkContext sc,
+			final JavaSparkContext sparkContext,
 			final Options options) throws IOException {
 
-		String n5Path = options.getN5Path();
-		String costN5Path = options.getOutputN5Path();
-		String zcorrDataset = options.getInputDatasetName();
-		String costDataset = options.getCostDatasetName();
-		int[] costSteps = options.getCostSteps();
-		String axisMode = options.getAxisMode();
+		String n5Path = options.n5Path;
+		String costN5Path = options.outputN5Path;
+		String zcorrDataset = options.inputDatasetName;
+		String costDataset = options.getCostDatasetName(0);
+		int[] costSteps = options.getCostSteps(0);
+		String axisMode = options.axisMode;
 
 		System.out.println("Computing cost on: " + n5Path + " " + zcorrDataset );
 		System.out.println("Cost output: " + costN5Path + " " + costDataset );
@@ -220,7 +179,6 @@ public class SparkComputeCost {
 
 		int[] zcorrBlockSize = n5.getAttribute(zcorrDataset, "blockSize", int[].class);
 		long[] zcorrSize = n5.getAttribute(zcorrDataset, "dimensions", long[].class);
-		RandomAccessibleInterval<UnsignedByteType> zcorr = N5Utils.openVolatile(n5, zcorrDataset);
 
 //		int[] costBlockSize = new int[]{
 //				zcorrBlockSize[0] / costSteps[0],
@@ -262,7 +220,7 @@ public class SparkComputeCost {
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
 
 		// Grids are w.r.t cost blocks
-		final JavaRDD<Long[]> rddSlices = sc.parallelize(gridCoords);
+		final JavaRDD<Long[]> rddSlices = sparkContext.parallelize(gridCoords);
 
 		// foreach version
 
@@ -295,15 +253,13 @@ public class SparkComputeCost {
 
 			gridCoordPartition.forEachRemaining(gridCoord -> {
 
-
-
 				try {
 				    processColumn(
 						  n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, axisMode, gridCoord, executorService,
-						  options.getBandSize(), options.getMinGradient(), options.getSlopeCorrXRange(), options.getSlopeCorrBandFactor(), options.getMaxSlope(),
-						  options.getMinSlope(), options.getStartThresh(), options.getKernelSize());
+						  options.bandSize, options.minGradient, options.slopeCorrXRange, options.slopeCorrBandFactor, options.maxSlope,
+						  options.minSlope, options.startThresh, options.kernelSize);
 				} catch (Exception e) {
-				    e.printStackTrace();
+				    e.printStackTrace(); // TODO: is there a reason we are swallowing exceptions?
 				}
 				
 			    });
@@ -312,6 +268,31 @@ public class SparkComputeCost {
 
 		    });
 
+		final N5PathSupplier n5PathSupplier = new N5PathSupplier(costN5Path);
+		for (int i = 1; i < options.costStepsStrings.length; i++) {
+			N5DownsamplerSpark.downsample(
+					sparkContext,
+					n5PathSupplier,
+					options.getCostDatasetName(i - 1),
+					options.getCostDatasetName(i),
+					options.getCostSteps(i),
+					costBlockSize
+			);
+		}
+
+	}
+
+	// serializable downsample supplier for spark
+	public static class N5PathSupplier implements N5WriterSupplier {
+		private final String path;
+		public N5PathSupplier(final String path) {
+			this.path = path;
+		}
+		@Override
+		public N5Writer get()
+				throws IOException {
+			return new N5FSWriter(path);
+		}
 	}
 
 	private static void processColumn(
