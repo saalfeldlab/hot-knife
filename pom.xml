@@ -12,6 +12,7 @@
 	<properties>
 		<enforcer.skip>true</enforcer.skip>
 		<package-name>org.janelia.saalfeldlab.hotknife</package-name>
+		<jackson-databind.version>2.6.7</jackson-databind.version>
 	</properties>
 	<dependencies>
 		<dependency>
