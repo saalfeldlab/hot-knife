@@ -60,7 +60,7 @@ import net.imglib2.view.Views;
  */
 public class ShearTest {
 
-	public static <T extends NativeType<T>> RandomAccessibleInterval<T> openSlice(
+	public static RandomAccessibleInterval openSlice(
 			final IFormatReader reader,
 			final int slice,
 			final int width,
@@ -75,7 +75,7 @@ public class ShearTest {
 
 		buffer.asShortBuffer().get(shorts);
 
-		return (RandomAccessibleInterval<T>)ArrayImgs.unsignedShorts(shorts, width, height);
+		return (RandomAccessibleInterval)ArrayImgs.unsignedShorts(shorts, width, height);
 	}
 
 	public static <T extends NativeType<T> & NumericType<T>> void main(final String... args) throws FormatException, IOException {

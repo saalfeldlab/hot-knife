@@ -121,6 +121,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Option(names = {"--maxDistance"}, description = "maximum distance between the both surfaces, e.g. 3500")
 	private double maxDistance = Double.MAX_VALUE;
 
+	private boolean useVisualization = false;
+
 	/**
 	 * Mask (0) all voxel z-columns with all equal cost.
 	 *
@@ -819,40 +821,50 @@ public class SparkSurfaceFit implements Callable<Void>{
 		/*
 		 * raw data
 		 */
-		final int numProc = Runtime.getRuntime().availableProcessors();
-		final SharedQueue queue = new SharedQueue(Math.min(24, Math.max(1, numProc - 2)));
-
-		final int numScales = n5.list(rawGroup).length;
-		final double[][] scales = new double[numScales][];
-		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
-		for (int s = 0; s < numScales; ++s) {
-
-			final String mipmapName = rawGroup + "/s" + s;
-			rawMipmaps[s] = Views.permute((RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName), 1, 2);
-			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
-			if (scale == null)
-				scale = new double[] {1, 1, 1};
-
-			scales[s] = scale;
-		}
-
-		final FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", 1, 1, 1);
-
-		final boolean useVolatile = true;
-
-		final RandomAccessibleIntervalMipmapSource<UnsignedByteType> rawMipmapSource = new RandomAccessibleIntervalMipmapSource<>(
-				rawMipmaps,
-				new UnsignedByteType(),
-				scales,
-				voxelDimensions,
-				"raw");
-
-		final BdvOptions options = BdvOptions.options().screenScales(new double[] {0.5}).numRenderingThreads(10);
-
+		int numScales = 8;
+		double[][] scales = null;
+		boolean useVolatile = false;
+		BdvOptions options = null;
 		BdvStackSource<?> bdv = null;
+		SharedQueue queue = null;
+		RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = null;
+		FinalVoxelDimensions voxelDimensions = null;
 
-		bdv = Show.mipmapSource(useVolatile ? rawMipmapSource.asVolatile(queue) : rawMipmapSource, bdv, options.addTo(bdv));
+		if( useVisualization ) {
+			final int numProc = Runtime.getRuntime().availableProcessors();
+			queue = new SharedQueue(Math.min(24, Math.max(1, numProc - 2)));
 
+			numScales = n5.list(rawGroup).length;
+			scales = new double[numScales][];
+			rawMipmaps = new RandomAccessibleInterval[numScales];
+			for (int s = 0; s < numScales; ++s) {
+
+				final String mipmapName = rawGroup + "/s" + s;
+				rawMipmaps[s] = Views.permute((RandomAccessibleInterval<UnsignedByteType>) N5Utils.openVolatile(n5, mipmapName), 1, 2);
+				double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
+				if (scale == null)
+					scale = new double[]{1, 1, 1};
+
+				scales[s] = scale;
+			}
+
+			voxelDimensions = new FinalVoxelDimensions("px", 1, 1, 1);
+
+			useVolatile = true;
+
+			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> rawMipmapSource = new RandomAccessibleIntervalMipmapSource<>(
+					rawMipmaps,
+					new UnsignedByteType(),
+					scales,
+					voxelDimensions,
+					"raw");
+
+			options = BdvOptions.options().screenScales(new double[]{0.5}).numRenderingThreads(10);
+
+			bdv = null;
+
+			bdv = Show.mipmapSource(useVolatile ? rawMipmapSource.asVolatile(queue) : rawMipmapSource, bdv, options.addTo(bdv));
+		}
 
 
 
@@ -979,27 +991,29 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			/* visualization again ... */
 
-			final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
-					Transform.scaleAndShiftHeightFieldAndValues(minField, downsamplingFactors),
-					Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
-					(minAvg + 0.5) * downsamplingFactors[2] - 0.5,
-					(maxAvg + 0.5) * downsamplingFactors[2] - 0.5);
+			if( useVisualization ) {
+				final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
+						Transform.scaleAndShiftHeightFieldAndValues(minField, downsamplingFactors),
+						Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
+						(minAvg + 0.5) * downsamplingFactors[2] - 0.5,
+						(maxAvg + 0.5) * downsamplingFactors[2] - 0.5);
 
-			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
-					Show.createTransformedMipmapSource(
-							flattenTransform.inverse(),
-							rawMipmaps,
-							scales,
-							voxelDimensions,
-							"" + s);
+				final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
+						Show.createTransformedMipmapSource(
+								flattenTransform.inverse(),
+								rawMipmaps,
+								scales,
+								voxelDimensions,
+								"" + s);
 
-			final Source<?> volatileMipmapSource;
-			if (useVolatile)
-				volatileMipmapSource = mipmapSource.asVolatile(queue);
-			else
-				volatileMipmapSource = mipmapSource;
+				final Source<?> volatileMipmapSource;
+				if (useVolatile)
+					volatileMipmapSource = mipmapSource.asVolatile(queue);
+				else
+					volatileMipmapSource = mipmapSource;
 
-			bdv = Show.mipmapSource(volatileMipmapSource, bdv, options.addTo(bdv));
+				bdv = Show.mipmapSource(volatileMipmapSource, bdv, options.addTo(bdv));
+			}
 		}
 
 
@@ -1009,12 +1023,13 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	@Override
-	public Void call() throws IOException {
-//	@SuppressWarnings("unchecked")
-//	public Void callSparkAndVisualization() throws IOException {
+//	@Override
+//	public Void call() throws IOException {
+	@SuppressWarnings("unchecked")
+	public Void callSparkAndVisualization() throws IOException {
 
-		new ImageJ();
+		if( useVisualization)
+			new ImageJ();
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -1028,39 +1043,51 @@ public class SparkSurfaceFit implements Callable<Void>{
 		/*
 		 * raw data
 		 */
-		final int numProc = Runtime.getRuntime().availableProcessors();
-		final SharedQueue queue = new SharedQueue(Math.min(24, Math.max(1, numProc - 2)));
 
-		final int numScales = n5.list(rawGroup).length;
-		final double[][] scales = new double[numScales][];
-		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
-		for (int s = 0; s < numScales; ++s) {
-
-			final String mipmapName = rawGroup + "/s" + s;
-			rawMipmaps[s] = Views.permute((RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName), 1, 2);
-			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
-			if (scale == null)
-				scale = new double[] {1, 1, 1};
-
-			scales[s] = scale;
-		}
-
-		final FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", 1, 1, 1);
-
-		final boolean useVolatile = true;
-
-		final RandomAccessibleIntervalMipmapSource<UnsignedByteType> rawMipmapSource = new RandomAccessibleIntervalMipmapSource<>(
-				rawMipmaps,
-				new UnsignedByteType(),
-				scales,
-				voxelDimensions,
-				"raw");
-
-		final BdvOptions options = BdvOptions.options().screenScales(new double[] {0.5}).numRenderingThreads(10);
-
+		int numScales = 8;
+		double[][] scales = null;
+		boolean useVolatile = false;
+		BdvOptions options = null;
 		BdvStackSource<?> bdv = null;
+		SharedQueue queue = null;
+		RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = null;
+		FinalVoxelDimensions voxelDimensions = null;
 
-		bdv = Show.mipmapSource(useVolatile ? rawMipmapSource.asVolatile(queue) : rawMipmapSource, bdv, options.addTo(bdv));
+		if( useVisualization ) {
+			final int numProc = Runtime.getRuntime().availableProcessors();
+			queue = new SharedQueue(Math.min(24, Math.max(1, numProc - 2)));
+
+			numScales = n5.list(rawGroup).length;
+			scales = new double[numScales][];
+			rawMipmaps = new RandomAccessibleInterval[numScales];
+			for (int s = 0; s < numScales; ++s) {
+
+				final String mipmapName = rawGroup + "/s" + s;
+				rawMipmaps[s] = Views.permute((RandomAccessibleInterval<UnsignedByteType>) N5Utils.openVolatile(n5, mipmapName), 1, 2);
+				double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
+				if (scale == null)
+					scale = new double[]{1, 1, 1};
+
+				scales[s] = scale;
+			}
+
+			voxelDimensions = new FinalVoxelDimensions("px", 1, 1, 1);
+
+			useVolatile = true;
+
+			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> rawMipmapSource = new RandomAccessibleIntervalMipmapSource<>(
+					rawMipmaps,
+					new UnsignedByteType(),
+					scales,
+					voxelDimensions,
+					"raw");
+
+			options = BdvOptions.options().screenScales(new double[]{0.5}).numRenderingThreads(10);
+
+			bdv = null;
+
+			bdv = Show.mipmapSource(useVolatile ? rawMipmapSource.asVolatile(queue) : rawMipmapSource, bdv, options.addTo(bdv));
+		}
 
 
 
@@ -1147,40 +1174,41 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 
 			/* visualization again ... */
+			if( useVisualization ) {
+				final N5FSReader n5Field = new N5FSReader(n5FieldPath);
+				final String groupName = outGroup + "/s" + s;
+				final String minFieldName = groupName + "/min";
+				final String maxFieldName = groupName + "/max";
 
-			final N5FSReader n5Field = new N5FSReader(n5FieldPath);
-			final String groupName = outGroup + "/s" + s;
-			final String minFieldName = groupName + "/min";
-			final String maxFieldName = groupName + "/max";
+				minField = N5Utils.open(n5Field, minFieldName);
+				maxField = N5Utils.open(n5Field, maxFieldName);
 
-			minField = N5Utils.open(n5Field, minFieldName);
-			maxField = N5Utils.open(n5Field, maxFieldName);
+				downsamplingFactors = n5Field.getAttribute(groupName, "downsamplingFactors", double[].class);
+				minAvg = n5Field.getAttribute(minFieldName, "avg", double.class);
+				maxAvg = n5Field.getAttribute(maxFieldName, "avg", double.class);
 
-			downsamplingFactors = n5Field.getAttribute(groupName, "downsamplingFactors", double[].class);
-			minAvg = n5Field.getAttribute(minFieldName, "avg", double.class);
-			maxAvg = n5Field.getAttribute(maxFieldName, "avg", double.class);
+				final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
+						Transform.scaleAndShiftHeightFieldAndValues(minField, downsamplingFactors),
+						Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
+						(minAvg + 0.5) * downsamplingFactors[2] - 0.5,
+						(maxAvg + 0.5) * downsamplingFactors[2] - 0.5);
 
-			final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
-					Transform.scaleAndShiftHeightFieldAndValues(minField, downsamplingFactors),
-					Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
-					(minAvg + 0.5) * downsamplingFactors[2] - 0.5,
-					(maxAvg + 0.5) * downsamplingFactors[2] - 0.5);
+				final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
+						Show.createTransformedMipmapSource(
+								flattenTransform.inverse(),
+								rawMipmaps,
+								scales,
+								voxelDimensions,
+								"" + s);
 
-			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
-					Show.createTransformedMipmapSource(
-							flattenTransform.inverse(),
-							rawMipmaps,
-							scales,
-							voxelDimensions,
-							"" + s);
+				final Source<?> volatileMipmapSource;
+				if (useVolatile)
+					volatileMipmapSource = mipmapSource.asVolatile(queue);
+				else
+					volatileMipmapSource = mipmapSource;
 
-			final Source<?> volatileMipmapSource;
-			if (useVolatile)
-				volatileMipmapSource = mipmapSource.asVolatile(queue);
-			else
-				volatileMipmapSource = mipmapSource;
-
-			bdv = Show.mipmapSource(volatileMipmapSource, bdv, options.addTo(bdv));
+				bdv = Show.mipmapSource(volatileMipmapSource, bdv, options.addTo(bdv));
+			}
 		}
 
 
@@ -1190,9 +1218,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	}
 
 
-	public Void callSpark() throws IOException {
-//	@Override
-//	public Void call() throws IOException {
+	//public Void callSpark() throws IOException {
+	@Override
+	public Void call() throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
