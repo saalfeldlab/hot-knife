@@ -465,7 +465,7 @@ public class SparkComputeCost {
 			//sliceCopy = ArrayImgs.unsignedBytes( (byte[])imp.getProcessor().getPixels(), new long[] { imp.getWidth(), imp.getHeight() } );
 			//ImageJFunctions.show( sliceCopy );
 
-			final boolean filter = true;
+			final boolean filter = false;
 			final Interval originalInterval = new FinalInterval( new long[] { 0, 0}, new long[] { slice.dimension(0) - 1, slice.dimension(1) - 1 } );
 			final Interval interval =
 					PreFilter.filter(
