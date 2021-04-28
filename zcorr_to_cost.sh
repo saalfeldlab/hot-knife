@@ -56,7 +56,10 @@ ARGV="\
 --bandSize=50 \
 --maxSlope=0.04 \
 --slopeCorrBandFactor=5.5 \
---slopeCorrXRange=20"
+--slopeCorrXRange=10 \
+--startThresh=100 \
+--downsampleCostX"
+#--normalizeImage
 
 LOG_DIR="logs"
 LOG_FILE="${LOG_DIR}/zcorr_to_cost.${RUN_TIME}.out"
