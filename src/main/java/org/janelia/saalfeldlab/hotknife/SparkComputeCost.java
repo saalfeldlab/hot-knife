@@ -135,6 +135,12 @@ public class SparkComputeCost {
 		@Option(name = "--kernelSize", required = false, usage = "Kernel size used for computing gradient used in cost stats calculation")
     	private int kernelSize = 5;// for valsCount
 
+		@Option(name = "--normalizeImage", required = false, usage = "uses contrast normalization and median before cost computation")
+		private boolean normalizeImage = false;
+
+		@Option(name = "--downsampleCostX", required = false, usage = "properly downsamples cost according to the cost step size (e.g. 6)")
+		private boolean downsampleCostX = false;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -245,6 +251,9 @@ public class SparkComputeCost {
 		// 	executorService.shutdown();
 		// });
 
+		final boolean filter = options.normalizeImage;
+		final boolean gauss = options.downsampleCostX;
+
 		rddSlices.foreachPartition( gridCoordPartition -> {
 			//gridCoords.forEach(gridCoord -> {
 
@@ -256,7 +265,7 @@ public class SparkComputeCost {
 
 				try {
 				    processColumn(
-						  n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, axisMode, gridCoord, executorService,
+						  n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, axisMode, gridCoord, executorService,
 						  options.bandSize, options.minGradient, options.slopeCorrXRange, options.slopeCorrBandFactor, options.maxSlope,
 						  options.minSlope, options.startThresh, options.kernelSize);
 				} catch (Exception e) {
@@ -301,6 +310,8 @@ public class SparkComputeCost {
 			String costN5Path,
 			String zcorrDataset,
 			String costDataset,
+			final boolean filter,
+			final boolean gauss,
 			int[] costBlockSize,
 			int[] zcorrBlockSize,
 			long[] zcorrSize,
@@ -320,12 +331,12 @@ public class SparkComputeCost {
 
 		RandomAccessibleInterval<UnsignedByteType> cost;
 		if (axisMode.equals("2")) {// This is the original mode
-			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 		} else if (axisMode.equals("0")) {// Compute along axis 0
-			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+			cost = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 		} else if (axisMode.equals("02")) {// Compute along both 0 and 2 then combine
-			RandomAccessibleInterval<UnsignedByteType> cost2 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-			RandomAccessibleInterval<UnsignedByteType> cost0 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+			RandomAccessibleInterval<UnsignedByteType> cost2 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
+			RandomAccessibleInterval<UnsignedByteType> cost0 = processColumnAlongAxis(n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
 			cost = mergeCosts(cost0, cost2);
 		} else {
 			throw new IllegalArgumentException("axisMode unknown: " + axisMode);
@@ -378,6 +389,8 @@ public class SparkComputeCost {
 			String costN5Path,
 			String zcorrDataset,
 			String costDataset,
+			final boolean filter,
+			final boolean gauss,
 			int[] costBlockSize,
 			int[] zcorrBlockSize,
 			long[] zcorrSize,
@@ -466,7 +479,6 @@ public class SparkComputeCost {
 			//sliceCopy = ArrayImgs.unsignedBytes( (byte[])imp.getProcessor().getPixels(), new long[] { imp.getWidth(), imp.getHeight() } );
 			//ImageJFunctions.show( sliceCopy );
 
-			final boolean filter = true;
 			final Interval originalInterval = new FinalInterval( new long[] { 0, 0}, new long[] { slice.dimension(0) - 1, slice.dimension(1) - 1 } );
 			final Interval interval =
 					PreFilter.filter(
@@ -482,9 +494,12 @@ public class SparkComputeCost {
 				// run on the cut out area where there are actual images (influences cost function!)
 				RandomAccessibleInterval<FloatType> costSliceFullResRaw = costFn.computeResin( Views.interval( sliceCopy, interval ), executorService);
 
-				double s = costSteps[0];
-				System.out.println( Math.sqrt( s*s - 0.5*0.5 ) );
-				Gauss3.gauss( new double[] { Math.sqrt( s*s - 0.5*0.5 ), 0 }, Views.extendBorder( costSliceFullResRaw ), costSliceFullResRaw );
+				if ( gauss )
+				{
+					double s = costSteps[0];
+					System.out.println( Math.sqrt( s*s - 0.5*0.5 ) );
+					Gauss3.gauss( new double[] { Math.sqrt( s*s - 0.5*0.5 ), 0 }, Views.extendBorder( costSliceFullResRaw ), costSliceFullResRaw );
+				}
 
 				costSliceFullResRaw = Views.interval( Views.extendZero( Views.translate( costSliceFullResRaw, interval.min( 0 ), interval.min( 1 ) ) ), originalInterval );
 
