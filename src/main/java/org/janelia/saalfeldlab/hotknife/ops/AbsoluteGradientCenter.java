@@ -38,6 +38,7 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 
 /**
@@ -51,14 +52,14 @@ public class AbsoluteGradientCenter<T extends RealType<T> & NativeType<T>> imple
 	final private ArrayList<RandomAccessible<T>> sourcesB;
 
 	final private int n;
-	final double[] norm;
+	//final double[] norm;
 
-	public AbsoluteGradientCenter(final RandomAccessible<T> source, final double[] sigma)
+	public AbsoluteGradientCenter(final RandomAccessible<T> source/*, final double[] sigma*/)
 	{
 		this.n = source.numDimensions();
 		this.sourcesA = new ArrayList<>( n );
 		this.sourcesB = new ArrayList<>( n );
-		this.norm = new double[ n ];
+		//this.norm = new double[ n ];
 
 		for ( int axis = 0; axis < n; ++axis )
 		{
@@ -66,7 +67,7 @@ public class AbsoluteGradientCenter<T extends RealType<T> & NativeType<T>> imple
 			offset[axis] = -1;
 			sourcesA.add( Views.offset(source, offset) );
 			sourcesB.add( Views.translate(source, offset) );
-			this.norm[ axis ] = 2.0 / sigma[ axis ];
+			//this.norm[ axis ] = 2.0 / sigma[ axis ];
 		}
 	}
 
@@ -92,7 +93,7 @@ public class AbsoluteGradientCenter<T extends RealType<T> & NativeType<T>> imple
 
 			for ( int d = 0; d < n; ++d )
 			{
-				final double gradient = (bs.get( d ).next().getRealDouble() - as.get( d ).next().getRealDouble()) * norm[ d ];
+				final double gradient = (bs.get( d ).next().getRealDouble() - as.get( d ).next().getRealDouble()) / 2.0 /* * norm[ d ]*/;
 				sumSquare += gradient * gradient;
 			}
 

@@ -58,7 +58,9 @@ import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.ARGBType;
@@ -220,14 +222,19 @@ public class PaintHeightField implements Callable<Void>{
 		/* gradients */
 		final AbsoluteGradientCenter<FloatType> gradientOp =
 				new AbsoluteGradientCenter<>(
-						Views.extendBorder( heightField ),
-						new double[] { 0.5, 0.5 });
+						Views.extendBorder( heightField ) /*,
+						new double[] { 0.5, 0.5 }*/);
 		final RandomAccessibleInterval<FloatType> gradient = Lazy.process(heightField, blockSize, new FloatType(), AccessFlags.setOf(), gradientOp);
 		final Cache< ?, ? > gradientCache = ((CachedCellImg< ?, ? >)gradient).getCache();
 
 		System.out.println("Copying gradients ... ");
 		final ArrayImg<FloatType, ?> gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
 		Util.copy(gradient, gradientCopy);
+
+		//new ImageJ();
+		//ImageJFunctions.show( heightField );
+		//ImageJFunctions.show( gradientCopy );
+		//SimpleMultiThreading.threadHaltUnClean(); 
 
 		final RealRandomAccessible< FloatType > gradientFull =
 				RealViews.affineReal(
@@ -250,14 +257,15 @@ public class PaintHeightField implements Callable<Void>{
 				new long[] { rawMipmaps[ 0 ].max( 0 ), rawMipmaps[ 0 ].max( 1 ) } );
 
 		bdv = BdvFunctions.show( gradientFull, gradientFullInterval, "current gradient", options.addTo( bdv ) );
-		bdv.setDisplayRange(0, 25);
 		bdv.setDisplayRangeBounds( 0, 500 );
+		bdv.setDisplayRange(0, 25);
 		bdv.setColor( new ARGBType( ARGBType.rgba( 0, 255, 0, 0 ) ) );
 
 		bdv = BdvFunctions.show( gradientCopyFull, gradientFullInterval, "input gradient", options.addTo( bdv ) );
-		bdv.setDisplayRange(0, 25);
 		bdv.setDisplayRangeBounds( 0, 500 );
+		bdv.setDisplayRange(0, 25);
 		bdv.setColor( new ARGBType( ARGBType.rgba( 255, 0, 0, 0 ) ) );
+		bdv.setActive( false );
 
 		final BdvStackSource< ? > bdvGradient = bdv;
 
