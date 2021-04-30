@@ -47,6 +47,7 @@ import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.Source;
 import mpicbg.spim.data.sequence.VoxelDimensions;
+import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.Volatile;
@@ -490,7 +491,13 @@ public class Show {
 		final Translation3D offset3D = new Translation3D(0, 0, -offset);
 
 		for (int s = 0; s < numScales; ++s) {
-			mipmaps[s] = VolatileViews.wrapAsVolatile(rawMipmaps[s], queue);
+			final int n = rawMipmaps[ s ].numDimensions();
+			final Interval interval = Intervals.expand( new FinalInterval( rawMipmaps[ s ] ), rawMipmaps[ s ].dimension( n - 1), n - 1 );
+
+			System.out.println( "expanding interval for scale " + s + ": " + Util.printInterval( rawMipmaps[ s ] ) + ">>>" + Util.printInterval( interval ) );
+
+			mipmaps[s] = VolatileViews.wrapAsVolatile( rawMipmaps[s], queue);
+			mipmaps[s] = Views.interval( Views.extendZero( mipmaps[ s ] ), interval );
 		}
 
 		final RandomAccessibleIntervalMipmapSource<V> mipmapSource = new RandomAccessibleIntervalMipmapSource<>(
