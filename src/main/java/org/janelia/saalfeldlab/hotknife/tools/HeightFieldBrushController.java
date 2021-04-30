@@ -23,17 +23,20 @@ import net.imglib2.view.Views;
 public class HeightFieldBrushController extends AbstractHeightFieldBrushController {
 
 	protected final Cache< ?, ? > gradientCache;
+	double heightFieldMagnitude;
 
 	public HeightFieldBrushController(
 			final ViewerPanel viewer,
 			final RandomAccessibleInterval<FloatType> heightField,
 			final ScaleAndTranslation heightFieldTransform,
 			final Cache< ?, ? > gradientCache,
+			final double heightFieldMagnitude,
 			final InputTriggerConfig config) {
 
 		super(viewer, heightField, heightFieldTransform, config, new CircleOverlay(viewer, new int[] {5}, new Color[] {Color.WHITE}));
 
 		this.gradientCache = gradientCache;
+		this.heightFieldMagnitude = heightFieldMagnitude;
 
 		new Push( "push", "SPACE button1" ).register();
 		new Pull( "erase", "SPACE button2", "SPACE button3" ).register();
@@ -68,7 +71,7 @@ public class HeightFieldBrushController extends AbstractHeightFieldBrushControll
 
 			while (maskCursor.hasNext()) {
 				final FloatType v = heightFieldCursor.next();
-				v.setReal(maskCursor.next().getRealDouble() * getValue() + v.getRealDouble());
+				v.setReal(maskCursor.next().getRealDouble() * getValue() * heightFieldMagnitude + v.getRealDouble());
 			}
 
 			if ( gradientCache != null )

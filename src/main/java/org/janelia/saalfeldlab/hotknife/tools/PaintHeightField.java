@@ -53,6 +53,7 @@ import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.array.ArrayImg;
@@ -104,7 +105,7 @@ public class PaintHeightField implements Callable<Void>{
 	private int offset = 0;
 
 	@Option(names = {"--heightFieldMagnitude"}, required = false, description = "allows to adjust the magnitude (multiplicative factor) of heightfield change when moving it (default: 1.0)")
-	private double heightFieldMagnitude = 0;
+	private double heightFieldMagnitude = 1.0;
 
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
 
@@ -192,6 +193,10 @@ public class PaintHeightField implements Callable<Void>{
 		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
 		Util.copy(heightFieldSource, heightField);
 		System.out.println("done.");
+
+		//System.out.print("Smoothing heightfield.");
+		//Gauss3.gauss( 0.75, Views.extendBorder( heightField ), heightField );
+		//System.out.println("done.");
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
@@ -281,6 +286,7 @@ public class PaintHeightField implements Callable<Void>{
 								downsamplingFactors[0],
 								downsamplingFactors[1]}),
 				gradientCache,
+				heightFieldMagnitude,
 				config);
 
 		final HeightFieldSmoothController smoothController = new HeightFieldSmoothController(
