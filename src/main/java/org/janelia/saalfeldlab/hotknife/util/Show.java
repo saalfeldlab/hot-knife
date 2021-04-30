@@ -488,7 +488,7 @@ public class Show {
 
 		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<V>[] mipmaps = new RandomAccessibleInterval[numScales];
-		final Translation3D offset3D = new Translation3D(0, 0, -offset);
+		//final Translation3D offset3D = new Translation3D(0, 0, -offset);
 
 		for (int s = 0; s < numScales; ++s) {
 			final int n = rawMipmaps[ s ].numDimensions();
@@ -500,6 +500,7 @@ public class Show {
 			mipmaps[s] = Views.interval( Views.extendZero( mipmaps[ s ] ), interval );
 		}
 
+		// TODO: in the future one can set doBoundingBoxCulling to false (https://github.com/bigdataviewer/bigdataviewer-vistools/pull/51/commits/058b1cc9c6373c52e05c121a9f0a8e3a5b8b35c5)
 		final RandomAccessibleIntervalMipmapSource<V> mipmapSource = new RandomAccessibleIntervalMipmapSource<>(
 				mipmaps,
 				Util.getTypeFromInterval(mipmaps[0]).createVariable(),
