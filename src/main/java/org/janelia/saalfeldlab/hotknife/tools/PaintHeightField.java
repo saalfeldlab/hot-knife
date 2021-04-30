@@ -101,6 +101,9 @@ public class PaintHeightField implements Callable<Void>{
 	@Option(names = {"-o", "--offset"}, required = true, description = "offset from the target surface, this will be at z=0, e.g. 3")
 	private int offset = 0;
 
+	@Option(names = {"--heightFieldMagnitude"}, required = false, description = "allows to adjust the magnitude (multiplicative factor) of heightfield change when moving it (default: 1.0)")
+	private double heightFieldMagnitude = 0;
+
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
 
 
@@ -176,7 +179,7 @@ public class PaintHeightField implements Callable<Void>{
 		final BdvOptions options =
 				BdvOptions.options()
 				.screenScales(new double[] {0.5})
-				.numRenderingThreads(8);
+				.numRenderingThreads(Runtime.getRuntime().availableProcessors());
 
 		BdvStackSource<?> bdv = null;
 
@@ -249,7 +252,7 @@ public class PaintHeightField implements Callable<Void>{
 		bdv = BdvFunctions.show( gradientFull, gradientFullInterval, "current gradient", options.addTo( bdv ) );
 		bdv.setDisplayRange(0, 25);
 		bdv.setDisplayRangeBounds( 0, 500 );
-		bdv.setColor( new ARGBType( ARGBType.rgba( 0, 0, 255, 0 ) ) );
+		bdv.setColor( new ARGBType( ARGBType.rgba( 0, 255, 0, 0 ) ) );
 
 		bdv = BdvFunctions.show( gradientCopyFull, gradientFullInterval, "input gradient", options.addTo( bdv ) );
 		bdv.setDisplayRange(0, 25);
