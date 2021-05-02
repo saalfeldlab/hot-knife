@@ -123,6 +123,35 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 	private boolean useVisualization = false;
 
+	public SparkSurfaceFit() {
+	}
+
+	public SparkSurfaceFit(final String n5Path,
+						   final String n5FieldPath,
+						   final String inGroup,
+						   final String rawGroup,
+						   final String outGroup,
+						   final int firstScaleIndex,
+						   final int lastScaleIndex,
+						   final double maxDeltaZ,
+						   final double initMaxDeltaZ,
+						   final double minDistance,
+						   final double maxDistance,
+						   final boolean useVisualization) {
+		this.n5Path = n5Path;
+		this.n5FieldPath = n5FieldPath;
+		this.inGroup = inGroup;
+		this.rawGroup = rawGroup;
+		this.outGroup = outGroup;
+		this.firstScaleIndex = firstScaleIndex;
+		this.lastScaleIndex = lastScaleIndex;
+		this.maxDeltaZ = maxDeltaZ;
+		this.initMaxDeltaZ = initMaxDeltaZ;
+		this.minDistance = minDistance;
+		this.maxDistance = maxDistance;
+		this.useVisualization = useVisualization;
+	}
+
 	/**
 	 * Mask (0) all voxel z-columns with all equal cost.
 	 *
@@ -416,12 +445,6 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param <T>
 	 * @param cost at target resolution
 	 * @param mask serves as both mask and target interval in x,y (don't forget the offsets)
-	 * @param minField in scaled and shifted z-coordinates according to scale
-	 * @param maxField in scaled and shifted z-coordinates according to scale
-	 * @param minAvg weighted average of minField
-	 * @param maxAvg weighted average of maxField
-	 * @param scale scale factors transforming minFIeld and maxField to cost
-	 * @param padding range of the cost function around the prior min face
 	 *
 	 * @return
 	 */
@@ -712,11 +735,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param costDataset
 	 * @param heightFieldGroup input height field group
 	 * @param heightFieldGroupOutput output height field group
-	 * @param blockMinOut 2D min coordinates of the out put block
 	 * @param blockSizeOut 2D size of the output block
 	 * @param blockPadding 2D padding of the output block for processing
-	 * @param padding padding in z around the previous surface
-	 * @param maxStepSize maximum z step size for surface update in output space
 	 *
 	 * @throws IOException if something goes wrong with the n5 containers
 	 */
@@ -1222,11 +1242,21 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Override
 	public Void call() throws IOException {
 
-		final N5Reader n5 = new N5FSReader(n5Path);
-
 		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
+
+		callWithSparkContext(sc);
+
+		sc.close();
+
+		return null;
+	}
+
+	public void callWithSparkContext(final JavaSparkContext sc)
+			throws IOException {
+
+		final N5Reader n5 = new N5FSReader(n5Path);
 
 		/* initialize */
 		double minAvg;
@@ -1308,12 +1338,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 					maxDeltaZ,
 					2);
 		}
-
-		sc.close();
-
-		return null;
 	}
-
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 

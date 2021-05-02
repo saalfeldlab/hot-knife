@@ -16,6 +16,8 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import ij.process.ByteProcessor;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -42,7 +44,6 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.process.ByteProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
@@ -140,6 +141,27 @@ public class SparkComputeCost {
 
 		@Option(name = "--downsampleCostX", required = false, usage = "properly downsamples cost according to the cost step size (e.g. 6)")
 		private boolean downsampleCostX = false;
+
+		@Option(name = "--surfaceN5Output", usage = "N5 output group for surface heighfields, e.g. /heightfields/Sec39/v1_acquire_trimmed_sp1, omit to skip surface fit")
+		private String surfaceN5Output = null;
+
+		@Option(name = "--surfaceFirstScale", usage = "initial scale index, e.g. 8")
+		private int surfaceFirstScale = 8;
+
+		@Option(name = "--surfaceLastScale", usage = "terminal scale index, e.g. 1")
+		private int surfaceLastScale = 1;
+
+		@Option(name = "--surfaceMaxDeltaZ", usage = "maximum slope of the surface in original pixels, e.g. 0.25")
+		private double surfaceMaxDeltaZ = 0.25;
+
+		@Option(name = "--surfaceInitMaxDeltaZ", usage = "maximum slope of the surface in original pixels in the first scale level (initialization), e.g. 0.3")
+		private double surfaceInitMaxDeltaZ = .3;
+
+		@Option(name = "--surfaceMinDistance", usage = "minimum distance between the both surfaces, e.g. 2000")
+		private double surfaceMinDistance = 2000;
+
+		@Option(name = "--surfaceMaxDistance", usage = "maximum distance between the both surfaces, e.g. 4000")
+		private double surfaceMaxDistance = 4000;
 
 		public Options(final String[] args) {
 
@@ -290,6 +312,21 @@ public class SparkComputeCost {
 			);
 		}
 
+		if (options.surfaceN5Output != null) {
+			SparkSurfaceFit sparkSurfaceFit = new SparkSurfaceFit(options.outputN5Path,
+																  options.outputN5Path,
+																  options.costDatasetName,
+																  options.inputDatasetName,
+																  options.surfaceN5Output,
+																  options.surfaceFirstScale,
+																  options.surfaceLastScale,
+																  options.surfaceMaxDeltaZ,
+																  options.surfaceInitMaxDeltaZ,
+																  options.surfaceMinDistance,
+																  options.surfaceMaxDistance,
+																  false);
+			sparkSurfaceFit.callWithSparkContext(sparkContext);
+		}
 	}
 
 	// serializable downsample supplier for spark
