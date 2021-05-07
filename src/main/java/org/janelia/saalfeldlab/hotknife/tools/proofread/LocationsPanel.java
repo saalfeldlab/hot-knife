@@ -71,6 +71,8 @@ public class LocationsPanel
             t.set( t.get( 0, 3 ) - cX, 0, 3 );
             t.set( t.get( 1, 3 ) - cY, 1, 3 );
             tableModel.add(new LocationOfInterest(t));
+            locationTable.editCellAt(tableModel.getRowCount() - 1, 0);
+            locationTable.getEditorComponent().requestFocus();
         });
 
         final JButton loadButton = new JButton("Load");
