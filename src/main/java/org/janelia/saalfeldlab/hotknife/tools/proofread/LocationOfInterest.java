@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import net.imglib2.RealPoint;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -22,36 +23,37 @@ import net.imglib2.realtransform.AffineTransform3D;
  */
 public class LocationOfInterest {
 
-    private final String coordinatesString;
+	public static AtomicInteger id = new AtomicInteger( 1 );
+    private final String transformString;
     private final double[] transform;
     private String notes;
 
     @SuppressWarnings("unused")
     private LocationOfInterest() {
-        this(null, 0, 0);
+        this(null);
     }
 
-    public LocationOfInterest(final AffineTransform3D affineTransform3D,
-                              final int x,
-                              final int y) {
+    public LocationOfInterest(final AffineTransform3D affineTransform3D ) {
 
         if (affineTransform3D != null) {
 
+        	/*
             final RealPoint gPos = new RealPoint(3);
             final RealPoint lPos = new RealPoint(3);
             lPos.setPosition(x, 0);
             lPos.setPosition(y, 1);
-            affineTransform3D.applyInverse(gPos, lPos);
+            affineTransform3D.applyInverse(gPos, lPos);*/
 
-            this.coordinatesString = String.format("(%6.0f,%6.0f,%6.0f)",
+            this.transformString = "issue " + id.getAndIncrement();
+            										/* String.format("(%6.0f,%6.0f,%6.0f)",
                                                    gPos.getDoublePosition(0),
                                                    gPos.getDoublePosition(1),
-                                                   gPos.getDoublePosition(2));
+                                                   gPos.getDoublePosition(2));*/
 
             this.transform = affineTransform3D.getRowPackedCopy();
 
         } else {
-            this.coordinatesString = null;
+            this.transformString = null;
             this.transform = null;
         }
         
@@ -84,7 +86,7 @@ public class LocationOfInterest {
 
     @Override
     public String toString() {
-        return coordinatesString;
+        return transformString;
     }
 
     public static void saveListToFile(final List<LocationOfInterest> list,
