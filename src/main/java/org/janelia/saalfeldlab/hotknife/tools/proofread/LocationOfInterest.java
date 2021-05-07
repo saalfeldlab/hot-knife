@@ -24,9 +24,11 @@ import net.imglib2.realtransform.AffineTransform3D;
 public class LocationOfInterest {
 
 	public static AtomicInteger id = new AtomicInteger( 1 );
-    private final String transformString;
+    private String transformString;
     private final double[] transform;
-    private String notes;
+
+    @SuppressWarnings({"FieldCanBeLocal", "unused"})
+    private final String coordinateString;
 
     @SuppressWarnings("unused")
     private LocationOfInterest() {
@@ -37,27 +39,23 @@ public class LocationOfInterest {
 
         if (affineTransform3D != null) {
 
-        	/*
+            this.transformString = "issue " + id.getAndIncrement();
+
             final RealPoint gPos = new RealPoint(3);
             final RealPoint lPos = new RealPoint(3);
-            lPos.setPosition(x, 0);
-            lPos.setPosition(y, 1);
-            affineTransform3D.applyInverse(gPos, lPos);*/
-
-            this.transformString = "issue " + id.getAndIncrement();
-            										/* String.format("(%6.0f,%6.0f,%6.0f)",
-                                                   gPos.getDoublePosition(0),
-                                                   gPos.getDoublePosition(1),
-                                                   gPos.getDoublePosition(2));*/
+            affineTransform3D.applyInverse(gPos, lPos);
+            this.coordinateString = String.format("(%6.0f,%6.0f,%6.0f)",
+                                                  gPos.getDoublePosition(0),
+                                                  gPos.getDoublePosition(1),
+                                                  gPos.getDoublePosition(2));
 
             this.transform = affineTransform3D.getRowPackedCopy();
 
         } else {
             this.transformString = null;
             this.transform = null;
+            this.coordinateString = null;
         }
-        
-        this.notes = null;
     }
 
     public AffineTransform3D getTransform()
@@ -76,12 +74,8 @@ public class LocationOfInterest {
         return value;
     }
 
-    public String getNotes() {
-        return notes;
-    }
-
-    public void setNotes(final String notes) {
-        this.notes = notes;
+    public void setTransformString(final String transformString) {
+        this.transformString = transformString;
     }
 
     @Override
