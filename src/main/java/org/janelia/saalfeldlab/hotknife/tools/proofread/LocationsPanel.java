@@ -15,10 +15,10 @@ import javax.swing.AbstractCellEditor;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextArea;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -46,9 +46,9 @@ public class LocationsPanel
 
         final JTable locationTable = new JTable(tableModel);
 
-        final TableColumn nameColumn = locationTable.getColumn(NAME_COLUMN_HEADER);
-        nameColumn.setCellRenderer(new CoordinatesCellRenderer());
-        nameColumn.setPreferredWidth(180);
+        final TableColumn descriptionColumn = locationTable.getColumn(DESCRIPTION_COLUMN_HEADER);
+        descriptionColumn.setCellEditor(new DescriptionCellEditor(locationTable, tableModel));
+        descriptionColumn.setPreferredWidth(180);
 
         final GoButton goButton = new GoButton(locationTable, tableModel, viewer);
         final RemoveButton removeButton = new RemoveButton(locationTable, tableModel);
@@ -138,7 +138,7 @@ public class LocationsPanel
 
         @Override
         public String getColumnName(int column) {
-            return column == 0 ? NAME_COLUMN_HEADER : ACTIONS_COLUMN_HEADER;
+            return column == 0 ? DESCRIPTION_COLUMN_HEADER : ACTIONS_COLUMN_HEADER;
         }
 
         @Override
@@ -153,7 +153,7 @@ public class LocationsPanel
 
         @Override
         public boolean isCellEditable(int rowIndex, int columnIndex) {
-            return columnIndex == 1;
+            return true;
         }
 
         public List<LocationOfInterest> getLocationList() {
@@ -180,6 +180,14 @@ public class LocationsPanel
             }
             this.locationList.addAll(locations);
             this.fireTableDataChanged();
+        }
+
+        public void setDescription(final String description,
+                                   final int rowIndex) {
+            if ((rowIndex >= 0) && (rowIndex < locationList.size())) {
+                locationList.get(rowIndex).setTransformString(description);
+                this.fireTableDataChanged();
+            }
         }
 
         public void removeRow(int rowIndex) {
@@ -253,19 +261,6 @@ public class LocationsPanel
         }
     }
 
-    private static class CoordinatesCellRenderer
-            extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(final JTable table,
-                                                       final Object value,
-                                                       final boolean isSelected,
-                                                       final boolean hasFocus,
-                                                       final int row,
-                                                       final int column) {
-            return new JLabel("<html><pre>" + value + "</pre></html>");
-        }
-    }
-
     private static class LocationActionsCellRenderer
             extends DefaultTableCellRenderer {
 
@@ -283,6 +278,42 @@ public class LocationsPanel
                                                        final int row,
                                                        final int column) {
             return panel;
+        }
+    }
+
+    private static class DescriptionCellEditor extends AbstractCellEditor
+            implements TableCellEditor {
+
+        private final JTable table;
+        private final LocationTableModel tableModel;
+        private final JTextArea descriptionTextArea;
+
+        public DescriptionCellEditor(final JTable table,
+                                     final LocationTableModel tableModel) {
+            this.table = table;
+            this.tableModel = tableModel;
+            this.descriptionTextArea = new JTextArea();
+        }
+
+        @Override
+        public Component getTableCellEditorComponent(final JTable table,
+                                                     final Object value,
+                                                     final boolean isSelected,
+                                                     final int row,
+                                                     final int column) {
+            descriptionTextArea.setText(value.toString());
+            return descriptionTextArea;
+        }
+
+        @Override
+        public String getCellEditorValue() {
+            return descriptionTextArea.getText().replaceAll("\\n", " ").trim();
+        }
+
+        @Override
+        public boolean stopCellEditing() {
+            tableModel.setDescription(getCellEditorValue(), table.getSelectedRow());
+            return super.stopCellEditing();
         }
     }
 
@@ -310,7 +341,7 @@ public class LocationsPanel
         }
     }
 
-    private static final String NAME_COLUMN_HEADER = "Name";
+    private static final String DESCRIPTION_COLUMN_HEADER = "Description";
     private static final String ACTIONS_COLUMN_HEADER = "Actions";
 
 }

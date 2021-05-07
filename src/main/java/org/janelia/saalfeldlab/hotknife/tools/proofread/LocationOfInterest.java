@@ -24,7 +24,7 @@ import net.imglib2.realtransform.AffineTransform3D;
 public class LocationOfInterest {
 
 	public static AtomicInteger id = new AtomicInteger( 1 );
-    private final String transformString;
+    private String transformString;
     private final double[] transform;
 
     @SuppressWarnings({"FieldCanBeLocal", "unused"})
@@ -72,6 +72,10 @@ public class LocationOfInterest {
                                                " values but should have 12");
         }
         return value;
+    }
+
+    public void setTransformString(final String transformString) {
+        this.transformString = transformString;
     }
 
     @Override
