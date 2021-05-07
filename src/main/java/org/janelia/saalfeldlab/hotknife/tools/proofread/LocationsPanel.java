@@ -70,7 +70,7 @@ public class LocationsPanel
             final double cY = viewer.getDisplay().getHeight() / 2.0;
             t.set( t.get( 0, 3 ) - cX, 0, 3 );
             t.set( t.get( 1, 3 ) - cY, 1, 3 );
-            tableModel.add(new LocationOfInterest(t, 0, 0));
+            tableModel.add(new LocationOfInterest(t));
         });
 
         final JButton loadButton = new JButton("Load");
@@ -210,11 +210,11 @@ public class LocationsPanel
                     viewer.state().getViewerTransform(viewerCenter);
                     final double cX = viewer.getDisplay().getWidth() / 2.0;
                     final double cY = viewer.getDisplay().getHeight() / 2.0;
-                    viewerCenter.set(viewerCenter.get(0, 3) - cX, 0, 3);
-                    viewerCenter.set(viewerCenter.get(1, 3) - cY, 1, 3);
+                    viewerCenter.set(viewerCenter.get(0, 3) + cX, 0, 3);
+                    viewerCenter.set(viewerCenter.get(1, 3) + cY, 1, 3);
                     viewer.setTransformAnimator(
                             new SimilarityTransformAnimator(viewerCenter, locationTransform, cX, cY, 300));
-                    viewer.toggleInterpolation();
+                    //viewer.toggleInterpolation();
                 }
                 table.getCellEditor().stopCellEditing();
             });
