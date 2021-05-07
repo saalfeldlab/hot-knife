@@ -451,8 +451,8 @@ public class HeightFieldKeyActions {
 			final double scale = computeScale(viewerTransform);
 
 			g.setFont(new Font("Monospaced", Font.PLAIN, 12));
-			g
-					.drawString(
+			g.setColor( Color.red );
+			g.drawString(
 							"s= " + format.format(scale) + " x",
 							(int)g.getClipBounds().getWidth() - 100,
 							(int)g.getClipBounds().getHeight() - 24);
