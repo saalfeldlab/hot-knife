@@ -190,6 +190,7 @@ public class PaintHeightField implements Callable<Void>{
 		final RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(n5Field, fieldGroup);
 		final ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
 
+		// TODO: multi-threaded copy
 		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
 		Util.copy(heightFieldSource, heightField);
 		System.out.println("done.");
