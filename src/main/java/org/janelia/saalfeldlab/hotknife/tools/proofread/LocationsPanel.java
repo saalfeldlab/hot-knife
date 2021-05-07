@@ -25,6 +25,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableColumn;
 
+import org.apache.commons.io.FileUtils;
+
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.animate.SimilarityTransformAnimator;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -39,7 +41,10 @@ public class LocationsPanel
 
     public static final String KEY = "LocationPanel";
 
-    public LocationsPanel(final ViewerPanel viewer) {
+    private File defaultLocationsFile;
+
+    public LocationsPanel(final ViewerPanel viewer,
+                          final String locationsFilePath) {
         super(new BorderLayout());
 
         final LocationTableModel tableModel = new LocationTableModel();
@@ -75,38 +80,60 @@ public class LocationsPanel
             locationTable.getEditorComponent().requestFocus();
         });
 
+        this.defaultLocationsFile = new File(locationsFilePath == null ? "." : locationsFilePath).getAbsoluteFile();
+
         final JButton loadButton = new JButton("Load");
         loadButton.addActionListener(e -> {
-            final JFileChooser fileChooser = new JFileChooser();
-            fileChooser.showDialog(null, "Load File");
 
-            final File selectedFile = fileChooser.getSelectedFile();
+            final JFileChooser fileChooser = new JFileChooser(this.defaultLocationsFile.getParentFile());
+            fileChooser.setSelectedFile(this.defaultLocationsFile);
 
-            if (selectedFile != null) {
-                try {
-                    tableModel.addAll(LocationOfInterest.loadListFromFile(selectedFile.getAbsolutePath()),
-                                      true);
-                } catch (IOException ioe) {
-                    throw new IllegalArgumentException("failed to save " + selectedFile.getAbsolutePath(), ioe);
+            final int choice = fileChooser.showDialog(null, "Load File");
+            if (choice == JFileChooser.APPROVE_OPTION) {
+
+                final File selectedFile = fileChooser.getSelectedFile();
+
+                if (selectedFile != null) {
+                    this.defaultLocationsFile = selectedFile;
+                    try {
+                        tableModel.addAll(LocationOfInterest.loadListFromFile(selectedFile.getAbsolutePath()),
+                                          true);
+                    } catch (IOException ioe) {
+                        throw new IllegalArgumentException("failed to save " + selectedFile.getAbsolutePath(), ioe);
+                    }
+
                 }
-
             }
         });
 
         final JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
-            final JFileChooser fileChooser = new JFileChooser();
-            fileChooser.showDialog(null, "Save File");
 
-            final File selectedFile = fileChooser.getSelectedFile();
-
-            if (selectedFile != null) {
+            final File outputDirectory = this.defaultLocationsFile.getParentFile();
+            if (! outputDirectory.exists()) {
                 try {
-                    LocationOfInterest.saveListToFile(tableModel.getLocationList(), selectedFile.getAbsolutePath());
+                    FileUtils.forceMkdir(outputDirectory);
                 } catch (IOException ioe) {
-                    throw new IllegalArgumentException("failed to save " + selectedFile.getAbsolutePath(), ioe);
+                    throw new IllegalArgumentException("failed to create " + outputDirectory, ioe);
                 }
+            }
 
+            final JFileChooser fileChooser = new JFileChooser(outputDirectory);
+            fileChooser.setSelectedFile(this.defaultLocationsFile);
+
+            final int choice = fileChooser.showDialog(null, "Save File");
+
+            if (choice == JFileChooser.APPROVE_OPTION) {
+                final File selectedFile = fileChooser.getSelectedFile();
+
+                if (selectedFile != null) {
+                    this.defaultLocationsFile = selectedFile;
+                    try {
+                        LocationOfInterest.saveListToFile(tableModel.getLocationList(), selectedFile.getAbsolutePath());
+                    } catch (IOException ioe) {
+                        throw new IllegalArgumentException("failed to save " + selectedFile.getAbsolutePath(), ioe);
+                    }
+                }
             }
         });
 
