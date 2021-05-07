@@ -1,4 +1,4 @@
-/**
+/*
  * License: GPL
  *
  * This program is free software; you can redistribute it and/or
@@ -16,6 +16,9 @@
  */
 package org.janelia.saalfeldlab.hotknife.tools;
 
+import ij.ImageJ;
+
+import java.awt.Insets;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -26,8 +29,11 @@ import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
+import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+
 import org.janelia.saalfeldlab.hotknife.HeightFieldTransform;
 import org.janelia.saalfeldlab.hotknife.ops.AbsoluteGradientCenter;
+import org.janelia.saalfeldlab.hotknife.tools.proofread.LocationsPanel;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
@@ -41,27 +47,24 @@ import org.scijava.ui.behaviour.io.InputTriggerDescription;
 import org.scijava.ui.behaviour.io.yaml.YamlConfigIO;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 
+import bdv.ui.BdvDefaultCards;
+import bdv.ui.CardPanel;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Interpolation;
 import bdv.viewer.SynchronizedViewerState;
-import ij.ImageJ;
-import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
-import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.basictypeaccess.AccessFlags;
-import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.ARGBType;
@@ -340,6 +343,17 @@ public class PaintHeightField implements Callable<Void>{
 		viewerState.getViewerTransform(transform);
 		transform.set(0, 3, 4);
 		viewerState.setViewerTransform(transform);
+
+		final LocationsPanel locationsPanel = new LocationsPanel(bdv.getBdvHandle().getViewerPanel());
+		final CardPanel cardPanel = bdv.getBdvHandle().getCardPanel();
+		cardPanel.addCard(LocationsPanel.KEY,
+						  "Locations",
+						  locationsPanel,
+						  true,
+						  new Insets(0, 4, 0, 0));
+		cardPanel.setCardExpanded(BdvDefaultCards.DEFAULT_VIEWERMODES_CARD, false);
+		cardPanel.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCES_CARD, false);
+		cardPanel.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
 
 //		bdv.getBdvHandle().getViewerPanel().transformChanged(transform);
 		bdv.getBdvHandle().getViewerPanel().setCurrentViewerTransform( transform );
