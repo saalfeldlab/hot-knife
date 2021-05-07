@@ -46,9 +46,9 @@ public class LocationsPanel
 
         final JTable locationTable = new JTable(tableModel);
 
-        final TableColumn coordinatesColumn = locationTable.getColumn(COORDINATES_COLUMN_HEADER);
-        coordinatesColumn.setCellRenderer(new CoordinatesCellRenderer());
-        coordinatesColumn.setPreferredWidth(180);
+        final TableColumn nameColumn = locationTable.getColumn(NAME_COLUMN_HEADER);
+        nameColumn.setCellRenderer(new CoordinatesCellRenderer());
+        nameColumn.setPreferredWidth(180);
 
         final GoButton goButton = new GoButton(locationTable, tableModel, viewer);
         final RemoveButton removeButton = new RemoveButton(locationTable, tableModel);
@@ -138,7 +138,7 @@ public class LocationsPanel
 
         @Override
         public String getColumnName(int column) {
-            return column == 0 ? COORDINATES_COLUMN_HEADER : ACTIONS_COLUMN_HEADER;
+            return column == 0 ? NAME_COLUMN_HEADER : ACTIONS_COLUMN_HEADER;
         }
 
         @Override
@@ -183,7 +183,6 @@ public class LocationsPanel
         }
 
         public void removeRow(int rowIndex) {
-            System.out.println("remove " + rowIndex);
             if ((rowIndex >= 0) && (rowIndex < locationList.size())) {
                 locationList.remove(rowIndex);
                 this.fireTableDataChanged();
@@ -311,7 +310,7 @@ public class LocationsPanel
         }
     }
 
-    private static final String COORDINATES_COLUMN_HEADER = "Coordinates";
+    private static final String NAME_COLUMN_HEADER = "Name";
     private static final String ACTIONS_COLUMN_HEADER = "Actions";
 
 }
