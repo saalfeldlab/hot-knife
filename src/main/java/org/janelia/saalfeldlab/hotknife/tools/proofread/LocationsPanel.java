@@ -52,7 +52,7 @@ public class LocationsPanel
         final JTable locationTable = new JTable(tableModel);
 
         final TableColumn descriptionColumn = locationTable.getColumn(DESCRIPTION_COLUMN_HEADER);
-        descriptionColumn.setCellEditor(new DescriptionCellEditor(locationTable, tableModel));
+        descriptionColumn.setCellEditor(new DescriptionCellEditor(tableModel));
         descriptionColumn.setPreferredWidth(180);
 
         final GoButton goButton = new GoButton(locationTable, tableModel, viewer);
@@ -313,14 +313,13 @@ public class LocationsPanel
     private static class DescriptionCellEditor extends AbstractCellEditor
             implements TableCellEditor {
 
-        private final JTable table;
         private final LocationTableModel tableModel;
+        private int rowBeingEdited;
         private final JTextArea descriptionTextArea;
 
-        public DescriptionCellEditor(final JTable table,
-                                     final LocationTableModel tableModel) {
-            this.table = table;
+        public DescriptionCellEditor(final LocationTableModel tableModel) {
             this.tableModel = tableModel;
+            this.rowBeingEdited = -1;
             this.descriptionTextArea = new JTextArea();
         }
 
@@ -330,6 +329,7 @@ public class LocationsPanel
                                                      final boolean isSelected,
                                                      final int row,
                                                      final int column) {
+            rowBeingEdited = row;
             descriptionTextArea.setText(value.toString());
             return descriptionTextArea;
         }
@@ -341,7 +341,7 @@ public class LocationsPanel
 
         @Override
         public boolean stopCellEditing() {
-            tableModel.setDescription(getCellEditorValue(), table.getSelectedRow());
+            tableModel.setDescription(getCellEditorValue(), rowBeingEdited);
             return super.stopCellEditing();
         }
     }
