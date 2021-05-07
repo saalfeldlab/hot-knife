@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
@@ -195,7 +196,7 @@ public class PaintHeightField implements Callable<Void>{
 
 		// TODO: multi-threaded copy
 		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
-		Util.copy(heightFieldSource, heightField);
+		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
 		System.out.println("done.");
 
 		//System.out.print("Smoothing heightfield.");

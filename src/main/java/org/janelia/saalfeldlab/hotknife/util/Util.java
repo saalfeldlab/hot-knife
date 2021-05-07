@@ -81,8 +81,6 @@ public class Util {
 				@Override
 				public Void call() throws Exception
 				{
-					//copyImg( portion.getA(), portion.getB(), Views.flatIterable( Views.interval( source, target ) ), Views.flatIterable( target ) );
-
 					final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
 					final Cursor< T > cursorTarget = targetIterable.cursor();
 
@@ -142,9 +140,7 @@ public class Util {
 		if ( imageSize <= Threads.numThreads() )
 			numPortions = (int)imageSize;
 		else
-			numPortions = Math.max( Threads.numThreads(), (int)( imageSize / ( defaultChunkLength ) ) );
-
-		//System.out.println( "nPortions for copy:" + numPortions );
+			numPortions = Math.max( Threads.numThreads(), (int)( imageSize / defaultChunkLength ) );
 
 		final ArrayList<Pair<Long,Long>> portions = new ArrayList<>();
 
