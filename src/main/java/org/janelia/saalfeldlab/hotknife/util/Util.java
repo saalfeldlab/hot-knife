@@ -16,15 +16,30 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Vector;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import ij.IJ;
 import ij.process.FloatProcessor;
+import net.imglib2.Cursor;
+import net.imglib2.IterableInterval;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.type.Type;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Pair;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
+import net.preibisch.legacy.io.IOFunctions;
+import net.preibisch.mvrecon.Threads;
+import net.preibisch.mvrecon.process.fusion.ImagePortion;
 
 /**
  *
@@ -41,6 +56,58 @@ public class Util {
 
 		Views.flatIterable(Views.interval(Views.pair(source, target), target)).forEach(
 				pair -> pair.getB().set(pair.getA()));
+	}
+
+	public static final <T extends Type<T>> void copy(
+			final RandomAccessible<? extends T> source,
+			final RandomAccessibleInterval<T> target,
+			final ExecutorService service ) {
+
+		final long numPixels = Views.iterable( target ).size();
+		final ArrayList<Pair<Long,Long>> portions = divideIntoPortions( numPixels );
+
+		// maximize the probability to fetch different blocks of the N%
+		Collections.shuffle( portions );
+
+		final ArrayList< Callable< Void > > tasks = new ArrayList< Callable< Void > >();
+
+		final IterableInterval< ? extends T > sourceIterable = Views.flatIterable( Views.interval( source, target ) );
+		final IterableInterval< T > targetIterable = Views.flatIterable( target );
+
+		for ( final Pair<Long,Long> portion : portions )
+		{
+			tasks.add( new Callable< Void >()
+			{
+				@Override
+				public Void call() throws Exception
+				{
+					//copyImg( portion.getA(), portion.getB(), Views.flatIterable( Views.interval( source, target ) ), Views.flatIterable( target ) );
+
+					final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
+					final Cursor< T > cursorTarget = targetIterable.cursor();
+
+					cursorSource.jumpFwd( portion.getA() );
+					cursorTarget.jumpFwd( portion.getA() );
+
+					for ( long l = 0; l < portion.getB(); ++l )
+						cursorTarget.next().set( cursorSource.next() );
+
+					return null;
+				}
+			});
+		}
+
+		try
+		{
+			// invokeAll() returns when all tasks are complete
+			service.invokeAll( tasks );
+		}
+		catch ( final InterruptedException e )
+		{
+			IOFunctions.println( "Failed to copy: " + e );
+			e.printStackTrace();
+			return;
+		}
 	}
 
 	public static final FloatProcessor materialize(final RandomAccessibleInterval<FloatType> source) {
@@ -61,6 +128,55 @@ public class Util {
 		Arrays.setAll(
 				array,
 				i -> array[i] * scale);
+	}
+
+	public static final ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize )
+	{
+		return divideIntoPortions(imageSize, 64l*64l*64l );
+	}
+
+	public static final ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize, final long defaultChunkLength )
+	{
+		int numPortions;
+
+		if ( imageSize <= Threads.numThreads() )
+			numPortions = (int)imageSize;
+		else
+			numPortions = Math.max( Threads.numThreads(), (int)( imageSize / ( defaultChunkLength ) ) );
+
+		//System.out.println( "nPortions for copy:" + numPortions );
+
+		final ArrayList<Pair<Long,Long>> portions = new ArrayList<>();
+
+		if ( imageSize == 0 )
+			return portions;
+
+		long threadChunkSize = imageSize / numPortions;
+
+		while ( threadChunkSize == 0 )
+		{
+			--numPortions;
+			threadChunkSize = imageSize / numPortions;
+		}
+
+		long threadChunkMod = imageSize % numPortions;
+
+		for ( int portionID = 0; portionID < numPortions; ++portionID )
+		{
+			// move to the starting position of the current thread
+			final long startPosition = portionID * threadChunkSize;
+
+			// the last thread may has to run longer if the number of pixels cannot be divided by the number of threads
+			final long loopSize;
+			if ( portionID == numPortions - 1 )
+				loopSize = threadChunkSize + threadChunkMod;
+			else
+				loopSize = threadChunkSize;
+			
+			portions.add( new ValuePair<>( startPosition, loopSize ) );
+		}
+		
+		return portions;
 	}
 
 	/**
