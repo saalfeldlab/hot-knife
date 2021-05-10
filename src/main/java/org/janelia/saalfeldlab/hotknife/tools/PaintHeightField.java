@@ -60,6 +60,7 @@ import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.array.ArrayImg;
@@ -200,8 +201,12 @@ public class PaintHeightField implements Callable<Void>{
 		System.out.println("done.");
 
 		//System.out.print("Smoothing heightfield.");
-		//Gauss3.gauss( 0.75, Views.extendBorder( heightField ), heightField );
+		//Gauss3.gauss( 2, Views.extendBorder( heightField ), heightField );
 		//System.out.println("done.");
+
+		//System.out.print("adding offset to heightfield.");
+		//for ( final FloatType t : heightField )
+		//	t.set( t.get() + 4 );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
