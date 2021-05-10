@@ -18,6 +18,7 @@ package org.janelia.saalfeldlab.hotknife.tools;
 
 import ij.ImageJ;
 
+import java.awt.BorderLayout;
 import java.awt.Insets;
 import java.io.File;
 import java.io.IOException;
@@ -27,6 +28,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
 import javax.swing.JFrame;
+import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
@@ -111,6 +113,9 @@ public class PaintHeightField implements Callable<Void>{
 
 	@Option(names = {"--heightFieldMagnitude"}, required = false, description = "allows to adjust the magnitude (multiplicative factor) of heightfield change when moving it (default: 1.0)")
 	private double heightFieldMagnitude = 1.0;
+
+	@Option(names = {"--locationsFile"}, description = "full path for review locations JSON file, e.g. /nrs/flyem/render/n5/Z0720_07m_BR/review/Sec38/v3_acquire_trimmed_sp1_adaptive_ic___20210424_155438_gauss/min/locations.trautmane.json")
+	private String locationsFilePath = null;
 
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
 
@@ -350,8 +355,18 @@ public class PaintHeightField implements Callable<Void>{
 		transform.set(0, 3, 4);
 		viewerState.setViewerTransform(transform);
 
-		final LocationsPanel locationsPanel = new LocationsPanel(bdv.getBdvHandle().getViewerPanel());
 		final CardPanel cardPanel = bdv.getBdvHandle().getCardPanel();
+
+		final JPanel heightFieldMagnitudePanel = new JPanel(new BorderLayout());
+		heightFieldMagnitudePanel.add(brushController.getMagnitudeSlider(), BorderLayout.CENTER);
+		cardPanel.addCard("HeightFieldMagnitude",
+						  "Height Field Magnitude",
+						  heightFieldMagnitudePanel,
+						  false,
+						  new Insets(0, 4, 0, 0));
+
+		final LocationsPanel locationsPanel = new LocationsPanel(bdv.getBdvHandle().getViewerPanel(),
+																 locationsFilePath);
 		cardPanel.addCard(LocationsPanel.KEY,
 						  "Locations",
 						  locationsPanel,
