@@ -18,6 +18,7 @@ package org.janelia.saalfeldlab.hotknife.tools;
 
 import ij.ImageJ;
 
+import java.awt.BorderLayout;
 import java.awt.Insets;
 import java.io.File;
 import java.io.IOException;
@@ -27,6 +28,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
 import javax.swing.JFrame;
+import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
@@ -348,9 +350,18 @@ public class PaintHeightField implements Callable<Void>{
 		transform.set(0, 3, 4);
 		viewerState.setViewerTransform(transform);
 
+		final CardPanel cardPanel = bdv.getBdvHandle().getCardPanel();
+
+		final JPanel heightFieldMagnitudePanel = new JPanel(new BorderLayout());
+		heightFieldMagnitudePanel.add(brushController.getMagnitudeSlider(), BorderLayout.CENTER);
+		cardPanel.addCard("HeightFieldMagnitude",
+						  "Height Field Magnitude",
+						  heightFieldMagnitudePanel,
+						  false,
+						  new Insets(0, 4, 0, 0));
+
 		final LocationsPanel locationsPanel = new LocationsPanel(bdv.getBdvHandle().getViewerPanel(),
 																 locationsFilePath);
-		final CardPanel cardPanel = bdv.getBdvHandle().getCardPanel();
 		cardPanel.addCard(LocationsPanel.KEY,
 						  "Locations",
 						  locationsPanel,
