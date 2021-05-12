@@ -1,11 +1,14 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.util.Dictionary;
 import java.util.Hashtable;
 
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JSlider;
+import javax.swing.JTextField;
 
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 
@@ -30,7 +33,7 @@ public class HeightFieldBrushController extends AbstractHeightFieldBrushControll
 	protected final Cache< ?, ? > gradientCache;
 	double heightFieldMagnitude;
 
-	private final JSlider magnitudeSlider;
+	private final JPanel magnitudePanel;
 
 	public HeightFieldBrushController(
 			final ViewerPanel viewer,
@@ -44,7 +47,7 @@ public class HeightFieldBrushController extends AbstractHeightFieldBrushControll
 
 		this.gradientCache = gradientCache;
 		this.heightFieldMagnitude = heightFieldMagnitude;
-		this.magnitudeSlider = buildMagnitudeSlider();
+		this.magnitudePanel = buildMagnitudePanel();
 
 		new Push( "push", "SPACE button1" ).register();
 		new Pull( "erase", "SPACE button2", "SPACE button3" ).register();
@@ -52,8 +55,8 @@ public class HeightFieldBrushController extends AbstractHeightFieldBrushControll
 		new MoveBrush( "move brush", "SPACE" ).register();
 	}
 
-	public JSlider getMagnitudeSlider() {
-		return magnitudeSlider;
+	public JPanel getMagnitudePanel() {
+		return magnitudePanel;
 	}
 
 	protected abstract class AbstractPaintBehavior extends AbstractHeightFieldBrushController.AbstractPaintBehavior {
@@ -119,12 +122,13 @@ public class HeightFieldBrushController extends AbstractHeightFieldBrushControll
 		}
 	}
 
-	private JSlider buildMagnitudeSlider() {
+	private JPanel buildMagnitudePanel() {
 		final int initialValue = (int) this.heightFieldMagnitude * 10;
 		final JSlider slider = new JSlider(JSlider.HORIZONTAL, 1, 100, initialValue);
+		final JTextField textField = new JTextField(String.valueOf(this.heightFieldMagnitude), 3);
+		textField.setHorizontalAlignment(JTextField.CENTER);
 
-		//Create the label table.
-		Dictionary<Integer, JLabel> labelTable = new Hashtable<>();
+		final Dictionary<Integer, JLabel> labelTable = new Hashtable<>();
 		labelTable.put(1, new JLabel("0.1") );
 		for (int i = 1; i < 11; i++) {
 			labelTable.put((i * 10), new JLabel(String.valueOf(i)));
@@ -133,11 +137,33 @@ public class HeightFieldBrushController extends AbstractHeightFieldBrushControll
 		slider.setPaintLabels(true);
 		slider.addChangeListener(e -> {
 			if (! slider.getValueIsAdjusting()) {
-				this.heightFieldMagnitude = slider.getValue() / 10.0;
+				final double adjustedMagnitude = slider.getValue() / 10.0;
+				if (this.heightFieldMagnitude != adjustedMagnitude) {
+					this.heightFieldMagnitude = adjustedMagnitude;
+					textField.setText(String.valueOf(adjustedMagnitude));
+				}
 			}
 		});
 
-		return slider;
+		textField.addActionListener(e -> {
+			final String valueString = textField.getText();
+			final double value = Double.parseDouble(valueString);
+			if (value > slider.getMinimum()) {
+				if (this.heightFieldMagnitude != value) {
+					this.heightFieldMagnitude = value;
+					final int sliderValue = (int) value * 10;
+					if (sliderValue <= slider.getMaximum()) {
+						slider.setValue(sliderValue);
+					}
+				}
+			}
+		});
+
+		final JPanel panel = new JPanel(new BorderLayout());
+		panel.add(slider, BorderLayout.CENTER);
+		panel.add(textField, BorderLayout.EAST);
+
+		return panel;
 	}
 
 }
