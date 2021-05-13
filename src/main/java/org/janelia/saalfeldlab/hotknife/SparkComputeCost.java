@@ -16,8 +16,6 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
-import ij.process.ByteProcessor;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -44,6 +42,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import ij.process.ByteProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
@@ -202,6 +201,8 @@ public class SparkComputeCost {
 		System.out.println("Cost output: " + costN5Path + " " + costDataset );
 		System.out.println("Cost steps: " + costSteps[0] + ", " + costSteps[1] + ", " + costSteps[2] );
 		System.out.println("Axis mode: " + axisMode );
+		System.out.println("Normalize image: " + options.normalizeImage );
+		System.out.println("downsampleCostX: " + options.downsampleCostX );
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5Writer n5w = new N5FSWriter(costN5Path);
@@ -238,14 +239,16 @@ public class SparkComputeCost {
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridZSize = (int)Math.ceil(costSize[2] / (float)costBlockSize[2]);
 
-		//for (long x = 22; x < 23; x++) {
-		//	for (long z = 24; z < 25; z++) {
+		//for (long x = 35; x < 36; x++) {
+		//	for (long z = 53; z < 54; z++) {
 		for (long x = 0; x < gridXSize; x++) {
 			for (long z = 0; z < gridZSize; z++) {
+				//if ( x == 0 ) System.out.println( "z: " + z + ": " + getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
 				gridCoords.add(new Long[]{x, z});
 			}
+			//System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
 		}
-
+		//System.exit( 0 );
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
 
 		// Grids are w.r.t cost blocks
