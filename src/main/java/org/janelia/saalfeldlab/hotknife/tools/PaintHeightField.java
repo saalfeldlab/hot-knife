@@ -365,7 +365,7 @@ public class PaintHeightField implements Callable<Void>{
 		final CardPanel cardPanel = bdv.getBdvHandle().getCardPanel();
 
 		final JPanel heightFieldMagnitudePanel = new JPanel(new BorderLayout());
-		heightFieldMagnitudePanel.add(brushController.getMagnitudeSlider(), BorderLayout.CENTER);
+		heightFieldMagnitudePanel.add(brushController.getMagnitudePanel(), BorderLayout.CENTER);
 		cardPanel.addCard("HeightFieldMagnitude",
 						  "Height Field Magnitude",
 						  heightFieldMagnitudePanel,
