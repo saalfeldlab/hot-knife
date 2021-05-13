@@ -17,6 +17,7 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
 import ij.ImageJ;
+import ij.ImagePlus;
 
 import java.awt.BorderLayout;
 import java.awt.Insets;
@@ -67,8 +68,11 @@ import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.ARGBType;
@@ -198,20 +202,23 @@ public class PaintHeightField implements Callable<Void>{
 
 		/* raw */
 		final RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(n5Field, fieldGroup);
-		final ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
+		ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
 
 		// TODO: multi-threaded copy
 		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
 		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
 		System.out.println("done.");
 
+		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec30/heighfield_max-inpainted.tif" ).getProcessor().getPixels();
+		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
+
 		//System.out.print("Smoothing heightfield.");
-		//Gauss3.gauss( 2, Views.extendBorder( heightField ), heightField );
+		//Gauss3.gauss( 15, Views.extendBorder( heightField ), heightField );
 		//System.out.println("done.");
 
 		//System.out.print("adding offset to heightfield.");
 		//for ( final FloatType t : heightField )
-		//	t.set( t.get() + 4 );
+		//	t.set( t.get() + 3 );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
@@ -252,8 +259,8 @@ public class PaintHeightField implements Callable<Void>{
 		Util.copy(gradient, gradientCopy);
 
 		//new ImageJ();
-		//ImageJFunctions.show( heightField );
-		//ImageJFunctions.show( gradientCopy );
+		//ImageJFunctions.show( heightField ).setTitle( "heighfield");
+		//ImageJFunctions.show( gradientCopy ).setTitle( "gradients");
 		//SimpleMultiThreading.threadHaltUnClean(); 
 
 		final RealRandomAccessible< FloatType > gradientFull =
