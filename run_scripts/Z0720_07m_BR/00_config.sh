@@ -86,6 +86,98 @@ export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
 # Tab Customizations
 # --------------------------------------------------------------------
 case "${TAB}" in
+  "Sec26")
+    export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
+    export ALIGN_STACK="v2_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec26/v2_acquire_trimmed_align_ic_global_3___20210518_215946"
+    export N5_Z_CORR_OFFSET="192,-2385,1316"
+  ;;
+  "Sec27")
+    export ACQUIRE_TRIMMED_STACK="v5_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
+    export ALIGN_STACK="v5_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec27/v5_acquire_trimmed_align_ic_global_3___20210518_220105"
+    export N5_Z_CORR_OFFSET="-330,-1695,1"
+  ;;
+  "Sec28")
+    export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export ALIGN_STACK="v3_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec28/v3_acquire_trimmed_align_ic_global_3___20210518_223431"
+    export N5_Z_CORR_OFFSET="-17488,-4261,1"
+  ;;
+  "Sec29")
+    export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export ALIGN_STACK="v3_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec29/v3_acquire_trimmed_align_ic_global_3___20210519_074013"
+    export N5_Z_CORR_OFFSET="-14395,-3719,1"
+  ;;
+  "Sec30")
+    export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export ALIGN_STACK="v3_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec30/v3_acquire_trimmed_align_ic_global_3___20210519_074213"
+    export N5_Z_CORR_OFFSET="-14832,-3955,1"
+  ;;
+  "Sec31")
+    export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
+    export ALIGN_STACK="v2_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec31/v2_acquire_trimmed_align_ic_global_3___20210519_113433"
+    export N5_Z_CORR_OFFSET="-811,-1174,1"
+  ;;
+  "Sec32")
+    export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export ALIGN_STACK="v3_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec32/v3_acquire_trimmed_align_5_ic_global_3___20210519_114445"
+    export N5_Z_CORR_OFFSET="81,193,1"
+  ;;
+  "Sec33")
+    export ALIGN_STACK="v1_acquire_trimmed_sp1_adaptive_3"
+    export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_sp1_adaptive_3_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec33/v1_acquire_trimmed_sp1_adaptive_3_ic_global_3___20210519_111209"
+    export N5_Z_CORR_OFFSET="291,-584,1"
+  ;;
+  "Sec34")
+    export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
+    export ALIGN_STACK="v2_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec34/v2_acquire_trimmed_align_ic_global_3___20210519_112458"
+    export N5_Z_CORR_OFFSET="-14640,-2987,1"
+  ;;
+  "Sec35")
+    export ALIGN_STACK="v1_acquire_trimmed_align_4"
+    export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_4_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec35/v1_acquire_trimmed_align_4_ic_global_3___20210519_113030"
+    export N5_Z_CORR_OFFSET="-299,-2304,1"
+  ;;
+  "Sec36")
+    export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
+    export ALIGN_STACK="v2_acquire_trimmed_sp3_adaptive"
+    export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_sp3_adaptive_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec36/v2_acquire_trimmed_sp3_adaptive_ic_global_3___20210519_114111"
+    export N5_Z_CORR_OFFSET="-280,-673,1"
+  ;;
+  "Sec37")
+    export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
+    export ALIGN_STACK="v2_acquire_trimmed_sp1_adaptive"
+    export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_sp1_adaptive_ic_global_3"
+    export N5_Z_CORR_DATASET="/z_corr/Sec37/v2_acquire_trimmed_sp1_adaptive_ic_global_3___20210519_114754"
+    export N5_Z_CORR_OFFSET="285,-224,1"
+  ;;
   "Sec38")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
