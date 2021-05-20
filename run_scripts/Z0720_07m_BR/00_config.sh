@@ -79,9 +79,8 @@ export FLINTSTONE="/groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.s
 export N5_SAMPLE_PATH="/nrs/flyem/render/n5/${RENDER_OWNER}"
 export N5_HEIGHT_FIELDS_COMPUTED_DATASET="/heightfields/${RENDER_PROJECT}/pass1/s1"
 export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
-export N5_FLAT_DATASET="/flat/${RENDER_PROJECT}/raw/s0"
-export N5_SURFACE_PADDING="20"
-export N5_FLAT_BLOCK_SIZE="128,128,128"
+export N5_FLAT_DATASET_ROOT="/flat/${RENDER_PROJECT}"
+export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
 
 # --------------------------------------------------------------------
 # Tab Customizations
