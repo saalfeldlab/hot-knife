@@ -3,11 +3,15 @@
 set -e
 
 if (( $# != 2 )); then
-  echo "USAGE $0 <tab id> <number of nodes> (e.g. Sec39 10)"
+  echo "USAGE $0 <tab id> <number of nodes> (e.g. Sec39 60)"
   exit 1
 fi
 
 TAB="${1}"
+
+# Sec26 (43K layers, 186K tiles): 90 nodes (11 cores each) took 136 minutes
+# Sec33 (45K layers, 130K tiles): 60 nodes (11 cores each) took 146 minutes
+# Sec38 (35K layers,  70K tiles): 60 nodes (11 cores each) took  71 minutes
 N_NODES="${2}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
