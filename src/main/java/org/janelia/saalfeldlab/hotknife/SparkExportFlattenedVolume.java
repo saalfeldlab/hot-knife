@@ -131,6 +131,14 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 								gridBlockSize,
 								blockSize));
 
+		// access all attributes.json files here to prevent concurrent access NPE issues in RDD loops
+		System.out.println("priming attributes for: " + n5RawInputPath + ", " + n5FieldPath +
+						   ", " + n5OutPath + ", " + rawDataset);
+		final N5Reader setupRawReader = new N5FSReader(n5RawInputPath);
+		new N5FSReader(n5FieldPath);
+		new N5FSWriter(n5OutPath);
+		N5Utils.open(setupRawReader, rawDataset);
+
 		rdd.foreach(
 				gridBlock -> {
 					final N5Reader n5RawReader = new N5FSReader(n5RawInputPath);
