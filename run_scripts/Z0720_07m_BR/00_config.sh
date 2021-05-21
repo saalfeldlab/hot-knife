@@ -148,6 +148,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_sp1_adaptive_3_ic_global_3"
     export N5_Z_CORR_DATASET="/z_corr/Sec33/v1_acquire_trimmed_sp1_adaptive_3_ic_global_3___20210519_111209"
     export N5_Z_CORR_OFFSET="291,-584,1"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass3_preibischs"
   ;;
   "Sec34")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -156,12 +157,14 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic_global_3"
     export N5_Z_CORR_DATASET="/z_corr/Sec34/v2_acquire_trimmed_align_ic_global_3___20210519_112458"
     export N5_Z_CORR_OFFSET="-14640,-2987,1"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass3_preibischs"
   ;;
   "Sec35")
     export ALIGN_STACK="v1_acquire_trimmed_align_4"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_4_ic_global_3"
     export N5_Z_CORR_DATASET="/z_corr/Sec35/v1_acquire_trimmed_align_4_ic_global_3___20210519_113030"
     export N5_Z_CORR_OFFSET="-299,-2304,1"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass3_preibischs"
   ;;
   "Sec36")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
