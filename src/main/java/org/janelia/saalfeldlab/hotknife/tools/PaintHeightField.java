@@ -168,7 +168,7 @@ public class PaintHeightField implements Callable<Void>{
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		new ImageJ();
+		//new ImageJ();
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5FSReader n5Field = new N5FSReader(n5FieldPath);
@@ -201,6 +201,12 @@ public class PaintHeightField implements Callable<Void>{
 		BdvStackSource<?> bdv = null;
 
 		/* raw */
+		if ( !new File( n5FieldPath, fieldGroup ).exists() )
+		{
+			System.out.println( "heightfield dataset does not exist: " + n5FieldPath + "/" + fieldGroup );
+			System.exit( 0 );
+		}
+
 		final RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(n5Field, fieldGroup);
 		ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
 
@@ -209,16 +215,16 @@ public class PaintHeightField implements Callable<Void>{
 		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
 		System.out.println("done.");
 
-		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec30/heighfield_max-inpainted.tif" ).getProcessor().getPixels();
+		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec27/heighfield-min_raw-collage.tif" ).getProcessor().getPixels();
 		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
 
 		//System.out.print("Smoothing heightfield.");
-		//Gauss3.gauss( 15, Views.extendBorder( heightField ), heightField );
+		//Gauss3.gauss( 5, Views.extendBorder( heightField ), heightField );
 		//System.out.println("done.");
 
 		//System.out.print("adding offset to heightfield.");
 		//for ( final FloatType t : heightField )
-		//	t.set( t.get() + 3 );
+		//	t.set( t.get() - 1.25f );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;

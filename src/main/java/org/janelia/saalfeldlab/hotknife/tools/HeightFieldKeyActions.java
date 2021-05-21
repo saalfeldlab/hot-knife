@@ -73,7 +73,7 @@ public class HeightFieldKeyActions {
 		ksKeyStrokeAdder = config.keyStrokeAdder(ksInputMap, "persistence");
 
 		new SaveHeightField("save heightfield", "ctrl S").register();
-		new Undo("undo", "ctrl Z").register();
+		new Undo("undo", "ctrl U").register();
 		new GoToZero("go to z=0", "ctrl C").register();
 		new DisplayZeroLine("display z=0", viewer, "ctrl 0").register();
 		new PrintScale("print current scaling", viewer, "ctrl 2").register();
