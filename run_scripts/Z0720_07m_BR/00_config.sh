@@ -144,6 +144,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic_global_3"
     export N5_Z_CORR_DATASET="/z_corr/Sec32/v3_acquire_trimmed_align_5_ic_global_3___20210519_114445"
     export N5_Z_CORR_OFFSET="81,193,1"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass3_preibischs"
   ;;
   "Sec33")
     export ALIGN_STACK="v1_acquire_trimmed_sp1_adaptive_3"
