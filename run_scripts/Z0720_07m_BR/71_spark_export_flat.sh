@@ -22,7 +22,12 @@ validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_Z_CORR_DATASET}/s0" "${N5_SAMPLE
 
 FULL_FLAT_DATASET_PATH="${N5_SAMPLE_PATH}${N5_FLAT_RAW_DATASET}"
 if [[ -d ${FULL_FLAT_DATASET_PATH} ]]; then
-  echo "ERROR: ${FULL_FLAT_DATASET_PATH} exists"
+  echo "
+ERROR: ${FULL_FLAT_DATASET_PATH} exists
+
+For runs after new height field fixes, move the existing data set elsewhere like this:
+  mv ${N5_FLAT_DATASET_ROOT} ${N5_FLAT_DATASET_ROOT}_${RUN_TIMESTAMP}
+"
   exit 1
 fi
 
