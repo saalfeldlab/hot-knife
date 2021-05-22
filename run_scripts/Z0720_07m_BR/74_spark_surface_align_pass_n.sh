@@ -2,6 +2,10 @@
 
 set -e
 
+# run times with default node counts
+# pass01:  7 min, pass02:  5 min, pass03: 14 min, pass04: 19 min, pass05: 24 min, pass06:  23 min
+# pass07: 23 min, pass08: 11 min, pass09: 11 min, pass10: 27 min, pass11: 39 min, pass12: 128 min
+
 if (( $# < 1 )); then
   echo "USAGE $0 <pass (1-12)> [number of nodes (overrides default)]"
   exit 1
@@ -19,7 +23,14 @@ PADDED_PRIOR_PASS=$(printf "%02d" "$(( PASS - 1 ))")
 N5_GROUP_INPUT="/surface_align/pass${PADDED_PRIOR_PASS}"
 N5_GROUP_OUTPUT="/surface_align/pass${PADDED_PASS}"
 
-validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_GROUP_INPUT}"
+if [[ -z ${SKIP_PRIOR_PASS_DIRECTORY_CHECK} ]]; then
+  validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_GROUP_INPUT}"
+fi
+
+if [[ -d "${N5_SAMPLE_PATH}${N5_GROUP_OUTPUT}" ]]; then
+  echo "ERROR: ${N5_SAMPLE_PATH}${N5_GROUP_OUTPUT} exists"
+  exit 1
+fi
 
 # setup pass specific run class
 case "${PASS}" in
