@@ -162,7 +162,7 @@ public class ViewAlignment {
 				final long[] min = new long[ stack.numDimensions() ];
 				stack.min( min );
 
-				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType() ).create( stack.dimensionsAsLongArray() ), min );
+				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), (int)stack.dimension( 2 ) ).create( stack.dimensionsAsLongArray() ), min );
 				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
 				Util.copy(stack, copy, service);
 				service.shutdown();
