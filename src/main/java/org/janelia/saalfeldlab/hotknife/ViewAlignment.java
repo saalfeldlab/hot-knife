@@ -45,6 +45,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
@@ -160,7 +161,8 @@ public class ViewAlignment {
 				long t = System.currentTimeMillis();
 				final long[] min = new long[ stack.numDimensions() ];
 				stack.min( min );
-				final RandomAccessibleInterval<FloatType> copy = Views.translate( ArrayImgs.floats( stack.dimensionsAsLongArray() ), min );
+
+				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType() ).create( stack.dimensionsAsLongArray() ), min );
 				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
 				Util.copy(stack, copy, service);
 				service.shutdown();
