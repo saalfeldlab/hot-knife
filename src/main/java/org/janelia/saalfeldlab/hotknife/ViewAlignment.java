@@ -22,10 +22,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
@@ -33,14 +36,19 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import bdv.util.Bdv;
+import bdv.util.BdvFunctions;
+import bdv.util.BdvOptions;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.Views;
 
 /**
  *
@@ -60,6 +68,9 @@ public class ViewAlignment {
 
 		@Option(name = "--scaleIndex", required = true, usage = "scale index for visualization, e.g. 4 (means scale = 1.0 / 2^4)")
 		private int transformScaleIndex = 0;
+
+		@Option(name = "--noVirtual", required = false, usage = "makes a physical copy of each transformed slab surface during startup (instead of virtual rendering)")
+		private boolean noVirtual = false;
 
 		public Options(final String[] args) {
 
@@ -116,7 +127,7 @@ public class ViewAlignment {
 
 		Bdv bdv = null;
 
-		final int numProc = Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 );
+		final int numProc = Math.max( 1, Runtime.getRuntime().availableProcessors() * 2 );
 		final SharedQueue queue = new SharedQueue( numProc );
 		final CacheHints cacheHints = new CacheHints( LoadingStrategy.VOLATILE, 0, true );
 
@@ -134,8 +145,8 @@ public class ViewAlignment {
 						n5,
 						group + "/" + transformDatasetNames[i]);
 			}
-			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
 
+			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
 					options.getN5Path(),
 					Arrays.asList(datasetNames),
 					showScaleIndex,
@@ -144,12 +155,31 @@ public class ViewAlignment {
 							Grid.floorScaled(boundsMin, showScale),
 							Grid.ceilScaled(boundsMax, showScale)));
 
-			bdv = Show.transformedStack(
-					(RandomAccessibleInterval)VolatileViews.wrapAsVolatile(
-							Show.wrapAsVolatileCachedCellImg(stack, new int[]{256, 256, 26}),
-							queue,
-							cacheHints),
-					bdv);
+			if ( options.noVirtual )
+			{
+				System.out.println( "copying entire stack ... " );
+				long t = System.currentTimeMillis();
+				final long[] min = new long[ stack.numDimensions() ];
+				stack.min( min );
+
+				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), (int)stack.dimension( 2 ) ).create( stack.dimensionsAsLongArray() ), min );
+				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+				Util.copy(stack, copy, service);
+				service.shutdown();
+
+				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
+
+				BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
+			}
+			else
+			{
+				bdv = Show.transformedStack(
+						(RandomAccessibleInterval)VolatileViews.wrapAsVolatile(
+								Show.wrapAsVolatileCachedCellImg(stack, new int[]{256, 256, 26}),
+								queue,
+								cacheHints),
+						bdv);
+			}
 
 //			ImageJFunctions.show(stack, group);
 		}
