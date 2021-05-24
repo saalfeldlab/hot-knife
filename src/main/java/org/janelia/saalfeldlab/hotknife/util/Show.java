@@ -181,7 +181,7 @@ public class Show {
 			final Bdv bdv) throws IOException {
 
 		final BdvOptions options = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
-//		options.numRenderingThreads(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+		options.numRenderingThreads(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
 		final BdvStackSource<T> stackSource = BdvFunctions.show(stack, "transformed", options);
 		stackSource.setDisplayRange(0, 255);
 		return stackSource;
