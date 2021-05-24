@@ -9,7 +9,7 @@ source "${SCRIPT_DIR}/00_config.sh" "${TAB}"
 # This runs quickly!  A 1 node job for Sec26 - Sec39 took < 4 minutes to finish.
 N_NODES=1
 
-N5_GROUP_OUTPUT="/surface_align/pass00"
+N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 MIN_SEC_NUM=26
 MAX_SEC_NUM=39
