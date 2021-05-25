@@ -82,7 +82,7 @@ export N5_HEIGHT_FIELDS_COMPUTED_DATASET="/heightfields/${RENDER_PROJECT}/pass1/
 export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
 export N5_FLAT_DATASET_ROOT="/flat/${RENDER_PROJECT}"
 export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
-export N5_SURFACE_ROOT="/surface_align_v2"
+export N5_SURFACE_ROOT="/surface_align_v3"
 
 # --------------------------------------------------------------------
 # Tab Customizations
@@ -110,9 +110,9 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
     export ALIGN_STACK="v3_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic_global_3"
-    export N5_Z_CORR_DATASET="/z_corr/Sec28/v3_acquire_trimmed_align_ic_global_3___20210518_223431"
+    export N5_Z_CORR_DATASET="/z_corr/Sec28/v3_acquire_trimmed_align_ic_global_3___20210524_224915"
     export N5_Z_CORR_OFFSET="-17488,-4261,1"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass4_preibischs"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass5_preibischs"
   ;;
   "Sec29")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
