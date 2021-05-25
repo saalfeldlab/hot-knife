@@ -20,8 +20,8 @@ source "${SCRIPT_DIR}/00_config.sh" "${TAB}"
 PADDED_PASS=$(printf "%02d" "${PASS}")
 PADDED_PRIOR_PASS=$(printf "%02d" "$(( PASS - 1 ))")
 
-N5_GROUP_INPUT="/surface_align/pass${PADDED_PRIOR_PASS}"
-N5_GROUP_OUTPUT="/surface_align/pass${PADDED_PASS}"
+N5_GROUP_INPUT="${N5_SURFACE_ROOT}/pass${PADDED_PRIOR_PASS}"
+N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass${PADDED_PASS}"
 
 if [[ -z ${SKIP_PRIOR_PASS_DIRECTORY_CHECK} ]]; then
   validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_GROUP_INPUT}"
