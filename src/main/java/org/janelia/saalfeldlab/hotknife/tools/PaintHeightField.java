@@ -218,9 +218,10 @@ public class PaintHeightField implements Callable<Void>{
 		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
 		System.out.println("done.");
 
-		float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec28/heighfield_min.tif" ).getProcessor().getPixels();
-		heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
-		heightField = fix07mBRSec28HeightField( heightField );
+		//System.out.print("Loading MANUAL heightfield.");
+		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec28/heighfield_max.tif" ).getProcessor().getPixels();
+		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
+		//heightField = fix07mBRSec28HeightField( heightField );
 
 		//System.out.print("Smoothing heightfield.");
 		//Gauss3.gauss( 5, Views.extendBorder( heightField ), heightField );
