@@ -4,6 +4,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
@@ -19,8 +21,12 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import bdv.util.Bdv;
+import bdv.util.BdvFunctions;
+import bdv.util.BdvOptions;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
+import ij.ImageJ;
+import ij.ImagePlus;
 import mpicbg.models.RigidModel2D;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -30,6 +36,7 @@ import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform2D;
@@ -80,6 +87,10 @@ public class ModifyAlignment
 		z=25 >>> flat.Sec38.top.face
 		z=26 >>> flat.Sec39.bot.face
 		z=27 >>> flat.Sec39.top.face
+		
+		Note:
+		positive X: move left
+		positive Y: move up
 		 */
 
 		if ( surfaceCount == 4 ) // flat.Sec28.bot.face
@@ -95,8 +106,134 @@ public class ModifyAlignment
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 2485, 731 },
-					new double[] { -10, -12 },
+					new double[] { 10, -12 },
 					new double[] { 50, 150 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 7 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1855, 286 },
+					new double[] { -10 / 2.0, -38 / 2.0 },
+					new double[] { 500, 200 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 8 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1855, 286 },
+					new double[] { 10 / 2.0, 38 / 2.0 },
+					new double[] { 500, 200 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 15 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2000, 646 },
+					new double[] { -32 / 2.0, 35 / 2.0 },
+					new double[] { 400, 100 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 16 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2000, 646 },
+					new double[] { 32 / 2.0, -35 / 2.0 },
+					new double[] { 400, 100 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2156, 3303 },
+					new double[] { 8, 38 },
+					new double[] { 400, 80 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 17 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2156, 3303 },
+					new double[] { 8, 38 },
+					new double[] { 400, 80 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2156, 3303 },
+					new double[] { -21, 24 },
+					new double[] { 100, 100 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 20 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2282, 3175 },
+					new double[] { 62, 0 },
+					new double[] { 650, 110 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1838, 3181 },
+					new double[] { 22, 12 },
+					new double[] { 75, 75 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -754,6 +891,8 @@ public class ModifyAlignment
 
 			final String datasetName = group + "/" + transformDatasetNames[i];
 
+			if ( datasetNames[ i ].contains( "Sec28") )
+				datasetNames[ i ] = datasetNames[ i ].substring( 0, datasetNames[ i ].indexOf( "Sec") + 5 ) + "_pass4/" + datasetNames[ i ].substring( datasetNames[ i ].indexOf( "Sec") + 6, datasetNames[ i ].length() );
 			//realTransforms[i] = Transform.loadScaledTransform(
 			//		n5,
 			//		group + "/" + transformDatasetNames[i]);
@@ -767,7 +906,7 @@ public class ModifyAlignment
 			if ( transformScale != showScale )
 				System.out.println( "WARNING: transformscale does not match showscale, be careful!" );
 
-			System.exit( 0 );
+			//System.exit( 0 );
 			final RandomAccessibleInterval<DoubleType> positionField = N5Utils.open(n5in, datasetName);
 			final int n = positionField.numDimensions() - 1;
 			final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMinSurface, transformScale), n + 1);
@@ -798,12 +937,30 @@ public class ModifyAlignment
 						Grid.floorScaled(boundsMin, showScale),
 						Grid.ceilScaled(boundsMax, showScale)));
 
+		System.out.println( "copying entire stack ... " );
+		long t = System.currentTimeMillis();
+		final long[] min = new long[ stack.numDimensions() ];
+		stack.min( min );
+
+		final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), (int)stack.dimension( 2 ) ).create( stack.dimensionsAsLongArray() ), min );
+		final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+		Util.copy(stack, copy, service);
+		service.shutdown();
+
+		System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
+
+		//BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
+		new ImageJ();
+		ImagePlus imp = ImageJFunctions.show( copy );
+
+		/*
 		bdv = Show.transformedStack(
 				(RandomAccessibleInterval)VolatileViews.wrapAsVolatile(
 						Show.wrapAsVolatileCachedCellImg(stack, new int[]{256, 256, 26}),
 						queue,
 						cacheHints),
 				bdv);
+		*/
 
 		if ( options.getSaveGroup() != null )
 		{
