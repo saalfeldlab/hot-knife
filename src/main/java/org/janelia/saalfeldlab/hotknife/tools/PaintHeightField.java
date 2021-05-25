@@ -59,13 +59,16 @@ import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Interpolation;
 import bdv.viewer.SynchronizedViewerState;
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
+import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
@@ -215,8 +218,9 @@ public class PaintHeightField implements Callable<Void>{
 		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
 		System.out.println("done.");
 
-		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec27/heighfield-min_raw-collage.tif" ).getProcessor().getPixels();
-		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
+		float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec28/heighfield_min.tif" ).getProcessor().getPixels();
+		heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
+		heightField = fix07mBRSec28HeightField( heightField );
 
 		//System.out.print("Smoothing heightfield.");
 		//Gauss3.gauss( 5, Views.extendBorder( heightField ), heightField );
@@ -396,5 +400,52 @@ public class PaintHeightField implements Callable<Void>{
 		((JFrame)SwingUtilities.getWindowAncestor(bdv.getBdvHandle().getViewerPanel())).setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
 		return null;
+	}
+
+	private ArrayImg<FloatType, ?> fix07mBRSec28HeightField( ArrayImg<FloatType, ?> hf )
+	{
+		final ArrayImg<FloatType, ?> hfNew = ArrayImgs.floats( hf.dimensionsAsLongArray() );
+
+		final RealRandomAccess< FloatType > rra = 
+				Views.interpolate( Views.extendBorder( hf ), new NLinearInterpolatorFactory<>() ).realRandomAccess();
+
+		final Cursor< FloatType > c = hfNew.cursor();
+		final double[] l = new double[ hf.numDimensions() ];
+
+		while ( c.hasNext() )
+		{
+			final FloatType out = c.next();
+			c.localize( l );
+
+			// within fixed zcorr range
+			if ( l[ 1 ] > 909.9370789 && l[ 1 ] < 940.6729431 )
+			{
+				if ( l[ 0 ] == 0 )
+					System.out.print( l[ 1 ] + " >>> " + ( ( l[ 1 ] - 909.9370789 ) / ( 940.6729431 - 909.9370789 ) ) + " >>> ");
+
+				l[ 1 ] += ( ( l[ 1 ] - 909.9370789 ) / ( 940.6729431 - 909.9370789 ) ) * 11.06491106;
+
+				if ( l[ 0 ] == 0 )
+					System.out.println( l[ 1 ] );
+			}
+			else if ( l[ 1 ] > 940.6729431 ) // 5644.037658 / 6.0
+			{
+				// fixed zcorr ends
+
+				if ( l[ 0 ] == 0 && l[ 1 ] == 941 )
+					System.out.print( l[ 1 ] + " >>> " + ( ( l[ 1 ] - 909.9370789 ) / ( 940.6729431 - 909.9370789 ) ) + " >>> ");
+
+				// move heightfield 11.06 pixels up, = (5710.427125-5644.037658)/6.0
+				l[ 1 ] += 11.06491106; 
+
+				if ( l[ 0 ] == 0 && c.getIntPosition( 1 ) == 941 )
+					System.out.println( l[ 1 ] );
+			}
+
+			rra.setPosition( l );
+			out.set( rra.get() );
+		}
+
+		return hfNew;
 	}
 }
