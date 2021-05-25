@@ -40,12 +40,14 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
+import ij.ImageJ;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
@@ -144,6 +146,16 @@ public class ViewAlignment {
 				realTransforms[i] = Transform.loadScaledTransform(
 						n5,
 						group + "/" + transformDatasetNames[i]);
+
+				/*
+				if ( datasetNames[ i ].contains( "Sec27") || datasetNames[ i ].contains( "Sec28") || datasetNames[ i ].contains( "Sec29") || datasetNames[ i ].contains( "Sec30") || 
+						datasetNames[ i ].contains( "Sec33") || datasetNames[ i ].contains( "Sec34") || datasetNames[ i ].contains( "Sec35") || datasetNames[ i ].contains( "Sec36") )
+				{
+					//System.out.println( datasetNames[ i ]);
+					datasetNames[ i ] = datasetNames[ i ].substring( 0, datasetNames[ i ].indexOf( "Sec") + 5 ) + "_pass3/" + datasetNames[ i ].substring( datasetNames[ i ].indexOf( "Sec") + 6, datasetNames[ i ].length() );
+					//System.out.println( datasetNames[ i ]);
+				}*/
+
 			}
 
 			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
@@ -170,6 +182,8 @@ public class ViewAlignment {
 				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
 
 				BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
+				new ImageJ();
+				ImageJFunctions.show( copy );
 			}
 			else
 			{
