@@ -146,6 +146,16 @@ public class ViewAlignment {
 				realTransforms[i] = Transform.loadScaledTransform(
 						n5,
 						group + "/" + transformDatasetNames[i]);
+
+				/*
+				if ( datasetNames[ i ].contains( "Sec27") || datasetNames[ i ].contains( "Sec28") || datasetNames[ i ].contains( "Sec29") || datasetNames[ i ].contains( "Sec30") || 
+						datasetNames[ i ].contains( "Sec33") || datasetNames[ i ].contains( "Sec34") || datasetNames[ i ].contains( "Sec35") || datasetNames[ i ].contains( "Sec36") )
+				{
+					//System.out.println( datasetNames[ i ]);
+					datasetNames[ i ] = datasetNames[ i ].substring( 0, datasetNames[ i ].indexOf( "Sec") + 5 ) + "_pass3/" + datasetNames[ i ].substring( datasetNames[ i ].indexOf( "Sec") + 6, datasetNames[ i ].length() );
+					//System.out.println( datasetNames[ i ]);
+				}*/
+
 			}
 
 			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
