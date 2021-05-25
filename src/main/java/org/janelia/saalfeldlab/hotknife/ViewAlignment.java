@@ -40,12 +40,14 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
+import ij.ImageJ;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
@@ -170,6 +172,8 @@ public class ViewAlignment {
 				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
 
 				BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
+				new ImageJ();
+				ImageJFunctions.show( copy );
 			}
 			else
 			{
