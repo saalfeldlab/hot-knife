@@ -45,6 +45,69 @@ import net.imglib2.view.Views;
 
 public class ModifyAlignment
 {
+	public static <T extends RealType<T>> RandomAccessibleInterval<T> modifyAlignmentBR07m(
+			final RandomAccessibleInterval<T> positionField,
+			final int surfaceCount,
+			final double transformScale,
+			final String datasetName )
+	{
+		/*
+		z=0 >>> flat.Sec26.bot.face
+		z=1 >>> flat.Sec26.top.face
+		z=2 >>> flat.Sec27.bot.face
+		z=3 >>> flat.Sec27.top.face
+		z=4 >>> flat.Sec28.bot.face
+		z=5 >>> flat.Sec28.top.face
+		z=6 >>> flat.Sec29.bot.face
+		z=7 >>> flat.Sec29.top.face
+		z=8 >>> flat.Sec30.bot.face
+		z=9 >>> flat.Sec30.top.face
+		z=10 >>> flat.Sec31.bot.face
+		z=11 >>> flat.Sec31.top.face
+		z=12 >>> flat.Sec32.bot.face
+		z=13 >>> flat.Sec32.top.face
+		z=14 >>> flat.Sec33.bot.face
+		z=15 >>> flat.Sec33.top.face
+		z=16 >>> flat.Sec34.bot.face
+		z=17 >>> flat.Sec34.top.face
+		z=18 >>> flat.Sec35.bot.face
+		z=19 >>> flat.Sec35.top.face
+		z=20 >>> flat.Sec36.bot.face
+		z=21 >>> flat.Sec36.top.face
+		z=22 >>> flat.Sec37.bot.face
+		z=23 >>> flat.Sec37.top.face
+		z=24 >>> flat.Sec38.bot.face
+		z=25 >>> flat.Sec38.top.face
+		z=26 >>> flat.Sec39.bot.face
+		z=27 >>> flat.Sec39.top.face
+		 */
+
+		if ( surfaceCount == 4 ) // flat.Sec28.bot.face
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2485, 731 },
+					new double[] { -10, -12 },
+					new double[] { 50, 150 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else
+		{
+			System.out.println( datasetName + " (" + surfaceCount + ") was not changed." );
+		}
+
+		return positionField;
+	}
+
 	public static <T extends RealType<T>> RandomAccessibleInterval<T> modifyAlignmentVNC19m(
 			final RandomAccessibleInterval<T> positionField,
 			final int surfaceCount,
@@ -662,8 +725,12 @@ public class ModifyAlignment
 
 		final String[] datasetNames = n5in.getAttribute(group, "datasets", String[].class);
 		final String[] transformDatasetNames = n5in.getAttribute(group, "transforms", String[].class);
+		final int scaleIndex = n5in.getAttribute(group, "scaleIndex", Integer.class );
 		final double[] boundsMin = n5in.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5in.getAttribute(group, "boundsMax", double[].class);
+
+		System.out.println( "scaleIndex: " + scaleIndex + ". NOTE: any deformations defined here need to be in that scale (i.e. open with ViewAlignment and measure in those images)" );
+		
 
 		/*
 		final String[] datasetNames = new String[ 4 ];
@@ -700,6 +767,7 @@ public class ModifyAlignment
 			if ( transformScale != showScale )
 				System.out.println( "WARNING: transformscale does not match showscale, be careful!" );
 
+			System.exit( 0 );
 			final RandomAccessibleInterval<DoubleType> positionField = N5Utils.open(n5in, datasetName);
 			final int n = positionField.numDimensions() - 1;
 			final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMinSurface, transformScale), n + 1);
@@ -707,7 +775,8 @@ public class ModifyAlignment
 			final RandomAccessibleInterval< DoubleType > positionFieldAdjusted = Views.translate(positionField, translation);
 			
 			// modify the field if necessary
-			final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentVNC19m( positionFieldAdjusted, i, transformScale, datasetName );
+			//final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentVNC19m( positionFieldAdjusted, i, transformScale, datasetName );
+			final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentBR07m( positionFieldAdjusted, i, transformScale, datasetName );
 
 			// remember it for saving
 			positionFields.add( positionFieldModified );
