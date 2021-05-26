@@ -36,6 +36,7 @@ import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
@@ -898,6 +899,45 @@ public class ModifyAlignment
 		return Views.translate( positionFieldCopy, min );
 	}
 
+	public static <T extends RealType<T>> void scalePositionFieldBR07m(
+			final RandomAccessibleInterval<T> positionFieldCopy,
+			final double x1,
+			final double y1,
+			final double x2,
+			final double y2 )
+	{
+		final Cursor< T > c = Views.iterable( positionFieldCopy ).localizingCursor();
+
+		while ( c.hasNext() )
+		{
+			final T t = c.next();
+
+			final double x0 = c.getDoublePosition( 0 );
+			final double y0 = c.getDoublePosition( 1 );
+
+			final double dist = ( (x2-x1)*(y1-y0) - (x1-x0)*(y2-y1) ) / Math.sqrt( Math.pow( (x2-x1), 2) + Math.pow((y2-y1), 2) );
+
+			if ( dist < 0 )
+			{
+				if ( c.getIntPosition( 2 ) == 1 ) // y
+					t.setReal( t.getRealDouble() + moveBy[ 1 ] * w );
+				else // x
+					t.setReal( t.getRealDouble() + moveBy[ 0 ] * w );
+			}
+			//t.setReal( dist );
+			/*
+			if ( distX < halfKernelX.length && distY < halfKernelY.length )
+			{
+				w = halfKernelX[ distX ] * halfKernelY[ distY ];
+	
+				if ( c.getIntPosition( 2 ) == 1 ) // y
+					t.setReal( t.getRealDouble() + moveBy[ 1 ] * w );
+				else // x
+					t.setReal( t.getRealDouble() + moveBy[ 0 ] * w );
+			}*/
+		}
+	}
+
 	public static <T extends RealType<T>> void modifyPositionField(
 			final RandomAccessibleInterval<T> positionFieldCopy,
 			final int[] loc,
@@ -995,6 +1035,12 @@ public class ModifyAlignment
 	}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+
+		RandomAccessibleInterval<FloatType > img = ArrayImgs.floats( 300, 300 );
+		scalePositionField(img, 0, 100, 100, 200 );
+		new ImageJ();
+		ImageJFunctions.show( img );
+		SimpleMultiThreading.threadHaltUnClean();
 
 		final Options options = new Options(args);
 
