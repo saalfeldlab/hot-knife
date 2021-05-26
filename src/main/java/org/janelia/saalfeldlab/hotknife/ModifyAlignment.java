@@ -1058,12 +1058,12 @@ public class ModifyAlignment
 
 			final String datasetName = group + "/" + transformDatasetNames[i];
 
-			if ( datasetNames[ i ].contains( "Sec32") )
-			{
+			//if ( datasetNames[ i ].contains( "Sec32") )
+			//{
 				//System.out.println( datasetNames[ i ]);
-				datasetNames[ i ] = datasetNames[ i ].substring( 0, datasetNames[ i ].indexOf( "Sec") + 5 ) + "_pass3/" + datasetNames[ i ].substring( datasetNames[ i ].indexOf( "Sec") + 6, datasetNames[ i ].length() );
+				//datasetNames[ i ] = datasetNames[ i ].substring( 0, datasetNames[ i ].indexOf( "Sec") + 5 ) + "_pass3/" + datasetNames[ i ].substring( datasetNames[ i ].indexOf( "Sec") + 6, datasetNames[ i ].length() );
 				//System.out.println( datasetNames[ i ]);
-			}
+			//}
 
 			//realTransforms[i] = Transform.loadScaledTransform(
 			//		n5,
