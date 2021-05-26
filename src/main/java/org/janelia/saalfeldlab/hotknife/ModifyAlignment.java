@@ -183,6 +183,12 @@ public class ModifyAlignment
 					new double[] { 8 / 2.0, 38 / 2.0 },
 					new double[] { 500, 200 } );
 
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1718, 245 },
+					new double[] { -22, 0 },
+					new double[] { 300, 50 } );
+
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
 		else if ( surfaceCount == 15 )
@@ -219,7 +225,18 @@ public class ModifyAlignment
 					new double[] { 33 / 2.0, -14 / 2.0 },
 					new double[] { 400, 110 } );
 
-			scalePositionFieldBR07m(positionFieldCopy, 1211, 3017, 1739, 3151, 1.7 );
+			scalePositionFieldBR07m(
+					positionFieldCopy,
+					1211, 3050,
+					1739, 3151,
+					1.0 / 1.65 );
+
+			
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1154, 2657 },
+					new double[] { 21, -21 },
+					new double[] { 300, 300 } );
 
 			/*
 			ModifyAlignment.modifyPositionField(
@@ -252,6 +269,12 @@ public class ModifyAlignment
 
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			scalePositionFieldBR07m(
+					positionFieldCopy,
+					1213, 3012,
+					1747, 3134,
+					1.0 / 1.4 );
 
 			/*
 			ModifyAlignment.modifyPositionField(
@@ -308,6 +331,12 @@ public class ModifyAlignment
 					new int[] { 1806, 777 },
 					new double[] { 4, -40 },
 					new double[] { 350, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1815, 874 },
+					new double[] { 14, -23 },
+					new double[] { 75, 75 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -889,7 +918,7 @@ public class ModifyAlignment
 				double moveLength = dist * scale;
 
 				// vector from current point to closest point
-				double[] move = new double[] {  px - x0, py - y0 };
+				double[] move = new double[] {  -( px - x0 ) , -( py - y0 ) };
 				LinAlgHelpers.normalize( move );
 
 				move[ 0 ] *= moveLength;
@@ -1150,6 +1179,7 @@ public class ModifyAlignment
 		//BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
 		new ImageJ();
 		ImagePlus imp = ImageJFunctions.show( copy );
+		imp.setSlice( 8 );
 
 		/*
 		bdv = Show.transformedStack(
