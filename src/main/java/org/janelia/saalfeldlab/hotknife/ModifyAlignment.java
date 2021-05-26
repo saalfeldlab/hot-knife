@@ -213,14 +213,15 @@ public class ModifyAlignment
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
 
-			/*
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 1947, 622 },
 					new double[] { 33 / 2.0, -14 / 2.0 },
 					new double[] { 400, 110 } );
 
-			
+			scalePositionFieldBR07m(positionFieldCopy, 1211, 3017, 1739, 3151, 1.7 );
+
+			/*
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 1385, 3227 },
@@ -851,7 +852,8 @@ public class ModifyAlignment
 			final double x1,
 			final double y1,
 			final double x2,
-			final double y2 )
+			final double y2,
+			final double scale )
 	{
 		final Cursor< T > c = Views.iterable( positionFieldCopy ).localizingCursor();
 
@@ -862,16 +864,45 @@ public class ModifyAlignment
 			final double x0 = c.getDoublePosition( 0 );
 			final double y0 = c.getDoublePosition( 1 );
 
-			final double dist = ( (x2-x1)*(y1-y0) - (x1-x0)*(y2-y1) ) / Math.sqrt( Math.pow( (x2-x1), 2) + Math.pow((y2-y1), 2) );
+			double dist = ( (x2-x1)*(y1-y0) - (x1-x0)*(y2-y1) ) / Math.sqrt( Math.pow( (x2-x1), 2) + Math.pow((y2-y1), 2) );
 
 			if ( dist < 0 )
 			{
+				// find closest point on the line
+				double[] a = new double[] { x1, y1 };
+				double[] m = new double[] { x2 - x1, y2 - y1 };
+				double[] p = new double[] { x0, y0 };
+
+				double[] pa = new double[] { x0 - x1, y0 - y1 };
+
+				double t0 = LinAlgHelpers.dot( pa, m ) / LinAlgHelpers.dot( m, m );
+
+				double px = a[ 0 ] + t0 * m[ 0 ];
+				double py = a[ 1 ] + t0 * m[ 1 ];
+
+				double dx = p[ 0 ] - px;
+				double dy = p[ 1 ] - py;
+
+				// different way to compute the distance
+				dist = Math.sqrt( dx*dx + dy*dy );
+
+				double moveLength = dist * scale;
+
+				// vector from current point to closest point
+				double[] move = new double[] {  px - x0, py - y0 };
+				LinAlgHelpers.normalize( move );
+
+				move[ 0 ] *= moveLength;
+				move[ 1 ] *= moveLength;
+
 				if ( c.getIntPosition( 2 ) == 1 ) // y
-					t.setReal( t.getRealDouble() + moveBy[ 1 ] * w );
+					t.setReal( t.getRealDouble() + move[ 1 ] );
 				else // x
-					t.setReal( t.getRealDouble() + moveBy[ 0 ] * w );
+					t.setReal( t.getRealDouble() + move[ 0 ] );
 			}
-			//t.setReal( dist );
+
+			// t.setReal( dist );
+
 			/*
 			if ( distX < halfKernelX.length && distY < halfKernelY.length )
 			{
@@ -983,11 +1014,13 @@ public class ModifyAlignment
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
+		/*
 		RandomAccessibleInterval<FloatType > img = ArrayImgs.floats( 300, 300 );
-		scalePositionField(img, 0, 100, 100, 200 );
+		scalePositionFieldBR07m(img, 0, 50, 100, 200 );
 		new ImageJ();
 		ImageJFunctions.show( img );
 		SimpleMultiThreading.threadHaltUnClean();
+		*/
 
 		final Options options = new Options(args);
 
