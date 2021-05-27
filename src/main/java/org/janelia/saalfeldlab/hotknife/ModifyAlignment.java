@@ -59,7 +59,12 @@ public class ModifyAlignment
 			final double transformScale,
 			final String datasetName )
 	{
-		
+		/*
+		--n5Path '/nrs/flyem/render/n5/Z0720_07m_BR'
+		-i '/surface_align_v5/pass11'
+		-o '/surface_align_v5/pass11-modified-1'
+		--scaleIndex 2
+		 */
 		if ( surfaceCount == 8 ) // 
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
@@ -75,7 +80,13 @@ public class ModifyAlignment
 					new int[] { 7267, 1053 },
 					new double[] { 25, 50 },
 					new double[] { 900, 120 } );
-		
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 6816, 1040 },
+					new double[] { 16, 50 },
+					new double[] { 200, 90 } );
+
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
 		else if ( surfaceCount == 16 ) // 
@@ -102,7 +113,7 @@ public class ModifyAlignment
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
-		else if ( surfaceCount == 18 ) // 
+		else if ( surfaceCount == 17 ) // 
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
 
@@ -115,7 +126,7 @@ public class ModifyAlignment
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 6151, 12345 },
-					new double[] { -18, -27 },
+					new double[] { -28, -10 },
 					new double[] { 180, 120 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
@@ -300,11 +311,25 @@ public class ModifyAlignment
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
 
+			/*
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 1925, 216 },
 					new double[] { -8 / 2.0, -38 / 2.0 },
-					new double[] { 500, 200 } );
+					new double[] { 500, 200 } );*/
+
+			scalePositionFieldBR07m(
+					positionFieldCopy,
+					1501, 279,
+					2386, 303,
+					1.0 / 1.65,
+					false );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 2128, 216 },
+					new double[] { 18, -18 },
+					new double[] { 400, 200 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -318,6 +343,7 @@ public class ModifyAlignment
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
 
+			/*
 			ModifyAlignment.modifyPositionField(
 					positionFieldCopy,
 					new int[] { 1925, 216 },
@@ -328,7 +354,38 @@ public class ModifyAlignment
 					positionFieldCopy,
 					new int[] { 1718, 245 },
 					new double[] { -22, 0 },
-					new double[] { 300, 50 } );
+					new double[] { 300, 50 } );*/
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 14 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1283, 2603 },
+					new double[] { 10, 63 },
+					new double[] { 275, 150 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1512, 3049 },
+					new double[] { 12, -26 },
+					new double[] { 400, 250 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1307, 2859 },
+					new double[] { -35, 26 },
+					new double[] { 250, 250 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -370,7 +427,8 @@ public class ModifyAlignment
 					positionFieldCopy,
 					1211, 3050,
 					1739, 3151,
-					1.0 / 1.65 );
+					1.0 / 1.65,
+					true );
 
 			
 			ModifyAlignment.modifyPositionField(
@@ -415,7 +473,8 @@ public class ModifyAlignment
 					positionFieldCopy,
 					1213, 3012,
 					1747, 3134,
-					1.0 / 1.4 );
+					1.0 / 1.4,
+					true );
 
 			/*
 			ModifyAlignment.modifyPositionField(
@@ -1022,7 +1081,8 @@ public class ModifyAlignment
 			final double y1,
 			final double x2,
 			final double y2,
-			final double scale )
+			final double scale,
+			final boolean down )
 	{
 		final Cursor< T > c = Views.iterable( positionFieldCopy ).localizingCursor();
 
@@ -1035,7 +1095,7 @@ public class ModifyAlignment
 
 			double dist = ( (x2-x1)*(y1-y0) - (x1-x0)*(y2-y1) ) / Math.sqrt( Math.pow( (x2-x1), 2) + Math.pow((y2-y1), 2) );
 
-			if ( dist < 0 )
+			if ( ( down && dist < 0 ) || ( !down && dist > 0 ))
 			{
 				// find closest point on the line
 				double[] a = new double[] { x1, y1 };
@@ -1282,7 +1342,7 @@ public class ModifyAlignment
 			
 			// modify the field if necessary
 			//final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentVNC19m( positionFieldAdjusted, i, transformScale, datasetName );
-			final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentBR07mPass11( positionFieldAdjusted, i, transformScale, datasetName );
+			final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentBR07mPass02( positionFieldAdjusted, i, transformScale, datasetName );
 
 			// remember it for saving
 			positionFields.add( positionFieldModified );
@@ -1333,6 +1393,7 @@ public class ModifyAlignment
 		if ( options.getSaveGroup() != null )
 		{
 			System.out.println( "Saving " + options.getSaveGroup() );
+			t = System.currentTimeMillis();
 
 			/* save transforms */
 			final N5Writer n5out = new N5FSWriter(options.getN5Path());
@@ -1347,6 +1408,8 @@ public class ModifyAlignment
 			{
 				final String datasetName = options.getSaveGroup() + "/" + transformDatasetNames[i];
 				
+				System.out.println( "Saving " + datasetName );
+				
 				Transform.savePositionField(
 						n5out,
 						datasetName,
@@ -1355,7 +1418,7 @@ public class ModifyAlignment
 						positionFieldBounds.get( i ).getA(),
 						positionFieldBounds.get( i ).getB() );
 			}
-			System.out.println( "done. " );
+			System.out.println( "done. Took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
 		}
 
 //			ImageJFunctions.show(stack, group);
