@@ -116,6 +116,8 @@ public class ViewAlignment {
 		}
 	}
 
+	public static int exportZ = -1;
+
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final Options options = new Options(args);
@@ -164,7 +166,7 @@ public class ViewAlignment {
 
 			}
 
-			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
+			RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
 					options.getN5Path(),
 					Arrays.asList(datasetNames),
 					showScaleIndex,
@@ -175,12 +177,16 @@ public class ViewAlignment {
 
 			if ( options.noVirtual )
 			{
+				// TODO: hack, remove
+				if ( exportZ >= 0 )
+					stack = Views.hyperSlice( stack, 2, exportZ );
+
 				System.out.println( "copying entire stack ... " );
 				long t = System.currentTimeMillis();
 				final long[] min = new long[ stack.numDimensions() ];
 				stack.min( min );
 
-				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), (int)stack.dimension( 2 ) ).create( stack.dimensionsAsLongArray() ), min );
+				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
 				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
 				Util.copy(stack, copy, service);
 				service.shutdown();
@@ -189,6 +195,7 @@ public class ViewAlignment {
 
 				//BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
 				ImagePlus imp = ImageJFunctions.wrapFloat( copy, "group " + group );
+				imp.setDisplayRange(0, 255);
 				new ImageConverter(imp).convertToGray8();
 				imp.setDimensions( 1, imp.getStackSize(), 1 );
 				imp.show();
