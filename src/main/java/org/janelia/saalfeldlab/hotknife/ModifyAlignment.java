@@ -242,7 +242,7 @@ public class ModifyAlignment
 		Last cmdline args:
 		--n5Path '/nrs/flyem/render/n5/Z0720_07m_BR'
 		-i '/surface_align_v3/pass02-original'
-		-o '/surface_align_v3/pass02-modified-3'
+		-o '/surface_align_v3/pass02-modified-5'
 		--scaleIndex 4
 		 */
 
