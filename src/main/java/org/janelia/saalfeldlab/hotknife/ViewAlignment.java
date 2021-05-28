@@ -40,7 +40,10 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
+import ij.IJ;
 import ij.ImageJ;
+import ij.ImagePlus;
+import ij.process.ImageConverter;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.volatiles.CacheHints;
@@ -133,6 +136,9 @@ public class ViewAlignment {
 		final SharedQueue queue = new SharedQueue( numProc );
 		final CacheHints cacheHints = new CacheHints( LoadingStrategy.VOLATILE, 0, true );
 
+		if ( options.noVirtual )
+			new ImageJ();
+
 		for (final String group : options.getGroups()) {
 
 			final String[] datasetNames = n5.getAttribute(group, "datasets", String[].class);
@@ -181,9 +187,12 @@ public class ViewAlignment {
 
 				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
 
-				BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
-				new ImageJ();
-				ImageJFunctions.show( copy );
+				//BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
+				ImagePlus imp = ImageJFunctions.wrapFloat( copy, "group " + group );
+				new ImageConverter(imp).convertToGray8();
+				imp.setDimensions( 1, imp.getStackSize(), 1 );
+				imp.show();
+				//ImageJFunctions.show( copy );
 			}
 			else
 			{
