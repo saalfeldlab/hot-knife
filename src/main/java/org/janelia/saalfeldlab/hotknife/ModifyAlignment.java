@@ -331,6 +331,12 @@ public class ModifyAlignment
 					new double[] { 18, -18 },
 					new double[] { 400, 200 } );
 
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1611, 293 },
+					new double[] { 15, -13 },
+					new double[] { 120, 75 } );
+
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
 		else if ( surfaceCount == 8 )
@@ -355,6 +361,32 @@ public class ModifyAlignment
 					new int[] { 1718, 245 },
 					new double[] { -22, 0 },
 					new double[] { 300, 50 } );*/
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		else if ( surfaceCount == 13 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1523, 3077 },
+					new double[] { -9, 24 },
+					new double[] { 200, 100 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1203, 2769 },
+					new double[] { -10, -15 },
+					new double[] { 120, 120 } );
+
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -386,6 +418,31 @@ public class ModifyAlignment
 					new int[] { 1307, 2859 },
 					new double[] { -35, 26 },
 					new double[] { 250, 250 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1296, 2432 },
+					new double[] { 12, -26 },
+					new double[] { 400, 250 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1306, 2810 },
+					new double[] { 22, 31 },
+					new double[] { 350, 200 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1502, 1701 },
+					new double[] { -7, -9 },
+					new double[] { 130, 130 } );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1433, 2571 },
+					new double[] { -5, -11 },
+					new double[] { 400, 300 } );
+
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
