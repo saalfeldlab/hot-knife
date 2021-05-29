@@ -201,7 +201,8 @@ public class ViewAlignedSlabSeries {
 				final int scale = 1 << s;
 				final double inverseScale = 1.0 / scale;
 
-				final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, datasetName + "/s" + s);
+				final RandomAccessibleInterval<UnsignedByteType> data = N5Utils.open(n5, datasetName + "/s" + s);
+				final RandomAccessibleInterval<UnsignedByteType> source = Views.zeroMin(Views.invertAxis(data, 2));
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
