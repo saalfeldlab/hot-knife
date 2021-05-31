@@ -61,11 +61,11 @@ public class ModifyAlignment
 	{
 		/*
 		--n5Path '/nrs/flyem/render/n5/Z0720_07m_BR'
-		-i '/surface_align_v5/pass11'
-		-o '/surface_align_v5/pass11-modified-1'
+		-i '/surface_align_v8/pass11'
+		-o '/surface_align_v8/pass11-modified-1'
 		--scaleIndex 2
 		 */
-		if ( surfaceCount == 8 ) // 
+		/*if ( surfaceCount == 8 ) // 
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
 		
@@ -88,8 +88,26 @@ public class ModifyAlignment
 					new double[] { 200, 90 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}*/
+		if ( surfaceCount == 14 ) // 
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+		
+			if ( transformScale != 0.25 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.25 and do not match for other scalings." );
+		
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+		
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 5024, 9817 },
+					new double[] { 10, -22 },
+					new double[] { 175, 110 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
-		else if ( surfaceCount == 16 ) // 
+		/*else if ( surfaceCount == 16 ) // 
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
 
@@ -190,7 +208,7 @@ public class ModifyAlignment
 					new double[] { 150, 300 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
-		}
+		}*/
 		else
 		{
 			System.out.println( datasetName + " (" + surfaceCount + ") was not changed." );
@@ -1399,7 +1417,7 @@ public class ModifyAlignment
 			
 			// modify the field if necessary
 			//final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentVNC19m( positionFieldAdjusted, i, transformScale, datasetName );
-			final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentBR07mPass02( positionFieldAdjusted, i, transformScale, datasetName );
+			final RandomAccessibleInterval< DoubleType > positionFieldModified = modifyAlignmentBR07mPass11( positionFieldAdjusted, i, transformScale, datasetName );
 
 			// remember it for saving
 			positionFields.add( positionFieldModified );

@@ -143,6 +143,8 @@ public class ViewAlignment {
 
 		for (final String group : options.getGroups()) {
 
+			System.out.println( "Viewing " + group + " ... " );
+
 			final String[] datasetNames = n5.getAttribute(group, "datasets", String[].class);
 			final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);
 			final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
