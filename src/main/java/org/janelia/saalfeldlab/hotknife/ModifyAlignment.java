@@ -246,7 +246,7 @@ public class ModifyAlignment
 		--scaleIndex 4
 		 */
 
-		if ( surfaceCount == 2 ) 
+		/*if ( surfaceCount == 2 ) 
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
 
@@ -311,13 +311,6 @@ public class ModifyAlignment
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
 
-			/*
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1925, 216 },
-					new double[] { -8 / 2.0, -38 / 2.0 },
-					new double[] { 500, 200 } );*/
-
 			scalePositionFieldBR07m(
 					positionFieldCopy,
 					1501, 279,
@@ -348,19 +341,6 @@ public class ModifyAlignment
 
 			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
 					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
-
-			/*
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1925, 216 },
-					new double[] { 8 / 2.0, 38 / 2.0 },
-					new double[] { 500, 200 } );
-
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1718, 245 },
-					new double[] { -22, 0 },
-					new double[] { 300, 50 } );*/
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -494,26 +474,6 @@ public class ModifyAlignment
 					new double[] { 21, -21 },
 					new double[] { 300, 300 } );
 
-			/*
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1385, 3227 },
-					new double[] { -7, 25 },
-					new double[] { 400, 140 } );
-
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1385, 3227 },
-					new double[] { -7, 25 },
-					new double[] { 400, 140 } );
-
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1335, 3057 },
-					new double[] { 0, -40 },
-					new double[] { 100, 50 } );
-			*/
-
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
 		else if ( surfaceCount == 17 )
@@ -532,26 +492,6 @@ public class ModifyAlignment
 					1747, 3134,
 					1.0 / 1.4,
 					true );
-
-			/*
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1453, 3200 },
-					new double[] { -7, 25 },
-					new double[] { 400, 100 } );
-
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1453, 3200 },
-					new double[] { -7, 25 },
-					new double[] { 400, 100 } );
-
-			ModifyAlignment.modifyPositionField(
-					positionFieldCopy,
-					new int[] { 1620, 3153 },
-					new double[] { -20, 20 },
-					new double[] { 70, 70 } );
-			*/
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
@@ -621,7 +561,25 @@ public class ModifyAlignment
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
 		}
-		else if ( surfaceCount == 26 )
+		else */if ( surfaceCount == 24 )
+		{
+			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
+
+			if ( transformScale != 0.0625 )
+				throw new RuntimeException( "These parameters were designed for a transform scaling of 0.0625 and do not match for other scalings." );
+
+			final RandomAccessibleInterval< DoubleType > positionFieldCopy =
+					ModifyAlignment.copyPositionField( (RandomAccessibleInterval)positionField );
+
+			ModifyAlignment.modifyPositionField(
+					positionFieldCopy,
+					new int[] { 1959, 2548 },
+					new double[] { -8, 25 },
+					new double[] { 250, 170 } );
+
+			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
+		}
+		/*else if ( surfaceCount == 26 )
 		{
 			System.out.println( "Modifying: " + datasetName + " (" + surfaceCount + ")" );
 
@@ -638,7 +596,7 @@ public class ModifyAlignment
 					new double[] { 200, 200 } );
 
 			return (RandomAccessibleInterval)ModifyAlignment.setPositionFieldBounds( positionFieldCopy, positionField );
-		}
+		}*/
 		else
 		{
 			System.out.println( datasetName + " (" + surfaceCount + ") was not changed." );
