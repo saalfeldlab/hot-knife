@@ -41,6 +41,7 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
@@ -108,13 +109,18 @@ public class SparkGenerateFaceScaleSpace {
 				} else
 					parseCSLongArray(sizeString, size);
 
-				/* default min and size for -1 fields */
+				/* absolute coordinates for negative min */
+				for (int i = 0; i < min.length; ++i) {
+					if (min[i] < 0) min[i] = sourceSize[i] + min[i] - 1;
+				}
+
+				/* default size for 0 fields */
 				for (int i = 0; i < size.length; ++i) {
-					if (min[i] == 0) min[i] = 0;
 					if (size[i] == 0) size[i] = sourceSize[i] - min[i];
 				}
 
 				parsedSuccessfully = true;
+
 			} catch (final CmdLineException | IOException e) {
 				System.err.println(e.getMessage());
 				parser.printUsage(System.err);
@@ -229,7 +235,7 @@ public class SparkGenerateFaceScaleSpace {
 					for (int d = 0; d < min.length; ++d) {
 						if (size[d] < 0) {
 							absMin[d] = min[d] + size[d];
-							absSize[d] = min[d] - absMin[d];
+							absSize[d] = -size[d];
 						}
 						else {
 							absMin[d] = min[d];
@@ -247,10 +253,12 @@ public class SparkGenerateFaceScaleSpace {
 					final RandomAccessibleInterval<FloatType> zeroMin = Views.zeroMin(roi);
 
 					final SimpleGaussRA<FloatType> gauss = new SimpleGaussRA<>(sigmas);
-					final RandomAccessibleInterval<FloatType> filtered = Lazy.processFloat(
+					final RandomAccessibleInterval<FloatType> filtered = Lazy.process(
 							Views.extendMirrorSingle(zeroMin),
 							zeroMin,
 							outBlockSize,
+							new FloatType(),
+							AccessFlags.setOf(),
 							gauss);
 					final SubsampleIntervalView<FloatType> subsampled = Views.subsample(filtered, sampleStepSize);
 
@@ -278,7 +286,7 @@ public class SparkGenerateFaceScaleSpace {
 		for (int d = 0; d < min.length; ++d) {
 			if (size[d] < 0) {
 				absMin[d] = min[d] + size[d];
-				absSize[d] = min[d] - absMin[d];
+				absSize[d] = -size[d];
 			}
 			else {
 				absMin[d] = min[d];
@@ -286,7 +294,7 @@ public class SparkGenerateFaceScaleSpace {
 			}
 		}
 
-		final long[] outDimensions = new long[]{absSize[0], absSize[2]};
+		final long[] outDimensions = new long[]{absSize[0], absSize[1]};
 
 		n5.createDataset(
 				outDatasetName,
@@ -320,7 +328,7 @@ public class SparkGenerateFaceScaleSpace {
 							roi = Views.invertAxis(roi, d);
 
 					final IntervalView<FloatType> zeroMin = Views.zeroMin(roi);
-					final IntervalView<FloatType> face = Views.hyperSlice(zeroMin, 1, 0);
+					final IntervalView<FloatType> face = Views.hyperSlice(zeroMin, 2, 0);
 					final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(face, gridBlock[0], gridBlock[1]);
 					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
 				});

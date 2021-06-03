@@ -27,27 +27,38 @@ import static net.imglib2.type.PrimitiveType.SHORT;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
+import org.janelia.saalfeldlab.hotknife.util.Transform.TransformedSource;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.imglib2.RandomAccessibleLoader;
 
+import bdv.util.AbstractSource;
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import bdv.util.RandomAccessibleIntervalMipmapSource;
+import bdv.util.volatiles.SharedQueue;
+import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.Source;
+import mpicbg.spim.data.sequence.VoxelDimensions;
+import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.Volatile;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.cache.img.LoadedCellCacheLoader;
 import net.imglib2.cache.img.RandomAccessibleCacheLoader;
 import net.imglib2.cache.img.ReadOnlyCachedCellImgFactory;
 import net.imglib2.cache.ref.SoftRefLoaderCache;
+import net.imglib2.cache.volatiles.CacheHints;
+import net.imglib2.cache.volatiles.LoadingStrategy;
 import net.imglib2.converter.Converter;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
@@ -56,8 +67,12 @@ import net.imglib2.img.basictypeaccess.array.ArrayDataAccess;
 import net.imglib2.img.cell.Cell;
 import net.imglib2.img.cell.CellGrid;
 import net.imglib2.position.RealPositionRealRandomAccessible;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
+import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.Scale3D;
+import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.Type;
 import net.imglib2.type.numeric.ARGBType;
@@ -81,6 +96,58 @@ import net.imglib2.view.composite.RealComposite;
 public class Show {
 
 	private Show() {}
+
+	public static class VolatileMipmapSource<T extends NumericType<T>, V extends Volatile<T> & NumericType<V>> extends AbstractSource<V> {
+
+		private final Source<T> source;
+
+		private SharedQueue queue;
+
+		public VolatileMipmapSource(
+				final Source<T> source,
+				final V type,
+				final SharedQueue queue) {
+
+			super(type, source.getName());
+			this.source = source;
+			this.queue = queue;
+		}
+
+		public VolatileMipmapSource(
+				final Source<T> source,
+				final Supplier<V> typeSupplier,
+				final SharedQueue queue) {
+
+			this(source, typeSupplier.get(), queue);
+		}
+
+		@Override
+		public RandomAccessibleInterval<V> getSource(final int t, final int level) {
+
+			return VolatileViews.wrapAsVolatile(
+					source.getSource(t, level),
+					queue,
+					new CacheHints(LoadingStrategy.VOLATILE, level, true));
+		}
+
+		@Override
+		public synchronized void getSourceTransform(final int t, final int level, final AffineTransform3D transform) {
+
+			source.getSourceTransform(t, level, transform);
+		}
+
+		@Override
+		public VoxelDimensions getVoxelDimensions() {
+
+			return source.getVoxelDimensions();
+		}
+
+		@Override
+		public int getNumMipmapLevels() {
+
+			return source.getNumMipmapLevels();
+		}
+	}
 
 	/**
 	 * Quickly visualize the slab-face series as transformed by a corresponding
@@ -114,7 +181,7 @@ public class Show {
 			final Bdv bdv) throws IOException {
 
 		final BdvOptions options = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
-//		options.numRenderingThreads(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+		options.numRenderingThreads(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
 		final BdvStackSource<T> stackSource = BdvFunctions.show(stack, "transformed", options);
 		stackSource.setDisplayRange(0, 255);
 		return stackSource;
@@ -209,7 +276,7 @@ public class Show {
 	@SuppressWarnings( { "unchecked", "rawtypes" } )
 	public static final <T extends NativeType<T>> RandomAccessibleInterval<T> wrapAsVolatileCachedCellImg(
 			final RandomAccessibleInterval<T> source,
-			final int[] blockSize) throws IOException {
+			final int[] blockSize) {
 
 		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
 		final CellGrid grid = new CellGrid(dimensions, blockSize);
@@ -356,5 +423,100 @@ public class Show {
 		}
 
 		return Views.stack(comparisonIntervals);
+	}
+
+
+	public static final <T extends NumericType<T> & NativeType<T>> RandomAccessibleIntervalMipmapSource<T> createTransformedMipmapSource(
+			final RealTransform transformToSource,
+			final RandomAccessibleInterval<T>[] rawMipmaps,
+			final double[][] scales,
+			final VoxelDimensions voxelDimensions,
+			final String name) {
+
+		final int numScales = rawMipmaps.length;
+
+		@SuppressWarnings("unchecked")
+		final RandomAccessibleInterval<T>[] mipmaps = new RandomAccessibleInterval[numScales];
+
+		final T type = Util.getTypeFromInterval(rawMipmaps[0]).createVariable();
+
+		for (int s = 0; s < numScales; ++s) {
+
+			final double[] scale = scales[s];
+			final double[] shift = new double[scale.length]; // 3
+			Arrays.setAll(shift, i -> 0.5 * (scale[i] - 1));
+
+			final RealTransformSequence transformSequence = new RealTransformSequence();
+			final Scale3D scale3D = new Scale3D(scale);
+			final Translation3D shift3D = new Translation3D(shift);
+			transformSequence.add(scale3D);
+			transformSequence.add(shift3D);
+			transformSequence.add(transformToSource);
+			transformSequence.add(shift3D.inverse());
+			transformSequence.add(scale3D.inverse());
+
+			final RandomAccessibleInterval<T> transformedSource =
+					Transform.createTransformedInterval(
+							rawMipmaps[s],
+							rawMipmaps[0],
+							transformSequence,
+							type.createVariable());
+
+			final RandomAccessibleInterval<T> cachedSource = Show.wrapAsVolatileCachedCellImg(transformedSource, new int[]{64, 64, 64});
+
+			mipmaps[s] = cachedSource;
+		}
+
+		return new RandomAccessibleIntervalMipmapSource<>(
+						mipmaps,
+						type.createVariable(),
+						scales,
+						voxelDimensions,
+						name);
+	}
+
+	public static final <T extends NumericType<T> & NativeType<T>, V extends Volatile<T> & NumericType<V>> TransformedSource<V> createTransformedMipmapSliceSource(
+			final RealTransform transformToSource,
+			final RandomAccessibleInterval<T>[] rawMipmaps,
+			final double[][] scales,
+			final VoxelDimensions voxelDimensions,
+			final String name,
+			final long offset,
+			final SharedQueue queue) {
+
+		final int numScales = rawMipmaps.length;
+
+		@SuppressWarnings("unchecked")
+		final RandomAccessibleInterval<V>[] mipmaps = new RandomAccessibleInterval[numScales];
+		//final Translation3D offset3D = new Translation3D(0, 0, -offset);
+
+		for (int s = 0; s < numScales; ++s) {
+			final int n = rawMipmaps[ s ].numDimensions();
+			final Interval interval = Intervals.expand( new FinalInterval( rawMipmaps[ s ] ), rawMipmaps[ s ].dimension( n - 1), n - 1 );
+
+			System.out.println( "expanding interval for scale " + s + ": " + Util.printInterval( rawMipmaps[ s ] ) + ">>>" + Util.printInterval( interval ) );
+
+			mipmaps[s] = VolatileViews.wrapAsVolatile( rawMipmaps[s], queue);
+			mipmaps[s] = Views.interval( Views.extendZero( mipmaps[ s ] ), interval );
+		}
+
+		// TODO: in the future one can set doBoundingBoxCulling to false (https://github.com/bigdataviewer/bigdataviewer-vistools/pull/51/commits/058b1cc9c6373c52e05c121a9f0a8e3a5b8b35c5)
+		final RandomAccessibleIntervalMipmapSource<V> mipmapSource = new RandomAccessibleIntervalMipmapSource<>(
+				mipmaps,
+				Util.getTypeFromInterval(mipmaps[0]).createVariable(),
+				scales,
+				voxelDimensions,
+				name);
+
+		final RealTransformSequence transformSequence = new RealTransformSequence();
+		final Translation3D shift = new Translation3D(0, 0, offset);
+		transformSequence.add(shift);
+		transformSequence.add(transformToSource);
+
+		return new TransformedSource<>(
+				mipmapSource,
+				transformSequence,
+				"transformed");
+
 	}
 }

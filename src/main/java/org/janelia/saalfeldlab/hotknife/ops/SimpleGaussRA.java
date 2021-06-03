@@ -31,6 +31,7 @@
 package org.janelia.saalfeldlab.hotknife.ops;
 
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
@@ -55,7 +56,7 @@ import net.imglib2.type.numeric.NumericType;
 @Plugin(type = Ops.Filter.Gauss.class, priority = 0.5)
 public class SimpleGaussRA<T extends NumericType<T> & NativeType<T>> extends
 	AbstractUnaryComputerOp<RandomAccessible<T>, RandomAccessibleInterval<T>>
-	implements Ops.Filter.Gauss {
+	implements Ops.Filter.Gauss, Consumer<RandomAccessibleInterval<T>> {
 
 	@Parameter
 	final private double[] sigmas;
@@ -79,5 +80,25 @@ public class SimpleGaussRA<T extends NumericType<T> & NativeType<T>> extends
 		} catch (final IncompatibleTypeException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	@Override
+	public void run() {
+
+		compute(in(), out());
+
+	}
+
+	@Override
+	public RandomAccessibleInterval<T> run(final RandomAccessibleInterval<T> output) {
+
+		compute(in(), output);
+		return output;
+	}
+
+	@Override
+	public void accept(final RandomAccessibleInterval<T> output) {
+
+		compute(in(), output);
 	}
 }

@@ -66,13 +66,13 @@ public class SparkExportAlignedSlabSeries {
 		private String n5PathOutput = null;
 
 		@Option(name = "-i", aliases = {"--n5DatasetInput"}, required = true, usage = "N5 slab dataset, e.g. /slab-22/raw/s0")
-		private List<String> datasetsInput = new ArrayList<>();
+		private ArrayList<String> datasetsInput = new ArrayList<>();
 
 		@Option(name = "-t", aliases = {"--top"}, required = true, usage = "top slab face offset")
-		private List<Long> topOffsets = new ArrayList<>();
+		private ArrayList<Long> topOffsets = new ArrayList<>();
 
 		@Option(name = "-b", aliases = {"--bot"}, required = true, usage = "bottom slab face offset")
-		private List<Long> botOffsets = new ArrayList<>();
+		private ArrayList<Long> botOffsets = new ArrayList<>();
 
 		@Option(name = "-j", aliases = {"--n5TransformGroup"}, required = true, usage = "N5 group containing alignments, e.g. /align-13")
 		private String n5GroupAlign;
@@ -195,8 +195,8 @@ public class SparkExportAlignedSlabSeries {
 						new ClippedTransitionRealTransform(
 								top,
 								bot,
-								topOffsets.get(i),
-								botOffsets.get(i));
+								topOffset,
+								botOffset);
 
 				final long[] cropMin = new long[] {min[0], min[1], topOffset};
 				final long[] cropMax = new long[] {max[0], max[1], botOffset};
@@ -206,10 +206,11 @@ public class SparkExportAlignedSlabSeries {
 						cropMax);
 
 				final String datasetName = datasetNames.get(i);
+
 				final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Input, datasetName);
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
-					Views.permute(source, 1, 2),
+					source,
 					cropInterval,
 					transition,
 					new UnsignedByteType(0));
@@ -293,6 +294,8 @@ public class SparkExportAlignedSlabSeries {
 
 		final List<Long> topOffsets = options.getTopOffsets();
 		final List<Long> botOffsets = options.getBotOffsets();
+		final List<String> datasetNames = options.getInputDatasets();
+
 
 		final double[] boundsMin = n5Input.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5Input.getAttribute(group, "boundsMax", double[].class);
@@ -302,8 +305,15 @@ public class SparkExportAlignedSlabSeries {
 		final long[] fMax = Grid.ceilScaled(boundsMax, 1);
 
 		long depth = 0;
-		for (int i = 0; i < topOffsets.size(); ++i)
-			depth += botOffsets.get(i) - topOffsets.get(i) + 1;
+		for (int i = 0; i < topOffsets.size(); ++i) {
+			long botOffset = botOffsets.get(i);
+			if (botOffset < 0) {
+				final long[] datasetDimensions = n5Input.getAttribute(datasetNames.get(i), "dimensions", long[].class);
+				botOffset = datasetDimensions[2] + botOffset - 1;
+				botOffsets.set(i, botOffset);
+			}
+			depth += botOffset - topOffsets.get(i) + 1;
+		}
 
 		final long[] min = new long[] {
 				fMin[0],
@@ -335,8 +345,6 @@ public class SparkExportAlignedSlabSeries {
 		final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
 		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
-
-		final List<String> datasetNames = options.getInputDatasets();
 
 		pGrid.foreach(
 				gridBlock -> {

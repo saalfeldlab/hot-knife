@@ -22,10 +22,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
@@ -33,14 +36,24 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import bdv.util.Bdv;
+import bdv.util.BdvFunctions;
+import bdv.util.BdvOptions;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
+import ij.IJ;
+import ij.ImageJ;
+import ij.ImagePlus;
+import ij.process.ImageConverter;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.cell.CellImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.Views;
 
 /**
  *
@@ -60,6 +73,9 @@ public class ViewAlignment {
 
 		@Option(name = "--scaleIndex", required = true, usage = "scale index for visualization, e.g. 4 (means scale = 1.0 / 2^4)")
 		private int transformScaleIndex = 0;
+
+		@Option(name = "--noVirtual", required = false, usage = "makes a physical copy of each transformed slab surface during startup (instead of virtual rendering)")
+		private boolean noVirtual = false;
 
 		public Options(final String[] args) {
 
@@ -100,6 +116,8 @@ public class ViewAlignment {
 		}
 	}
 
+	public static int exportZ = -1;
+
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final Options options = new Options(args);
@@ -116,11 +134,16 @@ public class ViewAlignment {
 
 		Bdv bdv = null;
 
-		final int numProc = Math.max( 1, Runtime.getRuntime().availableProcessors() / 2 );
+		final int numProc = Math.max( 1, Runtime.getRuntime().availableProcessors() * 2 );
 		final SharedQueue queue = new SharedQueue( numProc );
 		final CacheHints cacheHints = new CacheHints( LoadingStrategy.VOLATILE, 0, true );
 
+		if ( options.noVirtual )
+			new ImageJ();
+
 		for (final String group : options.getGroups()) {
+
+			System.out.println( "Viewing " + group + " ... " );
 
 			final String[] datasetNames = n5.getAttribute(group, "datasets", String[].class);
 			final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);
@@ -129,12 +152,23 @@ public class ViewAlignment {
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = 0; i < datasetNames.length; ++i) {
+				System.out.println( "z=" + i + " >>> " + transformDatasetNames[i] );
 				realTransforms[i] = Transform.loadScaledTransform(
 						n5,
 						group + "/" + transformDatasetNames[i]);
-			}
-			final RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
 
+				/*
+				if ( datasetNames[ i ].contains( "Sec27") || datasetNames[ i ].contains( "Sec28") || datasetNames[ i ].contains( "Sec29") || datasetNames[ i ].contains( "Sec30") || 
+						datasetNames[ i ].contains( "Sec33") || datasetNames[ i ].contains( "Sec34") || datasetNames[ i ].contains( "Sec35") || datasetNames[ i ].contains( "Sec36") )
+				{
+					//System.out.println( datasetNames[ i ]);
+					datasetNames[ i ] = datasetNames[ i ].substring( 0, datasetNames[ i ].indexOf( "Sec") + 5 ) + "_pass3/" + datasetNames[ i ].substring( datasetNames[ i ].indexOf( "Sec") + 6, datasetNames[ i ].length() );
+					//System.out.println( datasetNames[ i ]);
+				}*/
+
+			}
+
+			RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
 					options.getN5Path(),
 					Arrays.asList(datasetNames),
 					showScaleIndex,
@@ -143,12 +177,41 @@ public class ViewAlignment {
 							Grid.floorScaled(boundsMin, showScale),
 							Grid.ceilScaled(boundsMax, showScale)));
 
-			bdv = Show.transformedStack(
-					(RandomAccessibleInterval)VolatileViews.wrapAsVolatile(
-							Show.wrapAsVolatileCachedCellImg(stack, new int[]{256, 256, 26}),
-							queue,
-							cacheHints),
-					bdv);
+			if ( options.noVirtual )
+			{
+				// TODO: hack, remove
+				if ( exportZ >= 0 )
+					stack = Views.hyperSlice( stack, 2, exportZ );
+
+				System.out.println( "copying entire stack ... " );
+				long t = System.currentTimeMillis();
+				final long[] min = new long[ stack.numDimensions() ];
+				stack.min( min );
+
+				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
+				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+				Util.copy(stack, copy, service);
+				service.shutdown();
+
+				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
+
+				//BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
+				ImagePlus imp = ImageJFunctions.wrapFloat( copy, "group " + group );
+				imp.setDisplayRange(0, 255);
+				new ImageConverter(imp).convertToGray8();
+				imp.setDimensions( 1, imp.getStackSize(), 1 );
+				imp.show();
+				//ImageJFunctions.show( copy );
+			}
+			else
+			{
+				bdv = Show.transformedStack(
+						(RandomAccessibleInterval)VolatileViews.wrapAsVolatile(
+								Show.wrapAsVolatileCachedCellImg(stack, new int[]{256, 256, 26}),
+								queue,
+								cacheHints),
+						bdv);
+			}
 
 //			ImageJFunctions.show(stack, group);
 		}

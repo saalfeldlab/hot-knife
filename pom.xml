@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>saalfeldlab</groupId>
@@ -7,17 +8,31 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>27.0.1</version>
+		<version>29.2.1</version>
 	</parent>
 	<properties>
 		<enforcer.skip>true</enforcer.skip>
 		<package-name>org.janelia.saalfeldlab.hotknife</package-name>
+		<jackson-databind.version>2.6.7</jackson-databind.version>
+		<imglib2.version>5.11.0</imglib2.version>
+
+		<n5.version>2.3.0</n5.version>
+		<n5-imglib2.version>3.5.1</n5-imglib2.version>
+		<n5-hdf5.version>1.2.0</n5-hdf5.version>
+		<n5-aws-s3.version>3.2.0</n5-aws-s3.version>
+		<!-- <n5-blosc.version>1.1.0</n5-blosc.version> -->
+		<n5-zarr.version>0.0.6</n5-zarr.version>
+		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>
+		<n5-google-cloud>3.3.1</n5-google-cloud>
+
+		<n5.version>2.3.0</n5.version>
+		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>
 	</properties>
 	<dependencies>
 		<dependency>
 			<groupId>org.apache.spark</groupId>
 			<artifactId>spark-core_2.11</artifactId>
-			<version>2.4.0</version>
+			<version>2.4.6</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -32,6 +47,7 @@
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2</artifactId>
+			<version>5.11.1</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
@@ -40,25 +56,26 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>bigdataviewer-core</artifactId>
+			<version>10.0.2</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5</artifactId>
-			<version>2.1.0</version>
+			<version>2.5.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-imglib2</artifactId>
-			<version>3.3.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-spark</artifactId>
-			<version>3.3.1</version>
+			<version>3.4.1</version>
 		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>bigdataviewer-vistools</artifactId>
+			<version>1.0.0-beta-23</version>
 		</dependency>
 		<dependency>
 			<groupId>net.imglib2</groupId>
@@ -85,7 +102,7 @@
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2-realtransform</artifactId>
-			<version>3.0.0-SNAPSHOT</version>
+			<version>3.1.1</version>
 		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
@@ -109,7 +126,17 @@
 			<artifactId>render-app</artifactId>
 			<version>2.0.2</version>
 		</dependency>
-		
+		<dependency>
+			<groupId>org.ejml</groupId>
+			<artifactId>ejml-all</artifactId>
+			<version>0.37.1</version>
+		</dependency>
+		<dependency>
+			<groupId>it.unimi.dsi</groupId>
+			<artifactId>fastutil</artifactId>
+			<version>8.2.3</version>
+		</dependency>
+
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
@@ -118,7 +145,6 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-hdf5</artifactId>
-			<version>1.0.3</version>
 		</dependency>
 		<dependency>
 			<groupId>info.picocli</groupId>
@@ -129,6 +155,32 @@
 			<artifactId>MinCostZSurface_</artifactId>
 			<version>1.1.6-beta-1-SNAPSHOT</version>
 		</dependency>
+		<dependency>
+			<groupId>ome</groupId>
+			<artifactId>bio-formats_plugins</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>net.preibisch</groupId>
+			<artifactId>multiview-reconstruction</artifactId>
+			<version>0.9.3</version>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-jpeg</artifactId>
+			<version>${n5-jpeg.version}</version>
+		</dependency>
+		<!-- <dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-blosc</artifactId>
+		</dependency> -->
+		<dependency>
+			<groupId>sc.fiji</groupId>
+			<artifactId>Stitching_</artifactId>
+		</dependency>
 	</dependencies>
 
 	<repositories>
@@ -137,8 +189,8 @@
 			<url>https://saalfeldlab.github.io/maven</url>
 		</repository>
 		<repository>
-			<id>imagej.public</id>
-			<url>https://maven.imagej.net/content/groups/public</url>
+			<id>scijava.public</id>
+			<url>https://maven.scijava.org/content/groups/public</url>
 		</repository>
 	</repositories>
 
@@ -155,7 +207,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.1.0</version>
+				<version>3.2.1</version>
 				<configuration>
 					<filters>
 						<filter>
@@ -180,11 +232,20 @@
 							<exclude>*scala*</exclude>
 						</excludes>
 					</artifactSet>
+
 					<!-- Additional configuration. -->
 					<relocations>
 						<relocation>
 							<pattern>org.apache.commons.compress</pattern>
 							<shadedPattern>org.janelia.saalfeldlab.org.apache.commons.compress</shadedPattern>
+						</relocation>
+						<relocation>
+							<pattern>com.google.common.base</pattern>
+							<shadedPattern>org.janelia.saalfeldlab.com.google.common.base</shadedPattern>
+						</relocation>
+						<relocation>
+							<pattern>com.google.common.reflect</pattern>
+							<shadedPattern>org.janelia.saalfeldlab.com.google.common.reflect</shadedPattern>
 						</relocation>
 					</relocations>
 				</configuration>
@@ -196,9 +257,17 @@
 						</goals>
 						<configuration>
 							<transformers>
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>org.janelia.saalfeldlab.hotknife.SparkConvertTiffSeries</mainClass>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>META-INF/json/org.janelia.saalfeldlab.n5.Compression$CompressionType</resource>
+								</transformer>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>META-INF/json/org.scijava.plugin.Plugin</resource>
+								</transformer>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>META-INF/json/mpicbg.spim.data.generic.sequence.ImgLoaderIo</resource>
+								</transformer>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>org.janelia.saalfeldlab.hotknife.tools.HotKnife</mainClass>
 								</transformer>
 							</transformers>
 						</configuration>
@@ -207,6 +276,4 @@
 			</plugin>
 		</plugins>
 	</build>
-
-
 </project>

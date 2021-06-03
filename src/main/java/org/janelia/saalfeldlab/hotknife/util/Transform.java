@@ -32,15 +32,23 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import bdv.util.ConstantRandomAccessible;
+import bdv.viewer.Interpolation;
+import bdv.viewer.Source;
+import bdv.viewer.render.DefaultMipmapOrdering;
+import bdv.viewer.render.MipmapOrdering;
 import mpicbg.models.Affine2D;
+import mpicbg.models.Affine3D;
 import mpicbg.models.InterpolatedAffineModel2D;
+import mpicbg.models.InterpolatedAffineModel3D;
 import mpicbg.models.InterpolatedModel;
 import mpicbg.models.Model;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.converter.Converters;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
@@ -48,6 +56,7 @@ import net.imglib2.position.RealPositionRealRandomAccessible;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform;
 import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.PositionFieldTransform;
 import net.imglib2.realtransform.RealTransform;
@@ -73,6 +82,111 @@ import net.imglib2.view.Views;
 public class Transform {
 
 	private Transform() {}
+
+	public static class TransformedSource<T> implements Source<T>, MipmapOrdering {
+
+		private final Source<T> source;
+
+		private final String name;
+
+		private final MipmapOrdering sourceMipmapOrdering;
+
+		private final RealTransform transform;
+
+		public TransformedSource(
+				final Source<T> source,
+				final RealTransform transform,
+				final String name) {
+
+			this.source = source;
+			this.name = name;
+			this.transform = transform;
+			sourceMipmapOrdering =
+					MipmapOrdering.class.isInstance(source) ?
+							(MipmapOrdering)source : new DefaultMipmapOrdering(source);
+		}
+
+		@Override
+		public boolean isPresent(final int t) {
+
+			return source.isPresent(t);
+		}
+
+		@Override
+		public RandomAccessibleInterval<T> getSource(final int t, final int level) {
+
+			return Views.interval(
+					Views.raster(
+							getInterpolatedSource(
+									t,
+									level,
+									Interpolation.NEARESTNEIGHBOR)),
+					estimateBoundingInterval(t, level));
+		}
+
+		private Interval estimateBoundingInterval(final int t, final int level) {
+
+			final Interval wrappedInterval = source.getSource(t, level);
+			// TODO: Do something meaningful: apply transform, estimate bounding box, etc.
+			return wrappedInterval;
+		}
+
+		@Override
+		public RealRandomAccessible<T> getInterpolatedSource(
+				final int t,
+				final int level,
+				final Interpolation method) {
+
+			final AffineTransform3D affine = new AffineTransform3D();
+			source.getSourceTransform( t, level, affine );
+			final RealRandomAccessible< T > srcRaTransformed = RealViews.affineReal(source.getInterpolatedSource(t, level, method), affine);
+
+			return new RealTransformRealRandomAccessible<>(srcRaTransformed, transform);
+		}
+
+		@Override
+		public void getSourceTransform(final int t, final int level, final AffineTransform3D transform) {
+
+			transform.identity();
+		}
+
+		@Override
+		public T getType() {
+
+			return source.getType();
+		}
+
+		@Override
+		public String getName() {
+
+			return source.getName() + "-" + name;
+		}
+
+		@Override
+		public VoxelDimensions getVoxelDimensions() {
+
+			return source.getVoxelDimensions();
+		}
+
+		@Override
+		public int getNumMipmapLevels() {
+
+			return source.getNumMipmapLevels();
+		}
+
+		@Override
+		public synchronized MipmapHints getMipmapHints(
+				final AffineTransform3D screenTransform,
+				final int timepoint,
+				final int previousTimepoint) {
+
+			return sourceMipmapOrdering.getMipmapHints(
+					screenTransform,
+					timepoint,
+					previousTimepoint);
+		}
+	}
+
 
 	@SuppressWarnings("serial")
 	public static abstract class AbstractInterpolatedModelSupplier<A extends Model<A>, B extends Model<B>, C extends InterpolatedModel<A, B, C>> implements Supplier<C>, Serializable {
@@ -126,6 +240,24 @@ public class Transform {
 		public InterpolatedAffineModel2D<A, B> get() {
 
 			return new InterpolatedAffineModel2D<>(aSupplier.get(), bSupplier.get(), lambda);
+		}
+	}
+
+	@SuppressWarnings("serial")
+	public static class InterpolatedAffineModel3DSupplier<A extends Model<A> & Affine3D<A>, B extends Model<B> & Affine3D<B>> extends AbstractInterpolatedModelSupplier<A, B, InterpolatedAffineModel3D<A, B>> {
+
+		public <SA extends Supplier<A> & Serializable, SB extends Supplier<B> & Serializable> InterpolatedAffineModel3DSupplier(
+				final SA aSupplier,
+				final SB bSupplier,
+				final double lambda) {
+
+			super(aSupplier, bSupplier, lambda);
+		}
+
+		@Override
+		public InterpolatedAffineModel3D<A, B> get() {
+
+			return new InterpolatedAffineModel3D<>(aSupplier.get(), bSupplier.get(), lambda);
 		}
 	}
 
@@ -497,6 +629,35 @@ public class Transform {
 		n5.setAttribute(datasetName, "scale", transformScale);
 	}
 
+	/**
+	 * Saves a transform as a position field in an N5 dataset
+	 *
+	 * @param n5
+	 * @param datasetName
+	 * @param positionField
+	 * @param transformScale
+	 * @param boundsMin
+	 * @param boundsMax
+	 * @throws IOException
+	 */
+	public static void savePositionField(
+			final N5Writer n5,
+			final String datasetName,
+			final RandomAccessibleInterval<DoubleType> positionField,
+			final double transformScale,
+			final double[] boundsMin,
+			final double[] boundsMax) throws IOException {
+
+		final int n = positionField.numDimensions() - 1;
+		final int[] blockSize = new int[n + 1];
+		Arrays.fill(blockSize, 1024);
+		blockSize[n] = n;
+		N5Utils.save(positionField, n5, datasetName, blockSize, new GzipCompression());
+		n5.setAttribute(datasetName, "boundsMin", boundsMin);
+		n5.setAttribute(datasetName, "boundsMax", boundsMax);
+		n5.setAttribute(datasetName, "scale", transformScale);
+	}
+
 	public static DatasetAttributes createScaledTransformDataset(
 			final N5Writer n5,
 			final String datasetName,
@@ -669,12 +830,51 @@ public class Transform {
 	 * @param scale
 	 * @return
 	 */
-	public ScaleAndTranslation createTopLeftScaleShift(final double[] scale) {
+	public static ScaleAndTranslation createTopLeftScaleShift(final double[] scale) {
 
 		final double[] offset = new double[scale.length];
 		Arrays.setAll(offset, i -> scale[i] * 0.5 - 0.5);
 		return new ScaleAndTranslation(
 						scale,
 						offset);
+	}
+
+
+	public static <T extends RealType<T>> RealRandomAccessible<T> scaleAndShiftHeightField(
+			final RandomAccessibleInterval<T> heightField,
+			final double[] scale) {
+
+		return RealViews.affineReal(
+				Views.interpolate(
+						Views.extendBorder(heightField),
+						new NLinearInterpolatorFactory<>()),
+				createTopLeftScaleShift(scale));
+	}
+
+
+	public static <T extends RealType<T>> RandomAccessibleInterval<DoubleType> scaleAndShiftHeightFieldValues(
+			final RandomAccessibleInterval<T> heightField,
+			final double scale,
+			final double offset) {
+
+		return Converters.convert(
+				heightField,
+				(a, b) -> b.setReal((a.getRealDouble() + offset + 0.5) * scale - 0.5),
+				new DoubleType());
+	}
+
+	public static <T extends RealType<T>> RealRandomAccessible<DoubleType> scaleAndShiftHeightFieldAndValues(
+			final RandomAccessibleInterval<T> heightField,
+			final double[] scale) {
+
+		return RealViews.affineReal(
+				Views.interpolate(
+						Views.extendBorder(
+								scaleAndShiftHeightFieldValues(
+										heightField,
+										scale[2],
+										0)),
+						new NLinearInterpolatorFactory<>()),
+				createTopLeftScaleShift(new double[] {scale[0], scale[1]}));
 	}
 }

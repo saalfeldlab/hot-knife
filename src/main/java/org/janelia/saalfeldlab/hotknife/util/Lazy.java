@@ -16,9 +16,15 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
-import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
 import static net.imglib2.type.PrimitiveType.BYTE;
+import static net.imglib2.type.PrimitiveType.DOUBLE;
 import static net.imglib2.type.PrimitiveType.FLOAT;
+import static net.imglib2.type.PrimitiveType.INT;
+import static net.imglib2.type.PrimitiveType.LONG;
+import static net.imglib2.type.PrimitiveType.SHORT;
+
+import java.util.Set;
+import java.util.function.Consumer;
 
 import org.janelia.saalfeldlab.hotknife.ops.UnaryComputerOpCellLoader;
 
@@ -30,22 +36,24 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
+import net.imglib2.cache.img.CellLoader;
 import net.imglib2.cache.img.LoadedCellCacheLoader;
 import net.imglib2.cache.ref.SoftRefLoaderCache;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.basictypeaccess.ArrayDataAccessFactory;
-import net.imglib2.img.basictypeaccess.array.ByteArray;
-import net.imglib2.img.basictypeaccess.array.FloatArray;
-import net.imglib2.img.basictypeaccess.volatiles.array.VolatileByteArray;
-import net.imglib2.img.basictypeaccess.volatiles.array.VolatileFloatArray;
 import net.imglib2.img.cell.Cell;
 import net.imglib2.img.cell.CellGrid;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.integer.GenericByteType;
+import net.imglib2.type.numeric.integer.GenericIntType;
+import net.imglib2.type.numeric.integer.GenericLongType;
+import net.imglib2.type.numeric.integer.GenericShortType;
+import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 
 /**
- *
+ * Convenience methods to create lazy evaluated cached cell images with ops or consumers.
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
@@ -53,116 +61,156 @@ public class Lazy {
 
 	private Lazy() {}
 
-	public static <O extends Op> RandomAccessibleInterval<UnsignedByteType> processVolatileUnsignedByte(
-			final RandomAccessibleInterval<UnsignedByteType> source,
-			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
+	/**
+	 * Create a memory {@link CachedCellImg} with a cell {@link Cache}.
+	 *
+	 * @param grid
+	 * @param cache
+	 * @param type
+	 * @param accessFlags
+	 * @return
+	 */
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	public static <T extends NativeType<T>> CachedCellImg<T, ?> createImg(
+			final CellGrid grid,
+			final Cache<Long, Cell<?>> cache,
+			final T type,
+			final Set<AccessFlags> accessFlags) {
 
-		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
-		final CellGrid grid = new CellGrid(dimensions, blockSize);
-		final UnaryComputerOpCellLoader<UnsignedByteType, UnsignedByteType, RandomAccessible<UnsignedByteType>> loader = new UnaryComputerOpCellLoader<UnsignedByteType, UnsignedByteType, RandomAccessible<UnsignedByteType>>(
-				source,
-				UnsignedByteType::new,
-				opService,
-				opClass,
-				opArgs);
+		final CachedCellImg<T, ?> img;
 
-		final UnsignedByteType type = new UnsignedByteType();
-		final Cache<Long, Cell<VolatileByteArray>> cache = new SoftRefLoaderCache<Long, Cell<VolatileByteArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf(VOLATILE)));
-		final CachedCellImg<UnsignedByteType, VolatileByteArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(BYTE, AccessFlags.setOf(VOLATILE)));
+		if (GenericByteType.class.isInstance(type)) {
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(BYTE, accessFlags));
+		} else if (GenericShortType.class.isInstance(type)) {
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(SHORT, accessFlags));
+		} else if (GenericIntType.class.isInstance(type)) {
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(INT, accessFlags));
+		} else if (GenericLongType.class.isInstance(type)) {
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(LONG, accessFlags));
+		} else if (FloatType.class.isInstance(type)) {
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, accessFlags));
+		} else if (DoubleType.class.isInstance(type)) {
+			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(DOUBLE, accessFlags));
+		} else {
+			img = null;
+		}
 		return img;
 	}
 
-	public static <O extends Op> RandomAccessibleInterval<UnsignedByteType> processUnsignedByte(
-			final RandomAccessibleInterval<UnsignedByteType> source,
+	/**
+	 * Create a memory {@link CachedCellImg} with a {@link CellLoader}.
+	 *
+	 * @param targetInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param loader
+	 * @return
+	 */
+	public static <T extends NativeType<T>> CachedCellImg<T, ?> createImg(
+			final Interval targetInterval,
 			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
+			final T type,
+			final Set<AccessFlags> accessFlags,
+			final CellLoader<T> loader) {
 
-		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
+		final long[] dimensions = Intervals.dimensionsAsLongArray(targetInterval);
 		final CellGrid grid = new CellGrid(dimensions, blockSize);
-		final UnaryComputerOpCellLoader<UnsignedByteType, UnsignedByteType, RandomAccessible<UnsignedByteType>> loader = new UnaryComputerOpCellLoader<UnsignedByteType, UnsignedByteType, RandomAccessible<UnsignedByteType>>(
-				source,
-				UnsignedByteType::new,
-				opService,
-				opClass,
-				opArgs);
 
-		final UnsignedByteType type = new UnsignedByteType();
-		final Cache<Long, Cell<ByteArray>> cache = new SoftRefLoaderCache<Long, Cell<ByteArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf()));
-		final CachedCellImg<UnsignedByteType, ByteArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(BYTE, AccessFlags.setOf()));
-		return img;
+		@SuppressWarnings({"unchecked", "rawtypes"})
+		final Cache<Long, Cell<?>> cache =
+				new SoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, accessFlags));
+
+		return createImg(grid, cache, type, accessFlags);
 	}
 
-	public static <O extends Op> RandomAccessibleInterval<FloatType> processVolatileFloat(
-			final RandomAccessibleInterval<FloatType> source,
+	/**
+	 * Create a memory {@link CachedCellImg} with a cell generator {@link Consumer}.
+	 *
+	 * @param targetInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param op
+	 * @return
+	 */
+	public static <T extends NativeType<T>> CachedCellImg<T, ?> process(
+			final Interval targetInterval,
 			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
+			final T type,
+			final Set<AccessFlags> accessFlags,
+			final Consumer<RandomAccessibleInterval<T>> op) {
 
-		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
-		final CellGrid grid = new CellGrid(dimensions, blockSize);
-		final UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>> loader = new UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>>(
-				source,
-				FloatType::new,
-				opService,
-				opClass,
-				opArgs);
-
-		final FloatType type = new FloatType();
-		final Cache<Long, Cell<VolatileFloatArray>> cache = new SoftRefLoaderCache<Long, Cell<VolatileFloatArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf(VOLATILE)));
-		final CachedCellImg<FloatType, VolatileFloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, AccessFlags.setOf(VOLATILE)));
-		return img;
+		return createImg(
+				targetInterval,
+				blockSize,
+				type,
+				accessFlags,
+				op::accept);
 	}
 
-	public static <O extends Op> RandomAccessibleInterval<FloatType> processFloat(
-			final RandomAccessible<FloatType> source,
+	/**
+	 * Create a memory {@link CachedCellImg} with a cell generator {@link UnaryComputerOp}.
+	 *
+	 * @param source
+	 * @param sourceInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param op
+	 * @return
+	 */
+	public static <I, O extends NativeType<O>> CachedCellImg<O, ?> process(
+			final RandomAccessible<I> source,
 			final Interval sourceInterval,
 			final int[] blockSize,
-			final OpService opService,
-			final Class<O> opClass,
-			final Object... opArgs) {
+			final O type,
+			final Set<AccessFlags> accessFlags,
+			final UnaryComputerOp<RandomAccessible<I>, RandomAccessibleInterval<O>> op) {
 
-		final long[] dimensions = Intervals.dimensionsAsLongArray(sourceInterval);
-		final CellGrid grid = new CellGrid(dimensions, blockSize);
-		final UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>> loader = new UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>>(
-				source,
-				FloatType::new,
-				opService,
-				opClass,
-				opArgs);
-
-		final FloatType type = new FloatType();
-		final Cache<Long, Cell<FloatArray>> cache = new SoftRefLoaderCache<Long, Cell<FloatArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf()));
-		final CachedCellImg<FloatType, FloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, AccessFlags.setOf()));
-		return img;
-	}
-
-	public static RandomAccessibleInterval<FloatType> processFloat(
-			final RandomAccessible<FloatType> source,
-			final Interval sourceInterval,
-			final int[] blockSize,
-			final UnaryComputerOp<RandomAccessible<FloatType>, RandomAccessibleInterval<FloatType>> op) {
-
-		final long[] dimensions = Intervals.dimensionsAsLongArray(sourceInterval);
-		final CellGrid grid = new CellGrid(dimensions, blockSize);
-		final UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>> loader =
-				new UnaryComputerOpCellLoader<FloatType, FloatType, RandomAccessible<FloatType>>(
+		return createImg(
+				sourceInterval,
+				blockSize,
+				type,
+				accessFlags,
+				new UnaryComputerOpCellLoader<I, O, RandomAccessible<I>>(
 					source,
-					op);
+					op));
+	}
 
-		final FloatType type = new FloatType();
-		final Cache<Long, Cell<FloatArray>> cache = new SoftRefLoaderCache<Long, Cell<FloatArray>>()
-				.withLoader(LoadedCellCacheLoader.get(grid, loader, type, AccessFlags.setOf()));
-		final CachedCellImg<FloatType, FloatArray> img = new CachedCellImg<>(grid, type, cache, ArrayDataAccessFactory.get(FLOAT, AccessFlags.setOf()));
-		return img;
+	/**
+	 * Create a memory {@link CachedCellImg} with a cell generator
+	 * {@link UnaryComputerOp} provided by an {@link OpService}.
+	 *
+	 * @param source
+	 * @param sourceInterval
+	 * @param blockSize
+	 * @param type
+	 * @param accessFlags
+	 * @param opService
+	 * @param opClass
+	 * @param opArgs
+	 * @return
+	 */
+	public static <I, O extends NativeType<O>, P extends Op> CachedCellImg<O, ?> process(
+			final RandomAccessible<I> source,
+			final Interval sourceInterval,
+			final int[] blockSize,
+			final O type,
+			final Set<AccessFlags> accessFlags,
+			final OpService opService,
+			final Class<P> opClass,
+			final Object... opArgs) {
+
+		return createImg(
+				sourceInterval,
+				blockSize,
+				type,
+				accessFlags,
+				new UnaryComputerOpCellLoader<I, O, RandomAccessible<I>>(
+					source,
+					opService,
+					opClass,
+					opArgs));
 	}
 }

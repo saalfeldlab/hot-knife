@@ -8,8 +8,6 @@ import static org.junit.Assert.assertArrayEquals;
 import java.util.Arrays;
 import java.util.Random;
 
-import org.junit.Test;
-
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
@@ -93,7 +91,7 @@ public class DeformationFieldTest {
 		realSaalfeldTransform3 = new DeformationFieldTransform2<>(fieldReal3);
 	}
 
-	@Test
+//	@Test
 	public void testDeformationField2() {
 
 		final double[] src = new double[2];
@@ -111,7 +109,7 @@ public class DeformationFieldTest {
 		}
 	}
 
-	@Test
+//	@Test
 	public void testDeformationField3() {
 
 		final double[] src = new double[3];
@@ -163,39 +161,39 @@ public class DeformationFieldTest {
 		}
 	}
 
-	@Test
+//	@Test
 	public void testBogovicDeformationField2() {
 
 		testDeformation2(imglib2Transform2, 5);
 	}
 
 
-	@Test
+//	@Test
 	public void testSaalfeldDeformationField2() {
 
 		testDeformation2(saalfeldTransform2, 5);
 	}
 
-	@Test
+//	@Test
 	public void testRealSaalfeldDeformationField2() {
 
 		testDeformation2(realSaalfeldTransform2, 5);
 	}
 
-	@Test
+//	@Test
 	public void testBogovicDeformationField3() {
 
 		testDeformation3(imglib2Transform3, 5);
 	}
 
 
-	@Test
+//	@Test
 	public void testSaalfeldDeformationField3() {
 
 		testDeformation3(saalfeldTransform3, 5);
 	}
 
-	@Test
+//	@Test
 	public void testRealSaalfeldDeformationField3() {
 
 		testDeformation3(realSaalfeldTransform3, 5);
