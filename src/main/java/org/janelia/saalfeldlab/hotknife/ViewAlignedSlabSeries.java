@@ -20,7 +20,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Show;
@@ -37,16 +42,21 @@ import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
+import ij.ImageJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.imageplus.ByteImagePlus;
+import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.util.Util;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 
@@ -169,6 +179,10 @@ public class ViewAlignedSlabSeries {
 
 		long zOffset = 0;
 
+		new ImageJ();
+		ByteImagePlus<UnsignedByteType> render = ImagePlusImgs.unsignedBytes(1446, 1724, 1099 + 84 );
+		render.getImagePlus().show();
+
 		for (int i = 0; i < datasetNames.size(); ++i) {
 
 			final String datasetName = datasetNames.get(i);
@@ -189,6 +203,8 @@ public class ViewAlignedSlabSeries {
 			final FinalInterval cropInterval = new FinalInterval(
 					new long[] {fMin[0], fMin[1], topOffsets.get(i)},
 					new long[] {fMax[0], fMax[1], botOffset});
+
+			System.out.println( "Render interval: " + cropInterval );
 
 			final int numScales = n5.list(datasetName).length;
 
@@ -217,6 +233,57 @@ public class ViewAlignedSlabSeries {
 
 				final SubsampleIntervalView<UnsignedByteType> subsampledTransformedSource = Views.subsample(transformedSource, scale);
 				final RandomAccessibleInterval<UnsignedByteType> cachedSource = Show.wrapAsVolatileCachedCellImg(subsampledTransformedSource, new int[]{64, 64, 64});
+
+				if ( scale == 32 )
+				{
+					// last offset = 1099
+					// last size = 84
+					System.out.println( scale  + " " + Util.printInterval( subsampledTransformedSource ) + "  " + (zOffset / scale) );
+
+					// TODO: write this below into render
+					RandomAccessibleInterval<UnsignedByteType> view = Views.translate(cachedSource, new long[] { 0, 0, (zOffset / scale) } );
+
+					final int numThreads = Runtime.getRuntime().availableProcessors();
+					final List< Callable< Void > > tasks = new ArrayList<>();
+					final AtomicInteger nextBlock = new AtomicInteger( (int)view.min( 2 ));
+					final ExecutorService service = Executors.newFixedThreadPool( numThreads );
+
+					for ( int threadNum = 0; threadNum < numThreads; ++threadNum )
+					{
+						tasks.add( () ->
+						{
+							for ( int z = nextBlock.getAndIncrement(); z <= view.max( 2 ); z = nextBlock.getAndIncrement() )
+							{
+								final Cursor<UnsignedByteType> cIn =
+										Views.flatIterable(
+												Views.hyperSlice( view, 2, z ) ).cursor();
+								final Cursor<UnsignedByteType> cOut =
+										Views.flatIterable(
+												Views.hyperSlice(
+														Views.interval(
+																render,
+																new FinalInterval( view ) ), 2, z ) ).cursor();
+
+								while ( cIn.hasNext() )
+									cOut.next().set( cIn.next() );
+							}
+							return null;
+						});
+					}
+
+					try
+					{
+						final List< Future< Void > > futures = service.invokeAll( tasks );
+						for ( final Future< Void > future : futures )
+							future.get();
+					}
+					catch ( final InterruptedException | ExecutionException e )
+					{
+						e.printStackTrace();
+						throw new RuntimeException( e );
+					}
+					System.out.println( "done" );
+				}
 
 				mipmaps[s] = cachedSource;
 				scales[s] = new double[]{scale, scale, scale};
