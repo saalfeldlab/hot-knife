@@ -41,6 +41,7 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.algorithm.util.Singleton;
 import net.imglib2.converter.Converters;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
@@ -175,8 +176,8 @@ public class SparkExportAlignedSlabSeries {
 			final int[] blockSize,
 			final long[][] gridBlock) throws IOException {
 
-		final N5Reader n5Input = new N5FSReader(n5PathInput);
-		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+		final N5Reader n5Input = Singleton.get("n5Input", () -> new N5FSReader(n5PathInput));
+		final N5Writer n5Output = Singleton.get("n5Output", () -> new N5FSWriter(n5PathOutput));
 
 		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> sources = new ArrayList<>();
 		long zOffset = 0;
@@ -189,8 +190,18 @@ public class SparkExportAlignedSlabSeries {
 			/* do not include blocks that do not intersect with the gridBlock */
 			if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
 
-				final RealTransform top = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2]);
-				final RealTransform bot = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2 + 1]);
+				final String topTransformName = group + "/" + transformDatasetNames[i * 2];
+				final String botTransformName = group + "/" + transformDatasetNames[i * 2 + 1];
+
+				final RealTransform top =
+						Singleton.get(
+								topTransformName,
+								() -> Transform.loadScaledTransform(n5Input, topTransformName));
+				final RealTransform bot =
+						Singleton.get(
+								botTransformName,
+								() -> Transform.loadScaledTransform(n5Input, botTransformName));
+
 				final RealTransform transition =
 						new ClippedTransitionRealTransform(
 								top,
@@ -207,7 +218,10 @@ public class SparkExportAlignedSlabSeries {
 
 				final String datasetName = datasetNames.get(i);
 
-				final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Input, datasetName);
+				final RandomAccessibleInterval<UnsignedByteType> source =
+						Singleton.get(
+								"source" + i,
+								() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName));
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
 					source,
