@@ -217,13 +217,14 @@ public class ViewAlignedSlabSeries {
 				final int scale = 1 << s;
 				final double inverseScale = 1.0 / scale;
 
-				final RandomAccessibleInterval<UnsignedByteType> data = N5Utils.open(n5, datasetName + "/s" + s);
-				final RandomAccessibleInterval<UnsignedByteType> source = Views.zeroMin(Views.invertAxis(data, 2));
+				//final RandomAccessibleInterval<UnsignedByteType> data = N5Utils.open(n5, datasetName + "/s" + s);
+				//final RandomAccessibleInterval<UnsignedByteType> source = Views.zeroMin(Views.invertAxis(data, 2));
+				final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, datasetName + "/s" + s);
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
 
-				System.out.println( "Warning: adding custom transformation");
+				//System.out.println( "Warning: adding custom transformation");
 				final AffineTransform3D rigid = new AffineTransform3D();
 				rigid.translate(
 						-(cropInterval.dimension(0)/2 + cropInterval.min( 0 )),
