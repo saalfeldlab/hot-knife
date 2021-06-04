@@ -206,6 +206,21 @@ public class ViewAlignedSlabSeries {
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
+
+				System.out.println( "Warning: adding custom transformation");
+				final AffineTransform3D rigid = new AffineTransform3D();
+				rigid.translate(
+						-(cropInterval.dimension(0)/2 + cropInterval.min( 0 )),
+						-(cropInterval.dimension(1)/2 + cropInterval.min( 1 )),
+						0 );
+				rigid.rotate( 2, Math.toRadians( -18 ) );
+				rigid.translate(
+						(cropInterval.dimension(0)/2 + cropInterval.min( 0 )),
+						(cropInterval.dimension(1)/2 + cropInterval.min( 1 )),
+						0 );
+
+				transformSequence.add(rigid.inverse());
+
 				transformSequence.add(transition);
 				transformSequence.add(scale3D);
 
