@@ -186,11 +186,11 @@ public class SparkExportAlignedSlabSeries {
 			final String[] transformDatasetNames,
 			final List<Long> topOffsets,
 			final List<Long> botOffsets,
-			final long[] min,
-			final long[] max,
-			final long[] dimensions,
+			final long[] min, // original layout
+			final long[] max, // original layout
+			final long[] dimensions, // original layout
 			final int[] blockSize,
-			final long[][] gridBlock,
+			final long[][] gridBlock, // x-z transformed
 			final boolean normalizeContrast ) throws IOException {
 
 		final N5Reader n5Input = Singleton.get("n5Input", () -> new N5FSReader(n5PathInput));
@@ -305,8 +305,8 @@ public class SparkExportAlignedSlabSeries {
 
 				// flipping X-Z axes
 				// TODO: remove
-				//sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
-				sources.add( extendedTransformedSource );
+				sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
+				//sources.add( extendedTransformedSource );
 			}
 
 			zOffset += depth;
@@ -416,19 +416,12 @@ public class SparkExportAlignedSlabSeries {
 				depth
 		};
 
-		/*
 		// flipping x-z axes
 		// TODO: Remove
-		long tmp = min[ 2 ];
-		min[ 2 ] = min[ 0 ];
-		min[ 0 ] = tmp;
-		tmp = max[ 2 ];
-		max[ 2 ] = max[ 0 ];
-		max[ 0 ] = tmp;
-		tmp = dimensions[ 2 ];
-		dimensions[ 2 ] = dimensions[ 0 ];
-		dimensions[ 0 ] = tmp;
-		*/
+		final long[] dimensionsFlipped = dimensions.clone();
+		final long tmp = dimensionsFlipped[ 2 ];
+		dimensionsFlipped[ 2 ] = dimensionsFlipped[ 0 ];
+		dimensionsFlipped[ 0 ] = tmp;
 
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
@@ -438,9 +431,9 @@ public class SparkExportAlignedSlabSeries {
 
 		/* create output dataset */
 		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
-		n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+		n5Output.createDataset(datasetNameOutput, dimensionsFlipped, blockSize, DataType.UINT8, new GzipCompression());
 
-		final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
+		final List<long[][]> grid = Grid.create(dimensionsFlipped, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
 		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
 
