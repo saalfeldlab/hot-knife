@@ -216,9 +216,18 @@ public class SparkExportAlignedSlabSeries {
 								botOffset);
 				
 				final RealTransformSequence transformSequence = new RealTransformSequence();
-				
-				AffineTransform3D rigid = new AffineTransform3D();
-				//make rigid
+
+				final AffineTransform3D rigid = new AffineTransform3D();
+				rigid.translate(
+						-(dimensions[0]/2 + min[0]),
+						-(dimensions[1]/2 + min[1]),
+						0 );
+				rigid.rotate( 2, Math.toRadians( -18 ) );
+				rigid.translate(
+						(dimensions[0]/2 + min[0]),
+						(dimensions[1]/2 + min[1]),
+						0 );
+
 				transformSequence.add(rigid.inverse());
 				transformSequence.add(transition);
 				
@@ -277,7 +286,8 @@ public class SparkExportAlignedSlabSeries {
 
 				// flipping X-Z axes
 				// TODO: remove
-				sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
+				//sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
+				sources.add( extendedTransformedSource );
 			}
 
 			zOffset += depth;
@@ -387,6 +397,7 @@ public class SparkExportAlignedSlabSeries {
 				depth
 		};
 
+		/*
 		// flipping x-z axes
 		// TODO: Remove
 		long tmp = min[ 2 ];
@@ -398,7 +409,7 @@ public class SparkExportAlignedSlabSeries {
 		tmp = dimensions[ 2 ];
 		dimensions[ 2 ] = dimensions[ 0 ];
 		dimensions[ 0 ] = tmp;
-
+		*/
 
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
