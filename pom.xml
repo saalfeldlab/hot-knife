@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>saalfeldlab</groupId>
 	<artifactId>hot-knife</artifactId>
-	<version>0.0.4-SNAPSHOT</version>
+	<version>0.0.4b-SNAPSHOT</version>
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
