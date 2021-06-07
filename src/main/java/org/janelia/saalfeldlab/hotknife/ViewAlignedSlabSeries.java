@@ -22,7 +22,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
+import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -41,6 +44,7 @@ import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
@@ -74,6 +78,9 @@ public class ViewAlignedSlabSeries {
 
 		@Option(name = "-j", aliases = {"--n5Group"}, required = true, usage = "N5 group containing alignments, e.g. /nrs/flyem/data/tmp/Z0115-22.n5/align-6")
 		private String n5GroupAlign;
+
+		@Option(name = "-n", aliases = {"--normalizeContrast"}, required = false, usage = "optionally normalize contrast")
+		private boolean normalizeContrast;
 
 		public Options(final String[] args) {
 
@@ -126,6 +133,13 @@ public class ViewAlignedSlabSeries {
 
 			return n5GroupAlign;
 		}
+
+		/**
+		 * @return whether to normalize contrast
+		 */
+		public boolean normalizeContrast() {
+			return normalizeContrast;
+		}
 	}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -142,6 +156,7 @@ public class ViewAlignedSlabSeries {
 				options.getTopOffsets(),
 				options.getBotOffsets(),
 				new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
+				options.normalizeContrast(),
 				true);
 	}
 
@@ -152,6 +167,7 @@ public class ViewAlignedSlabSeries {
 			final List<Long> topOffsets,
 			final List<Long> botOffsets,
 			final VoxelDimensions voxelDimensions,
+			final boolean normalizeContrast,
 			final boolean useVolatile) throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
@@ -201,11 +217,51 @@ public class ViewAlignedSlabSeries {
 				final int scale = 1 << s;
 				final double inverseScale = 1.0 / scale;
 
-				final RandomAccessibleInterval<UnsignedByteType> data = N5Utils.open(n5, datasetName + "/s" + s);
-				final RandomAccessibleInterval<UnsignedByteType> source = Views.zeroMin(Views.invertAxis(data, 2));
+				final RandomAccessibleInterval<UnsignedByteType> source;
+
+				if ( normalizeContrast )
+				{
+					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
+	
+					final int blockRadius = (int)Math.round(511 * inverseScale); //1023
+	
+					final ImageJStackOp<UnsignedByteType> cllcn =
+							new ImageJStackOp<>(
+									Views.extendZero(sourceRaw),
+									(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+									blockRadius,
+									0,
+									255);
+	
+					source = Lazy.process(
+							sourceRaw,
+							new int[] {128, 128, 16},
+							new UnsignedByteType(),
+							AccessFlags.setOf(AccessFlags.VOLATILE),
+							cllcn);
+				}
+				else
+				{
+					source = N5Utils.open(n5, datasetName + "/s" + s);
+				}
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
+
+				//System.out.println( "Warning: adding custom transformation");
+				final AffineTransform3D rigid = new AffineTransform3D();
+				rigid.translate(
+						-(cropInterval.dimension(0)/2 + cropInterval.min( 0 )),
+						-(cropInterval.dimension(1)/2 + cropInterval.min( 1 )),
+						0 );
+				rigid.rotate( 2, Math.toRadians( -18 ) );
+				rigid.translate(
+						(cropInterval.dimension(0)/2 + cropInterval.min( 0 )),
+						(cropInterval.dimension(1)/2 + cropInterval.min( 1 )),
+						0 );
+
+				transformSequence.add(rigid.inverse());
+
 				transformSequence.add(transition);
 				transformSequence.add(scale3D);
 

@@ -25,7 +25,10 @@ import java.util.concurrent.ExecutionException;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
+import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -43,8 +46,11 @@ import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.util.Singleton;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
@@ -83,6 +89,9 @@ public class SparkExportAlignedSlabSeries {
 
 		@Option(name = "--blockSize", usage = "blockSize, e.g. 128,128,128")
 		private String blockSizeString = null;
+
+		@Option(name = "-n", aliases = {"--normalizeContrast"}, required = false, usage = "optionally normalize contrast")
+		private boolean normalizeContrast;
 
 		public Options(final String[] args) {
 
@@ -159,6 +168,13 @@ public class SparkExportAlignedSlabSeries {
 
 			return blockSizeString == null ? new int[]{128, 128, 128}: parseCSIntArray(blockSizeString);
 		}
+
+		/**
+		 * @return whether to normalize contrast
+		 */
+		public boolean normalizeContrast() {
+			return normalizeContrast;
+		}
 	}
 
 	private static void saveBlock(
@@ -174,7 +190,8 @@ public class SparkExportAlignedSlabSeries {
 			final long[] max,
 			final long[] dimensions,
 			final int[] blockSize,
-			final long[][] gridBlock) throws IOException {
+			final long[][] gridBlock,
+			final boolean normalizeContrast ) throws IOException {
 
 		final N5Reader n5Input = Singleton.get("n5Input", () -> new N5FSReader(n5PathInput));
 		final N5Writer n5Output = Singleton.get("n5Output", () -> new N5FSWriter(n5PathOutput));
@@ -208,6 +225,14 @@ public class SparkExportAlignedSlabSeries {
 								bot,
 								topOffset,
 								botOffset);
+				
+				final RealTransformSequence transformSequence = new RealTransformSequence();
+				
+				AffineTransform3D rigid = new AffineTransform3D();
+				//make rigid
+				transformSequence.add(rigid.inverse());
+				transformSequence.add(transition);
+				
 
 				final long[] cropMin = new long[] {min[0], min[1], topOffset};
 				final long[] cropMax = new long[] {max[0], max[1], botOffset};
@@ -218,15 +243,46 @@ public class SparkExportAlignedSlabSeries {
 
 				final String datasetName = datasetNames.get(i);
 
-				final RandomAccessibleInterval<UnsignedByteType> source =
-						Singleton.get(
-								"source" + i,
-								() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName));
+				final RandomAccessibleInterval<UnsignedByteType> source;
+
+				if ( normalizeContrast )
+				{
+					final RandomAccessibleInterval<UnsignedByteType> sourceRaw =
+							Singleton.get(
+									"source" + i,
+									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName));
+	
+					final int blockRadius = (int)Math.round(511);
+	
+					final ImageJStackOp<UnsignedByteType> cllcn =
+							new ImageJStackOp<>(
+									Views.extendZero(sourceRaw),
+									(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+									blockRadius,
+									0,
+									255);
+
+					source =
+							Singleton.get(
+									"cllcn" + i,
+									() -> (RandomAccessibleInterval<UnsignedByteType>)Lazy.process(
+											sourceRaw,
+											new int[] {128, 128, 16},
+											new UnsignedByteType(),
+											AccessFlags.setOf(AccessFlags.VOLATILE),
+											cllcn));
+				}
+				else
+				{
+					source = Singleton.get(
+									"source" + i,
+									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName));
+				}
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
 					source,
 					cropInterval,
-					transition,
+					transformSequence,
 					new UnsignedByteType(0));
 
 				final IntervalView<UnsignedByteType> extendedTransformedSource =
@@ -238,7 +294,9 @@ public class SparkExportAlignedSlabSeries {
 									new UnsignedByteType(0)),
 							new FinalInterval(min, max));
 
-				sources.add(extendedTransformedSource);
+				// flipping X-Z axes
+				// TODO: remove
+				sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
 			}
 
 			zOffset += depth;
@@ -291,6 +349,7 @@ public class SparkExportAlignedSlabSeries {
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
+		// TODO: doesn't work right now, see saalfeld's change to ViewAlignedSlabSeries
 		final Options options = new Options(args);
 
 		if (!options.parsedSuccessfully)
@@ -347,8 +406,22 @@ public class SparkExportAlignedSlabSeries {
 				depth
 		};
 
+		// flipping x-z axes
+		// TODO: Remove
+		long tmp = fMin[ 2 ];
+		fMin[ 2 ] = fMin[ 0 ];
+		fMin[ 0 ] = tmp;
+		tmp = fMax[ 2 ];
+		fMax[ 2 ] = fMax[ 0 ];
+		fMax[ 0 ] = tmp;
+		tmp = dimensions[ 2 ];
+		dimensions[ 2 ] = dimensions[ 0 ];
+		dimensions[ 0 ] = tmp;
+
+
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
+		final boolean normalizeContrast = options.normalizeContrast();
 
 		final String n5PathOutput = options.getN5OutputPath();
 
@@ -375,9 +448,13 @@ public class SparkExportAlignedSlabSeries {
 							max,
 							dimensions,
 							blockSize,
-							gridBlock);
+							gridBlock,
+							normalizeContrast);
 				});
 
 		sc.close();
+
+		n5Input.close();
+		n5Output.close();
 	}
 }
