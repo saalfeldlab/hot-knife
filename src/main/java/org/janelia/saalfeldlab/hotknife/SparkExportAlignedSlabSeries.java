@@ -319,7 +319,7 @@ public class SparkExportAlignedSlabSeries {
 		for (int i = 0; i < topOffsets.size(); ++i) {
 			long botOffset = botOffsets.get(i);
 			if (botOffset < 0) {
-				final long[] datasetDimensions = n5Input.getAttribute(datasetNames.get(i), "dimensions", long[].class);
+				final long[] datasetDimensions = n5Input.getAttribute(datasetNames.get(i) + "/s0", "dimensions", long[].class);
 				botOffset = datasetDimensions[2] + botOffset - 1;
 				botOffsets.set(i, botOffset);
 			}
