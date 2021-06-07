@@ -27,7 +27,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
+import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -48,6 +51,7 @@ import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.imageplus.ByteImagePlus;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -217,9 +221,24 @@ public class ViewAlignedSlabSeries {
 				final int scale = 1 << s;
 				final double inverseScale = 1.0 / scale;
 
-				//final RandomAccessibleInterval<UnsignedByteType> data = N5Utils.open(n5, datasetName + "/s" + s);
-				//final RandomAccessibleInterval<UnsignedByteType> source = Views.zeroMin(Views.invertAxis(data, 2));
-				final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, datasetName + "/s" + s);
+				final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
+
+				final int blockRadius = (int)Math.round(511 * inverseScale); //1023
+
+				final ImageJStackOp<UnsignedByteType> cllcn =
+						new ImageJStackOp<>(
+								Views.extendZero(sourceRaw),
+								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+								blockRadius,
+								0,
+								255);
+
+				final RandomAccessibleInterval<UnsignedByteType> source = Lazy.process(
+						sourceRaw,
+						new int[] {128, 128, 16},
+						new UnsignedByteType(),
+						AccessFlags.setOf(AccessFlags.VOLATILE),
+						cllcn);
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
