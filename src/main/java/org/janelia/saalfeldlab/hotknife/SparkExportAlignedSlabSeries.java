@@ -42,8 +42,10 @@ import org.kohsuke.args4j.Option;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
@@ -197,6 +199,14 @@ public class SparkExportAlignedSlabSeries {
 								bot,
 								topOffset,
 								botOffset);
+				
+				final RealTransformSequence transformSequence = new RealTransformSequence();
+				
+				AffineTransform3D rigid = new AffineTransform3D();
+				//make rigid
+				transformSequence.add(rigid.inverse());
+				transformSequence.add(transition);
+				
 
 				final long[] cropMin = new long[] {min[0], min[1], topOffset};
 				final long[] cropMax = new long[] {max[0], max[1], botOffset};
@@ -212,7 +222,7 @@ public class SparkExportAlignedSlabSeries {
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
 					source,
 					cropInterval,
-					transition,
+					transformSequence,
 					new UnsignedByteType(0));
 
 				final IntervalView<UnsignedByteType> extendedTransformedSource =
@@ -277,6 +287,7 @@ public class SparkExportAlignedSlabSeries {
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
+		// TODO: doesn't work right now, see saalfeld's change to ViewAlignedSlabSeries
 		final Options options = new Options(args);
 
 		if (!options.parsedSuccessfully)
@@ -365,5 +376,8 @@ public class SparkExportAlignedSlabSeries {
 				});
 
 		sc.close();
+
+		n5Input.close();
+		n5Output.close();
 	}
 }

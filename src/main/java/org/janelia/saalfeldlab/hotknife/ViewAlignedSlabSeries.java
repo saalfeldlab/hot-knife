@@ -44,12 +44,7 @@ import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
-<<<<<<< HEAD
-=======
 import net.imglib2.img.basictypeaccess.AccessFlags;
-import net.imglib2.img.imageplus.ByteImagePlus;
-import net.imglib2.img.imageplus.ImagePlusImgs;
->>>>>>> 9e18503... added contrast normalization
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
