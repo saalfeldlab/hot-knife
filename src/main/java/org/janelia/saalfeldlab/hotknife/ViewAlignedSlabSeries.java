@@ -79,6 +79,9 @@ public class ViewAlignedSlabSeries {
 		@Option(name = "-j", aliases = {"--n5Group"}, required = true, usage = "N5 group containing alignments, e.g. /nrs/flyem/data/tmp/Z0115-22.n5/align-6")
 		private String n5GroupAlign;
 
+		@Option(name = "-n", aliases = {"--normalizeContrast"}, required = false, usage = "optionally normalize contrast")
+		private boolean normalizeContrast;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -130,6 +133,13 @@ public class ViewAlignedSlabSeries {
 
 			return n5GroupAlign;
 		}
+
+		/**
+		 * @return whether to normalize contrast
+		 */
+		public boolean normalizeContrast() {
+			return normalizeContrast;
+		}
 	}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -146,6 +156,7 @@ public class ViewAlignedSlabSeries {
 				options.getTopOffsets(),
 				options.getBotOffsets(),
 				new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
+				options.normalizeContrast(),
 				true);
 	}
 
@@ -156,6 +167,7 @@ public class ViewAlignedSlabSeries {
 			final List<Long> topOffsets,
 			final List<Long> botOffsets,
 			final VoxelDimensions voxelDimensions,
+			final boolean normalizeContrast,
 			final boolean useVolatile) throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
@@ -205,24 +217,33 @@ public class ViewAlignedSlabSeries {
 				final int scale = 1 << s;
 				final double inverseScale = 1.0 / scale;
 
-				final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
+				final RandomAccessibleInterval<UnsignedByteType> source;
 
-				final int blockRadius = (int)Math.round(511 * inverseScale); //1023
-
-				final ImageJStackOp<UnsignedByteType> cllcn =
-						new ImageJStackOp<>(
-								Views.extendZero(sourceRaw),
-								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
-								blockRadius,
-								0,
-								255);
-
-				final RandomAccessibleInterval<UnsignedByteType> source = Lazy.process(
-						sourceRaw,
-						new int[] {128, 128, 16},
-						new UnsignedByteType(),
-						AccessFlags.setOf(AccessFlags.VOLATILE),
-						cllcn);
+				if ( normalizeContrast )
+				{
+					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
+	
+					final int blockRadius = (int)Math.round(511 * inverseScale); //1023
+	
+					final ImageJStackOp<UnsignedByteType> cllcn =
+							new ImageJStackOp<>(
+									Views.extendZero(sourceRaw),
+									(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+									blockRadius,
+									0,
+									255);
+	
+					source = Lazy.process(
+							sourceRaw,
+							new int[] {128, 128, 16},
+							new UnsignedByteType(),
+							AccessFlags.setOf(AccessFlags.VOLATILE),
+							cllcn);
+				}
+				else
+				{
+					source = N5Utils.open(n5, datasetName + "/s" + s);
+				}
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
