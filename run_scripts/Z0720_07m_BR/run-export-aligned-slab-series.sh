@@ -14,7 +14,6 @@ ARGV="\
 --n5PathOutput /nrs/flyem/render/n5/Z0720_07m_BR \
 --n5DatasetOutput /39-26 \
 --blockSize 128,128,128 \
-# --normalizeContrast
 -i '/flat/Sec39/raw' \
 -t 20 \
 -b -20 \
