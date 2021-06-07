@@ -245,7 +245,7 @@ public class SparkExportAlignedSlabSeries {
 
 				if ( normalizeContrast )
 				{
-					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
+					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName + "/s0" );
 	
 					final int blockRadius = (int)Math.round(511);
 	
@@ -266,7 +266,7 @@ public class SparkExportAlignedSlabSeries {
 				}
 				else
 				{
-					source =  N5Utils.open(n5Input, datasetName);
+					source =  N5Utils.open(n5Input, datasetName  + "/s0" );
 				}
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
