@@ -275,7 +275,9 @@ public class SparkExportAlignedSlabSeries {
 									new UnsignedByteType(0)),
 							new FinalInterval(min, max));
 
-				sources.add(extendedTransformedSource);
+				// flipping X-Z axes
+				// TODO: remove
+				sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
 			}
 
 			zOffset += depth;
@@ -384,6 +386,19 @@ public class SparkExportAlignedSlabSeries {
 				max[1] - min[1] + 1,
 				depth
 		};
+
+		// flipping x-z axes
+		// TODO: Remove
+		long tmp = fMin[ 2 ];
+		fMin[ 2 ] = fMin[ 0 ];
+		fMin[ 0 ] = tmp;
+		tmp = fMax[ 2 ];
+		fMax[ 2 ] = fMax[ 0 ];
+		fMax[ 0 ] = tmp;
+		tmp = dimensions[ 2 ];
+		dimensions[ 2 ] = dimensions[ 0 ];
+		dimensions[ 0 ] = tmp;
+
 
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
