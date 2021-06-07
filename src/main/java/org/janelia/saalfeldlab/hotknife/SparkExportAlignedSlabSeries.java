@@ -227,9 +227,18 @@ public class SparkExportAlignedSlabSeries {
 								botOffset);
 				
 				final RealTransformSequence transformSequence = new RealTransformSequence();
-				
-				AffineTransform3D rigid = new AffineTransform3D();
-				//make rigid
+
+				final AffineTransform3D rigid = new AffineTransform3D();
+				rigid.translate(
+						-(dimensions[0]/2 + min[0]),
+						-(dimensions[1]/2 + min[1]),
+						0 );
+				rigid.rotate( 2, Math.toRadians( -18 ) );
+				rigid.translate(
+						(dimensions[0]/2 + min[0]),
+						(dimensions[1]/2 + min[1]),
+						0 );
+
 				transformSequence.add(rigid.inverse());
 				transformSequence.add(transition);
 				
@@ -250,7 +259,7 @@ public class SparkExportAlignedSlabSeries {
 					final RandomAccessibleInterval<UnsignedByteType> sourceRaw =
 							Singleton.get(
 									"source" + i,
-									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName));
+									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));
 	
 					final int blockRadius = (int)Math.round(511);
 	
@@ -276,7 +285,7 @@ public class SparkExportAlignedSlabSeries {
 				{
 					source = Singleton.get(
 									"source" + i,
-									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName));
+									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));
 				}
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
@@ -296,7 +305,8 @@ public class SparkExportAlignedSlabSeries {
 
 				// flipping X-Z axes
 				// TODO: remove
-				sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
+				//sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
+				sources.add( extendedTransformedSource );
 			}
 
 			zOffset += depth;
@@ -381,7 +391,7 @@ public class SparkExportAlignedSlabSeries {
 		for (int i = 0; i < topOffsets.size(); ++i) {
 			long botOffset = botOffsets.get(i);
 			if (botOffset < 0) {
-				final long[] datasetDimensions = n5Input.getAttribute(datasetNames.get(i), "dimensions", long[].class);
+				final long[] datasetDimensions = n5Input.getAttribute(datasetNames.get(i) + "/s0", "dimensions", long[].class);
 				botOffset = datasetDimensions[2] + botOffset - 1;
 				botOffsets.set(i, botOffset);
 			}
@@ -406,18 +416,19 @@ public class SparkExportAlignedSlabSeries {
 				depth
 		};
 
+		/*
 		// flipping x-z axes
 		// TODO: Remove
-		long tmp = fMin[ 2 ];
-		fMin[ 2 ] = fMin[ 0 ];
-		fMin[ 0 ] = tmp;
-		tmp = fMax[ 2 ];
-		fMax[ 2 ] = fMax[ 0 ];
-		fMax[ 0 ] = tmp;
+		long tmp = min[ 2 ];
+		min[ 2 ] = min[ 0 ];
+		min[ 0 ] = tmp;
+		tmp = max[ 2 ];
+		max[ 2 ] = max[ 0 ];
+		max[ 0 ] = tmp;
 		tmp = dimensions[ 2 ];
 		dimensions[ 2 ] = dimensions[ 0 ];
 		dimensions[ 0 ] = tmp;
-
+		*/
 
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
