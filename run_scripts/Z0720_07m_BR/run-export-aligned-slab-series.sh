@@ -3,7 +3,7 @@
 set -e
 umask 0002
 
-N_NODES=4
+N_NODES=60
 
 # --------------------------------------------------------------------
 # setup export parameters
@@ -12,7 +12,7 @@ ARGV="\
 --n5PathInput /nrs/flyem/render/n5/Z0720_07m_BR \
 --n5TransformGroup /surface_align_final/pass12 \
 --n5PathOutput /nrs/flyem/render/n5/Z0720_07m_BR \
---n5DatasetOutput /39-26 \
+--n5DatasetOutput /39-26/s0 \
 --blockSize 128,128,128 \
 -i '/flat/Sec39/raw' \
 -t 20 \
