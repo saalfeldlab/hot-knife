@@ -44,7 +44,6 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.algorithm.util.Singleton;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -194,8 +193,8 @@ public class SparkExportAlignedSlabSeries {
 			final long[][] gridBlock, // x-z transformed
 			final boolean normalizeContrast ) throws IOException {
 
-		final N5Reader n5Input = Singleton.get("n5Input", () -> new N5FSReader(n5PathInput));
-		final N5Writer n5Output = Singleton.get("n5Output", () -> new N5FSWriter(n5PathOutput));
+		final N5Reader n5Input = new N5FSReader(n5PathInput);
+		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
 
 		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> sources = new ArrayList<>();
 		long zOffset = 0;
@@ -212,13 +211,9 @@ public class SparkExportAlignedSlabSeries {
 				final String botTransformName = group + "/" + transformDatasetNames[i * 2 + 1];
 
 				final RealTransform top =
-						Singleton.get(
-								topTransformName,
-								() -> Transform.loadScaledTransform(n5Input, topTransformName));
+						Transform.loadScaledTransform(n5Input, topTransformName);
 				final RealTransform bot =
-						Singleton.get(
-								botTransformName,
-								() -> Transform.loadScaledTransform(n5Input, botTransformName));
+						Transform.loadScaledTransform(n5Input, botTransformName);
 
 				final RealTransform transition =
 						new ClippedTransitionRealTransform(
@@ -258,9 +253,7 @@ public class SparkExportAlignedSlabSeries {
 				if ( normalizeContrast )
 				{
 					final RandomAccessibleInterval<UnsignedByteType> sourceRaw =
-							Singleton.get(
-									"source" + i,
-									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));
+							N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" );
 	
 					final int blockRadius = (int)Math.round(511);
 	
@@ -273,20 +266,19 @@ public class SparkExportAlignedSlabSeries {
 									255);
 
 					source =
-							Singleton.get(
-									"cllcn" + i,
-									() -> (RandomAccessibleInterval<UnsignedByteType>)Lazy.process(
+							Lazy.process(
 											sourceRaw,
 											new int[] {128, 128, 16},
 											new UnsignedByteType(),
 											AccessFlags.setOf(AccessFlags.VOLATILE),
-											cllcn));
+											cllcn);
 				}
 				else
 				{
-					source = Singleton.get(
+					source = N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" );
+					/*source = Singleton.get(
 									"source" + i,
-									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));
+									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));*/
 				}
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
