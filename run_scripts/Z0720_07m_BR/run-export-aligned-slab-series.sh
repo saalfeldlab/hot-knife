@@ -3,6 +3,9 @@
 set -e
 umask 0002
 
+export JAVA_HOME="/misc/sc/jdks/8.0.275.fx-zulu"
+export PATH="${JAVA_HOME}/bin:${PATH}"
+
 N_NODES=60
 
 # --------------------------------------------------------------------
