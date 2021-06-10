@@ -44,7 +44,6 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.algorithm.util.Singleton;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -53,6 +52,7 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
@@ -193,8 +193,8 @@ public class SparkExportAlignedSlabSeries {
 			final long[][] gridBlock, // x-z transformed
 			final boolean normalizeContrast ) throws IOException {
 
-		final N5Reader n5Input = Singleton.get("n5Input", () -> new N5FSReader(n5PathInput));
-		final N5Writer n5Output = Singleton.get("n5Output", () -> new N5FSWriter(n5PathOutput));
+		final N5Reader n5Input = new N5FSReader(n5PathInput);
+		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
 
 		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> sources = new ArrayList<>();
 		long zOffset = 0;
@@ -211,13 +211,9 @@ public class SparkExportAlignedSlabSeries {
 				final String botTransformName = group + "/" + transformDatasetNames[i * 2 + 1];
 
 				final RealTransform top =
-						Singleton.get(
-								topTransformName,
-								() -> Transform.loadScaledTransform(n5Input, topTransformName));
+						Transform.loadScaledTransform(n5Input, topTransformName);
 				final RealTransform bot =
-						Singleton.get(
-								botTransformName,
-								() -> Transform.loadScaledTransform(n5Input, botTransformName));
+						Transform.loadScaledTransform(n5Input, botTransformName);
 
 				final RealTransform transition =
 						new ClippedTransitionRealTransform(
@@ -257,9 +253,7 @@ public class SparkExportAlignedSlabSeries {
 				if ( normalizeContrast )
 				{
 					final RandomAccessibleInterval<UnsignedByteType> sourceRaw =
-							Singleton.get(
-									"source" + i,
-									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));
+							N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" );
 	
 					final int blockRadius = (int)Math.round(511);
 	
@@ -272,20 +266,19 @@ public class SparkExportAlignedSlabSeries {
 									255);
 
 					source =
-							Singleton.get(
-									"cllcn" + i,
-									() -> (RandomAccessibleInterval<UnsignedByteType>)Lazy.process(
+							Lazy.process(
 											sourceRaw,
 											new int[] {128, 128, 16},
 											new UnsignedByteType(),
 											AccessFlags.setOf(AccessFlags.VOLATILE),
-											cllcn));
+											cllcn);
 				}
 				else
 				{
-					source = Singleton.get(
+					source = N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" );
+					/*source = Singleton.get(
 									"source" + i,
-									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));
+									() -> N5Utils.<UnsignedByteType>open(n5Input, datasetName + "/s0" ));*/
 				}
 
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
@@ -305,8 +298,8 @@ public class SparkExportAlignedSlabSeries {
 
 				// flipping X-Z axes
 				// TODO: remove
-				sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
-				//sources.add( extendedTransformedSource );
+				//sources.add( Views.permute( extendedTransformedSource, 0, 2 ) );
+				sources.add( extendedTransformedSource );
 			}
 
 			zOffset += depth;
@@ -320,6 +313,8 @@ public class SparkExportAlignedSlabSeries {
 				gridBlock[1][0],
 				gridBlock[1][1],
 				gridBlock[1][2]);
+
+		System.out.println( "writing gridBlockInterval: " + Util.printInterval( gridBlockInterval ));
 
 		switch (sources.size()) {
 		case 0:
@@ -398,6 +393,9 @@ public class SparkExportAlignedSlabSeries {
 			depth += botOffset - topOffsets.get(i) + 1;
 		}
 
+		//fMin[ 1 ] = 10000;
+		//fMax[ 1 ] = fMin[ 1 ] + 126;
+
 		final long[] min = new long[] {
 				fMin[0],
 				fMin[1],
@@ -416,12 +414,16 @@ public class SparkExportAlignedSlabSeries {
 				depth
 		};
 
+		//System.out.println( Util.printCoordinates( min ) );
+		//System.out.println( Util.printCoordinates( max ) );
+		System.out.println( Util.printCoordinates( dimensions ) );
+
 		// flipping x-z axes
 		// TODO: Remove
-		final long[] dimensionsFlipped = dimensions.clone();
-		final long tmp = dimensionsFlipped[ 2 ];
-		dimensionsFlipped[ 2 ] = dimensionsFlipped[ 0 ];
-		dimensionsFlipped[ 0 ] = tmp;
+		//final long[] dimensionsFlipped = dimensions.clone();
+		//final long tmp = dimensionsFlipped[ 2 ];
+		//dimensionsFlipped[ 2 ] = dimensionsFlipped[ 0 ];
+		//dimensionsFlipped[ 0 ] = tmp;
 
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
@@ -431,9 +433,9 @@ public class SparkExportAlignedSlabSeries {
 
 		/* create output dataset */
 		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
-		n5Output.createDataset(datasetNameOutput, dimensionsFlipped, blockSize, DataType.UINT8, new GzipCompression());
+		n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
-		final List<long[][]> grid = Grid.create(dimensionsFlipped, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
+		final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
 		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
 
