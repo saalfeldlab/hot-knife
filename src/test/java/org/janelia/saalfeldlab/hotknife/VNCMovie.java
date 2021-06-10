@@ -51,6 +51,7 @@ import bdv.viewer.render.RenderTarget;
 import bdv.viewer.render.awt.BufferedImageRenderResult;
 import ij.process.ColorProcessor;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.AffineTransform3D;
@@ -126,7 +127,7 @@ public class VNCMovie implements Callable<Void> {
 	/**
 	 * Cosine shape of linear [0,1]
 	 */
-	private static double cos(final double x) {
+	protected static double cos(final double x) {
 
 		return 0.5 - 0.5 * Math.cos(Math.PI * x);
 	}
@@ -142,7 +143,7 @@ public class VNCMovie implements Callable<Void> {
 	 *   4  soft slow start
 	 *   5  soft slow end
 	 */
-	private static double accel(final double t, final int type) {
+	protected static double accel(final double t, final int type) {
 
 		switch (type) {
 		case 1:		// slow start
@@ -160,11 +161,13 @@ public class VNCMovie implements Callable<Void> {
 		}
 	}
 
-	private void recordMovie(
+	protected static void recordMovie(
 			final ViewerPanel viewer,
 			final int width,
 			final int height,
 			final AffineTransform3D[] transforms,
+			final AffineTransform3D viewerScale,
+			final AffineTransform3D viewerTranslation,
 			final int[] frames,
 			final int[] accel,
 			final int firstTransformIndex,
@@ -244,7 +247,11 @@ public class VNCMovie implements Callable<Void> {
 		new CommandLine(new VNCMovie()).execute(args);
 	}
 
-	public RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource() throws IOException {
+	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
+			final String n5Path,
+			final String n5Group,
+			final VoxelDimensions voxelDims,
+			final String title ) throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -284,8 +291,8 @@ public class VNCMovie implements Callable<Void> {
 						mipmaps,
 						new UnsignedByteType(),
 						scales,
-						new FinalVoxelDimensions("um", new double[]{0.008, 0.008, 0.008}),
-						"VNC");
+						voxelDims,
+						title);
 
 		return mipmapSource;
 	}
@@ -293,7 +300,7 @@ public class VNCMovie implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = createMipmapSource();
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = createMipmapSource( n5Path, n5Group, new FinalVoxelDimensions("um", new double[]{0.008, 0.008, 0.008}), "VNC");
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1) / 2));
 //		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
@@ -388,6 +395,8 @@ public class VNCMovie implements Callable<Void> {
 				screenWidth,
 				screenHeight,
 				transforms,
+				viewerScale,
+				viewerTranslation,
 				frames,
 				accel,
 				5,
