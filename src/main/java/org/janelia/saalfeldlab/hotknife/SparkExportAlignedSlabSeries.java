@@ -214,14 +214,6 @@ public class SparkExportAlignedSlabSeries {
 								bot,
 								topOffset,
 								botOffset);
-				
-				final RealTransformSequence transformSequence = new RealTransformSequence();
-				
-				AffineTransform3D rigid = new AffineTransform3D();
-				//make rigid
-				transformSequence.add(rigid.inverse());
-				transformSequence.add(transition);
-				
 
 				final long[] cropMin = new long[] {min[0], min[1], topOffset};
 				final long[] cropMax = new long[] {max[0], max[1], botOffset};
@@ -263,7 +255,7 @@ public class SparkExportAlignedSlabSeries {
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
 					source,
 					cropInterval,
-					transformSequence,
+					transition,
 					new UnsignedByteType(0));
 
 				final IntervalView<UnsignedByteType> extendedTransformedSource =
@@ -360,7 +352,7 @@ public class SparkExportAlignedSlabSeries {
 		for (int i = 0; i < topOffsets.size(); ++i) {
 			long botOffset = botOffsets.get(i);
 			if (botOffset < 0) {
-				final long[] datasetDimensions = n5Input.getAttribute(datasetNames.get(i), "dimensions", long[].class);
+				final long[] datasetDimensions = n5Input.getAttribute(datasetNames.get(i) + "/s0", "dimensions", long[].class);
 				botOffset = datasetDimensions[2] + botOffset - 1;
 				botOffsets.set(i, botOffset);
 			}
