@@ -23,43 +23,6 @@ import net.imglib2.type.numeric.real.FloatType;
 
 public class CreateMouseLightProject {
 
-	public static <T extends NativeType<T>> MetaData<T> openAndParseMetaData( final String file ) throws FormatException, IOException
-	{
-		final TiffReader r = new TiffReader();
-		r.setId( file );
-
-		final long[] dim;
-
-		if ( r.getSizeT() > 1 )
-			System.out.println( "Warning, more than one timepoints, not supported right now.");
-
-		if ( r.getSizeC() > 1 )
-			System.out.println( "Warning, more than one channel, not supported right now.");
-
-		if ( r.getSizeZ() > 1 )
-			dim = new long[] { r.getSizeX(), r.getSizeY(), r.getSizeZ() };
-		else
-			dim = new long[] { r.getSizeX(), r.getSizeY() };
-
-		final int pixelType = r.getPixelType();
-		final T type;
-
-		if ( pixelType == FormatTools.UINT8 )
-			type = (T)(Object) new UnsignedByteType();
-		else if ( pixelType == FormatTools.INT8 )
-			type = (T)(Object) new ByteType();
-		else if ( pixelType == FormatTools.UINT16 )
-			type = (T)(Object) new UnsignedShortType();
-		else if ( pixelType == FormatTools.INT16 )
-			type = (T)(Object) new ShortType();
-		else if ( pixelType == FormatTools.FLOAT )
-			type = (T)(Object) new FloatType();
-		else
-			throw new RuntimeException( "Import type " + pixelType + " not supported." );
-
-		return new MetaData<>( dim, type, r, pixelType, r.getBitsPerPixel(), r.isLittleEndian() );
-	}
-
 	public static void main( String[] args ) throws IOException, FormatException
 	{
 		final N5FSWriter n5 = new N5FSWriter(
@@ -90,8 +53,8 @@ public class CreateMouseLightProject {
 		final String basepath = "/nrs/mouselight/lightsheet/2021-02-12/021221_JChandrashekar_HHMI/S1/S1_0000";
 
 		final ArrayList< String > stacks = new ArrayList<>();
-		for ( int y = 0; y <= 3 /*69*/; ++y )
-			for ( int x = 0; x <= 2 /*24*/; ++x )
+		for ( int y = 0; y <= 69; ++y )
+			for ( int x = 0; x <= 24; ++x )
 			{
 				final String posShort = "Pos" + String.format("%03d", y ) + "-" + String.format("%03d", x );
 
