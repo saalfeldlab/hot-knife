@@ -215,6 +215,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		final double sigma = 2.5;
 		double thr = 0.03;
+		double lowestThr = 0.01;
 
 		int numUnconnected = 0;
 		int lastUnconnected = Integer.MAX_VALUE;
@@ -485,7 +486,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 				thr /= 1.5;
 
 			// one final run, none before was good
-			if ( thr <= 0.001 || lastUnconnected < numUnconnected )
+			if ( thr <= lowestThr || lastUnconnected < numUnconnected )
 			{
 				System.out.println( "repeating best thr=" + bestThr );
 				thr = bestThr;
