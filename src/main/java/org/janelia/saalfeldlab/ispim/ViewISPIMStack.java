@@ -24,7 +24,10 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 
 import com.google.common.reflect.TypeToken;
@@ -36,6 +39,7 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.viewer.Interpolation;
+import ij.ImageJ;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import net.imglib2.FinalInterval;
@@ -47,6 +51,9 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.img.imageplus.ShortImagePlus;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.Interpolant;
 import net.imglib2.interpolation.InterpolatorFactory;
@@ -102,6 +109,9 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 
 	@Option(names = "--shearY", required = false, description = "shearing of z into y, e.g. -1 (default 0)")
 	private double shearY = 0;
+
+	@Option(names = "--displayImageJStack", required = false, description = "display as ImageJ stack (default off)")
+	private boolean displayImageJStack = false;
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
@@ -529,7 +539,12 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 				new TypeToken<ArrayList<String>>() {}.getType());
 
 		if (!ids.contains(id))
+		{
+			for ( final String s : ids )
+				System.out.println( s );
+			System.out.println( id + " not present (available ones listed above).");
 			return null;
+		}
 
 		final HashMap<String, HashMap<String, List<Slice>>> stacks = new HashMap<>();
 		final HashMap<String, RandomAccessible<AffineTransform2D>> alignments = new HashMap<>();
@@ -590,10 +605,40 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 		System.out.println(gson.toJson(ids));
 		// System.out.println(new Gson().toJson(stacks));
 
-		final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
-//		final AffineTransform3D stretchTransform = new AffineTransform3D();
+//		final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
+		final AffineTransform3D stretchTransform = new AffineTransform3D();
 
-		run(camTransforms, stretchTransform, stacks, alignments, firstSliceIndex, localLastSliceIndex);
+		if ( displayImageJStack )
+		{
+			new ImageJ();
+
+			final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+
+			for (final Entry<String, HashMap<String, List<Slice>>> channel : stacks.entrySet()) {
+	
+				for (final Entry<String, List<Slice>> cam : channel.getValue().entrySet()) {
+	
+					/* this is the inverse */
+					final AffineTransform2D camTransform = camTransforms.get(channel.getKey()).get(cam.getKey());
+					final String title = channel.getKey() + " " + cam.getKey();
+					final Pair< RealRandomAccessible<UnsignedShortType>, Interval > data =
+							prepareCamSource(cam.getValue(), new UnsignedShortType(0), Interpolation.NLINEAR, camTransform.inverse(), stretchTransform, alignments.get(channel.getKey()), firstSliceIndex, localLastSliceIndex);
+	
+					RandomAccessibleInterval< UnsignedShortType > ra = Views.zeroMin( Views.interval( Views.raster( data.getA() ), data.getB() ) );
+					System.out.println( "copying..." );
+					ShortImagePlus<UnsignedShortType> img = ImagePlusImgs.unsignedShorts( ra.dimensionsAsLongArray() );
+					Util.copy(ra, img, service);
+					img.getImagePlus().setDimensions(1, (int)img.dimension( 2 ), 1 );
+					img.getImagePlus().setTitle(title);
+					img.getImagePlus().show();
+				}
+			}
+			service.shutdown();
+		}
+		else
+		{
+			run(camTransforms, stretchTransform, stacks, alignments, firstSliceIndex, localLastSliceIndex);
+		}
 
 		return null;
 	}

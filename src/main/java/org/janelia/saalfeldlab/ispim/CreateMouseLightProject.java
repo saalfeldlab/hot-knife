@@ -67,10 +67,12 @@ public class CreateMouseLightProject {
 			{
 				final String fileName = basepath + "/S1_0000_MMStack_Pos" + y + "_" + x + ".ome.tif";
 
-				System.out.println( "Parsing " + fileName );
+				System.out.print( "Parsing " + fileName );
 
 				final TiffReader r = new TiffReader();
 				r.setId( fileName );
+
+				System.out.println( " z=" + r.getSizeT()  );
 
 				// timepoints is z ?!?!?
 				for ( int z = 0; z < r.getSizeT(); ++z )
