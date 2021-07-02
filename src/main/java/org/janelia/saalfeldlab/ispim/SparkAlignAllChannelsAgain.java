@@ -113,6 +113,12 @@ public class SparkAlignAllChannelsAgain implements Callable<Void>, Serializable 
 							new AffineTransform2DAdapter()));
 
 			final ArrayList<AffineTransform2D> transforms = n5.getAttribute(n5.groupPath(idc), "transforms", new TypeToken<ArrayList<AffineTransform2D>>() {}.getType());
+
+			if ( transforms == null )
+			{
+				// empty stack most likely
+				return null;
+			}
 			final HashSet<AffineTransform2D> consider = new HashSet<>(transforms);
 
 			final double[] shearX = AlignChannel.fit(transforms, consider, 0, 2);
