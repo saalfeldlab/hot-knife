@@ -26,7 +26,7 @@ public class CreateMouseLightProject {
 	public static void main( String[] args ) throws IOException, FormatException
 	{
 		final N5FSWriter n5 = new N5FSWriter(
-				"/nrs/mouselight/lightsheet/2021-02-12/021221_JChandrashekar_HHMI/S1.n5",
+				"/nrs/mouselight/lightsheet/2021-02-12/021221_JChandrashekar_HHMI/S1-2.n5",
 				new GsonBuilder().registerTypeAdapter(
 						AffineTransform2D.class,
 						new AffineTransform2DAdapter()));
@@ -54,14 +54,18 @@ public class CreateMouseLightProject {
 
 		final ArrayList< String > stacks = new ArrayList<>();
 		for ( int y = 0; y <= 69; ++y )
+		{
+			final ArrayList<Slice> slices = new ArrayList<>();
+
+			final String posShort = "Pos" + String.format("%03d", y );
+			System.out.println( "Creating stack " + posShort );
+
+			stacks.add( posShort );// "S1_0000_MMStack_Pos" + y + "_" + x + ".ome.tif" );
+
+			// the x positions are simply concatenated stacks
 			for ( int x = 0; x <= 24; ++x )
 			{
-				final String posShort = "Pos" + String.format("%03d", y ) + "-" + String.format("%03d", x );
-
-				stacks.add( posShort );// "S1_0000_MMStack_Pos" + y + "_" + x + ".ome.tif" );
-
 				final String fileName = basepath + "/S1_0000_MMStack_Pos" + y + "_" + x + ".ome.tif";
-				final ArrayList<Slice> slices = new ArrayList<>();
 
 				System.out.println( "Parsing " + fileName );
 
@@ -80,16 +84,17 @@ public class CreateMouseLightProject {
 				}
 
 				r.close();
-
-				n5.createGroup( "/" + posShort + "/" + channel + "/" + cam );
-				n5.setAttribute( "/" + posShort + "/" + channel + "/" + cam, "slices", slices );
-				/*
-				stack = n5.getAttribute(
-					groupName,
-					"slices",
-					new TypeToken<ArrayList<Slice>>() {}.getType());
-				 */
 			}
+
+			n5.createGroup( "/" + posShort + "/" + channel + "/" + cam );
+			n5.setAttribute( "/" + posShort + "/" + channel + "/" + cam, "slices", slices );
+			/*
+			stack = n5.getAttribute(
+				groupName,
+				"slices",
+				new TypeToken<ArrayList<Slice>>() {}.getType());
+			 */
+		}
 
 		n5.setAttribute( "/", "stacks", stacks );
 		/*
