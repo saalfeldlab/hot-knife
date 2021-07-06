@@ -214,8 +214,9 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		}
 
 		final double sigma = 2.5;
-		double thr = 0.03;
-		double lowestThr = 0.01;
+		final double startThreshold = 0.02;
+		double thr = startThreshold;
+		double lowestThr = 0.02;
 
 		int numUnconnected = 0;
 		int lastUnconnected = Integer.MAX_VALUE;
@@ -475,6 +476,10 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 			System.out.println( "\nunconnected: " + numUnconnected + " (" + numMatches + "), " + " t=" + threshold );
 
+			// no iterative trying on the threshold if they are identical
+			if ( startThreshold == lowestThr )
+				break;
+
 			if ( numUnconnected < bestUnconnected )
 			{
 				bestUnconnected = numUnconnected;
@@ -496,11 +501,12 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		} while ( !extraRun && numUnconnected > 0 );
 
+		/*
 		if ( numUnconnected > 0 )
 		{
 			PrintWriter out = TextFileAccess.openFileWrite( id + "_" + channel +"_" + cam + "." + numUnconnected + ".txt" );
 			out.close();
-		}
+		}*/
 	}
 
 	public static ArrayList< RandomAccessibleInterval< UnsignedShortType> > loadStack( final List<Slice> stack, final List<Integer> slices, final int width, final int height ) throws IOException
