@@ -227,7 +227,10 @@ public class AlignChannel implements Callable<Void>, Serializable {
 
 			final String groupName = n5.groupPath(id, channel, channelCamTransformEntry.getKey(), "matches");
 			if (!n5.exists(groupName))
+			{
+				System.out.println( "WARNING: no matches for " + groupName );
 				continue;
+			}
 
 			System.out.println("loading matches " + groupName + "...");
 
@@ -286,6 +289,7 @@ public class AlignChannel implements Callable<Void>, Serializable {
 				tc.preAlign();
 				tc.optimizeSilently(new ErrorStatistic(numIterations), maxEpsilon, numIterations, numIterations, 1);
 			} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+				System.out.println( "failed on: " + id);
 				e.printStackTrace();
 			}
 
