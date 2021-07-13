@@ -141,6 +141,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		final String n5Path, id, channel, cam;
 		final double sigma, threshold, minIntensity, maxIntensity;
 		final double[] transform;
+		final int downsampling;
 
 		public Block(
 				final int from,
@@ -153,7 +154,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				final double sigma,
 				final double threshold,
 				final double minIntensity,
-				final double maxIntensity)
+				final double maxIntensity,
+				final int downsampling )
 		{
 			this.from = from;
 			this.to = to;
@@ -163,10 +165,11 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			this.cam = cam;
 			this.sigma = sigma;
 			this.threshold = threshold;
-			this.gaussOverhead = DoGImgLib2.radiusDoG( sigma );
+			this.gaussOverhead = DoGImgLib2.radiusDoG( sigma ) * downsampling;
 			this.transform = camtransform.getRowPackedCopy();
 			this.minIntensity = minIntensity;
 			this.maxIntensity = maxIntensity;
+			this.downsampling = downsampling;
 		}
 
 		public AffineTransform2D getTransform()
@@ -284,63 +287,6 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		// System.out.println(new Gson().toJson(stacks));
 
 		return n5data;
-	}
-
-	public static ArrayList< Block > assembleBlocks(
-			final String n5Path,
-			final String id,
-			final String channel,
-			final String cam,
-			final int blockSize,
-			final double sigma, // 2.0
-			final double threshold, // /*0.02*/0.004
-			final double minIntensity,
-			final double maxIntensity ) throws IOException
-	{
-		return assembleBlocks( openN5( n5Path, id ), id, channel, cam, blockSize, sigma, threshold, minIntensity, maxIntensity );
-	}
-
-	public static ArrayList< Block > assembleBlocks(
-			final N5Data n5data,
-			final String id,
-			final String channel,
-			final String cam,
-			final int blockSize,
-			final double sigma, // 2.0
-			final double threshold, // /*0.02*/0.004
-			final double minIntensity,
-			final double maxIntensity )
-	{
-		final int lastSliceIndex = n5data.lastSliceIndex;
-		final int numSlices = lastSliceIndex - + 1;
-		final int numBlocks = numSlices / blockSize + (numSlices % blockSize > 0 ? 1 : 0);
-
-		final ArrayList<Block> blocks = new ArrayList<>();
-
-		System.out.println( "numblocks = " + numBlocks + " from " + n5data.lastSliceIndex + " slices." );
-
-		for ( int i = 0; i < numBlocks; ++i )
-		{
-			final int from  = i * blockSize;
-			final int to = Math.min( lastSliceIndex, from + blockSize - 1 );
-
-			final Block block = new Block(from, to, n5data.n5path, id, channel, cam, n5data.camTransforms.get( channel ).get( cam ), sigma, threshold, minIntensity, maxIntensity );
-
-			blocks.add( block );
-	
-			System.out.println( "block " + i + ": " + from + " >> " + to + " for id=" + id + ", channel=" + channel + ", cam=" + cam );
-
-			/*
-			// visible error: from=200, to=219, ch=Ch515+594nm (cam=cam1) Pos012
-			if ( blockChannelB.from == 200 )
-			{
-				new ImageJ();
-				viewBlock( stacks.get( blockChannelB.channel ), blockChannelB, firstSliceIndex, localLastSlice, n5Path, id );
-				SimpleMultiThreading.threadHaltUnClean();
-			}*/
-		}
-
-		return blocks;
 	}
 
 	public static double align(

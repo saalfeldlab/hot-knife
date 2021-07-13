@@ -29,6 +29,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -50,6 +51,8 @@ import bdv.viewer.Interpolation;
 import loci.formats.FormatException;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.ImgFactory;
+import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
@@ -57,6 +60,7 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
+import net.preibisch.mvrecon.process.downsampling.Downsample;
 import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import picocli.CommandLine;
@@ -87,6 +91,15 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 	@Option(names = "--maxIntensity", required = false, description = "max intensity")
 	private double maxIntensity = 4096;
 
+	@Option(names = "--sigma", required = false, description = "DoG Sigma (default: 2.0)")
+	private double sigma = 2.0;
+
+	@Option(names = "--threshold", required = false, description = "DoG threshold (default: 0.004)")
+	private double threshold = 0.004;
+
+	@Option(names = "--downsample", required = false, description = "downsampling (default: 1.0 - no downsampling)")
+	private int downsample = 1;
+
 	@Option(names = "--channel", required = true, description = "Channel key, e.g. Ch488+561+647nm")
 	private String channel = null;
 
@@ -100,12 +113,73 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 	private HashSet<String> excludeIds = new HashSet<>();
 
 	@SuppressWarnings("serial")
-	public static List<String> getIds(final N5Reader n5) throws IOException {
+	public static List<String> getIds(final N5Reader n5,final HashSet<String> excludeIds) throws IOException {
 
-		return n5.getAttribute(
+		List< String > ids = n5.getAttribute(
 				"/",
 				"stacks",
 				new TypeToken<ArrayList<String>>() {}.getType());
+
+		return ids.stream().filter( id -> excludeIds.contains( id ) ).collect( Collectors.toList() );
+	}
+
+	public static ArrayList< Block > assembleBlocks(
+			final String n5Path,
+			final String id,
+			final String channel,
+			final String cam,
+			final int blockSize,
+			final double sigma, // 2.0
+			final double threshold, // /*0.02*/0.004
+			final double minIntensity,
+			final double maxIntensity,
+			final int downsampling ) throws IOException
+	{
+		return assembleBlocks( SparkPaiwiseAlignChannelsGeo.openN5( n5Path, id ), id, channel, cam, blockSize, sigma, threshold, minIntensity, maxIntensity, downsampling );
+	}
+
+	public static ArrayList< Block > assembleBlocks(
+			final N5Data n5data,
+			final String id,
+			final String channel,
+			final String cam,
+			final int blockSize,
+			final double sigma, // 2.0
+			final double threshold, // /*0.02*/0.004
+			final double minIntensity,
+			final double maxIntensity,
+			final int downsampling )
+	{
+		final int lastSliceIndex = n5data.lastSliceIndex;
+		final int numSlices = lastSliceIndex - + 1;
+		final int numBlocks = numSlices / blockSize + (numSlices % blockSize > 0 ? 1 : 0);
+
+		final ArrayList<Block> blocks = new ArrayList<>();
+
+		System.out.println( "("+id+"/"+channel+"/" +cam + "):" + " numblocks = " + numBlocks + " from " + n5data.lastSliceIndex + " slices." );
+
+		for ( int i = 0; i < numBlocks; ++i )
+		{
+			final int from  = i * blockSize;
+			final int to = Math.min( lastSliceIndex, from + blockSize - 1 );
+
+			final Block block = new Block(from, to, n5data.n5path, id, channel, cam, n5data.camTransforms.get( channel ).get( cam ), sigma, threshold, minIntensity, maxIntensity, downsampling );
+
+			blocks.add( block );
+	
+			System.out.println( "block " + i + ": " + from + " >> " + to + " for id=" + id + ", channel=" + channel + ", cam=" + cam );
+
+			/*
+			// visible error: from=200, to=219, ch=Ch515+594nm (cam=cam1) Pos012
+			if ( blockChannelB.from == 200 )
+			{
+				new ImageJ();
+				viewBlock( stacks.get( blockChannelB.channel ), blockChannelB, firstSliceIndex, localLastSlice, n5Path, id );
+				SimpleMultiThreading.threadHaltUnClean();
+			}*/
+		}
+
+		return blocks;
 	}
 
 	public static void extractPoints(
@@ -161,10 +235,42 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 				final int zBlockSize = (int)( imgs.getA().dimension( 2 ) / 2  + imgs.getA().dimension( 2 ) % 2 );
 
 				final ExecutorService service = Executors.newFixedThreadPool( 1 );
+
+				RandomAccessibleInterval<UnsignedShortType> input =
+						FusionTools.cacheRandomAccessibleInterval( imgs.getA(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } );
+
+				RandomAccessibleInterval<UnsignedShortType> mask =
+						FusionTools.cacheRandomAccessibleInterval( imgs.getB(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } );
+
+				final long[] min = new long[ input.numDimensions() ];
+				input.min( min );
+
+				final ImgFactory< UnsignedShortType > f = new CellImgFactory<>( new UnsignedShortType() );
+
+				final int downsample = block.downsampling;
+
+				for ( int dsx = downsample; dsx > 1; dsx /= 2 )
+				{
+					input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ true, false, false }, service );
+					mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ true, false, false }, service );
+				}
+
+				for ( int dsy = downsample; dsy > 1; dsy /= 2 )
+				{
+					input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ false, true, false }, service );
+					mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ false, true, false }, service );
+				}
+
+				for ( int dsz = downsample; dsz > 1; dsz /= 2 )
+				{
+					input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ false, false, true }, service );
+					mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ false, false, true }, service );
+				}
+
 				final ArrayList< InterestPoint > initialPoints =
 						DoGImgLib2.computeDoG(
-								FusionTools.cacheRandomAccessibleInterval( imgs.getA(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } ),
-								FusionTools.cacheRandomAccessibleInterval( imgs.getB(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } ),
+								input,
+								mask,
 								block.sigma,
 								block.threshold,
 								1, /*localization*/
@@ -172,7 +278,7 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 								true, /*findMax*/
 								block.minIntensity, /* min intensity */
 								block.maxIntensity, /* max intensity */
-								new int[] { 512, 512, zBlockSize }, // choose good blocksize in z
+								new int[] { 512/downsample, 512/downsample, zBlockSize/downsample }, // choose good blocksize in z
 								service,
 								1 );
 
@@ -180,6 +286,19 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 
 				// exclude points that lie within the Gauss overhead
 				final ArrayList< InterestPoint > points = new ArrayList<>();
+
+				if ( downsample > 1 )
+				{
+					// if image was downsampled correct for downsampling and offset
+					for ( final InterestPoint ip : initialPoints )
+					{
+						for ( int d = 0; d < ip.getL().length; ++d )
+						{
+							ip.getL()[ d ] = ip.getL()[ d ] * downsample + min[ d ];
+							ip.getW()[ d ] = ip.getW()[ d ] * downsample + min[ d ];
+						}
+					}
+				}
 
 				for ( final InterestPoint ip : initialPoints )
 					if ( ip.getDoublePosition( 2 ) > block.from - 0.5 && ip.getDoublePosition( 2 ) < block.to + 0.5 )
@@ -297,10 +416,12 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 
 		final ArrayList< Block > blocks = new ArrayList<>();
 
-		getIds(n5).stream().forEach(
+		getIds(n5,excludeIds).stream().forEach(
 				id -> {
 					try {
-						blocks.addAll( SparkPaiwiseAlignChannelsGeo.assembleBlocks(n5Path, id, channel, cam, blocksize, 2.0, /* 0.02 */0.004, minIntensity, maxIntensity) );
+						blocks.addAll(
+								assembleBlocks(
+										n5Path, id, channel, cam, blocksize, sigma, /* 0.02 */threshold, minIntensity, maxIntensity, downsample) );
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
