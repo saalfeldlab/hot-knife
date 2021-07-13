@@ -53,6 +53,7 @@ import mpicbg.models.Tile;
 import mpicbg.models.TileConfiguration;
 import mpicbg.models.TranslationModel2D;
 import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.util.Util;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -80,7 +81,7 @@ public class AlignChannel implements Callable<Void>, Serializable {
 	@Option(names = "--channel", required = true, description = "Channel key, e.g. Ch488+561+647nm")
 	private String channel = null;
 
-	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 10 (default 0)")
+	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 10 (default 0, read from data)")
 	private int distance = 0;
 
 	@Option(names = "--lambdaModel", required = false, description = "lambda for rigid regularizer in model")
@@ -180,7 +181,7 @@ public class AlignChannel implements Callable<Void>, Serializable {
 		final Set<Tile<?>> tileGraph = whichGraph(tile, graphs);
 		final Set<Tile<?>> otherTileGraph = whichGraph(otherTile, graphs);
 		if (tileGraph != otherTileGraph) {
-			System.out.println("virtually connecting graphs with " + tileGraph.size() + " and " + otherTileGraph.size() + " tiles");
+			//System.out.println("virtually connecting graphs with " + tileGraph.size() + " and " + otherTileGraph.size() + " tiles");
 			final double[] coordinates = new double[] {0, 0};
 			final double[] target = transform.apply(coordinates);
 			final PointMatch match = new PointMatch(
@@ -239,6 +240,11 @@ public class AlignChannel implements Callable<Void>, Serializable {
 			final Long mObject = n5.getAttribute(groupName, "distance", long.class);
 			final long m = distance == 0 ? mObject == null ? 1 : mObject : distance;
 
+			long maxMatches = 0;
+			long minMatches = Long.MAX_VALUE;
+			long numMatches = 0;
+			long count = 0;
+
 			final int nCamSlices = (int)matchesAttributes.getDimensions()[0];
 			for (int i = 0; i < nCamSlices; ++i) {
 				for (int k = 0; k < m; ++k) {
@@ -256,6 +262,11 @@ public class AlignChannel implements Callable<Void>, Serializable {
 						PointMatch.flip(matchesJI, matches);
 					}
 
+					minMatches = Math.min( minMatches, matches.size() );
+					maxMatches = Math.max( maxMatches, matches.size() );
+					numMatches += matches.size();
+					++count;
+
 					for (final PointMatch match : matches) {
 						final double[] p1l = match.getP1().getL();
 						final double[] p2l = match.getP2().getL();
@@ -271,18 +282,27 @@ public class AlignChannel implements Callable<Void>, Serializable {
 						tiles.get(i).connect(tiles.get(j), matches);
 				}
 			}
+
+			System.out.println( "minMatches=" + minMatches + ", maxMatches=" + maxMatches + ", avgMatches=" + (double)numMatches/(double)count + " ("+ id + "/" + channel + ")");
 		}
 
 		final ArrayList<Set<Tile<?>>> graphs = Tile.identifyConnectedGraphs(tiles);
+
+		System.out.println( "num graphs=" + graphs.size()  + " ("+ id + "/" + channel + ")" );
 
 		if (shearX == null || shearY == null) {
 
 			final Set<Tile<?>> nonEmptyTiles = tiles.stream().filter(tile -> tile.getConnectedTiles().size() > 0).collect(Collectors.toSet());
 
+			final Set<Tile<?>> largestGraph =
+					graphs.stream().max((a, b) -> a.size() == b.size() ? 0 : a.size() < b.size() ? -1 : 1).get();
+
+			System.out.println( "nonEmptyTiles: " + nonEmptyTiles.size() + ", largest graph: " + largestGraph.size()  + " ("+ id + "/" + channel + ")");
+
 			/* optimize */
 			/* feed all tiles that have connections into tile configuration, report those that are disconnected */
 			final TileConfiguration tc = new TileConfiguration();
-			tc.addTiles(nonEmptyTiles);
+			tc.addTiles(largestGraph);
 
 			/* three pass optimization, first using the regularizer exclusively ... */
 			try {
@@ -291,10 +311,9 @@ public class AlignChannel implements Callable<Void>, Serializable {
 			} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
 				System.out.println( "failed on: " + id);
 				e.printStackTrace();
+				System.exit(0);
 			}
 
-			final Set<Tile<?>> largestGraph =
-					graphs.stream().max((a, b) -> a.size() == b.size() ? 0 : a.size() < b.size() ? -1 : 1).get();
 
 			/* extract affines */
 			final ArrayList<AffineTransform2D> transforms = new ArrayList<>();
@@ -311,9 +330,9 @@ public class AlignChannel implements Callable<Void>, Serializable {
 			final double[] shearXFit = fit(transforms, consider, 0, 2);
 			final double[] shearYFit = fit(transforms, consider, 1, 2);
 
-			System.out.println("average shear");
-			System.out.println("x : a = " + shearXFit[0] + ", b = " + shearXFit[1]);
-			System.out.println("y : a = " + shearYFit[0] + ", b = " + shearYFit[1]);
+			System.out.println("average shear " + id + "/" + channel);
+			System.out.println("x : a = " + shearXFit[0] + ", b = " + shearXFit[1] + " ("+ id + "/" + channel + ")");
+			System.out.println("y : a = " + shearYFit[0] + ", b = " + shearYFit[1] + " ("+ id + "/" + channel + ")");
 
 			if ( shearX == null) shearX = shearXFit[0];
 			if ( shearY == null) shearY = shearYFit[0];
@@ -358,12 +377,42 @@ public class AlignChannel implements Callable<Void>, Serializable {
 		}
 
 		/* extract affines */
+		double avgShearX = 0;
+		double avgShearY = 0;
+		int count = 0;
+
+		double minShearX = Double.MAX_VALUE;
+		double minShearY = Double.MAX_VALUE;
+		double maxShearX = -Double.MAX_VALUE;
+		double maxShearY = -Double.MAX_VALUE;
+
 		final ArrayList<AffineTransform2D> transforms = new ArrayList<>();
 		for (final Tile<?> tile : tiles) {
 			final InterpolatedAffineModel2D interpolatedAffineModel = new InterpolatedAffineModel2D(((InterpolatedModel)tile.getModel()).getA(), ((ConstantModel)((InterpolatedModel)tile.getModel()).getB()).getModel(), lambdaModel);
-			transforms.add(
-					Transform.convertAffine2DtoAffineTransform2D(interpolatedAffineModel));
+			final AffineTransform2D t = Transform.convertAffine2DtoAffineTransform2D(interpolatedAffineModel);
+			transforms.add( t );
+			
+			//System.out.println( t );
+			if ( transforms.size() > 1 )
+			{
+				final double shearX = t.get(0, 2 ) - transforms.get( transforms.size() - 2 ).get( 0 , 2 );
+				final double shearY = t.get(1, 2 ) - transforms.get( transforms.size() - 2 ).get( 1 , 2 );
+
+				minShearX = Math.min( minShearX, shearX );
+				minShearY = Math.min( minShearY, shearY );
+
+				maxShearX = Math.max( maxShearX, shearX );
+				maxShearY = Math.max( maxShearY, shearY );
+
+				avgShearX += shearX;
+				avgShearY += shearY;
+				++count;
+			}
 		}
+
+		System.out.println("average shear final x : " + (avgShearX / count ) + ", y : " + (avgShearY / count ) + " ("+ id + "/" + channel + ")");
+		System.out.println("min shear final x : " + minShearX + ", y : " + minShearY + " ("+ id + "/" + channel + ")");
+		System.out.println("max shear final x : " + maxShearX + ", y : " + maxShearY + " ("+ id + "/" + channel + ")");
 
 		n5.setAttribute(n5.groupPath(id, channel), "transforms", transforms);
 
