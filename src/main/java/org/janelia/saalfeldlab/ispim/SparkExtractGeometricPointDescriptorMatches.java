@@ -106,7 +106,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	private int distance = 3;
 
 	@Option(names = {"-r", "--redundancy"}, required = false, description = "redundancy for geometric descriptor matching (default: 0)")
-	private int redundancy = 1;
+	private int redundancy = 0;
 
 	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default: 25)")
 	private int minNumInliers = 25;
@@ -180,11 +180,14 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 					new int[] {1, 1},
 					DataType.OBJECT,
 					new GzipCompression());
+
 			n5.setAttribute(
 					matchesGroupName,
 					"distance",
 					distance);
 		}
+
+		System.out.println( "Initialized N5." );
 
 		/* get width and height from first slice */
 		final int width, height;
@@ -214,9 +217,9 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		}
 
 		final double sigma = 2.5;
-		final double startThreshold = 0.02;
+		final double startThreshold = 0.03;
 		double thr = startThreshold;
-		double lowestThr = 0.02;
+		double lowestThr = 0.03;
 
 		int numUnconnected = 0;
 		int lastUnconnected = Integer.MAX_VALUE;
