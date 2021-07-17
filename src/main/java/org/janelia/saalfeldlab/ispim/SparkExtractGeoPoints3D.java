@@ -57,11 +57,11 @@ import net.imglib2.img.list.ListImg;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Pair;
+import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import net.preibisch.mvrecon.process.downsampling.Downsample;
-import net.preibisch.mvrecon.process.fusion.FusionTools;
 import net.preibisch.mvrecon.process.interestpointdetection.methods.dog.DoGImgLib2;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -106,8 +106,8 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 	@Option(names = "--cam", required = true, description = "Cam key, e.g. cam1")
 	private String cam = null;
 
-	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize in z for point extraction (default: 20)")
-	private int blocksize = 20;
+	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize in z for point extraction (default: 50)")
+	private int blocksize = 50;
 
 	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
 	private HashSet<String> excludeIds = new HashSet<>();
@@ -120,7 +120,7 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 				"stacks",
 				new TypeToken<ArrayList<String>>() {}.getType());
 
-		return ids.stream().filter( id -> excludeIds.contains( id ) ).collect( Collectors.toList() );
+		return ids.stream().filter( id -> !excludeIds.contains( id ) ).collect( Collectors.toList() );
 	}
 
 	public static ArrayList< Block > assembleBlocks(
@@ -167,7 +167,7 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 
 			blocks.add( block );
 	
-			System.out.println( "block " + i + ": " + from + " >> " + to + " for id=" + id + ", channel=" + channel + ", cam=" + cam );
+			System.out.println( "block " + i + ": " + from + " >> " + to + ", overhead=" + block.gaussOverhead + " for id=" + id + ", channel=" + channel + ", cam=" + cam );
 
 			/*
 			// visible error: from=200, to=219, ch=Ch515+594nm (cam=cam1) Pos012
@@ -227,6 +227,7 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 								alignmentTransforms,//alignments.get( channelA ),
 								Math.max( 0, block.from  - block.gaussOverhead ),
 								Math.min( n5data.lastSliceIndex, block.to + block.gaussOverhead ) );
+				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): interval=" + Util.printInterval( imgs.getA() ) + " for "+ block.id );
 
 				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): finding points for " + block.id );
 
@@ -236,36 +237,48 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 
 				final ExecutorService service = Executors.newFixedThreadPool( 1 );
 
-				RandomAccessibleInterval<UnsignedShortType> input =
-						FusionTools.cacheRandomAccessibleInterval( imgs.getA(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } );
+				// already cached
+				RandomAccessibleInterval<UnsignedShortType> input = imgs.getA();
+						//FusionTools.cacheRandomAccessibleInterval( imgs.getA(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } );
 
-				RandomAccessibleInterval<UnsignedShortType> mask =
-						FusionTools.cacheRandomAccessibleInterval( imgs.getB(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } );
+				RandomAccessibleInterval<UnsignedShortType> mask = imgs.getB();
+						//FusionTools.cacheRandomAccessibleInterval( imgs.getB(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } );
 
 				final long[] min = new long[ input.numDimensions() ];
 				input.min( min );
 
-				final ImgFactory< UnsignedShortType > f = new CellImgFactory<>( new UnsignedShortType() );
-
 				final int downsample = block.downsampling;
 
-				for ( int dsx = downsample; dsx > 1; dsx /= 2 )
+				if ( downsample > 1 )
 				{
-					input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ true, false, false }, service );
-					mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ true, false, false }, service );
+					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): DownsamplingX: " + downsample );
+
+					final ImgFactory< UnsignedShortType > f = new CellImgFactory<>( new UnsignedShortType() );
+
+					for ( int dsx = downsample; dsx > 1; dsx /= 2 )
+					{
+						input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ true, false, false }, service );
+						mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ true, false, false }, service );
+					}
+
+					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): DownsamplingY: " + downsample );
+
+					for ( int dsy = downsample; dsy > 1; dsy /= 2 )
+					{
+						input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ false, true, false }, service );
+						mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ false, true, false }, service );
+					}
+
+					System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): DownsamplingZ: " + downsample );
+
+					for ( int dsz = downsample; dsz > 1; dsz /= 2 )
+					{
+						input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ false, false, true }, service );
+						mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ false, false, true }, service );
+					}
 				}
 
-				for ( int dsy = downsample; dsy > 1; dsy /= 2 )
-				{
-					input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ false, true, false }, service );
-					mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ false, true, false }, service );
-				}
-
-				for ( int dsz = downsample; dsz > 1; dsz /= 2 )
-				{
-					input = Downsample.simple2x( Views.zeroMin( input ), f, new boolean[]{ false, false, true }, service );
-					mask = Downsample.simple2x( Views.zeroMin( mask ), f, new boolean[]{ false, false, true }, service );
-				}
+				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): DoG" );
 
 				final ArrayList< InterestPoint > initialPoints =
 						DoGImgLib2.computeDoG(
@@ -416,7 +429,11 @@ public class SparkExtractGeoPoints3D implements Callable<Void>, Serializable {
 
 		final ArrayList< Block > blocks = new ArrayList<>();
 
-		getIds(n5,excludeIds).stream().forEach(
+		final List< String > ids = getIds(n5,excludeIds);
+
+		//ids.forEach( id -> System.out.println( id ) );
+
+		ids.stream()/*.filter( id -> id.equals( "Pos005" ) )*/.forEach(
 				id -> {
 					try {
 						blocks.addAll(
