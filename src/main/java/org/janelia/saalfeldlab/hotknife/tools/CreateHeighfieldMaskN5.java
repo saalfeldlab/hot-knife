@@ -162,6 +162,12 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 	
 							if ( pos[ 1 ] <= max )
 								v.setOne();
+							else
+								v.setZero();
+						}
+						else
+						{
+							v.setZero();
 						}
 					}
 
@@ -296,6 +302,12 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		
 								if ( pos[ 1 ] <= max )
 									v.setOne();
+								else
+									v.setZero();
+							}
+							else
+							{
+								v.setZero();
 							}
 						}
 	
@@ -327,14 +339,12 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 				dimensions,
 				blockSize );
 
-		/*
 		n5.createDataset(
 				maskGroup,
 				dimensions,
 				blockSize,
 				DataType.UINT8,
 				new GzipCompression( 1 ) );
-		*/
 
 		n5.close();
 
@@ -343,7 +353,7 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		saveMultiThreaded( n5Path, maskGroup, n5FieldPath, fieldGroupMin, fieldGroupMax, downsamplingFactors, blockSize, gridBlocks, nThreads );
 		*/
 
-		final SparkConf conf = new SparkConf().setAppName("SparkFusionSaveN5");
+		final SparkConf conf = new SparkConf().setAppName("CreateHeighfieldMaskN5");
 
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
