@@ -11,8 +11,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.ispim.RenderFullStack;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -66,21 +71,20 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		CommandLine.call(new CreateHeighfieldMaskN5(), args);
 	}
 
-	@SuppressWarnings("unchecked")
-	@Override
-	public final Void call() throws IOException {
-
-		final N5Writer n5 = new N5FSWriter(n5Path);
-		final N5FSReader n5Field = new N5FSReader(n5FieldPath);
-
-		System.out.println("Loading dimensions and blocksize of raw N5" + n5Path + ":/" + rawGroup + "/s0 ... " );
-		final String fullRes = rawGroup + "/s0";
-		final long[] dimensions = n5.getAttribute( fullRes, "dimensions", long[].class );
-		final int[] blockSize = n5.getAttribute( fullRes, "blockSize", int[].class );
-		System.out.println( net.imglib2.util.Util.printCoordinates( dimensions ) + ", blocksize=" + net.imglib2.util.Util.printCoordinates( blockSize ) );
-
-		final int nThreads = Math.max( 1, Runtime.getRuntime().availableProcessors() );
+	public static void saveMultiThreaded(
+			final String n5Path,
+			final String n5MaskGroup,
+			final String n5FieldPath,
+			final String fieldGroupMin,
+			final String fieldGroupMax,
+			final int[] downsamplingFactors,
+			final int[] blockSize,
+			final List<long[][]> gridBlocks,
+			final int nThreads ) throws IOException
+	{
 		final ExecutorService service = Executors.newFixedThreadPool( nThreads );
+
+		final N5FSReader n5Field = new N5FSReader(n5FieldPath);
 
 		System.out.println("Loading min height field " + n5FieldPath + ":/" + fieldGroupMin + "... " );
 		final RandomAccessibleInterval<FloatType> heightFieldSourceMin = N5Utils.open(n5Field, fieldGroupMin);
@@ -106,22 +110,8 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 						downsamplingFactors[1],
 						downsamplingFactors[2]});
 
-		//new ImageJ();
-
 		final List< Callable< Void > > tasks = new ArrayList<>();
 		final AtomicInteger nextBlock = new AtomicInteger();
-		final String maskGroupFinal = maskGroup;
-
-		List<long[][]> gridBlocks = Grid.create(
-				dimensions,
-				blockSize );
-
-		n5.createDataset(
-				maskGroupFinal,
-				dimensions,
-				blockSize,
-				DataType.UINT8,
-				new GzipCompression( 1 ) );
 
 		final int oneHundreth = gridBlocks.size() / 100 + 1;
 
@@ -176,7 +166,7 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 					}
 
 					//ImageJFunctions.show( source ).setDisplayRange(0, 1);
-					N5Utils.saveBlock(source, n5Writer, maskGroupFinal, gridBlock[2]);
+					N5Utils.saveBlock(source, n5Writer, n5MaskGroup, gridBlock[2]);
 				}
 
 				n5Writer.close();
@@ -194,12 +184,173 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		catch ( final InterruptedException | ExecutionException e )
 		{
 			e.printStackTrace();
-			n5.close();
 			throw new RuntimeException( e );
 		}
 
 		service.shutdown();
+	}
+
+	public static ArrayList<ArrayList<long[][]>> gridBlockBatches( final List<long[][]> gridBlocks, final int blocksPerBatch )
+	{
+		final ArrayList<ArrayList<long[][]>> batches = new ArrayList<>();
+
+		ArrayList<long[][]> batch = null;
+
+		for ( int i = 0; i < gridBlocks.size(); ++i )
+		{
+			if ( i % blocksPerBatch == 0 )
+			{
+				if ( batch != null )
+					batches.add( batch );
+
+				batch = new ArrayList<>();
+			}
+
+			batch.add( gridBlocks.get( i ) );
+		}
+
+		return batches;
+	}
+
+	public static void saveSpark(
+			final JavaSparkContext sc,
+			final String n5Path,
+			final String n5MaskGroup,
+			final String n5FieldPath,
+			final String fieldGroupMin,
+			final String fieldGroupMax,
+			final int[] downsamplingFactors,
+			final int[] blockSize,
+			final List<long[][]> gridBlocks )
+	{
+		System.out.println( "numBlocks = " + gridBlocks.size() );
+
+		final int oneThousandth = Math.max( 1, gridBlocks.size() / 10000 );
+
+		System.out.println( "Splitting into batches of " + oneThousandth );
+
+		final ArrayList<ArrayList<long[][]>> batches = gridBlockBatches( gridBlocks, oneThousandth );
+
+		System.out.println( "numBatches = " + batches.size() );
+
+		final JavaRDD<ArrayList<long[][]>> rdd =
+				sc.parallelize(
+						batches );
+
+		rdd.foreach(
+				batch -> {
+
+					final N5FSReader n5Field = new N5FSReader(n5FieldPath);
+					
+					final RandomAccessibleInterval<FloatType> heightFieldSourceMin = N5Utils.open(n5Field, fieldGroupMin);
+					final RandomAccessibleInterval<FloatType> heightFieldSourceMax = N5Utils.open(n5Field, fieldGroupMax);
+
+					final RealRandomAccessible<DoubleType> minField = Transform.scaleAndShiftHeightFieldAndValues(
+							heightFieldSourceMin,
+							new double[]{
+									downsamplingFactors[0],
+									downsamplingFactors[1],
+									downsamplingFactors[2]});
+
+					final RealRandomAccessible<DoubleType> maxField = Transform.scaleAndShiftHeightFieldAndValues(
+							heightFieldSourceMax,
+							new double[]{
+									downsamplingFactors[0],
+									downsamplingFactors[1],
+									downsamplingFactors[2]});
+
+					final ArrayImg<UnsignedByteType, ByteArray> source = ArrayImgs.unsignedBytes( Util.int2long( blockSize ) );
+					final N5Writer n5Writer = new N5FSWriter(n5Path);
+
+					final RealRandomAccess<DoubleType> rMin = minField.realRandomAccess();
+					final RealRandomAccess<DoubleType> rMax = maxField.realRandomAccess();
+
+					final long[] pos = new long[ source.numDimensions() ];
+
+					for ( final long[][] gridBlock : batch )
+					{
+						//if ( gridBlock[0][ 0 ] == 6400 && gridBlock[0][ 1 ] == 1280 && gridBlock[0][ 2 ] == 4352 ) {
+						//new ImageJ();
+						//System.out.println( "displaying " + Util.printCoordinates( gridBlock[ 0]) + ", " + Util.printCoordinates( gridBlock[ 1]) + ", " + Util.printCoordinates( gridBlock[ 2]));
+		
+						// move our img to the offset of this block
+						final RandomAccessibleInterval<UnsignedByteType> block = Views.translate( source, gridBlock[0] );
+	
+						final Cursor<UnsignedByteType> c = Views.iterable( block ).localizingCursor();
+	
+						while( c.hasNext() )
+						{
+							final UnsignedByteType v = c.next();
+	
+							c.localize( pos );
+	
+							rMin.setPosition( pos[ 0 ], 0 );
+							rMin.setPosition( pos[ 2 ], 1 );
+							final double min = rMin.get().get();
+	
+							if ( pos[ 1 ] >= min )
+							{
+								rMax.setPosition( pos[ 0 ], 0 );
+								rMax.setPosition( pos[ 2 ], 1 );
+								final double max = rMax.get().get();
+		
+								if ( pos[ 1 ] <= max )
+									v.setOne();
+							}
+						}
+	
+						//ImageJFunctions.show( source ).setDisplayRange(0, 1);
+						N5Utils.saveBlock(source, n5Writer, n5MaskGroup, gridBlock[2]);	
+						//}
+					}
+
+					n5Writer.close();
+				});
+
+	}
+
+	@Override
+	public final Void call() throws IOException {
+
+		final N5Writer n5 = new N5FSWriter(n5Path);
+
+		System.out.println("Loading dimensions and blocksize of raw N5" + n5Path + ":/" + rawGroup + "/s0 ... " );
+		final String fullRes = rawGroup + "/s0";
+		final long[] dimensions = n5.getAttribute( fullRes, "dimensions", long[].class );
+		final int[] blockSize = n5.getAttribute( fullRes, "blockSize", int[].class );
+		System.out.println( net.imglib2.util.Util.printCoordinates( dimensions ) + ", blocksize=" + net.imglib2.util.Util.printCoordinates( blockSize ) );
+
+
+		//new ImageJ();
+
+		List<long[][]> gridBlocks = Grid.create(
+				dimensions,
+				blockSize );
+
+		/*
+		n5.createDataset(
+				maskGroup,
+				dimensions,
+				blockSize,
+				DataType.UINT8,
+				new GzipCompression( 1 ) );
+		*/
+
 		n5.close();
+
+		/*
+		final int nThreads = Math.max( 1, Runtime.getRuntime().availableProcessors() );
+		saveMultiThreaded( n5Path, maskGroup, n5FieldPath, fieldGroupMin, fieldGroupMax, downsamplingFactors, blockSize, gridBlocks, nThreads );
+		*/
+
+		final SparkConf conf = new SparkConf().setAppName("SparkFusionSaveN5");
+
+		final JavaSparkContext sc = new JavaSparkContext(conf);
+		sc.setLogLevel("ERROR");
+
+		saveSpark(sc, n5Path, maskGroup, n5FieldPath, fieldGroupMin, fieldGroupMax, downsamplingFactors, blockSize, gridBlocks );
+
+		sc.close();
 
 		System.out.println("Done.");
 
