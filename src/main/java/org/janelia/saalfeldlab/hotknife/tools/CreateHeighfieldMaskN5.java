@@ -26,6 +26,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
@@ -78,15 +79,16 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		final int[] blockSize = n5.getAttribute( fullRes, "blockSize", int[].class );
 		System.out.println( net.imglib2.util.Util.printCoordinates( dimensions ) + ", blocksize=" + net.imglib2.util.Util.printCoordinates( blockSize ) );
 
-		//final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+		final int nThreads = Math.max( 1, Runtime.getRuntime().availableProcessors() );
+		final ExecutorService service = Executors.newFixedThreadPool( nThreads );
 
 		System.out.println("Loading min height field " + n5FieldPath + ":/" + fieldGroupMin + "... " );
 		final RandomAccessibleInterval<FloatType> heightFieldSourceMin = N5Utils.open(n5Field, fieldGroupMin);
-		//final ArrayImg<FloatType, ?> heightFieldMin = new ArrayImgFactory<>(new FloatType()).create(heightFieldSourceMin);
-		//Util.copy(heightFieldSourceMin, heightFieldMin, service);
+		final ArrayImg<FloatType, ?> heightFieldMin = new ArrayImgFactory<>(new FloatType()).create(heightFieldSourceMin);
+		org.janelia.saalfeldlab.hotknife.util.Util.copy(heightFieldSourceMin, heightFieldMin, service);
 
-		RealRandomAccessible<DoubleType> minField = Transform.scaleAndShiftHeightFieldAndValues(
-				heightFieldSourceMin,
+		final RealRandomAccessible<DoubleType> minField = Transform.scaleAndShiftHeightFieldAndValues(
+				heightFieldMin,
 				new double[]{
 						downsamplingFactors[0],
 						downsamplingFactors[1],
@@ -94,17 +96,15 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 
 		System.out.println("Loading max height field " + n5FieldPath + ":/" + fieldGroupMax + "... " );
 		final RandomAccessibleInterval<FloatType> heightFieldSourceMax = N5Utils.open(n5Field, fieldGroupMax);
-		//final ArrayImg<FloatType, ?> heightFieldMax = new ArrayImgFactory<>(new FloatType()).create(heightFieldSourceMax);
-		//Util.copy(heightFieldSourceMax, heightFieldMax, service);
+		final ArrayImg<FloatType, ?> heightFieldMax = new ArrayImgFactory<>(new FloatType()).create(heightFieldSourceMax);
+		org.janelia.saalfeldlab.hotknife.util.Util.copy(heightFieldSourceMax, heightFieldMax, service);
 
-		RealRandomAccessible<DoubleType> maxField = Transform.scaleAndShiftHeightFieldAndValues(
-				heightFieldSourceMax,
+		final RealRandomAccessible<DoubleType> maxField = Transform.scaleAndShiftHeightFieldAndValues(
+				heightFieldMax,
 				new double[]{
 						downsamplingFactors[0],
 						downsamplingFactors[1],
 						downsamplingFactors[2]});
-
-		//service.shutdown();
 
 		//new ImageJ();
 
@@ -123,7 +123,6 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 				DataType.UINT8,
 				new GzipCompression( 1 ) );
 
-		final int nThreads = Math.min( 1, Runtime.getRuntime().availableProcessors() / 2 );
 		final int oneHundreth = gridBlocks.size() / 100 + 1;
 
 		System.out.println( "processing " + gridBlocks.size() + " blocks using " + nThreads + " threads.");
@@ -134,6 +133,11 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 			{
 				final ArrayImg<UnsignedByteType, ByteArray> source = ArrayImgs.unsignedBytes( Util.int2long( blockSize ) );
 				final N5Writer n5Writer = new N5FSWriter(n5Path);
+
+				final RealRandomAccess<DoubleType> rMin = minField.realRandomAccess();
+				final RealRandomAccess<DoubleType> rMax = maxField.realRandomAccess();
+
+				final long[] pos = new long[ source.numDimensions() ];
 
 				for ( int g = nextBlock.getAndIncrement(); g < gridBlocks.size(); g = nextBlock.getAndIncrement() )
 				{
@@ -148,11 +152,7 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 					// move our img to the offset of this block
 					final RandomAccessibleInterval<UnsignedByteType> block = Views.translate( source, gridBlock[0] );
 
-					final RealRandomAccess<DoubleType> rMin = minField.realRandomAccess();
-					final RealRandomAccess<DoubleType> rMax = maxField.realRandomAccess();
-
 					final Cursor<UnsignedByteType> c = Views.iterable( block ).localizingCursor();
-					final long[] pos = new long[ block.numDimensions() ];
 
 					while( c.hasNext() )
 					{
@@ -164,12 +164,15 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 						rMin.setPosition( pos[ 2 ], 1 );
 						final double min = rMin.get().get();
 
-						rMax.setPosition( pos[ 0 ], 0 );
-						rMax.setPosition( pos[ 2 ], 1 );
-						final double max = rMax.get().get();
-
-						if ( pos[ 1 ] >= min && pos[ 1 ] <= max )
-							v.setOne();
+						if ( pos[ 1 ] >= min )
+						{
+							rMax.setPosition( pos[ 0 ], 0 );
+							rMax.setPosition( pos[ 2 ], 1 );
+							final double max = rMax.get().get();
+	
+							if ( pos[ 1 ] <= max )
+								v.setOne();
+						}
 					}
 
 					//ImageJFunctions.show( source ).setDisplayRange(0, 1);
@@ -182,8 +185,6 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 			} );
 		}
 
-		final ExecutorService service = Executors.newFixedThreadPool( nThreads );
-
 		try
 		{
 			final List< Future< Void > > futures = service.invokeAll( tasks );
@@ -193,10 +194,12 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		catch ( final InterruptedException | ExecutionException e )
 		{
 			e.printStackTrace();
+			n5.close();
 			throw new RuntimeException( e );
 		}
 
 		service.shutdown();
+		n5.close();
 
 		System.out.println("Done.");
 
