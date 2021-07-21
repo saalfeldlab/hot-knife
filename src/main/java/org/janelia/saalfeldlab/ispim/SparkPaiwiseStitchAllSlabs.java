@@ -70,7 +70,7 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
 
-	@Option(names = "--positionFile", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json")
+	@Option(names = "--positionFile", required = false, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json")
 	private String positionFile = null;
 
 	@Option(names = "--channelA", required = true, description = "Channel A key, e.g. Ch488+561+647nm")
@@ -86,10 +86,19 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 	private String camB = null;
 
 	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 250, 250, 100)")
-	private int[] blocksize = new int[]{ 250, 250, 100 };
+	private int[] blocksize = new int[]{ 2000, 2000, 1000 };
 
 	@Option(names = "--excludeIds", split=",", required = false, description = "ids to be exluded")
 	private HashSet<String> excludeIds = new HashSet<>();
+
+	/*
+	--n5Path=/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5
+	--positionFile=/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json
+	--channelA=Ch488+561+647nm
+	--camA=cam1
+	--channelB=Ch488+561+647nm
+	--camB=cam1
+	*/
 
 	public static ArrayList< Tuple2< String, String > > overlappingStacks(
 			final List<String> ids,
@@ -149,9 +158,14 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 		List<String> ids = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
 		Collections.sort( ids );
 
-		final HashMap< String, MetaData > meta = SparkPairwiseStitchSlabs.readPositionMetaData( positionFile );
+		// Tim's data
+		//final HashMap< String, MetaData > meta = SparkPairwiseStitchSlabs.readPositionMetaData( positionFile );
+		//final ArrayList< Tuple2< String, String > > pairs = overlappingStacks( ids, meta );
 
-		final ArrayList< Tuple2< String, String > > pairs = overlappingStacks( ids, meta );
+		// Jayaram's data
+		final ArrayList< Tuple2< String, String > > pairs = new ArrayList<>();
+		for ( int i = 0; i < ids.size() - 1; ++i )
+			pairs.add( new Tuple2<>(ids.get(i), ids.get(i+1)) );
 
 		int i = 0;
 
@@ -164,7 +178,7 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 
 		final JavaPairRDD<Tuple2< String, String >, AlignStatistics > rddResults = rddIds.mapToPair( pair -> {
 
-			final AlignStatistics result =
+			final AlignStatistics result = 
 					SparkPairwiseStitchSlabs.align( positionFile, n5Path, pair._1(), pair._2(), channelA, channelB, camA, camB, blocksize );
 
 			return new Tuple2<>(pair, result );

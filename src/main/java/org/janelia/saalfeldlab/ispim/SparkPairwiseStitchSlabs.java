@@ -77,7 +77,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
 
-	@Option(names = "--positionFile", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json")
+	@Option(names = "--positionFile", required = false, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json")
 	private String positionFile = null;
 
 	@Option(names = "--idA", required = true, description = "Stack key A, e.g. Pos012")
@@ -99,7 +99,20 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 	private String camB = null;
 
 	@Option(names = {"-b", "--blocksize"}, required = false, description = "blocksize for point extraction (default: 250, 250, 100)")
-	private int[] blocksize = new int[]{ 250, 250, 100 };
+	private int[] blocksize = new int[]{ 2000, 2000, 1000 };
+
+	/*
+	 * cmdline params for tim's data
+	 * 
+	--n5Path=/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5
+	--positionFile=/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json
+	--idA=Pos002
+	--idB=Pos005
+	--channelA=Ch488+561+647nm
+	--camA=cam1
+	--channelB=Ch488+561+647nm
+	--camB=cam1
+	*/
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 		new CommandLine(new SparkPairwiseStitchSlabs()).execute(args);
@@ -798,10 +811,20 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		System.out.println( idA + " <> " + idB );
 
-		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
+		//final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
 
-		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, meta.get( idA ) );
-		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, meta.get( idB ) );
+		Pair< ArrayList<InterestPoint>, N5Data > pairA = loadPoints( n5Path, idA, channelA, camA, null );//meta.get( idA ) );
+		Pair< ArrayList<InterestPoint>, N5Data > pairB = loadPoints( n5Path, idB, channelB, camB, null );//meta.get( idB ) );
+
+		// JAYARAM
+		for ( final InterestPoint p : pairB.getA() )
+		{
+			final double[] l = p.getL();
+			//l[ 0 ] += meta.position[ 0 ] - meta.position[ 2 ] * 13; // it is z along the sheared volume
+			l[ 1 ] -= 1730;
+			//l[ 2 ] += meta.position[ 2 ];
+			//pointsChNew.add( new InterestPoint( p.getId(), l ) );
+		}
 
 		final ArrayList< Interval > blocks =
 				findBlocks( pairA.getA(), pairB.getA(), blockSize );
@@ -894,7 +917,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 							lookUpA.get( ((InterestPoint)pm.getP1()).getId() ),
 							lookUpB.get( ((InterestPoint)pm.getP2()).getId() ) ) );
 
-		//writeMatches( matchesTmp, n5Path, idA, idB, channelA, channelB, camA, camB);
+		writeMatches( matchesTmp, n5Path, idA, idB, channelA, channelB, camA, camB);
 
 		statistics.matches = matches; // without metadata -> matchesTmp;
 
@@ -1051,6 +1074,7 @@ public class SparkPairwiseStitchSlabs implements Callable<Void>, Serializable {
 
 		final ArrayList< PointMatch > matches = result.matches;
 
+		System.exit( 0 );
 
 		final HashMap< String, MetaData > meta = readPositionMetaData( positionFile );
 
