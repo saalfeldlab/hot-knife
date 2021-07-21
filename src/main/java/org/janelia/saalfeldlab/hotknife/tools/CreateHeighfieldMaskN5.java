@@ -209,6 +209,9 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 			batch.add( gridBlocks.get( i ) );
 		}
 
+		if ( batch.size() > 0 )
+			batches.add( batch );
+
 		return batches;
 	}
 
