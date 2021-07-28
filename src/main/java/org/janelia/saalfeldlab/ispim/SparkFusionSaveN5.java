@@ -155,7 +155,7 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		saveN5( sc, fused, n5Path, new int[] { 2048, 2048, 16 }, allIds, channel, cam );
+		saveN5( sc, fused, n5Path, new int[] { 2048, 2048, 32 }, allIds, channel, cam );
 
 		sc.close();
 
