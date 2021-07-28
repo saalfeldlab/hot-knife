@@ -47,6 +47,12 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 	@Option(names = "--cam", required = true, description = "Cam key, e.g. cam1")
 	private String cam = null;
 
+	/*
+	--n5Path=/nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5
+	--channel=Ch488+561+647nm
+	--cam=cam1
+	*/
+
 	@SuppressWarnings("unchecked")
 	public static void saveN5(
 			final JavaSparkContext sc,
@@ -57,7 +63,7 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 	{
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
-		final String outDatasetName = "maxfusion4_"+channel+"_"+cam;// + "/s0";
+		final String outDatasetName = "maxfusion_"+channel+"_"+cam;// + "/s0";
 
 		final long[] dimensions = new long[ fused.numDimensions() ];
 		fused.dimensions( dimensions );
@@ -132,10 +138,12 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 		allIds.addAll( SparkPaiwiseAlignChannelsGeoAll.getIds(n5) );
 		Collections.sort( allIds );
 
-		/*
+			/*
 		ArrayList< String > list = new ArrayList<>();
 		list.add( allIds.get( 0 ) );
 		list.add( allIds.get( 1 ) );
+		allIds.clear();
+		allIds.addAll( list );
 		*/
 
 		RandomAccessibleInterval< UnsignedShortType > fused = RenderFullStack.fuseMax( n5Path, allIds, channel, cam );
@@ -147,7 +155,7 @@ public class SparkFusionSaveN5 implements Callable<Void>, Serializable
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		saveN5( sc, fused, n5Path, new int[] { 2048, 2048, 32 }, allIds, channel, cam );
+		saveN5( sc, fused, n5Path, new int[] { 2048, 2048, 16 }, allIds, channel, cam );
 
 		sc.close();
 

@@ -116,7 +116,7 @@ public class RenderFullStack implements Callable<Void>, Serializable
 						new UnsignedShortType() );
 
 		final int blockSizeXY = (int)Math.min( interval.dimension( 0 ), interval.dimension( 1 ) );
-		final int[] blockSize = new int[] { blockSizeXY, blockSizeXY, 10 };
+		final int[] blockSize = new int[] { blockSizeXY, blockSizeXY, 1 };
 		System.out.println( new Date(System.currentTimeMillis() ) + ": " + id + "," + channel + "," + cam + ": blocksize=" + Util.printCoordinates( blockSize ) );
 
 		final RandomAccessibleInterval<UnsignedShortType> cachedImg =
