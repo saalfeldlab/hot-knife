@@ -651,7 +651,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 					for (final Entry<String, List<Slice>> cam : channel.getValue().entrySet()) {
 
 						Pair<ArrayList<InterestPoint>, N5Data> points =
-								SparkPairwiseStitchSlabs.loadPoints( n5Path, id, channel.getKey(), cam.getKey(), null );
+								SparkPairwiseStitchSlabs.loadPoints( n5Path, id, channel.getKey(), cam.getKey(), null, 0 );
 
 						System.out.println( "Loaded " + points.getA().size() + " interest points.");
 

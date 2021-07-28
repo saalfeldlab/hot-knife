@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -70,7 +71,7 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
 
-	@Option(names = "--positionFile", required = false, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json")
+	@Option(names = "--positionFile", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6-backup.n5/m24o.edited.pos.json")
 	private String positionFile = null;
 
 	@Option(names = "--channelA", required = true, description = "Channel A key, e.g. Ch488+561+647nm")
@@ -158,16 +159,24 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 		List<String> ids = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
 		Collections.sort( ids );
 
+		//final double avgShear = 13; //TIM
+		final double avgShear = 3.5; //JAYARAM
+
 		// Tim's data
 		//final HashMap< String, MetaData > meta = SparkPairwiseStitchSlabs.readPositionMetaData( positionFile );
 		//final ArrayList< Tuple2< String, String > > pairs = overlappingStacks( ids, meta );
 
 		// Jayaram's data
-		final ArrayList< Tuple2< String, String > > pairs = new ArrayList<>();
-		for ( int i = 0; i < ids.size() - 1; ++i )
-			pairs.add( new Tuple2<>(ids.get(i), ids.get(i+1)) );
+		final HashMap< String, MetaData > meta = SparkPairwiseStitchSlabs.readPositionMetaData( positionFile );
+		List< Tuple2< String, String > > pairs = overlappingStacks( ids, meta );
+
+		//final ArrayList< Tuple2< String, String > > pairs = new ArrayList<>();
+		//for ( int i = 0; i < ids.size() - 1; ++i )
+			//pairs.add( new Tuple2<>(ids.get(i), ids.get(i+1)) );
 
 		int i = 0;
+
+		//pairs = pairs.stream().filter( pair -> pair._1().contains( "000") && pair._2().contains( "014" ) ).collect( Collectors.toList() );
 
 		for ( final Tuple2< String, String > pair : pairs )
 			System.out.println( ++i + ": " + pair._1() + " <> " + pair._2() );
@@ -179,7 +188,7 @@ public class SparkPaiwiseStitchAllSlabs implements Callable<Void>, Serializable 
 		final JavaPairRDD<Tuple2< String, String >, AlignStatistics > rddResults = rddIds.mapToPair( pair -> {
 
 			final AlignStatistics result = 
-					SparkPairwiseStitchSlabs.align( positionFile, n5Path, pair._1(), pair._2(), channelA, channelB, camA, camB, blocksize );
+					SparkPairwiseStitchSlabs.align( positionFile, avgShear, n5Path, pair._1(), pair._2(), channelA, channelB, camA, camB, blocksize );
 
 			return new Tuple2<>(pair, result );
 		});
