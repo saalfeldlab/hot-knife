@@ -24,6 +24,8 @@ import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 
 import ij.ImageJ;
 import net.imglib2.Cursor;
@@ -361,13 +363,26 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Starting mask creation for " + n5Path );
+
 		saveSpark(sc, n5Path, maskGroup, n5FieldPath, fieldGroupMin, fieldGroupMax, downsamplingFactors, blockSize, gridBlocks );
 
 		sc.close();
 
-		System.out.println("Done.");
+		System.out.println( new Date(System.currentTimeMillis() ) + ": Done mask creation, downsampling now .... ");
 
-		/*
+        final int[] downSamplingFactors = new int[] { 2, 2, 2 };
+        final N5WriterSupplier n5Supplier = () -> new N5FSWriter( n5Path );
+        N5ScalePyramidSpark.downsampleScalePyramid(
+                sc,
+                n5Supplier,
+                n5Path + "/s0",
+                n5Path,
+                downSamplingFactors );
+
+        System.out.println(new Date(System.currentTimeMillis() ) + ": Done");
+
+        /*
 		final ArrayImg<UnsignedByteType, ByteArray> slice = ArrayImgs.unsignedBytes( new long[]{ dimensions[0], dimensions[1] } );
 		final Cursor<UnsignedByteType> c = slice.localizingCursor();
 
