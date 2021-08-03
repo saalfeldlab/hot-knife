@@ -387,7 +387,8 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		System.out.println( reSlicedDataSetPath);
 
         final int[] downSamplingFactors = new int[] { 2, 2, 2 };
-        final N5WriterSupplier n5Supplier = (N5WriterSupplier & Serializable)( () -> new N5FSWriter( n5Path ) );
+        final String n5Local = n5Path; // the n5Path has other non-serializable objects attached
+        final N5WriterSupplier n5Supplier = (N5WriterSupplier & Serializable)( () -> new N5FSWriter( n5Local ) );
         N5ScalePyramidSpark.downsampleScalePyramid(
                 sc,
                 n5Supplier,
