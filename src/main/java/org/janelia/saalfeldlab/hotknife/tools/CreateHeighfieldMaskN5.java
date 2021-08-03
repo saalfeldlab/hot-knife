@@ -1,6 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -67,6 +68,16 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 
 	@Option(names = {"-s", "--scale"}, required = true,  split=",", description = "downsampling factors, e.g. 6,6,1")
 	private int[] downsamplingFactors = null;
+
+	/*
+	--n5Path=/nrs/flyem/render/n5/Z0720_07m_BR
+			--n5FieldPath=/nrs/flyem/render/n5/Z0720_07m_BR
+			--n5Raw=/z_corr/Sec32/v3_acquire_trimmed_align_5_ic_global_3___20210519_114445
+			--n5FieldMin=/heightfields_fix/Sec32/pass6_preibischs/min
+			--n5FieldMax=/heightfields_fix/Sec32/pass6_preibischs/max
+			--n5Mask=/z_corr/Sec32/mask/s0
+			--scale=6,6,1
+	 */
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
@@ -365,20 +376,26 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Starting mask creation for " + n5Path );
 
-		saveSpark(sc, n5Path, maskGroup, n5FieldPath, fieldGroupMin, fieldGroupMax, downsamplingFactors, blockSize, gridBlocks );
-
-		sc.close();
+		//saveSpark(sc, n5Path, maskGroup, n5FieldPath, fieldGroupMin, fieldGroupMax, downsamplingFactors, blockSize, gridBlocks );
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Done mask creation, downsampling now .... ");
 
+		String reSlicedDataSetZeroPath = maskGroup;
+		String reSlicedDataSetPath = reSlicedDataSetZeroPath.substring(0, reSlicedDataSetZeroPath.indexOf("/s0"));
+
+		System.out.println( reSlicedDataSetZeroPath);
+		System.out.println( reSlicedDataSetPath);
+
         final int[] downSamplingFactors = new int[] { 2, 2, 2 };
-        final N5WriterSupplier n5Supplier = () -> new N5FSWriter( n5Path );
+        final N5WriterSupplier n5Supplier = (N5WriterSupplier & Serializable)( () -> new N5FSWriter( n5Path ) );
         N5ScalePyramidSpark.downsampleScalePyramid(
                 sc,
                 n5Supplier,
-                n5Path + "/s0",
-                n5Path,
+                reSlicedDataSetZeroPath,
+                reSlicedDataSetPath,
                 downSamplingFactors );
+
+		sc.close();
 
         System.out.println(new Date(System.currentTimeMillis() ) + ": Done");
 
