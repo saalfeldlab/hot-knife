@@ -17,6 +17,8 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
@@ -37,6 +39,9 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrWriter;
 
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
@@ -122,6 +127,20 @@ public class SparkSurfaceFit implements Callable<Void>{
 	private double maxDistance = Double.MAX_VALUE;
 
 	private boolean useVisualization = false;
+
+	/*
+	--n5Path /nrs/flyem/render/n5/Z0720_07m_BR
+	--n5FieldPath /nrs/flyem/render/n5/Z0720_07m_BR
+	--n5CostInput /cost_new/Sec32/v3_acquire_trimmed_align_5_ic___20210503_161648_gauss
+	--n5SurfaceOutput=/heightfields/Sec32/v3_acquire_trimmed_align_5_ic___20210503_161648_gauss_slope_sp
+	--n5Raw /z_corr/Sec32/v3_acquire_trimmed_align_5_ic___20210503_161648
+	--firstScale=8
+	--lastScale=1
+	--maxDeltaZ=0.15
+	--initMaxDeltaZ=0.15
+	--minDistance=2000
+	--maxDistance=4000
+	*/
 
 	public SparkSurfaceFit() {
 	}
@@ -613,8 +632,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long padding,
 			final int maxStepSize) throws IOException {
 
-		final N5Reader n5Cost = new N5FSReader(n5CostPath);
-		final N5Writer n5Field = new N5FSWriter(n5FieldPath);
+		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5ZarrReader(n5CostPath);
+		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType> fullCost =
@@ -752,8 +771,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final double maxDeltaZ,
 			final int maxDeltaZTimes) throws IOException {
 
-		final N5Reader n5Cost = new N5FSReader(n5CostPath);
-		final N5Writer n5Field = new N5FSWriter(n5FieldPath);
+		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5ZarrReader(n5CostPath);
+		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 		final int[] blockSizeOutInt = new int[blockSizeOut.length];
 		Arrays.setAll(blockSizeOutInt, i -> (int)blockSizeOut[i]);
@@ -829,7 +848,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@SuppressWarnings("unchecked")
 	public Void callSingle() throws IOException {
 
-		final N5Reader n5 = new N5FSReader(n5Path);
+		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
 
 		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
 		final JavaSparkContext sc = new JavaSparkContext(conf);
@@ -897,7 +916,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
 		{
-			final N5Writer n5Writer = new N5FSWriter(n5FieldPath);
+			final N5Writer n5Writer = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
@@ -1051,7 +1070,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		if( useVisualization)
 			new ImageJ();
 
-		final N5Reader n5 = new N5FSReader(n5Path);
+		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
 
 		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
 		final JavaSparkContext sc = new JavaSparkContext(conf);
@@ -1121,7 +1140,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
 		{
-			final N5Writer n5Writer = new N5FSWriter(n5FieldPath);
+			final N5Writer n5Writer = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
@@ -1253,10 +1272,19 @@ public class SparkSurfaceFit implements Callable<Void>{
 		return null;
 	}
 
+	// TODO: this should not be here, but is private in n5-utils
+	public static boolean isZarr(final String containerPath) {
+
+		return containerPath.toLowerCase().endsWith(".zarr") ||
+				(Files.isDirectory(Paths.get(containerPath)) &&
+						(Files.isRegularFile(Paths.get(containerPath, ".zarray")) ||
+								Files.isRegularFile(Paths.get(containerPath, ".zgroup"))));
+	}
+
 	public void callWithSparkContext(final JavaSparkContext sc)
 			throws IOException {
 
-		final N5Reader n5 = new N5FSReader(n5Path);
+		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
 
 		/* initialize */
 		double minAvg;
@@ -1267,7 +1295,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
 		{
-			final N5Writer n5Writer = new N5FSWriter(n5FieldPath);
+			final N5Writer n5Writer = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = N5Utils.openVolatile(n5, dataset);
@@ -1328,8 +1356,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			updateHeightFields(
 					sc,
-					n5Path,
-					n5FieldPath,
+					n5Path, // TODO
+					n5FieldPath, // TODO
 					inGroup + "/s" + s,
 					outGroup + "/s" + (s + 1),
 					outGroup + "/s" + s,
