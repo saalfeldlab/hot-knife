@@ -682,7 +682,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final double minAvg = n5Field.getAttribute(heightFieldGroup + "/min", "avg", double.class);
 		final double maxAvg = n5Field.getAttribute(heightFieldGroup + "/max", "avg", double.class);
 
-		final double[] downsamplingHeightField = n5Cost.getAttribute(heightFieldGroup, "downsamplingFactors", double[].class);
+		final double[] downsamplingHeightField = n5Field.getAttribute(heightFieldGroup, "downsamplingFactors", double[].class);
 		final double[] scale = new double[] {
 				downsamplingHeightField[0] / downsamplingFactors[0],
 				downsamplingHeightField[1] / downsamplingFactors[1],
@@ -791,6 +791,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final int maxStepSize = (int)Math.max(1, Math.round(dzScale * maxDeltaZ));
 		final int padding = Math.max(15, maxStepSize * maxDeltaZTimes + 1);
 
+		System.out.println( "dzScale " + dzScale + ", downsampling of heightfield " + net.imglib2.util.Util.printCoordinates( downsamplingFactors ));
 		System.out.println("max step size " + maxStepSize + ", z-padding with " + padding + "px");
 
 		n5Field.createGroup(heightFieldGroupOutput);
@@ -1309,6 +1310,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
 		{
+			System.out.println( "Processing scale: " + firstScaleIndex );
+
 			final N5Writer n5Writer = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
@@ -1328,7 +1331,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			downsamplingFactors[2] = downsamplingFactorsXZY[1];
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
 
-			System.out.println( "downsampling of heightfield " + net.imglib2.util.Util.printCoordinates( downsamplingFactors ));
+			System.out.println( "dzScale " + dzScale + ", downsampling of heightfield " + net.imglib2.util.Util.printCoordinates( downsamplingFactors ));
+
 			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
 					inpaintedCost,
 					mask,
@@ -1340,7 +1344,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			minAvg = weightedAverage(Views.flatIterable(heightFields[0]), Views.flatIterable(mask));
 			maxAvg = weightedAverage(Views.flatIterable(heightFields[1]), Views.flatIterable(mask));
 
-			System.out.println(minAvg + ", " + maxAvg);
+			System.out.println( "minAvg: " + minAvg + ", maxAvg: " + maxAvg);
 
 			if (minAvg > maxAvg) {
 				final double a = minAvg;
@@ -1364,8 +1368,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
 		}
 
-		System.exit( 0 );
 		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
+
+			System.out.println( "Processing scale: " + s );
 
 			final long[] blockSize = new long[] {128, 128};
 			final long[] blockPadding = new long[] {32, 32};
