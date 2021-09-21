@@ -68,6 +68,7 @@ import net.imglib2.RealRandomAccessible;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
@@ -82,6 +83,7 @@ import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.RealSum;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -114,6 +116,9 @@ public class PaintHeightField implements Callable<Void>{
 
 	@Option(names = {"-s", "--scale"}, required = true,  split=",", description = "downsampling factors, e.g. 6,6,1")
 	private int[] downsamplingFactors = null;
+
+	@Option(names = {"-hfo", "--heightfieldOffset"}, required = false,  split=",", description = "offset of the heightfield (at the respective input resolution), e.g. 46,46,46")
+	private int[] heightfieldOffset = null;
 
 	@Option(names = {"-o", "--offset"}, required = true, description = "offset from the target surface, this will be at z=0, e.g. 3")
 	private int offset = 0;
@@ -210,7 +215,22 @@ public class PaintHeightField implements Callable<Void>{
 			System.exit( 0 );
 		}
 
-		final RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(n5Field, fieldGroup);
+		RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(n5Field, fieldGroup);
+
+		// add offsets from DL prediction
+		if ( heightfieldOffset != null )
+		{
+			System.out.println( "correcting heighfield offset (from DL predictions): " + net.imglib2.util.Util.printCoordinates( heightfieldOffset ) );
+
+			final long[] min = new long[] { 0, 0 };
+			final long[] max = new long[] { heightFieldSource.dimension( 0 ) + heightfieldOffset[ 0 ] * 2, heightFieldSource.dimension( 1 ) + heightfieldOffset[ 1 ] * 2  };
+			heightFieldSource = Views.interval( Views.translate( Views.extendBorder( heightFieldSource ), new long[] { heightfieldOffset[ 0 ], heightfieldOffset[ 1 ] } ), min, max);
+
+			// correct the location of the surface
+			heightFieldSource = Converters.convert( heightFieldSource, (i,o) -> o.set( (i.get() + heightfieldOffset[ 2 ]) * downsamplingFactors[ 2 ]), new FloatType() );
+			downsamplingFactors[ 2 ] = 1;
+		}
+
 		ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
 
 		// TODO: multi-threaded copy
@@ -223,13 +243,13 @@ public class PaintHeightField implements Callable<Void>{
 		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
 		//heightField = fix07mBRSec28HeightField( heightField );
 
-		//System.out.print("Smoothing heightfield.");
-		//Gauss3.gauss( 5, Views.extendBorder( heightField ), heightField );
-		//System.out.println("done.");
+		System.out.print("Smoothing heightfield.");
+		Gauss3.gauss( 1, Views.extendBorder( heightField ), heightField );
+		System.out.println("done.");
 
-		//System.out.print("adding offset to heightfield.");
-		//for ( final FloatType t : heightField )
-		//	t.set( t.get() - 1.25f );
+		System.out.print("adding offset to heightfield.");
+		for ( final FloatType t : heightField )
+			t.set( t.get() - 4f );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
