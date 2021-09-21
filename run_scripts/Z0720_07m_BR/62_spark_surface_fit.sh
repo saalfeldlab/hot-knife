@@ -2,54 +2,68 @@
 
 set -e
 
-ABSOLUTE_SCRIPT=`readlink -m $0`
-SCRIPT_DIR=`dirname ${ABSOLUTE_SCRIPT}`
-source ${SCRIPT_DIR}/00_config.sh
+ABSOLUTE_SCRIPT=$(readlink -m "$0")
+SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
+source "${SCRIPT_DIR}/00_config.sh"
 
 umask 0002
 
 if (( $# < 1 )); then
-  echo "USAGE $0 <number of nodes> [filter]"
+  echo "USAGE $0 <number of nodes>"
   exit 1
 fi
 
-N_NODES="${1}"        # 30 11-slot workers takes 2+ hours
+N_NODES="${1}"        # 10 11-slot workers takes less than 10 minutes
 
-N5_PATH="/nrs/flyem/render/n5/${RENDER_OWNER}"
-PROJECT_Z_CORR_DIR="${N5_PATH}/z_corr/${RENDER_PROJECT}"
+BASE_ZARR_COST_DIR="/nrs/flyem/bukharih"
+N5_FIELD_PATH="/nrs/flyem/render/n5/${RENDER_OWNER}"
 
-# /nrs/flyem/render/n5/Z0720_07m_BR/z_corr/Sec39/v1_acquire_trimmed_sp1___20210410_220552
-
-if [[ ! -d ${PROJECT_Z_CORR_DIR} ]]; then
-  echo "ERROR: ${PROJECT_Z_CORR_DIR} not found"
+if [[ ! -d ${BASE_ZARR_COST_DIR} ]]; then
+  echo "ERROR: ${BASE_ZARR_COST_DIR} not found"
   exit 1
 fi
+
+# ZARR_PATH="/nrs/flyem/bukharih/Sec25_trn_vld_single_head_jitter_flips_12-5-3-2-2-4_s3_s2_ft_20_cosine.zarr"
 shopt -s nullglob
-DIRS=(${PROJECT_Z_CORR_DIR}/*/)
+DIRS=("${BASE_ZARR_COST_DIR}/${RENDER_PROJECT}"_*.zarr/)
 shopt -u nullglob # Turn off nullglob to make sure it doesn't interfere with anything later
 DIR_COUNT=${#DIRS[@]}
 if (( DIR_COUNT == 0 )); then
-  echo "ERROR: no directories found in ${PROJECT_Z_CORR_DIR}"
+  echo "ERROR: no ${BASE_ZARR_COST_DIR}/${RENDER_PROJECT}_*.zarr directories found"
   exit 1
 elif (( DIR_COUNT == 1 )); then
-  Z_CORR_PATH=${DIRS[0]}
+  ZARR_PATH=${DIRS[0]}
 else
   PS3="Choose a source directory: "
-  select Z_CORR_PATH in `echo ${DIRS[@]}`; do
+  select ZARR_PATH in "${DIRS[@]}"; do
     break
   done
 fi
 
 # trim trailing slash
-Z_CORR_PATH=$(echo "${Z_CORR_PATH}" | sed 's@/$@@')
+ZARR_PATH=${ZARR_PATH%/}
 
-if [[ ! -d ${Z_CORR_PATH} ]]; then
-  echo "ERROR: ${Z_CORR_PATH} not found"
+if [[ ! -d ${ZARR_PATH} ]]; then
+  echo "ERROR: ${ZARR_PATH} not found"
+  exit 1
+fi
+
+# ZARR_PATH="/nrs/flyem/bukharih/Sec25_trn_vld_single_head_jitter_flips_12-5-3-2-2-4_s3_s2_ft_20_cosine.zarr"
+# shellcheck disable=SC2001
+COST_NAME=$(echo "${ZARR_PATH}" | sed 's@.*/Sec.._\(.*\).zarr@\1@')
+
+# HEIGHT_FIELDS_DATASET=/heightfields/Sec25/trn_vld_single_head_jitter_flips_12-5-3-2-2-4_s3_s2_ft_20_cosine
+HEIGHT_FIELDS_DATASET="/heightfields/${RENDER_PROJECT}/${COST_NAME}"
+
+# /nrs/flyem/render/n5/Z0720_07m_BR/heightfields/Sec25/trn_vld_single_head_jitter_flips_12-5-3-2-2-4_s3_s2_ft_20_cosine
+if [[ -d ${N5_FIELD_PATH}${HEIGHT_FIELDS_DATASET} ]]; then
+  echo "ERROR: ${N5_FIELD_PATH}${HEIGHT_FIELDS_DATASET} already exists!"
   exit 1
 fi
 
 # must export this for flintstone
 export LSF_PROJECT="flyem"
+export RUNTIME="3:59" # less than 4 hour max runtime maximizes available cluster nodes
 
 #-----------------------------------------------------------
 # Spark executor setup with 11 cores per worker ...
@@ -63,38 +77,32 @@ export N_OVERHEAD_CORES_PER_WORKER=1
 export N_CORES_DRIVER=1
 
 #-----------------------------------------------------------
-RUN_TIME=`date +"%Y%m%d_%H%M%S"`
+# prepend newer gson jar to spark classpaths to fix bug
+# see https://hadoopsters.com/2019/05/08/how-to-override-a-spark-dependency-in-client-or-cluster-mode/
+GSON_JAR="gson-2.8.6.jar"
+GSON_JAR_PATH="/groups/flyem/data/trautmane/hot-knife/${GSON_JAR}"
+export SUBMIT_ARGS="--conf spark.driver.extraClassPath=${GSON_JAR_PATH} --conf spark.executor.extraClassPath=${GSON_JAR_PATH}"
+
+#-----------------------------------------------------------
+LAUNCH_TIME=$(date +"%Y%m%d_%H%M%S")
 JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-SNAPSHOT.jar"
 CLASS=org.janelia.saalfeldlab.hotknife.SparkSurfaceFit
 
-# /nrs/flyem/render/n5/Z0720_07m_BR/z_corr/Sec39/v1_acquire_trimmed_sp1___20210410_220552
-Z_CORR_DATASET=$(echo "${Z_CORR_PATH}" | sed 's@.*\(/z_corr/.*\)@\1@')
-COST_DATASET="$(echo "${Z_CORR_DATASET}" | sed 's@/z_corr/@/cost_new/@')_gauss"
-if (( $# > 1 )); then
-  COST_DATASET="${COST_DATASET}_w_filter"
-fi
-HEIGHT_FIELDS_DATASET=$(echo "${COST_DATASET}" | sed 's@/cost_new/@/heightfields/@')
-
-if [[ -d ${N5_PATH}${HEIGHT_FIELDS_DATASET} ]]; then
-  echo "ERROR: ${N5_PATH}${HEIGHT_FIELDS_DATASET} already exists!"
-  exit 1
-fi
 
 ARGV="\
---n5Path=${N5_PATH} \
---n5FieldPath=${N5_PATH} \
---n5CostInput=${COST_DATASET} \
---n5Raw=${Z_CORR_DATASET} \
+--n5Path=${ZARR_PATH} \
+--n5FieldPath=${N5_FIELD_PATH} \
+--n5CostInput=/ \
 --n5SurfaceOutput=${HEIGHT_FIELDS_DATASET} \
---firstScale=8 \
+--firstScale=7 \
 --lastScale=1 \
---maxDeltaZ=0.25 \
---initMaxDeltaZ=0.3 \
+--maxDeltaZ=0.15 \
+--initMaxDeltaZ=0.35 \
 --minDistance=2000 \
 --maxDistance=4000"
 
 LOG_DIR="logs"
-LOG_FILE="${LOG_DIR}/surface_fit.${RENDER_PROJECT}.${RUN_TIME}.out"
+LOG_FILE="${LOG_DIR}/surface_fit.${RENDER_PROJECT}.${LAUNCH_TIME}.out"
 
 mkdir -p ${LOG_DIR}
 
@@ -106,5 +114,5 @@ mkdir -p ${LOG_DIR}
   echo """Running with arguments:
 ${ARGV}
 """
-  /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $JAR $CLASS $ARGV
-} 2>&1 | tee -a ${LOG_FILE}
+  /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh "${N_NODES}" "${JAR}" "${CLASS}" ${ARGV}
+} 2>&1 | tee -a "${LOG_FILE}"
