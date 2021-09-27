@@ -5,8 +5,11 @@ import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvStackSource;
 import java.io.IOException;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.position.FunctionRandomAccessible;
 import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -25,12 +28,28 @@ public class ViewAlignmentPlayground
 
 		final String transformGroup = passGroup + "/" + "flat.Sec26.top.face";
 
-
 		final RandomAccessibleInterval< DoubleType > positionField = N5Utils.open( n5, transformGroup );
-		final BdvStackSource< DoubleType > bdv = BdvFunctions.show( positionField, "positionField", Bdv.options().is2D().axisOrder( AxisOrder.XYC ) );
+		final BdvStackSource< DoubleType > bdv = BdvFunctions.show( positionField, "field", Bdv.options().is2D().axisOrder( AxisOrder.XYC ) );
 
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(bdv.getBdvHandle().getViewerPanel());
 		bdv.getBdvHandle().getViewerPanel().getDisplay().overlays().add( overlay );
+
+		final RandomAccessibleInterval< DoubleType > relativePositionField = Views.interval(
+				new FunctionRandomAccessible<>(
+						positionField.numDimensions(),
+						() -> {
+							final RandomAccess< DoubleType > input = Views.extendBorder( positionField ).randomAccess();
+							return ( pos, value ) -> {
+								input.setPosition( pos );
+								final int d = pos.getIntPosition( pos.numDimensions() - 1 );
+								value.set( input.get().get() - pos.getDoublePosition( d ) );
+							};
+						},
+						DoubleType::new ),
+				positionField );
+
+		BdvFunctions.show( relativePositionField, "relative", Bdv.options().addTo( bdv ).axisOrder( AxisOrder.XYC ) );
+
 	}
 
 //		final String[] datasetNames = n5.getAttribute( passGroup, "datasets", String[].class );
