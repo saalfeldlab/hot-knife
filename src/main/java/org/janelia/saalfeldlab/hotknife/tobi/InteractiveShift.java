@@ -119,7 +119,30 @@ public class InteractiveShift {
 			viewer.getDisplay().overlays().add(overlay);
 		}
 
+		private static final double maxSlope = 0.8;
+		private static final double exph = Math.exp(-0.5) / maxSlope;
+		private static final double minSigma = 2.0;
+
 		public void transform(final RealLocalizable source, final RealPositionable target) {
+
+			double x = source.getDoublePosition(0);
+			double y = source.getDoublePosition(1);
+			double transformedX = x;
+			double transformedY = y;
+
+			double h = Math.sqrt(stx * stx + sty * sty);
+			double sigma = Math.max(minSigma, h * exph);
+			double asqu = (x - sx1) * (x - sx1) + (y - sy1) * (y - sy1);
+			double dt = Math.exp(asqu / (-2.0 * sigma * sigma));
+
+			transformedX = x + dt * stx;
+			transformedY = y + dt * sty;
+
+			target.setPosition(transformedX, 0);
+			target.setPosition(transformedY, 1);
+		}
+
+		public void transformTriangle(final RealLocalizable source, final RealPositionable target) {
 
 			double x = source.getDoublePosition(0);
 			double y = source.getDoublePosition(1);
