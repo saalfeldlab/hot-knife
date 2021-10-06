@@ -8,13 +8,12 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>29.2.1</version>
+		<version>31.1.0</version>
 	</parent>
 	<properties>
 		<enforcer.skip>true</enforcer.skip>
 		<package-name>org.janelia.saalfeldlab.hotknife</package-name>
 		<jackson-databind.version>2.6.7</jackson-databind.version>
-		<imglib2.version>5.11.0</imglib2.version>
 
 		<n5.version>2.3.0</n5.version>
 		<n5-imglib2.version>3.5.1</n5-imglib2.version>
@@ -47,7 +46,6 @@
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2</artifactId>
-			<version>5.11.1</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
@@ -56,7 +54,6 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>bigdataviewer-core</artifactId>
-			<version>10.0.2</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
@@ -75,7 +72,6 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>bigdataviewer-vistools</artifactId>
-			<version>1.0.0-beta-23</version>
 		</dependency>
 		<dependency>
 			<groupId>net.imglib2</groupId>
@@ -92,7 +88,6 @@
 		<dependency>
 			<groupId>net.imglib2</groupId>
 			<artifactId>imglib2-algorithm</artifactId>
-			<version>0.12.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.scala-lang</groupId>
