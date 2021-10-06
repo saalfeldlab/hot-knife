@@ -1,0 +1,26 @@
+package org.janelia.saalfeldlab.hotknife.tobi;
+
+import bdv.util.Bdv;
+import bdv.util.BdvFunctions;
+import java.io.IOException;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5Reader;
+
+public class ViewAlignmentPlayground3 {
+
+	public static void main(String[] args) throws IOException {
+		System.setProperty("apple.laf.useScreenMenuBar", "true");
+
+		final String n5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_BR";
+		final String passGroup = "/surface_align/pass02";
+
+		final N5Reader n5 = new N5FSReader(n5Path);
+
+		final String transformGroup = passGroup + "/" + "flat.Sec33.bot.face";
+		final String faceGroup = "/flat/Sec33/bot/face";
+
+		final SurfacePyramid<?,?> pyramid = new SurfacePyramid<>(n5, faceGroup);
+		BdvFunctions.show(pyramid.getSourceAndConverter(), Bdv.options().is2D());
+	}
+
+}
