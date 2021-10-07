@@ -46,6 +46,9 @@ import static bdv.BigDataViewer.createConverterToARGB;
 
 public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>> {
 
+	private final T type;
+	private final V volatileType;
+
 	private final FetcherThreads fetchers;
 	private final VolatileGlobalCellCache cache;
 	private final RandomAccessibleInterval<T>[] imgs;
@@ -64,9 +67,25 @@ public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends 
 		return imgs.length;
 	}
 
+	public RandomAccessibleInterval<T> getImg(final int level) {
+		return imgs[level];
+	}
+
+	public RandomAccessibleInterval<V> getVolatileImg(final int level) {
+		return vimgs[level];
+	}
+
 	public void close() {
 		fetchers.shutdown();
 		cache.clearCache();
+	}
+
+	public T getType() {
+		return type;
+	}
+
+	public V getVolatileType() {
+		return volatileType;
 	}
 
 	private static class Types<T extends NativeType<T>, V> {
@@ -87,6 +106,9 @@ public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends 
 
 	private SurfacePyramid(final N5Reader n5, final String group, final T type, final V volatileType) throws IOException {
 		final int numScales = n5.list(group).length;
+
+		this.type = type;
+		this.volatileType = volatileType;
 
 		final int numFetcherThreads = Math.max(1, Runtime.getRuntime().availableProcessors());
 		final BlockingFetchQueues<Callable<?>> queue = new BlockingFetchQueues<>(numScales, numFetcherThreads);
