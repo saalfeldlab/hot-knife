@@ -2,6 +2,7 @@ package org.janelia.saalfeldlab.hotknife.tobi;
 
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
+import bdv.util.BdvStackSource;
 import java.io.IOException;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -20,11 +21,14 @@ public class ViewAlignmentPlayground3 {
 		final String faceGroup = "/flat/Sec33/bot/face";
 
 		final SurfacePyramid<?, ?> pyramid = new SurfacePyramid<>(n5, faceGroup);
-		BdvFunctions.show(pyramid.getSourceAndConverter(), Bdv.options().is2D());
+//		BdvFunctions.show(pyramid.getSourceAndConverter(), Bdv.options().is2D());
 
 		final PositionField positionField = new PositionField(n5, transformGroup);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField);
-		BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D());
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, IdentityTransform.get());
+		final BdvStackSource<?> source = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D());
+		source.setDisplayRange(0, 255);
+		source.setDisplayRangeBounds(0, 255);
+
 	}
 }
