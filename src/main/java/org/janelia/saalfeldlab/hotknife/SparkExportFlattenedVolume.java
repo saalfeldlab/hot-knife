@@ -101,6 +101,18 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 			min = (minAvg + 0.5) * downsamplingFactors[2] - 0.5;
 			max = (maxAvg + 0.5) * downsamplingFactors[2] - 0.5;
 
+			if (min >= max) {
+				final String minAttrPath = n5FieldPath + minFieldName + "/attributes.json";
+				final String maxAttrPath = n5FieldPath + maxFieldName + "/attributes.json";
+				final String groupAttrPath = n5FieldPath + fieldGroup + "/attributes.json";
+				throw new IllegalStateException(
+						"output volume has negative dimension because scaled min " + min + " >= scaled max " + max +
+						", minAvg " + minAvg + " read from " + minAttrPath +
+						", maxAvg " + maxAvg + " read from " + maxAttrPath +
+						", downsamplingFactors [" +  downsamplingFactors[0] + ", " + downsamplingFactors[1] + ", "  +
+						downsamplingFactors[2] + "] read from " + groupAttrPath);
+			}
+
 			final DatasetAttributes attributes = n5RawReader.getDatasetAttributes(rawDataset);
 			rawBlockSize = attributes.getBlockSize();
 			final long[] rawDimensions = attributes.getDimensions();
