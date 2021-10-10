@@ -16,15 +16,23 @@ public class PositionField {
 
 	final RandomAccessibleInterval<DoubleType> positionField;
 	final RealTransform positionFieldLookup;
-	final long[] translation;
-	final double transformScale;
+	final long[] offset;
+	final double scale;
 
 	public PositionField(final N5Reader n5, final String datasetName)
 			throws IOException {
-		transformScale = n5.getAttribute(datasetName, "scale", double.class);
+		scale = n5.getAttribute(datasetName, "scale", double.class);
 		final double[] boundsMin = n5.getAttribute(datasetName, "boundsMin", double[].class);
-		translation = Grid.floorScaled(boundsMin, transformScale);
+		offset = Grid.floorScaled(boundsMin, scale);
 		positionField = N5Utils.open(n5, datasetName);
+		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
+	}
+
+	public PositionField(final RandomAccessibleInterval<DoubleType> positionField, final long[] offset, final double scale)
+	{
+		this.positionField = positionField;
+		this.offset = offset.clone();
+		this.scale = scale;
 		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
 	}
 
@@ -33,7 +41,23 @@ public class PositionField {
 	}
 
 	public RealTransform getTransform(final int level, final RealTransform movingTransform) {
-		return new CombinedTransform(positionFieldLookup, transformScale, translation[0], translation[1], level, movingTransform);
+		return new CombinedTransform(positionFieldLookup, scale, offset[0], offset[1], level, movingTransform);
+	}
+
+	public RandomAccessibleInterval<DoubleType> getPositionFieldRAI() {
+		return positionField;
+	}
+
+	public long[] getOffset() {
+		return offset;
+	}
+
+	public long getOffset(final int d) {
+		return offset[d];
+	}
+
+	public double getScale() {
+		return scale;
 	}
 
 	private static class CombinedTransform implements RealTransform {

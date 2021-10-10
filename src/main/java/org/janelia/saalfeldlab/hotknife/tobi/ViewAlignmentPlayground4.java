@@ -99,6 +99,7 @@ public class ViewAlignmentPlayground4 {
 		}
 
 		private synchronized void endTranslate(final int x, final int y) {
+			System.out.println("transform = " + transform);
 			transform.setActive(false);
 
 			dragging = false;
