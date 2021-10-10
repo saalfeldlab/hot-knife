@@ -1,4 +1,4 @@
-/**
+/*
  * License: GPL
  *
  * This program is free software; you can redistribute it and/or
@@ -26,6 +26,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
@@ -47,6 +48,7 @@ import picocli.CommandLine.Option;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
+@SuppressWarnings("FieldMayBeFinal")
 public class SparkExportFlattenedVolume implements Callable<Void>, Serializable {
 
 	@Option(names = {"--n5RawPath"}, required = true, description = "N5 raw input path, e.g. /nrs/flyem/tmp/VNC.n5")
@@ -67,10 +69,10 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 	@Option(names = {"--n5OutDataset"}, required = true, description = "N5 output dataset, e.g. /flattened/slab-01")
 	private String outDataset = null;
 
-	@Option(names = {"--padding"}, required = false, description = "padding beyond flattening field min and max in px, e.g. 20")
+	@Option(names = {"--padding"}, description = "padding beyond flattening field min and max in px, e.g. 20")
 	private int padding = 0;
 
-	@Option(names = "--blockSize", required = false, split=",", description = "Size of output blocks, e.g. 128,128,128")
+	@Option(names = "--blockSize", split=",", description = "Size of output blocks, e.g. 128,128,128")
 	private int[] blockSize = new int[] {128, 128, 128};
 
 	@Override
@@ -84,33 +86,41 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 		final long[] dimensions;
 		final String minFieldName;
 		final String maxFieldName;
-		final double[] downsamplingFactors;
+		final double[] minFactors;
+		final double[] maxFactors;
 		final double min;
 		final double max;
 		{
 			final N5Reader n5RawReader = new N5FSReader(n5RawInputPath);
-			final N5Reader n5FieldReader = new N5FSReader(n5FieldPath);
+			final N5FSReader n5FieldReader = new N5FSReader(n5FieldPath);
 
 			minFieldName = fieldGroup + "/min";
 			maxFieldName = fieldGroup + "/max";
 
-			downsamplingFactors = n5FieldReader.getAttribute(fieldGroup, "downsamplingFactors", double[].class);
-			final double minAvg = n5FieldReader.getAttribute(minFieldName, "avg", double.class);
-			final double maxAvg = n5FieldReader.getAttribute(maxFieldName, "avg", double.class);
+			final String minAttrPath = Util.getAttributesJsonPath(n5FieldPath, minFieldName);
+			final String maxAttrPath = Util.getAttributesJsonPath(n5FieldPath, maxFieldName);
 
-			min = (minAvg + 0.5) * downsamplingFactors[2] - 0.5;
-			max = (maxAvg + 0.5) * downsamplingFactors[2] - 0.5;
+			final String avgKey = "avg";
+			final Double minAvg = Util.readRequiredAttribute(n5FieldReader, minFieldName, avgKey, Double.class);
+			final Double maxAvg = Util.readRequiredAttribute(n5FieldReader, maxFieldName, avgKey, Double.class);
+
+			final String factorsKey = "downsamplingFactors";
+			minFactors = Util.readRequiredAttribute(n5FieldReader, minFieldName, factorsKey, double[].class);
+			maxFactors = Util.readRequiredAttribute(n5FieldReader, maxFieldName, factorsKey, double[].class);
+
+			System.out.println("loaded " + factorsKey + " " + Arrays.toString(minFactors) + " from " + minAttrPath);
+			System.out.println("loaded " + factorsKey + " " + Arrays.toString(maxFactors) + " from " + maxAttrPath);
+
+			min = (minAvg + 0.5) * minFactors[2] - 0.5;
+			max = (maxAvg + 0.5) * maxFactors[2] - 0.5;
 
 			if (min >= max) {
-				final String minAttrPath = n5FieldPath + minFieldName + "/attributes.json";
-				final String maxAttrPath = n5FieldPath + maxFieldName + "/attributes.json";
-				final String groupAttrPath = n5FieldPath + fieldGroup + "/attributes.json";
 				throw new IllegalStateException(
 						"output volume has negative dimension because scaled min " + min + " >= scaled max " + max +
-						", minAvg " + minAvg + " read from " + minAttrPath +
-						", maxAvg " + maxAvg + " read from " + maxAttrPath +
-						", downsamplingFactors [" +  downsamplingFactors[0] + ", " + downsamplingFactors[1] + ", "  +
-						downsamplingFactors[2] + "] read from " + groupAttrPath);
+						", min " + avgKey + " " + minAvg +  " and " + factorsKey + " " + Arrays.toString(minFactors) +
+						" read from " + minAttrPath +
+						", max " + avgKey + " " + maxAvg +  " and " + factorsKey + " " + Arrays.toString(maxFactors) +
+						" read from " + maxAttrPath);
 			}
 
 			final DatasetAttributes attributes = n5RawReader.getDatasetAttributes(rawDataset);
@@ -169,8 +179,8 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 					final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, maxFieldName);
 
 					final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
-							Transform.scaleAndShiftHeightFieldAndValues(minField, downsamplingFactors),
-							Transform.scaleAndShiftHeightFieldAndValues(maxField, downsamplingFactors),
+							Transform.scaleAndShiftHeightFieldAndValues(minField, minFactors),
+							Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors),
 							min,
 							max);
 
@@ -193,7 +203,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 		return null;
 	}
 
-	public static final void main(final String... args) {
+	public static void main(final String... args) {
 
 		CommandLine.call(new SparkExportFlattenedVolume(), args);
 	}

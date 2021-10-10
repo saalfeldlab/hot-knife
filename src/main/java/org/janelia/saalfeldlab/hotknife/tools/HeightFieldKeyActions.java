@@ -46,6 +46,7 @@ public class HeightFieldKeyActions {
 	final protected ViewerPanel viewer;
 	final protected RandomAccessibleInterval<FloatType> heightField;
 	final protected double avg;
+	final protected int[] downsamplingFactors;
 
 	final protected String n5Path;
 	final protected String heightFieldDataset;
@@ -59,6 +60,7 @@ public class HeightFieldKeyActions {
 			final ViewerPanel viewer,
 			final RandomAccessibleInterval<FloatType> heightField,
 			final double avg,
+			final int[] downsamplingFactors,
 			final String n5Path,
 			final String heightFieldDataset,
 			final InputTriggerConfig config,
@@ -67,6 +69,7 @@ public class HeightFieldKeyActions {
 		this.viewer = viewer;
 		this.heightField = heightField;
 		this.avg = avg;
+		this.downsamplingFactors = downsamplingFactors;
 		this.n5Path = n5Path;
 		this.heightFieldDataset = heightFieldDataset;
 
@@ -124,6 +127,7 @@ public class HeightFieldKeyActions {
 						exec);
 		exec.shutdown();
 		n5.setAttribute(heightFieldDataset, "avg", avg);
+		n5.setAttribute(heightFieldDataset, "downsamplingFactors", downsamplingFactors);
 		System.out.println("done.");
 	}
 
