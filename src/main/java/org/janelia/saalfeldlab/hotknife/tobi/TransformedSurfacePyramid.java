@@ -14,11 +14,13 @@ import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.view.Views;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
 
 import static bdv.BigDataViewer.createConverterToARGB;
 
@@ -84,7 +86,14 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 								Views.interpolate(ext, nLinear),
 								positionField.getTransform(i, movingTransform)),
 				};
-				rais[i] = imgs[i];
+
+				final long[] min = Grid.floorScaled(positionField.getBoundsMin(), 1);
+				final long[] max = Grid.ceilScaled(positionField.getBoundsMax(), 1);
+				rais[i] = Views.interval(
+						new RealTransformRandomAccessible<>(
+								Views.interpolate(ext, nearestNeighbor),
+								positionField.getTransform(i, movingTransform)),
+						min, max);
 			}
 		}
 

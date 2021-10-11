@@ -90,7 +90,9 @@ public class ViewAlignmentPlayground5 {
 			a.get().set(tmp1[1] * scale);
 		}
 
-		final PositionField bakedPositionField = new PositionField(baked, positionField.getOffset(), positionField.getScale());
+		final PositionField bakedPositionField = new PositionField(baked,
+				positionField.getOffset(), positionField.getScale(),
+				positionField.getBoundsMin(), positionField.getBoundsMax());
 		final TransformedSurfacePyramid<?, ?> bakedtpyramid = new TransformedSurfacePyramid<>(pyramid, bakedPositionField, IdentityTransform.get());
 		final BdvStackSource<?> bsource = BdvFunctions.show(bakedtpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		bsource.setDisplayRange(0, 255);

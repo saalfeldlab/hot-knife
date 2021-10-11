@@ -81,7 +81,9 @@ public class ViewAlignmentPlayground7 {
 //		System.out.println("bdims = " + Intervals.toString(bdims));
 //		System.out.println("boffset = " + boffsetX + ", " + boffsetY);
 
-		final PositionField bakedPositionField = new PositionField(baked, new long[] {boffsetX, boffsetY}, bscale);
+		final PositionField bakedPositionField = new PositionField(baked,
+				new long[] {boffsetX, boffsetY}, bscale,
+				positionField.getBoundsMin(), positionField.getBoundsMax());
 		final TransformedSurfacePyramid<?, ?> bakedtpyramid = new TransformedSurfacePyramid<>(pyramid, bakedPositionField, IdentityTransform.get());
 		final BdvStackSource<?> bsource = BdvFunctions.show(bakedtpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		bsource.setDisplayRange(0, 255);

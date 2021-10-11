@@ -14,25 +14,30 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 public class PositionField {
 
-	final RandomAccessibleInterval<DoubleType> positionField;
-	final RealTransform positionFieldLookup;
-	final long[] offset;
-	final double scale;
+	private final RandomAccessibleInterval<DoubleType> positionField;
+	private final RealTransform positionFieldLookup;
+	private final long[] offset;
+	private final double scale;
+	private final double[] boundsMin;
+	private final double[] boundsMax;
 
 	public PositionField(final N5Reader n5, final String datasetName)
 			throws IOException {
 		scale = n5.getAttribute(datasetName, "scale", double.class);
-		final double[] boundsMin = n5.getAttribute(datasetName, "boundsMin", double[].class);
+		boundsMin = n5.getAttribute(datasetName, "boundsMin", double[].class);
+		boundsMax = n5.getAttribute(datasetName, "boundsMax", double[].class);
 		offset = Grid.floorScaled(boundsMin, scale);
 		positionField = N5Utils.open(n5, datasetName);
 		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
 	}
 
-	public PositionField(final RandomAccessibleInterval<DoubleType> positionField, final long[] offset, final double scale)
+	public PositionField(final RandomAccessibleInterval<DoubleType> positionField, final long[] offset, final double scale, final double[] boundsMin, final double[] boundsMax)
 	{
 		this.positionField = positionField;
 		this.offset = offset.clone();
 		this.scale = scale;
+		this.boundsMin = boundsMin;
+		this.boundsMax = boundsMax;
 		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
 	}
 
@@ -62,6 +67,14 @@ public class PositionField {
 
 	public int getLevel() {
 		return (int) Math.round(-Math.log(scale) / Math.log(2));
+	}
+
+	public double[] getBoundsMin() {
+		return boundsMin;
+	}
+
+	public double[] getBoundsMax() {
+		return boundsMax;
 	}
 
 	private static class CombinedTransform implements RealTransform {
