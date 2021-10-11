@@ -60,6 +60,10 @@ public class PositionField {
 		return scale;
 	}
 
+	public int getLevel() {
+		return (int) Math.round(-Math.log(scale) / Math.log(2));
+	}
+
 	private static class CombinedTransform implements RealTransform {
 
 		private final RealTransform positionFieldLookup;

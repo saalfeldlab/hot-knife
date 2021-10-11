@@ -18,6 +18,8 @@ import org.scijava.ui.behaviour.DragBehaviour;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.Behaviours;
 
+
+// interactive GaussTransform
 public class ViewAlignmentPlayground4 {
 
 	public static void main(String[] args) throws IOException {
