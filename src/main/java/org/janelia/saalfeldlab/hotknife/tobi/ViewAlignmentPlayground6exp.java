@@ -6,16 +6,10 @@ import bdv.util.BdvStackSource;
 import java.io.IOException;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
-import net.imglib2.Interval;
-import net.imglib2.RandomAccess;
 import net.imglib2.RealPoint;
-import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
-import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.DoubleArray;
-import net.imglib2.iterator.IntervalIterator;
-import net.imglib2.iterator.LocalizingZeroMinIntervalIterator;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.BenchmarkHelper;
@@ -24,7 +18,7 @@ import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 
 // bake transform into positionField at specified resolution level
-public class ViewAlignmentPlayground6 {
+public class ViewAlignmentPlayground6exp {
 
 	public static void main(String[] args) throws IOException {
 		System.setProperty("apple.laf.useScreenMenuBar", "true");
@@ -48,11 +42,11 @@ public class ViewAlignmentPlayground6 {
 		final double sy0=14456.360833333334;
 		final double sx1=11067.172499999999;
 		final double sy1=14679.345833333335;
-		final GaussTransform movingTransform = new GaussTransform(maxSlope, minSigma);
-		movingTransform.setLine(sx0, sy0, sx1, sy1);
-		movingTransform.setActive(active);
+		final GaussTransform incrementalTransform = new GaussTransform(maxSlope, minSigma);
+		incrementalTransform.setLine(sx0, sy0, sx1, sy1);
+		incrementalTransform.setActive(active);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, movingTransform);
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, incrementalTransform);
 		final BdvStackSource<?> source = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
@@ -92,23 +86,20 @@ public class ViewAlignmentPlayground6 {
 		final RealPoint tmp2p = RealPoint.wrap(tmp2);
 
 		BenchmarkHelper.benchmarkAndPrint(40, true, () -> {
-		final RandomAccess<DoubleType> a = baked.randomAccess();
-		a.setPosition(new int[] {0, 0, 0});
-		for (int y = 0; y < bsizeY; ++y) {
-			for (int x = 0; x < bsizeX; ++x) {
-				tmp1[0] = (x + boffsetX) * binvscale;
-				tmp1[1] = (y + boffsetY) * binvscale;
-				movingTransform.apply(tmp1p, tmp2p);
-				positionFieldTransform.apply(tmp2p, tmp1p);
-				a.get().set(tmp1[0] * bscale);
-				a.fwd(2);
-				a.get().set(tmp1[1] * bscale);
-				a.bck(2);
-				a.fwd(0);
+			final double[] storage = baked.update(null).getCurrentStorageArray();
+			final int zo = bsizeX * bsizeY;
+			int o = 0;
+			for (int y = 0; y < bsizeY; ++y) {
+				for (int x = 0; x < bsizeX; ++x) {
+					tmp1[0] = (x + boffsetX) * binvscale;
+					tmp1[1] = (y + boffsetY) * binvscale;
+					incrementalTransform.apply(tmp1p, tmp2p);
+					positionFieldTransform.apply(tmp2p, tmp1p);
+					storage[o] = tmp1[0] * bscale;
+					storage[o + zo] = tmp1[1] * bscale;
+					++o;
+				}
 			}
-			a.setPosition(0, 0);
-			a.fwd(1);
-		}
 		});
 
 		final PositionField bakedPositionField = new PositionField(baked, new long[] {boffsetX, boffsetY}, bscale);
