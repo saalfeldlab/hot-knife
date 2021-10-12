@@ -16,7 +16,6 @@
 		<jackson-databind.version>2.6.7</jackson-databind.version>
 		<imglib2.version>5.11.0</imglib2.version>
 
-		<n5.version>2.3.0</n5.version>
 		<n5-imglib2.version>3.5.1</n5-imglib2.version>
 		<n5-hdf5.version>1.2.0</n5-hdf5.version>
 		<n5-aws-s3.version>3.2.0</n5-aws-s3.version>
