@@ -28,11 +28,11 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 
 	private final SourceAndConverter<T> sourceAndConverter;
 
-	public TransformedSurfacePyramid(SurfacePyramid<T, V> pyramid, PositionField positionField, RealTransform movingTransform) {
-		this(pyramid, positionField, movingTransform, "transformed");
+	public TransformedSurfacePyramid(SurfacePyramid<T, V> pyramid, PositionField positionField, RealTransform incrementalTransform) {
+		this(pyramid, positionField, incrementalTransform, "transformed");
 	}
 
-	public TransformedSurfacePyramid(SurfacePyramid<T, V> pyramid, PositionField positionField, RealTransform movingTransform, final String name) {
+	public TransformedSurfacePyramid(SurfacePyramid<T, V> pyramid, PositionField positionField, RealTransform incrementalTransform, final String name) {
 		final int numScales = pyramid.getNumMipmapLevels();
 		final RandomAccessibleInterval<T>[] imgs = new RandomAccessibleInterval[numScales];
 		final RandomAccessibleInterval<V>[] vimgs = new RandomAccessibleInterval[numScales];
@@ -45,9 +45,9 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 		final T type = pyramid.getType();
 		final V volatileType = pyramid.getVolatileType();
 
-		final Source<V> vs = new TransformedSurfaceSource<>(volatileType, vimgs, positionField, movingTransform, name);
+		final Source<V> vs = new TransformedSurfaceSource<>(volatileType, vimgs, positionField, incrementalTransform, name);
 		final SourceAndConverter<V> vsoc = new SourceAndConverter<>(vs, createConverterToARGB(volatileType));
-		final Source<T> s = new TransformedSurfaceSource<>(type, imgs, positionField, movingTransform, name);
+		final Source<T> s = new TransformedSurfaceSource<>(type, imgs, positionField, incrementalTransform, name);
 		sourceAndConverter = new SourceAndConverter<>(s, createConverterToARGB(type), vsoc);
 	}
 
@@ -68,7 +68,7 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 				final T type,
 				final RandomAccessibleInterval<T>[] imgs,
 				final PositionField positionField,
-				final RealTransform movingTransform,
+				final RealTransform incrementalTransform,
 				final String name) {
 			this.type = type;
 			this.name = name;
@@ -85,10 +85,10 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 				rras[i] = new RealRandomAccessible[] {
 						new RealTransformRealRandomAccessible<>(
 								Views.interpolate(ext, nearestNeighbor),
-								positionField.getTransform(i, movingTransform)),
+								positionField.getTransform(i, incrementalTransform)),
 						new RealTransformRealRandomAccessible<>(
 								Views.interpolate(ext, nLinear),
-								positionField.getTransform(i, movingTransform)),
+								positionField.getTransform(i, incrementalTransform)),
 				};
 
 				final long[] min = Grid.floorScaled(positionField.getBoundsMin(), 1);
@@ -96,7 +96,7 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 				rais[i] = Views.interval(
 						new RealTransformRandomAccessible<>(
 								Views.interpolate(ext, nearestNeighbor),
-								positionField.getTransform(i, movingTransform)),
+								positionField.getTransform(i, incrementalTransform)),
 						min, max);
 			}
 		}

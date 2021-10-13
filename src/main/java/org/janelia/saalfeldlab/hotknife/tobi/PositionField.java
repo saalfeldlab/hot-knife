@@ -45,8 +45,8 @@ public class PositionField {
 		return getTransform(level, IdentityTransform.get());
 	}
 
-	public RealTransform getTransform(final int level, final RealTransform movingTransform) {
-		return new CombinedTransform(positionFieldLookup, scale, offset[0], offset[1], level, movingTransform);
+	public RealTransform getTransform(final int level, final RealTransform incrementalTransform) {
+		return new CombinedTransform(positionFieldLookup, scale, offset[0], offset[1], level, incrementalTransform);
 	}
 
 	public RandomAccessibleInterval<DoubleType> getPositionFieldRAI() {
@@ -88,7 +88,7 @@ public class PositionField {
 		private int level;
 
 		// manual transform defined on scale level 0
-		private final RealTransform movingTransform;
+		private final RealTransform incrementalTransform;
 
 		// 1 << level
 		private final double levelscale;
@@ -101,9 +101,9 @@ public class PositionField {
 				final double offsetX,
 				final double offsetY,
 				final int level,
-				final RealTransform movingTransform) {
+				final RealTransform incrementalTransform) {
 			this.positionFieldLookup = positionFieldTransform.copy();
-			this.movingTransform = movingTransform.copy();
+			this.incrementalTransform = incrementalTransform.copy();
 
 			levelscale = 1 << level;
 			invlevelscale =  1.0 / (scale * (1 << level));
@@ -146,7 +146,7 @@ public class PositionField {
 			tmp1[ 0 ] = x * levelscale;
 			tmp1[ 1 ] = y * levelscale;
 			// apply manualTransform
-			movingTransform.apply(tmp1p, tmp2p);
+			incrementalTransform.apply(tmp1p, tmp2p);
 			// scale by transformScale and subtract offset
 			tmp3[0] = scale * tmp2[0] - offsetX;
 			tmp3[1] = scale * tmp2[1] - offsetY;
@@ -159,7 +159,7 @@ public class PositionField {
 
 		@Override
 		public RealTransform copy() {
-			return new CombinedTransform(positionFieldLookup, scale, offsetX, offsetY, level, movingTransform);
+			return new CombinedTransform(positionFieldLookup, scale, offsetX, offsetY, level, incrementalTransform);
 		}
 	}
 }
