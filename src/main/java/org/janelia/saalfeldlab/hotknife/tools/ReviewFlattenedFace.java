@@ -25,27 +25,22 @@ import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
-import mpicbg.spim.data.sequence.DefaultVoxelDimensions;
-
 import org.janelia.saalfeldlab.hotknife.tools.proofread.LocationsPanel;
-import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import bdv.ui.BdvDefaultCards;
 import bdv.ui.CardPanel;
+import bdv.util.BdvFunctions;
+import bdv.util.BdvHandle;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
-import bdv.util.RandomAccessibleIntervalMipmapSource;
+import bdv.util.Prefs;
 import bdv.viewer.Interpolation;
-import bdv.viewer.Source;
-import bdv.viewer.SynchronizedViewerState;
 import bdv.viewer.ViewerPanel;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.type.volatiles.VolatileUnsignedByteType;
+import net.imglib2.type.numeric.real.FloatType;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
@@ -57,11 +52,11 @@ public class ReviewFlattenedFace
 	private String containerPath;
 
 	@SuppressWarnings("unused")
-	@Option(names = {"--dataset"}, required = true, description = "dataset, e.g. --dataset '/flat/Sec06/top/s1'")
+	@Option(names = {"--dataset"}, required = true, description = "dataset, e.g. --dataset '/flat/Sec06/top/face/s0'")
 	private String datasetPath;
 
 	@SuppressWarnings("unused")
-	@Option(names = {"--locationsFile"}, description = "full path for review locations JSON file, e.g. /nrs/flyem/render/n5/Z0720_07m_BR/review/Sec38/v3_acquire_trimmed_sp1_adaptive_ic___20210424_155438_gauss/min/locations.trautmane.json")
+	@Option(names = {"--locationsFile"}, description = "full path for review locations JSON file, e.g. /nrs/flyem/render/n5/Z0720_07m_BR/review/Sec06/top13/locations.trautmane.json")
 	private String locationsFilePath;
 
 	public static void main(final String... args) throws Exception {
@@ -69,51 +64,43 @@ public class ReviewFlattenedFace
 		cmd.execute(args);
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final N5Reader n5 = new N5FSReader(containerPath);
+		final N5Reader n5Reader = new N5FSReader(containerPath);
 
-		final double[][] scales = new double[][] {{ 1, 1, 1 }};
-		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[1];
-		rawMipmaps[0] = N5Utils.openVolatile(n5, datasetPath);
+		final RandomAccessibleInterval<FloatType> img = N5Utils.open(n5Reader, datasetPath);
 
-		final BdvOptions options =
-				BdvOptions.options()
+		final BdvOptions options = BdvOptions.options()
+				.is2D()
 				.screenScales(new double[] {0.5})
 				.numRenderingThreads(Runtime.getRuntime().availableProcessors());
 
-//		final UnsignedByteType byteType = net.imglib2.util.Util.getTypeFromInterval(rawMipmaps[0]).createVariable();
-		final UnsignedByteType byteType = new VolatileUnsignedByteType(0).get();
+		BdvStackSource<?> bdv = BdvFunctions.show(img, datasetPath, options);
 
-		final Source<?> mipmapSource =
-				new RandomAccessibleIntervalMipmapSource<>(
-						rawMipmaps,
-						byteType,
-						scales,
-						new DefaultVoxelDimensions(3),
-						datasetPath);
+		final BdvHandle handle = bdv.getBdvHandle();
 
-		BdvStackSource<?> bdv = Show.mipmapSource(mipmapSource, null, options);
+		// force intensity range to 8-bit
+		// TODO: ask Tobias how to do this without using deprecated getSetupAssignments
+		handle.getSetupAssignments().getMinMaxGroups().get(0).setRange(0, 255);
 
-		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
+		Prefs.showScaleBar(true);
+
+		// -----------------------------------
+		// add locations panel UI ...
+
+		final ViewerPanel viewerPanel = handle.getViewerPanel();
 		viewerPanel.setInterpolation(Interpolation.NLINEAR);
 
-		final SynchronizedViewerState viewerState = viewerPanel.state();
-
-		final AffineTransform3D transform = new AffineTransform3D();
-		viewerState.getViewerTransform(transform);
-		transform.set(0, 3, 4);
-		viewerState.setViewerTransform(transform);
-
-		final CardPanel cardPanel = bdv.getBdvHandle().getCardPanel();
+		final CardPanel cardPanel = handle.getCardPanel();
 
 		Double sourceScale = null;
-		// datasetPath = /flat/Sec06/top/s1
+		// datasetPath = /flat/Sec06/top/face/s0
 		if (datasetPath.matches(".*/s\\d")) {
 			final double scaleIndex = Double.parseDouble(datasetPath.substring(datasetPath.length() - 1));
-			sourceScale = Math.pow(2.0, scaleIndex);
+			if (scaleIndex > 0) {
+				sourceScale = Math.pow(2.0, scaleIndex);
+			}
 		}
 		System.out.println("set sourceScale to " + sourceScale + " for dataset " + datasetPath);
 
