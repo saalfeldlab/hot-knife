@@ -12,6 +12,18 @@ import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
+
+/**
+ * A position field representing a 2D coordinate transform.
+ * <p>
+ * {@code PositionField} is either read from N5 (float64 with "scale",
+ * "boundsMin", and "boundsMax" attributes), or constructed directly from a
+ * {@code RandomAccessibleInterval<DoubleType>}.
+ * <p>
+ * The represented 2D {@code RealTransform} can be obtained via {@link
+ * #getTransform(int)}. Optionally, an incremental 2D {@code RealTransform} can
+ * be concatenated via {@link #getTransform(int, RealTransform)}.
+ */
 public class PositionField {
 
 	private final RandomAccessibleInterval<DoubleType> positionField;

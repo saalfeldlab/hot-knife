@@ -44,6 +44,21 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import static bdv.BigDataViewer.createConverterToARGB;
 
+/**
+ * Surface pyramid is a 2D image read from N5 datasets named "s0", "s1", etc for
+ * resolution levels. The pyramid levels are expected to be down-sampled on
+ * pixel centers (no 0.5 shift).
+ * <p>
+ * Each resolution is available as volatile ({@link #getVolatileImg(int)}) and
+ * non-volatile ({@link #getImg(int)}) {@code RandomAccessibleInterval} (both
+ * lazily loaded from the N5).
+ * <p>
+ * The whole pyramid is packaged as a {@link #getSourceAndConverter()
+ * SourceAndConverter} for displaying in BDV.
+ *
+ * @param <T> pixel type
+ * @param <V> volatile pixel type
+ */
 public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>> {
 
 	private final T type;
@@ -171,14 +186,6 @@ public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends 
 		@Override
 		public boolean isPresent(final int t) {
 			return true;
-		}
-
-		private RandomAccessibleInterval<T> get2DSource(final int level) {
-			return imgs[level];
-		}
-
-		private RealRandomAccessible<T> getInterpolated2DSource(final int level, final Interpolation method) {
-			return interpolatedImgs[level][method.ordinal()];
 		}
 
 		@Override

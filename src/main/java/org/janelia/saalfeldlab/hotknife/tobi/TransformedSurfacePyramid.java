@@ -24,6 +24,19 @@ import org.janelia.saalfeldlab.hotknife.util.Grid;
 
 import static bdv.BigDataViewer.createConverterToARGB;
 
+/**
+ * A {@code SurfacePyramid} transformed by a single {@code PositionField} and concatenated incremental transform.
+ * <p>
+ * The whole pyramid is packaged as a {@link #getSourceAndConverter()
+ * SourceAndConverter} for displaying in BDV.
+ *
+ * @param <T> pixel type
+ * @param <V> volatile pixel type
+ */
+// TODO
+//   Add getImg(level) and getVolatileImg(level) methods so that this can be chained.
+//   But probably this will be superseded anyway by a version transforming a
+//   SurfacePyramid with a PositionField *PYRAMID*.
 public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>> {
 
 	private final SourceAndConverter<T> sourceAndConverter;
@@ -36,7 +49,6 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 		final int numScales = pyramid.getNumMipmapLevels();
 		final RandomAccessibleInterval<T>[] imgs = new RandomAccessibleInterval[numScales];
 		final RandomAccessibleInterval<V>[] vimgs = new RandomAccessibleInterval[numScales];
-
 		for (int level = 0; level < numScales; ++level) {
 			imgs[level] = pyramid.getImg(level);
 			vimgs[level] = pyramid.getVolatileImg(level);
