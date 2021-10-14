@@ -43,6 +43,17 @@ public class PositionField {
 		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
 	}
 
+	public PositionField(final RandomAccessibleInterval<DoubleType> positionField, final double scale, final double[] boundsMin, final double[] boundsMax)
+	{
+		this.positionField = positionField;
+		this.scale = scale;
+		this.boundsMin = boundsMin;
+		this.boundsMax = boundsMax;
+		offset = Grid.floorScaled(boundsMin, scale);
+		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
+	}
+
+	// TODO: remove / deprecate ?
 	public PositionField(final RandomAccessibleInterval<DoubleType> positionField, final long[] offset, final double scale, final double[] boundsMin, final double[] boundsMax)
 	{
 		this.positionField = positionField;
