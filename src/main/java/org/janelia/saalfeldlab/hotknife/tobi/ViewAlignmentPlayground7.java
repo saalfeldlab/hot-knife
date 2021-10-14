@@ -8,20 +8,15 @@ import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.RandomAccess;
 import net.imglib2.RealPoint;
-import net.imglib2.cache.img.AccessIo;
 import net.imglib2.cache.img.CellLoader;
 import net.imglib2.cache.img.SingleCellArrayImg;
 import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.util.Intervals;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
-
-import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
 
 // transform baking in a CellLoader
 public class ViewAlignmentPlayground7 {
@@ -52,7 +47,10 @@ public class ViewAlignmentPlayground7 {
 		movingTransform.setLine(sx0, sy0, sx1, sy1);
 		movingTransform.setActive(active);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, movingTransform);
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+				pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+				movingTransform);
 		final BdvStackSource<?> source = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
@@ -84,7 +82,9 @@ public class ViewAlignmentPlayground7 {
 		final PositionField bakedPositionField = new PositionField(baked,
 				new long[] {boffsetX, boffsetY}, bscale,
 				positionField.getBoundsMin(), positionField.getBoundsMax());
-		final TransformedSurfacePyramid<?, ?> bakedtpyramid = new TransformedSurfacePyramid<>(pyramid, bakedPositionField, IdentityTransform.get());
+		final TransformedSurfacePyramid<?, ?> bakedtpyramid = new TransformedSurfacePyramid<>(pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(bakedPositionField),
+				IdentityTransform.get());
 		final BdvStackSource<?> bsource = BdvFunctions.show(bakedtpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		bsource.setDisplayRange(0, 255);
 		bsource.setDisplayRangeBounds(0, 255);

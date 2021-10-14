@@ -6,22 +6,18 @@ import bdv.util.BdvStackSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import java.io.IOException;
-import net.imglib2.Cursor;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealPoint;
 import net.imglib2.cache.img.CellLoader;
 import net.imglib2.cache.img.SingleCellArrayImg;
 import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
-import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.type.volatiles.VolatileFloatType;
 import net.imglib2.util.Intervals;
@@ -75,7 +71,10 @@ public class ViewAlignmentPlayground9 {
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, IdentityTransform.get());
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+				pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+				IdentityTransform.get());
 		final BdvStackSource<?> s2 = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().addTo(source));
 		s2.setDisplayRange(0, 255);
 		s2.setDisplayRangeBounds(0, 255);

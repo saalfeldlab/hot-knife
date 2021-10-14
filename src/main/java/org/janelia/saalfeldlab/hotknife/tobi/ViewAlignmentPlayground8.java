@@ -7,19 +7,13 @@ import java.io.IOException;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
-import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.interpolation.InterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
-import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
-import net.imglib2.realtransform.RealTransformRealRandomAccessible;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
@@ -74,7 +68,10 @@ public class ViewAlignmentPlayground8 {
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, IdentityTransform.get());
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+				pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+				IdentityTransform.get());
 		final BdvStackSource<?> s2 = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().addTo(source));
 		s2.setDisplayRange(0, 255);
 		s2.setDisplayRangeBounds(0, 255);

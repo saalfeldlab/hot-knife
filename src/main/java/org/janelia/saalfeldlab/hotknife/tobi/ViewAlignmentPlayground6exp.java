@@ -46,7 +46,10 @@ public class ViewAlignmentPlayground6exp {
 		incrementalTransform.setLine(sx0, sy0, sx1, sy1);
 		incrementalTransform.setActive(active);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, incrementalTransform);
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+				pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+				incrementalTransform);
 		final BdvStackSource<?> source = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
@@ -105,7 +108,10 @@ public class ViewAlignmentPlayground6exp {
 		final PositionField bakedPositionField = new PositionField(baked,
 				new long[] {boffsetX, boffsetY}, bscale,
 				positionField.getBoundsMin(), positionField.getBoundsMax());
-		final TransformedSurfacePyramid<?, ?> bakedtpyramid = new TransformedSurfacePyramid<>(pyramid, bakedPositionField, IdentityTransform.get());
+		final TransformedSurfacePyramid<?, ?> bakedtpyramid = new TransformedSurfacePyramid<>(
+				pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(bakedPositionField),
+				IdentityTransform.get());
 		final BdvStackSource<?> bsource = BdvFunctions.show(bakedtpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		bsource.setDisplayRange(0, 255);
 		bsource.setDisplayRangeBounds(0, 255);

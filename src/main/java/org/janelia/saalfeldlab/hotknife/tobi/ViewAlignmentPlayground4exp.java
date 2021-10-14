@@ -12,7 +12,6 @@ import java.awt.Graphics2D;
 import java.io.IOException;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.type.numeric.ARGBType;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.scijava.ui.behaviour.DragBehaviour;
@@ -45,8 +44,14 @@ public class ViewAlignmentPlayground4exp {
 		final PositionField positionField2 = new PositionField(n5, transformGroup2);
 
 		final GaussTransform movingTransform = new GaussTransform(0.3, 200);
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, movingTransform, "flat.Sec33.bot.face");
-		final TransformedSurfacePyramid<?, ?> tpyramid2 = new TransformedSurfacePyramid<>(pyramid2, positionField2, IdentityTransform.get(), "flat.Sec32.top.face");
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+				pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+				movingTransform, "flat.Sec33.bot.face");
+		final TransformedSurfacePyramid<?, ?> tpyramid2 = new TransformedSurfacePyramid<>(
+				pyramid2,
+				PositionFieldPyramid.createSingleLevelPyramid(positionField2),
+				IdentityTransform.get(), "flat.Sec32.top.face");
 		final BdvStackSource<?> source = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D().screenScales(new double[] {1}));
 		final BdvStackSource<?> source2 = BdvFunctions.show(tpyramid2.getSourceAndConverter(), Bdv.options().addTo(source));
 		source.setDisplayRange(0, 700);

@@ -25,7 +25,10 @@ public class ViewAlignmentPlayground3 {
 
 		final PositionField positionField = new PositionField(n5, transformGroup);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(pyramid, positionField, IdentityTransform.get());
+		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+				pyramid,
+				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+				IdentityTransform.get());
 		final BdvStackSource<?> source = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
