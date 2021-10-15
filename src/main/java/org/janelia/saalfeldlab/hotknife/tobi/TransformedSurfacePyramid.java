@@ -34,8 +34,12 @@ import static bdv.BigDataViewer.createConverterToARGB;
  * @param <V> volatile pixel type
  */
 // TODO: Add getImg(level) and getVolatileImg(level) methods so that this can be chained.
-public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>> {
+public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>>
+		implements SurfacePyramid<T, V> {
 
+	private final SurfacePyramid<T, V> pyramid;
+	private final RandomAccessibleInterval<T>[] imgs;
+	private final RandomAccessibleInterval<V>[] vimgs;
 	private final SourceAndConverter<T> sourceAndConverter;
 
 	public TransformedSurfacePyramid(
@@ -50,6 +54,7 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 			final PositionFieldPyramid positionFieldPyramid,
 			final RealTransform incrementalTransform,
 			final String name) {
+		this.pyramid = pyramid;
 		final int numScales = pyramid.getNumMipmapLevels();
 		final RandomAccessibleInterval<T>[] imgs = new RandomAccessibleInterval[numScales];
 		final RandomAccessibleInterval<V>[] vimgs = new RandomAccessibleInterval[numScales];
@@ -61,14 +66,42 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 		final T type = pyramid.getType();
 		final V volatileType = pyramid.getVolatileType();
 
-		final Source<V> vs = new TransformedSurfaceSource<>(volatileType, vimgs, positionFieldPyramid, incrementalTransform, name);
+		final TransformedSurfaceSource<V> vs = new TransformedSurfaceSource<>(volatileType, vimgs, positionFieldPyramid, incrementalTransform, name);
 		final SourceAndConverter<V> vsoc = new SourceAndConverter<>(vs, createConverterToARGB(volatileType));
-		final Source<T> s = new TransformedSurfaceSource<>(type, imgs, positionFieldPyramid, incrementalTransform, name);
+		final TransformedSurfaceSource<T> s = new TransformedSurfaceSource<>(type, imgs, positionFieldPyramid, incrementalTransform, name);
 		sourceAndConverter = new SourceAndConverter<>(s, createConverterToARGB(type), vsoc);
+		this.vimgs = vs.rais;
+		this.imgs = s.rais;
 	}
 
+	@Override
 	public SourceAndConverter<T> getSourceAndConverter() {
 		return sourceAndConverter;
+	}
+
+	@Override
+	public int getNumMipmapLevels() {
+		return pyramid.getNumMipmapLevels();
+	}
+
+	@Override
+	public RandomAccessibleInterval<T> getImg(final int level) {
+		return imgs[level];
+	}
+
+	@Override
+	public RandomAccessibleInterval<V> getVolatileImg(final int level) {
+		return vimgs[level];
+	}
+
+	@Override
+	public T getType() {
+		return pyramid.getType();
+	}
+
+	@Override
+	public V getVolatileType() {
+		return pyramid.getVolatileType();
 	}
 
 
@@ -76,7 +109,7 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 
 		private final T type;
 		private final String name;
-		private final RandomAccessibleInterval<T>[] rais;
+		final RandomAccessibleInterval<T>[] rais;
 		private final RealRandomAccessible<T>[][] rras;
 		private final DefaultVoxelDimensions voxelDimensions = new DefaultVoxelDimensions(3);
 
@@ -108,8 +141,9 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 								positionField.getTransform(level, incrementalTransform)),
 				};
 
-				final long[] min = Grid.floorScaled(positionField.getBoundsMin(), 1);
-				final long[] max = Grid.ceilScaled(positionField.getBoundsMax(), 1);
+				final double scale = 1.0 / (1 << level);
+				final long[] min = Grid.floorScaled(positionField.getBoundsMin(), scale);
+				final long[] max = Grid.ceilScaled(positionField.getBoundsMax(), scale);
 				rais[level] = Views.interval(
 						new RealTransformRandomAccessible<>(
 								Views.interpolate(ext, nearestNeighbor),
