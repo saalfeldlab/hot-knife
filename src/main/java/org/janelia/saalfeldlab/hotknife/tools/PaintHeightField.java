@@ -16,9 +16,6 @@
  */
 package org.janelia.saalfeldlab.hotknife.tools;
 
-import ij.ImageJ;
-import ij.ImagePlus;
-
 import java.awt.BorderLayout;
 import java.awt.Insets;
 import java.io.File;
@@ -37,6 +34,7 @@ import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 
 import org.janelia.saalfeldlab.hotknife.HeightFieldTransform;
 import org.janelia.saalfeldlab.hotknife.ops.AbsoluteGradientCenter;
+import org.janelia.saalfeldlab.hotknife.tools.actions.HeightFieldKeyActions;
 import org.janelia.saalfeldlab.hotknife.tools.proofread.LocationsPanel;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Show;
@@ -69,21 +67,17 @@ import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
-import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.RealSum;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;

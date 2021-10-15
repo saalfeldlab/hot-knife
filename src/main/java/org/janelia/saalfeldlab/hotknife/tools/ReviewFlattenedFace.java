@@ -25,6 +25,8 @@ import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
+import org.janelia.saalfeldlab.hotknife.tools.actions.KeyActionMaps;
+import org.janelia.saalfeldlab.hotknife.tools.actions.PrintScale;
 import org.janelia.saalfeldlab.hotknife.tools.proofread.LocationsPanel;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -36,7 +38,6 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvHandle;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
-import bdv.util.Prefs;
 import bdv.viewer.Interpolation;
 import bdv.viewer.ViewerPanel;
 import net.imglib2.RandomAccessibleInterval;
@@ -84,7 +85,7 @@ public class ReviewFlattenedFace
 		// TODO: ask Tobias how to do this without using deprecated getSetupAssignments
 		handle.getSetupAssignments().getMinMaxGroups().get(0).setRange(0, 255);
 
-		Prefs.showScaleBar(true);
+		// Prefs.showScaleBar(true); // commented-out because this breaks with 2D view
 
 		// -----------------------------------
 		// add locations panel UI ...
@@ -117,10 +118,16 @@ public class ReviewFlattenedFace
 
 		viewerPanel.requestRepaint();
 
+		KeyActionMaps keyActionMaps = new KeyActionMaps("persistence", handle);
+		final PrintScale printScaleAction = new PrintScale(viewerPanel);
+		keyActionMaps.register(printScaleAction);
+
+		// show scale by default
+		printScaleAction.actionPerformed(null);
+
 		final JFrame window = (JFrame) SwingUtilities.getWindowAncestor(viewerPanel);
 		window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
 		return null;
 	}
-
 }
