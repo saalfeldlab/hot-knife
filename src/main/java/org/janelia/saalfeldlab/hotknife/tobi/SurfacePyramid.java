@@ -37,6 +37,7 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.util.Cast;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -165,10 +166,11 @@ public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends 
 		private final double[] boundsMin;
 		private final DefaultVoxelDimensions voxelDimensions = new DefaultVoxelDimensions(3);
 
-		SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final String name) {
+		public SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final String name) {
 			this(type, imgs, new double[] {0, 0}, name);
 		}
-		SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final double[] boundsMin, final String name) {
+
+		public SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final double[] boundsMin, final String name) {
 			this.type = type;
 			this.boundsMin = boundsMin;
 			this.name = name;
@@ -206,9 +208,10 @@ public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends 
 		@Override
 		public void getSourceTransform(final int t, final int level, final AffineTransform3D transform) {
 			final int s = 1 << level;
+			final long[] offset = Grid.floorScaled(boundsMin, 1.0 / s);
 			transform.set(
-					s, 0, 0, boundsMin[0],
-					0, s, 0, boundsMin[1],
+					s, 0, 0, offset[0] << level,
+					0, s, 0, offset[1] << level,
 					0, 0, s, 0);
 		}
 

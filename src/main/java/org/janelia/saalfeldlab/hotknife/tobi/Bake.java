@@ -12,6 +12,7 @@ import net.imglib2.img.Img;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.DoubleType;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 
 public class Bake {
@@ -22,32 +23,32 @@ public class Bake {
 	 * @param positionField
 	 * @param concatenatedTransform
 	 * @param level desired resolution level of output position field
-	 * @param blockSize
+	 * @param blockWidth
 	 * @return
 	 */
 	public static PositionField bakePositionField(
 			final PositionField positionField,
 			final RealTransform concatenatedTransform,
 			final int level,
-			final int blockSize ) {
-		final Dimensions pfDims = positionField.getPositionFieldRAI();
-
-		// TODO: use boundsMin/boundsMax here. Then we could also compute upscaled position fields...
-		final int levelDist = level - positionField.getLevel();
-		final long sizeX = pfDims.dimension(0) >> levelDist;
-		final long sizeY = pfDims.dimension(1) >> levelDist;
-		final Dimensions dims = new FinalDimensions(sizeX, sizeY, 2);
-
-		final int[] blocks = {blockSize, blockSize, 2};
-
-		final BakedPositionFieldLoader loader = new BakedPositionFieldLoader(positionField, concatenatedTransform, level);
-		final Img<DoubleType> baked = Lazy.createImg(
-				dims, blocks, new DoubleType(), AccessFlags.setOf(),
-				loader);
-
-		final double scale = 1.0 / (1 << level);
+			final int blockWidth ) {
 		final double[] boundsMin = positionField.getBoundsMin();
 		final double[] boundsMax = positionField.getBoundsMax();
+		final double scale = 1.0 / (1 << level);
+		final long[] min = Grid.floorScaled(boundsMin, scale);
+		final long[] max = Grid.ceilScaled(boundsMax, scale);
+		final long[] dimensions = {
+				max[0] - min[0] + 1,
+				max[1] - min[1] + 1,
+				2};
+		final int[] blockSize = {
+				blockWidth,
+				blockWidth,
+				2};
+		final BakedPositionFieldLoader loader = new BakedPositionFieldLoader(positionField, concatenatedTransform, level);
+		final Img<DoubleType> baked = Lazy.createImg(
+				new FinalDimensions(dimensions), blockSize, new DoubleType(), AccessFlags.setOf(),
+				loader);
+
 		return new PositionField(baked, scale, boundsMin, boundsMax);
 	}
 
@@ -56,16 +57,16 @@ public class Bake {
 	 *
 	 * @param positionFieldPyramid
 	 * @param concatenatedTransform
-	 * @param blockSize
+	 * @param blockWidth
 	 * @return
 	 */
 	public static PositionFieldPyramid bakePositionFieldPyramid(
 			final PositionFieldPyramid positionFieldPyramid,
 			final RealTransform concatenatedTransform,
-			final int blockSize) {
+			final int blockWidth) {
 		final int minLevel = positionFieldPyramid.getMinLevel();
 		final int maxLevel = positionFieldPyramid.getMaxLevel();
-		return bakePositionFieldPyramid(positionFieldPyramid, concatenatedTransform, blockSize, minLevel, maxLevel);
+		return bakePositionFieldPyramid(positionFieldPyramid, concatenatedTransform, blockWidth, minLevel, maxLevel);
 	}
 
 	/**
@@ -73,7 +74,7 @@ public class Bake {
 	 *
 	 * @param positionFieldPyramid
 	 * @param concatenatedTransform
-	 * @param blockSize
+	 * @param blockWidth
 	 * @param minLevel
 	 * @param maxLevel
 	 * @return
@@ -81,7 +82,7 @@ public class Bake {
 	public static PositionFieldPyramid bakePositionFieldPyramid(
 			final PositionFieldPyramid positionFieldPyramid,
 			final RealTransform concatenatedTransform,
-			final int blockSize,
+			final int blockWidth,
 			final int minLevel,
 			final int maxLevel) {
 
@@ -92,7 +93,7 @@ public class Bake {
 							positionFieldPyramid.getPositionField(level),
 							concatenatedTransform,
 							level,
-							blockSize
+							blockWidth
 					)
 			);
 		}
@@ -121,11 +122,11 @@ public class Bake {
 				final int level) {
 			this.positionField = positionField;
 			this.incrementalTransform = incremental;
-			final int pfLevel = positionField.getLevel();
 			invscale = 1 << level;
 			scale = 1.0 / invscale;
-			offsetX = positionField.getOffset(0) >> (level - pfLevel);
-			offsetY = positionField.getOffset(1) >> (level - pfLevel);
+			final long[] offset = Grid.floorScaled(positionField.getBoundsMin(), scale);
+			offsetX = offset[ 0 ];
+			offsetY = offset[ 1 ];
 		}
 
 		@Override
@@ -161,3 +162,4 @@ public class Bake {
 		}
 	}
 }
+

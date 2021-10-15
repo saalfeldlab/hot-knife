@@ -26,6 +26,11 @@ public class ViewAlignmentPlayground10 {
 		final SurfacePyramid<?, ?> pyramid = new SurfacePyramid<>(n5, faceGroup);
 		final PositionField positionField = new PositionField(n5, transformGroup);
 
+		final int minLevel = positionField.getLevel(); // can be 0
+		final int maxLevel = pyramid.getNumMipmapLevels() - 1;
+		final PositionFieldPyramid positionFieldPyramid = PositionFieldPyramid.createSingleLevelPyramid(positionField);
+//		final PositionFieldPyramid positionFieldPyramid = PositionFieldPyramid.createFullPyramid(positionField, 256, minLevel, maxLevel);
+
 		// set up transform to bake into positionField
 		final double maxSlope=0.8;
 		final double minSigma=100.0;
@@ -38,20 +43,19 @@ public class ViewAlignmentPlayground10 {
 		movingTransform.setLine(sx0, sy0, sx1, sy1);
 		movingTransform.setActive(active);
 
-		// TODO: show both in the same window to make sure offset & scale is correct
+		// show on-the-fly transformed SurfacePyramid
 		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
 				pyramid,
-				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+				positionFieldPyramid,
 				movingTransform);
 		final BdvStackSource<?> source = BdvFunctions.show(tpyramid.getSourceAndConverter(), Bdv.options().is2D());
 		source.setColor(new ARGBType(0xff0000));
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
 
-		final int minLevel = positionField.getLevel(); // TODO make 0 (need to change Bake min max computation for that)
-		final int maxLevel = pyramid.getNumMipmapLevels() - 1;
-		final PositionFieldPyramid bakedPositionFields =	Bake.bakePositionFieldPyramid(
-				PositionFieldPyramid.createSingleLevelPyramid(positionField),
+		// show baked transformed SurfacePyramid
+		final PositionFieldPyramid bakedPositionFields = Bake.bakePositionFieldPyramid(
+				positionFieldPyramid,
 				movingTransform, 256, minLevel, maxLevel);
 		final PositionField bakedPositionField = Bake.bakePositionField(positionField, movingTransform, 5, 256 );
 		final RenderedSurfacePyramid<?, ?> renderedSurfacePyramid = new RenderedSurfacePyramid<>(

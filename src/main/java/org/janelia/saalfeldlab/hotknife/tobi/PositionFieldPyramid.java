@@ -41,6 +41,14 @@ public class PositionFieldPyramid {
 				positionField.getLevel());
 	}
 
+	public static PositionFieldPyramid createFullPyramid(
+			final PositionField positionField,
+			final int blockWidth,
+			final int minLevel,
+			final int maxLevel) {
+		return Bake.bakePositionFieldPyramid(createSingleLevelPyramid(positionField), IdentityTransform.get(), blockWidth, minLevel, maxLevel);
+	}
+
 	/**
 	 * Get the resolution level of the highest-resolution {@code PositionField}
 	 * in the pyramid.
