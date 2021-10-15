@@ -263,7 +263,7 @@ public class PaintHeightField implements Callable<Void>{
 						rawMipmaps,
 						scales,
 						voxelDimensions,
-						"surface",
+						fieldGroup,
 						offset,
 						queue);
 
