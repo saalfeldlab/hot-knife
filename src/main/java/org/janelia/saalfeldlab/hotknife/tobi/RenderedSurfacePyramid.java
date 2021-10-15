@@ -13,15 +13,12 @@ import net.imglib2.cache.img.CellLoader;
 import net.imglib2.cache.img.SingleCellArrayImg;
 import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
-import net.imglib2.img.Img;
 import net.imglib2.img.basictypeaccess.AccessFlags;
-import net.imglib2.img.cell.CellGrid;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.view.Views;
-import org.janelia.saalfeldlab.hotknife.tobi.SurfacePyramid.SurfaceSource;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 
@@ -29,11 +26,12 @@ import static bdv.BigDataViewer.createConverterToARGB;
 import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
 
 /**
- * TODO!
+ * A SurfacePyramid that is obtained by applying a PositionFieldPyramid to a
+ * source SurfacePyramid.
  * <p>
  * Each resolution is available as volatile ({@link #getVolatileImg(int)}) and
  * non-volatile ({@link #getImg(int)}) {@code RandomAccessibleInterval} (both
- * lazily loaded from the N5).
+ * lazily loaded).
  * <p>
  * The whole pyramid is packaged as a {@link #getSourceAndConverter()
  * SourceAndConverter} for displaying in BDV.
@@ -43,7 +41,8 @@ import static net.imglib2.img.basictypeaccess.AccessFlags.VOLATILE;
  * @param <V>
  * 		volatile pixel type
  */
-public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>> {
+public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>>
+		implements SurfacePyramid<T, V> {
 
 	private final T type;
 	private final V volatileType;
@@ -53,34 +52,41 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 	private final SourceAndConverter<T> sourceAndConverter;
 	private final SharedQueue queue;
 
+	@Override
 	public SourceAndConverter<T> getSourceAndConverter() {
 		return sourceAndConverter;
 	}
 
+	@Override
 	public int getNumMipmapLevels() {
 		return imgs.length;
 	}
 
+	@Override
 	public RandomAccessibleInterval<T> getImg(final int level) {
 		return imgs[level];
 	}
 
+	@Override
 	public RandomAccessibleInterval<V> getVolatileImg(final int level) {
 		return vimgs[level];
 	}
 
-	public void close() {
-		// TODO: if passed queue was given as constructor argument, don't shut it down
-		queue.shutdown();
-	}
-
+	@Override
 	public T getType() {
 		return type;
 	}
 
+	@Override
 	public V getVolatileType() {
 		return volatileType;
 	}
+
+//	@Override
+//	public void close() {
+//		// TODO: if passed queue was given as constructor argument, don't shut it down
+//		queue.shutdown();
+//	}
 
 	public RenderedSurfacePyramid(
 			final SurfacePyramid<T, V> surfacePyramid,

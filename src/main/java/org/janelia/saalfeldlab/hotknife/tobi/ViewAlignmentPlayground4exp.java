@@ -36,8 +36,8 @@ public class ViewAlignmentPlayground4exp {
 		final String transformGroup2 = passGroup + "/" + "flat.Sec32.top.face";
 		final String faceGroup2 = "/flat/Sec32/top/face";
 
-		final SurfacePyramid<?, ?> pyramid = new SurfacePyramid<>(n5, faceGroup);
-		final SurfacePyramid<?, ?> pyramid2 = new SurfacePyramid<>(n5, faceGroup2);
+		final SurfacePyramid<?, ?> pyramid = new N5SurfacePyramid<>(n5, faceGroup);
+		final SurfacePyramid<?, ?> pyramid2 = new N5SurfacePyramid<>(n5, faceGroup2);
 //		BdvFunctions.show(pyramid.getSourceAndConverter(), Bdv.options().is2D());
 
 		final PositionField positionField = new PositionField(n5, transformGroup);

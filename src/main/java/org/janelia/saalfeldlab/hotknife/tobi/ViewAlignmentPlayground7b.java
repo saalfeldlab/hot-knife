@@ -21,7 +21,7 @@ public class ViewAlignmentPlayground7b {
 		final String transformGroup = passGroup + "/" + "flat.Sec33.bot.face";
 		final String faceGroup = "/flat/Sec33/bot/face";
 
-		final SurfacePyramid<?, ?> pyramid = new SurfacePyramid<>(n5, faceGroup);
+		final SurfacePyramid<?, ?> pyramid = new N5SurfacePyramid<>(n5, faceGroup);
 		final PositionField positionField = new PositionField(n5, transformGroup);
 
 		// set up transform to bake into positionField
