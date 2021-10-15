@@ -125,6 +125,11 @@ public class LocationsPanel
         final JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
 
+            // stop any active editing to make sure most recent description changes are saved
+            if (locationTable.isEditing()) {
+                locationTable.getCellEditor().stopCellEditing();
+            }
+
             final File outputDirectory = this.defaultLocationsFile.getParentFile();
             if (! outputDirectory.exists()) {
                 try {
