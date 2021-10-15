@@ -156,16 +156,21 @@ public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends 
 	}
 
 
-	private static class SurfaceSource<T extends NumericType<T>> implements Source<T> {
+	static class SurfaceSource<T extends NumericType<T>> implements Source<T> {
 
 		private final T type;
 		private final String name;
 		private final RandomAccessibleInterval<T>[] imgs;
 		private final RealRandomAccessible<T>[][] interpolatedImgs;
+		private final double[] boundsMin;
 		private final DefaultVoxelDimensions voxelDimensions = new DefaultVoxelDimensions(3);
 
 		SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final String name) {
+			this(type, imgs, new double[] {0, 0}, name);
+		}
+		SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final double[] boundsMin, final String name) {
 			this.type = type;
+			this.boundsMin = boundsMin;
 			this.name = name;
 			this.imgs = imgs;
 
@@ -202,8 +207,8 @@ public class SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends 
 		public void getSourceTransform(final int t, final int level, final AffineTransform3D transform) {
 			final int s = 1 << level;
 			transform.set(
-					s, 0, 0, 0,
-					0, s, 0, 0,
+					s, 0, 0, boundsMin[0],
+					0, s, 0, boundsMin[1],
 					0, 0, s, 0);
 		}
 

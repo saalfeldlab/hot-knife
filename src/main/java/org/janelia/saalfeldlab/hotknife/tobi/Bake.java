@@ -1,5 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.tobi;
 
+import java.util.ArrayList;
+import java.util.List;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalDimensions;
 import net.imglib2.RandomAccess;
@@ -15,15 +17,22 @@ import org.janelia.saalfeldlab.hotknife.util.Lazy;
 public class Bake {
 
 	/**
+	 * TODO javadoc
 	 *
+	 * @param positionField
+	 * @param concatenatedTransform
 	 * @param level desired resolution level of output position field
+	 * @param blockSize
+	 * @return
 	 */
-	static PositionField bakePositionField(
+	public static PositionField bakePositionField(
 			final PositionField positionField,
 			final RealTransform concatenatedTransform,
 			final int level,
 			final int blockSize ) {
 		final Dimensions pfDims = positionField.getPositionFieldRAI();
+
+		// TODO: use boundsMin/boundsMax here. Then we could also compute upscaled position fields...
 		final int levelDist = level - positionField.getLevel();
 		final long sizeX = pfDims.dimension(0) >> levelDist;
 		final long sizeY = pfDims.dimension(1) >> levelDist;
@@ -40,6 +49,55 @@ public class Bake {
 		final double[] boundsMin = positionField.getBoundsMin();
 		final double[] boundsMax = positionField.getBoundsMax();
 		return new PositionField(baked, scale, boundsMin, boundsMax);
+	}
+
+	/**
+	 * TODO javadoc
+	 *
+	 * @param positionFieldPyramid
+	 * @param concatenatedTransform
+	 * @param blockSize
+	 * @return
+	 */
+	public static PositionFieldPyramid bakePositionFieldPyramid(
+			final PositionFieldPyramid positionFieldPyramid,
+			final RealTransform concatenatedTransform,
+			final int blockSize) {
+		final int minLevel = positionFieldPyramid.getMinLevel();
+		final int maxLevel = positionFieldPyramid.getMaxLevel();
+		return bakePositionFieldPyramid(positionFieldPyramid, concatenatedTransform, blockSize, minLevel, maxLevel);
+	}
+
+	/**
+	 * TODO javadoc
+	 *
+	 * @param positionFieldPyramid
+	 * @param concatenatedTransform
+	 * @param blockSize
+	 * @param minLevel
+	 * @param maxLevel
+	 * @return
+	 */
+	public static PositionFieldPyramid bakePositionFieldPyramid(
+			final PositionFieldPyramid positionFieldPyramid,
+			final RealTransform concatenatedTransform,
+			final int blockSize,
+			final int minLevel,
+			final int maxLevel) {
+
+		final List<PositionField> positionFields = new ArrayList<>();
+		for (int level = minLevel; level <= maxLevel; ++level) {
+			positionFields.add(
+					bakePositionField(
+							positionFieldPyramid.getPositionField(level),
+							concatenatedTransform,
+							level,
+							blockSize
+					)
+			);
+		}
+
+		return new PositionFieldPyramid(positionFields, minLevel, maxLevel);
 	}
 
 	/**

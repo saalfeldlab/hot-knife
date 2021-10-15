@@ -28,15 +28,13 @@ public class PositionFieldPyramid {
 	public PositionFieldPyramid(
 			final List<PositionField> positionFields,
 			final int minLevel,
-			final int maxLevel )
-	{
+			final int maxLevel) {
 		this.positionFields = new ArrayList<>(positionFields);
 		this.minLevel = minLevel;
 		this.maxLevel = maxLevel;
 	}
 
-	public static PositionFieldPyramid createSingleLevelPyramid(final PositionField positionField)
-	{
+	public static PositionFieldPyramid createSingleLevelPyramid(final PositionField positionField) {
 		return new PositionFieldPyramid(
 				Collections.singletonList(positionField),
 				positionField.getLevel(),
@@ -64,8 +62,15 @@ public class PositionFieldPyramid {
 	 * That is, clamped to {@link #getMinLevel() min}/{@link #getMaxLevel() max}
 	 * available resolution level.
 	 */
-	public PositionField getPositionField(final int level)
-	{
+	public PositionField getPositionField(final int level) {
 		return positionFields.get(Math.max(minLevel, Math.min(maxLevel, level)) - minLevel);
+	}
+
+	public double[] getBoundsMin() {
+		return positionFields.get(0).getBoundsMin();
+	}
+
+	public double[] getBoundsMax() {
+		return positionFields.get(0).getBoundsMax();
 	}
 }
