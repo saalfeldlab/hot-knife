@@ -25,7 +25,7 @@ public class ViewAlignmentPlayground3 {
 
 		final PositionField positionField = new PositionField(n5, transformGroup);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> tpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
 				PositionFieldPyramid.createSingleLevelPyramid(positionField),
 				IdentityTransform.get());

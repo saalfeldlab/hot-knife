@@ -39,7 +39,7 @@ public class ViewAlignmentPlayground4 {
 		final PositionField positionField = new PositionField(n5, transformGroup);
 
 		final GaussTransform movingTransform = new GaussTransform();
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> tpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
 				PositionFieldPyramid.createSingleLevelPyramid(positionField),
 				movingTransform);

@@ -47,7 +47,7 @@ public class ViewAlignmentPlayground6 {
 		movingTransform.setLine(sx0, sy0, sx1, sy1);
 		movingTransform.setActive(active);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> tpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
 				PositionFieldPyramid.createSingleLevelPyramid(positionField),
 				movingTransform);
@@ -112,7 +112,7 @@ public class ViewAlignmentPlayground6 {
 		final PositionField bakedPositionField = new PositionField(baked,
 				new long[] {boffsetX, boffsetY}, bscale,
 				positionField.getBoundsMin(), positionField.getBoundsMax());
-		final TransformedSurfacePyramid<?, ?> bakedtpyramid = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> bakedtpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
 				PositionFieldPyramid.createSingleLevelPyramid(bakedPositionField),
 				IdentityTransform.get());

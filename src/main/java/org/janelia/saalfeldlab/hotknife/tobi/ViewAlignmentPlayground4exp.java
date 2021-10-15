@@ -44,11 +44,11 @@ public class ViewAlignmentPlayground4exp {
 		final PositionField positionField2 = new PositionField(n5, transformGroup2);
 
 		final GaussTransform movingTransform = new GaussTransform(0.3, 200);
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> tpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
 				PositionFieldPyramid.createSingleLevelPyramid(positionField),
 				movingTransform, "flat.Sec33.bot.face");
-		final TransformedSurfacePyramid<?, ?> tpyramid2 = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> tpyramid2 = new TwiceTransformedSurfacePyramid<>(
 				pyramid2,
 				PositionFieldPyramid.createSingleLevelPyramid(positionField2),
 				IdentityTransform.get(), "flat.Sec32.top.face");

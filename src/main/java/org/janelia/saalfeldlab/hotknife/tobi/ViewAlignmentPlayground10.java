@@ -44,7 +44,7 @@ public class ViewAlignmentPlayground10 {
 		movingTransform.setActive(active);
 
 		// show on-the-fly transformed SurfacePyramid
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> tpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
 				positionFieldPyramid,
 				movingTransform);

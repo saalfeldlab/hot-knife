@@ -71,7 +71,7 @@ public class ViewAlignmentPlayground9 {
 		source.setDisplayRange(0, 255);
 		source.setDisplayRangeBounds(0, 255);
 
-		final TransformedSurfacePyramid<?, ?> tpyramid = new TransformedSurfacePyramid<>(
+		final TwiceTransformedSurfacePyramid<?, ?> tpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
 				PositionFieldPyramid.createSingleLevelPyramid(positionField),
 				IdentityTransform.get());

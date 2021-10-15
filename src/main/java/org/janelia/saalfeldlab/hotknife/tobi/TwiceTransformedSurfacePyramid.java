@@ -33,8 +33,7 @@ import static bdv.BigDataViewer.createConverterToARGB;
  * @param <T> pixel type
  * @param <V> volatile pixel type
  */
-// TODO: Add getImg(level) and getVolatileImg(level) methods so that this can be chained.
-public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>>
+public class TwiceTransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V extends Volatile<T> & NativeType<V> & NumericType<V>>
 		implements SurfacePyramid<T, V> {
 
 	private final SurfacePyramid<T, V> pyramid;
@@ -42,14 +41,14 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 	private final RandomAccessibleInterval<V>[] vimgs;
 	private final SourceAndConverter<T> sourceAndConverter;
 
-	public TransformedSurfacePyramid(
+	public TwiceTransformedSurfacePyramid(
 			final SurfacePyramid<T, V> pyramid,
 			final PositionFieldPyramid positionFieldPyramid,
 			final RealTransform incrementalTransform) {
 		this(pyramid, positionFieldPyramid, incrementalTransform, "transformed");
 	}
 
-	public TransformedSurfacePyramid(
+	public TwiceTransformedSurfacePyramid(
 			final SurfacePyramid<T, V> pyramid,
 			final PositionFieldPyramid positionFieldPyramid,
 			final RealTransform incrementalTransform,
@@ -66,9 +65,9 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 		final T type = pyramid.getType();
 		final V volatileType = pyramid.getVolatileType();
 
-		final TransformedSurfaceSource<V> vs = new TransformedSurfaceSource<>(volatileType, vimgs, positionFieldPyramid, incrementalTransform, name);
+		final TwiceTransformedSurfaceSource<V> vs = new TwiceTransformedSurfaceSource<>(volatileType, vimgs, positionFieldPyramid, incrementalTransform, name);
 		final SourceAndConverter<V> vsoc = new SourceAndConverter<>(vs, createConverterToARGB(volatileType));
-		final TransformedSurfaceSource<T> s = new TransformedSurfaceSource<>(type, imgs, positionFieldPyramid, incrementalTransform, name);
+		final TwiceTransformedSurfaceSource<T> s = new TwiceTransformedSurfaceSource<>(type, imgs, positionFieldPyramid, incrementalTransform, name);
 		sourceAndConverter = new SourceAndConverter<>(s, createConverterToARGB(type), vsoc);
 		this.vimgs = vs.rais;
 		this.imgs = s.rais;
@@ -105,7 +104,7 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 	}
 
 
-	private static class TransformedSurfaceSource<T extends NumericType<T>> implements Source<T> {
+	private static class TwiceTransformedSurfaceSource<T extends NumericType<T>> implements Source<T> {
 
 		private final T type;
 		private final String name;
@@ -113,7 +112,7 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 		private final RealRandomAccessible<T>[][] rras;
 		private final DefaultVoxelDimensions voxelDimensions = new DefaultVoxelDimensions(3);
 
-		TransformedSurfaceSource(
+		TwiceTransformedSurfaceSource(
 				final T type,
 				final RandomAccessibleInterval<T>[] imgs,
 				final PositionFieldPyramid positionFieldPyramid,
