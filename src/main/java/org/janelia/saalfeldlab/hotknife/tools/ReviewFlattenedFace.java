@@ -82,8 +82,7 @@ public class ReviewFlattenedFace
 		final BdvHandle handle = bdv.getBdvHandle();
 
 		// force intensity range to 8-bit
-		// TODO: ask Tobias how to do this without using deprecated getSetupAssignments
-		handle.getSetupAssignments().getMinMaxGroups().get(0).setRange(0, 255);
+		bdv.setDisplayRange(0, 255);
 
 		// Prefs.showScaleBar(true); // commented-out because this breaks with 2D view
 
