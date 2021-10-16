@@ -51,6 +51,7 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 	private final RandomAccessibleInterval<V>[] vimgs;
 	private final SourceAndConverter<T> sourceAndConverter;
 	private final SharedQueue queue;
+	private final double[] boundsMin;
 
 	@Override
 	public SourceAndConverter<T> getSourceAndConverter() {
@@ -82,6 +83,11 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 		return volatileType;
 	}
 
+	@Override
+	public double[] getBoundsMin() {
+		return boundsMin;
+	}
+
 //	@Override
 //	public void close() {
 //		// TODO: if passed queue was given as constructor argument, don't shut it down
@@ -100,14 +106,14 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 		final int numFetcherThreads = Math.max(1, Runtime.getRuntime().availableProcessors());
 		queue = new SharedQueue(numFetcherThreads, numScales);
 		// TODO: Optionally pass queue as constructor argument
-		//   	 Does it clamp priorities?
+		//   	 Does queue clamp priorities?
 
 		final int timepointId = 0; // TODO: what can this be re-purposed for ???
 		final int setupId = 0; // TODO: what can this be re-purposed for ???
 
 		imgs = new RandomAccessibleInterval[numScales];
 		vimgs = new RandomAccessibleInterval[numScales];
-		final double[] boundsMin = positionFieldPyramid.getBoundsMin();
+		boundsMin = positionFieldPyramid.getBoundsMin();
 		final double[] boundsMax = positionFieldPyramid.getBoundsMax();
 		for (int level = 0; level < numScales; ++level) {
 
@@ -161,6 +167,10 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 							Views.extendZero(img),
 							new ClampingNLinearInterpolatorFactory<>()),
 					positionField.getTransform(level));
+
+			// TODO: pyramid.getMinBounds() should have an influence on how things shift around
+			//       (additional translation RealTransform in positionField.getTransform(level, translation) or somthing like that?)
+			//       Or we just make it clear that pyramid is not yet position-field-transformed.
 
 			final RandomAccess<T> in = Views.translateInverse(timg, min).randomAccess();
 			final RandomAccess<T> out = cell.randomAccess();

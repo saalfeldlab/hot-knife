@@ -94,6 +94,11 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 		return volatileType;
 	}
 
+	@Override
+	public double[] getBoundsMin() {
+		return new double[] {0, 0};
+	}
+
 //	@Override
 //	public void close() {
 //		fetchers.shutdown();

@@ -64,6 +64,12 @@ public interface SurfacePyramid<T extends NativeType<T> & NumericType<T>, V exte
 	 */
 	V getVolatileType();
 
+	/**
+	 * TODO
+	 * @return
+	 */
+	double[] getBoundsMin();
+
 
 	class SurfaceSource<T extends NumericType<T>> implements Source<T> {
 
