@@ -3,10 +3,18 @@ package org.janelia.saalfeldlab.hotknife.tobi;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealPositionable;
+import net.imglib2.realtransform.AffineTransform2D;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransform;
+import org.scijava.listeners.Listeners;
 
 public class GaussTransform implements RealTransform {
 
+	public interface ChangeListener {
+		void transformParametersChanged();
+	}
+
+	private final Listeners.List<ChangeListener> listeners;
 	private double maxSlope;
 	private double minSigma;
 	private double exph;
@@ -16,6 +24,7 @@ public class GaussTransform implements RealTransform {
 	}
 
 	public GaussTransform(double maxSlope, double minSigma) {
+		listeners = new Listeners.SynchronizedList<>();
 		this.maxSlope = maxSlope;
 		this.minSigma = minSigma;
 		this.exph = Math.exp(-0.5) / maxSlope;
@@ -45,10 +54,28 @@ public class GaussTransform implements RealTransform {
 		this.sy1 = sy1;
 		stx = sx0 - sx1;
 		sty = sy0 - sy1;
+		notifyParametersChanged();
+	}
+
+	public void setLineStart(double sx0, double sy0) {
+		this.sx0 = sx0;
+		this.sy0 = sy0;
+		stx = sx0 - sx1;
+		sty = sy0 - sy1;
+		notifyParametersChanged();
+	}
+
+	public void setLineEnd(double sx1, double sy1) {
+		this.sx1 = sx1;
+		this.sy1 = sy1;
+		stx = sx0 - sx1;
+		sty = sy0 - sy1;
+		notifyParametersChanged();
 	}
 
 	public void setActive(boolean active) {
 		this.active = active;
+		notifyParametersChanged();
 	}
 
 	@Override
@@ -110,5 +137,35 @@ public class GaussTransform implements RealTransform {
 				", sx1=" + sx1 +
 				", sy1=" + sy1 +
 				'}';
+	}
+
+	public double[][] getCorners() {
+		return new double[][] {
+				{sx0, sy0},
+				{sx1, sy1}
+		};
+	}
+
+	public double[][] getCornersInViewerCoords(final AffineTransform3D viewerTransform) {
+		final double[][] corners = getCorners();
+
+		AffineTransform2D sourceToViewer = new AffineTransform2D();
+		sourceToViewer.set(
+				viewerTransform.get(0, 0), viewerTransform.get(0, 1), viewerTransform.get(0, 3),
+				viewerTransform.get(1, 0), viewerTransform.get(1, 1), viewerTransform.get(1, 3));
+
+		double[][] c = new double[2][2];
+		for (int i = 0; i < 2; i++) {
+			sourceToViewer.apply(corners[i], c[i]);
+		}
+		return c;
+	}
+
+	public Listeners<ChangeListener> changeListeners() {
+		return listeners;
+	}
+
+	private void notifyParametersChanged() {
+		listeners.list.forEach(ChangeListener::transformParametersChanged);
 	}
 }
