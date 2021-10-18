@@ -1,9 +1,16 @@
 package org.janelia.saalfeldlab.hotknife.tobi;
 
+import bdv.ui.BdvDefaultCards;
+import bdv.ui.CardPanel;
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvSource;
 import bdv.viewer.ViewerPanel;
+import java.awt.Insets;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.Img;
@@ -11,6 +18,7 @@ import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
+import net.miginfocom.swing.MigLayout;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
@@ -68,6 +76,63 @@ public class InteractiveShift2 {
 		final GaussShiftEditor editor = new GaussShiftEditor(keyconf,
 				viewer, triggerbindings, transform);
 		editor.install();
+
+
+
+		JPanel panel = new JPanel(new MigLayout( "ins 0, fillx, filly", "[][grow]", "center" ));
+		final BoundedValuePanel sigmaSlider = new BoundedValuePanel(new BoundedValue(10, 200, 100));
+		panel.add(new JLabel("min sigma"), "aligny baseline");
+		panel.add(sigmaSlider, "growx, wrap");
+		panel.add(new JButton("bla"), "growx, wrap");
+
+		new MinSigmaEditor(sigmaSlider, transform);
+
+		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
+		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
+		cards.addCard("Face Transforms", panel, true, new Insets(0, 0, 0, 0));
 	}
 
+
+	static class MinSigmaEditor {
+
+		private final BoundedValuePanel valuePanel;
+		private GaussTransform transform;
+
+		public MinSigmaEditor(
+				final BoundedValuePanel valuePanel,
+				final GaussTransform transform) {
+			this.valuePanel = valuePanel;
+			this.transform = transform;
+			valuePanel.changeListeners().add(this::updateTransform);
+			transform.changeListeners().add(this::updateValuePanel);
+			updateValuePanel();
+		}
+
+		private boolean blockUpdates = false;
+
+		private synchronized void updateTransform() {
+			if (blockUpdates || transform == null)
+				return;
+
+			final BoundedValue value = valuePanel.getValue();
+			transform.setMinSigma(value.getValue());
+
+			updateValuePanel();
+		}
+
+		private synchronized void updateValuePanel() {
+			if (transform == null) {
+				SwingUtilities.invokeLater(() -> valuePanel.setEnabled(false));
+			} else {
+				SwingUtilities.invokeLater(() -> {
+					synchronized (MinSigmaEditor.this) {
+						blockUpdates = true;
+						valuePanel.setEnabled(true);
+						valuePanel.setValue(valuePanel.getValue().withValue(transform.getMinSigma()));
+						blockUpdates = false;
+					}
+				});
+			}
+		}
+	}
 }

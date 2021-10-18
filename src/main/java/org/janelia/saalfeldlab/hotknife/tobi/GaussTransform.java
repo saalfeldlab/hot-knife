@@ -18,6 +18,14 @@ public class GaussTransform implements RealTransform {
 	private double maxSlope;
 	private double minSigma;
 	private double exph;
+	private boolean active = false;
+	private double sx0;
+	private double sy0;
+	private double sx1;
+	private double sy1;
+	private double stx; // sx1 - sx0
+	private double sty; // sy1 - sy0
+	private double sigmaSqu;
 
 	public GaussTransform() {
 		this(0.8, 100.0);
@@ -32,20 +40,24 @@ public class GaussTransform implements RealTransform {
 
 	public void setMinSigma(double minSigma) {
 		this.minSigma = minSigma;
+		updateSigmaSqu();
+		notifyParametersChanged();
+	}
+
+	public double getMinSigma() {
+		return minSigma;
 	}
 
 	public void setMaxSlope(double maxSlope) {
 		this.maxSlope = maxSlope;
 		this.exph = Math.exp(-0.5) / maxSlope;
+		updateSigmaSqu();
+		notifyParametersChanged();
 	}
 
-	private boolean active = false;
-	private double sx0;
-	private double sy0;
-	private double sx1;
-	private double sy1;
-	private double stx; // sx1 - sx0
-	private double sty; // sy1 - sy0
+	public double getMaxSlope() {
+		return maxSlope;
+	}
 
 	public void setLine(double sx0, double sy0, double sx1, double sy1) {
 		this.sx0 = sx0;
@@ -54,6 +66,7 @@ public class GaussTransform implements RealTransform {
 		this.sy1 = sy1;
 		stx = sx0 - sx1;
 		sty = sy0 - sy1;
+		updateSigmaSqu();
 		notifyParametersChanged();
 	}
 
@@ -62,6 +75,7 @@ public class GaussTransform implements RealTransform {
 		this.sy0 = sy0;
 		stx = sx0 - sx1;
 		sty = sy0 - sy1;
+		updateSigmaSqu();
 		notifyParametersChanged();
 	}
 
@@ -70,13 +84,57 @@ public class GaussTransform implements RealTransform {
 		this.sy1 = sy1;
 		stx = sx0 - sx1;
 		sty = sy0 - sy1;
+		updateSigmaSqu();
 		notifyParametersChanged();
 	}
 
+	@Deprecated
 	public void setActive(boolean active) {
 		this.active = active;
 		notifyParametersChanged();
 	}
+
+	public double getSigma() {
+		double h = Math.sqrt(stx * stx + sty * sty);
+		return Math.max(minSigma, h * exph);
+	}
+
+	private void updateSigmaSqu() {
+		final double sigma = getSigma();
+		sigmaSqu = sigma * sigma;
+	}
+
+	public double[][] getCorners() {
+		return new double[][] {
+				{sx0, sy0},
+				{sx1, sy1}
+		};
+	}
+
+	public double[][] getCornersInViewerCoords(final AffineTransform3D viewerTransform) {
+		final double[][] corners = getCorners();
+
+		AffineTransform2D sourceToViewer = new AffineTransform2D();
+		sourceToViewer.set(
+				viewerTransform.get(0, 0), viewerTransform.get(0, 1), viewerTransform.get(0, 3),
+				viewerTransform.get(1, 0), viewerTransform.get(1, 1), viewerTransform.get(1, 3));
+
+		double[][] c = new double[2][2];
+		for (int i = 0; i < 2; i++) {
+			sourceToViewer.apply(corners[i], c[i]);
+		}
+		return c;
+	}
+
+	public Listeners<ChangeListener> changeListeners() {
+		return listeners;
+	}
+
+	private void notifyParametersChanged() {
+		listeners.list.forEach(ChangeListener::transformParametersChanged);
+	}
+
+
 
 	@Override
 	public int numSourceDimensions() {
@@ -99,10 +157,8 @@ public class GaussTransform implements RealTransform {
 			double x = source.getDoublePosition(0);
 			double y = source.getDoublePosition(1);
 
-			double h = Math.sqrt(stx * stx + sty * sty);
-			double sigma = Math.max(minSigma, h * exph);
 			double asqu = (x - sx1) * (x - sx1) + (y - sy1) * (y - sy1);
-			double dt = Math.exp(asqu / (-2.0 * sigma * sigma));
+			double dt = Math.exp(asqu / (-2.0 * sigmaSqu));
 
 			double transformedX = x + dt * stx;
 			double transformedY = y + dt * sty;
@@ -137,35 +193,5 @@ public class GaussTransform implements RealTransform {
 				", sx1=" + sx1 +
 				", sy1=" + sy1 +
 				'}';
-	}
-
-	public double[][] getCorners() {
-		return new double[][] {
-				{sx0, sy0},
-				{sx1, sy1}
-		};
-	}
-
-	public double[][] getCornersInViewerCoords(final AffineTransform3D viewerTransform) {
-		final double[][] corners = getCorners();
-
-		AffineTransform2D sourceToViewer = new AffineTransform2D();
-		sourceToViewer.set(
-				viewerTransform.get(0, 0), viewerTransform.get(0, 1), viewerTransform.get(0, 3),
-				viewerTransform.get(1, 0), viewerTransform.get(1, 1), viewerTransform.get(1, 3));
-
-		double[][] c = new double[2][2];
-		for (int i = 0; i < 2; i++) {
-			sourceToViewer.apply(corners[i], c[i]);
-		}
-		return c;
-	}
-
-	public Listeners<ChangeListener> changeListeners() {
-		return listeners;
-	}
-
-	private void notifyParametersChanged() {
-		listeners.list.forEach(ChangeListener::transformParametersChanged);
 	}
 }

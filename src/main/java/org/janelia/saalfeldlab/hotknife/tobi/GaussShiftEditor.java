@@ -211,15 +211,15 @@ public class GaussShiftEditor {
 
 		private final GaussTransform transform;
 		private final AffineTransform3D viewerTransform;
-		private final GaussShiftOverlay.CornerHighlighter cornerHighlighter;
+		private final CornerHighlighter cornerHighlighter;
 
-		private GaussShiftOverlay.HighlightedCornerListener highlightedCornerListener = null;
+		private HighlightedCornerListener highlightedCornerListener = null;
 		private int cornerId = -1;
 
 		public GaussShiftOverlay(final GaussTransform transform) {
 			this.transform = transform;
 			viewerTransform = new AffineTransform3D();
-			cornerHighlighter = new GaussShiftOverlay.CornerHighlighter(DISTANCE_TOLERANCE);
+			cornerHighlighter = new CornerHighlighter(DISTANCE_TOLERANCE);
 		}
 
 
@@ -227,18 +227,21 @@ public class GaussShiftEditor {
 		public void drawOverlays(final Graphics g) {
 			final Graphics2D graphics = (Graphics2D) g;
 			final Color color = Color.green;
-			final Stroke stroke = new BasicStroke();
+			final Stroke solid = new BasicStroke();
+			final Stroke dashed = new BasicStroke( 1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 1f, new float[] { 5f, 5f }, 0f );
 
 			final int id = getHighlightedCornerIndex();
 
 			final double[][] corners;
+			final double sigma;
 			synchronized (viewerTransform) {
 				corners = transform.getCornersInViewerCoords(viewerTransform);
+				sigma = transform.getSigma() * viewerTransform.get(0,0);
 			}
 
 			graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			graphics.setColor(color);
-			graphics.setStroke(stroke);
+			graphics.setStroke(solid);
 			Line2D line = new Line2D.Double(corners[0][0], corners[0][1], corners[1][0], corners[1][1]);
 			graphics.draw(line);
 
@@ -254,6 +257,16 @@ public class GaussShiftEditor {
 				graphics.fill(cornerHandle);
 //				graphics.setColor(cornerColor.darker().darker());
 //				graphics.draw(cornerHandle);
+
+				if ( i == 1 ) {
+					final Ellipse2D sigmaEllipse = new Ellipse2D.Double(
+							p[0] - sigma,
+							p[1] - sigma,
+							2 * sigma, 2 * sigma);
+					graphics.setColor(color);
+					graphics.setStroke(dashed);
+					graphics.draw(sigmaEllipse);
+				}
 			}
 		}
 
@@ -289,7 +302,7 @@ public class GaussShiftEditor {
 		 * Returns a {@code MouseMotionListener} that can be installed into a bdv
 		 * (see {@code ViewerPanel.getDisplay().addHandler(...)}). If installed, it
 		 * will notify a {@code HighlightedCornerListener} (see
-		 * {@link #setHighlightedCornerListener(GaussShiftOverlay.HighlightedCornerListener)}) when
+		 * {@link #setHighlightedCornerListener(HighlightedCornerListener)}) when
 		 * the mouse is over a corner of the box (with some tolerance)/
 		 *
 		 * @return a {@code MouseMotionListener} implementing mouse-over for box
@@ -299,7 +312,7 @@ public class GaussShiftEditor {
 			return cornerHighlighter;
 		}
 
-		public void setHighlightedCornerListener(final GaussShiftOverlay.HighlightedCornerListener highlightedCornerListener) {
+		public void setHighlightedCornerListener(final HighlightedCornerListener highlightedCornerListener) {
 			this.highlightedCornerListener = highlightedCornerListener;
 		}
 
