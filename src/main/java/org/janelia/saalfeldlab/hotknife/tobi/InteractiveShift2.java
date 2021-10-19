@@ -1,6 +1,5 @@
 package org.janelia.saalfeldlab.hotknife.tobi;
 
-import bdv.tools.brightness.ConverterSetup;
 import bdv.ui.BdvDefaultCards;
 import bdv.ui.CardPanel;
 import bdv.util.Bdv;
@@ -89,21 +88,35 @@ public class InteractiveShift2 {
 
 		JPanel panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));
 
-		final BoundedValuePanel sigmaSlider = new BoundedValuePanel(new BoundedValue(0, 1000, 100));
-		sigmaSlider.setBorder(null);
-		panel.add(new JLabel("min sigma"), "aligny baseline");
-		panel.add(sigmaSlider, "growx, wrap");
-		new MinSigmaEditor(sigmaSlider, transform);
+		final BoundedValuePanel minSigmaSlider = new BoundedValuePanel(new BoundedValue(0, 1000, 100));
+		minSigmaSlider.setBorder(null);
+		final JLabel minSigmaLabel = new JLabel("min sigma");
+		panel.add(minSigmaLabel, "aligny baseline");
+		panel.add(minSigmaSlider, "growx, wrap");
+		final MinSigmaEditor minSigmaEditor = new MinSigmaEditor(minSigmaLabel, minSigmaSlider, transform);
 
-		final BoundedValuePanel slopeSlider = new BoundedValuePanel(new BoundedValue(0, 1, 0.8));
-		slopeSlider.setBorder(null);
-		panel.add(new JLabel("slope"), "aligny baseline");
-		panel.add(slopeSlider, "growx, wrap");
-		new MaxSlopeEditor(slopeSlider, transform);
+		final BoundedValuePanel maxSlopeSlider = new BoundedValuePanel(new BoundedValue(0, 1, 0.8));
+		maxSlopeSlider.setBorder(null);
+		final JLabel maxSlopeLabel = new JLabel("max slope");
+		panel.add(maxSlopeLabel, "aligny baseline");
+		panel.add(maxSlopeSlider, "growx, wrap");
+		final MaxSlopeEditor maxSlopeEditor = new MaxSlopeEditor(maxSlopeLabel, maxSlopeSlider, transform);
+
 
 		final ButtonPanel buttons = new ButtonPanel("Cancel", "Apply");
 		panel.add(buttons, "sx2, gaptop 10px, wrap, bottom");
 
+		buttons.onButton(1, () -> SwingUtilities.invokeLater(() -> {
+			editor.setModel(null);
+			minSigmaEditor.setTransform(null);
+			maxSlopeEditor.setTransform(null);
+		}));
+
+		buttons.onButton(0, () -> SwingUtilities.invokeLater(() -> {
+			editor.setModel(transform);
+			minSigmaEditor.setTransform(transform);
+			maxSlopeEditor.setTransform(transform);
+		}));
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
@@ -112,16 +125,29 @@ public class InteractiveShift2 {
 
 	static class MaxSlopeEditor {
 
+		private final JLabel label;
 		private final BoundedValuePanel valuePanel;
+		private final GaussTransform.ChangeListener updateValuePanel;
 		private GaussTransform transform;
 
 		public MaxSlopeEditor(
+				final JLabel label,
 				final BoundedValuePanel valuePanel,
 				final GaussTransform transform) {
+			this.label = label;
 			this.valuePanel = valuePanel;
 			this.transform = transform;
 			valuePanel.changeListeners().add(this::updateTransform);
-			transform.changeListeners().add(this::updateValuePanel);
+			updateValuePanel = this::updateValuePanel;
+			setTransform(transform);
+		}
+
+		public synchronized void setTransform(final GaussTransform transform) {
+			if (this.transform != null)
+				this.transform.changeListeners().remove(updateValuePanel);
+			this.transform = transform;
+			if (this.transform != null)
+				this.transform.changeListeners().add(updateValuePanel);
 			updateValuePanel();
 		}
 
@@ -139,12 +165,16 @@ public class InteractiveShift2 {
 
 		private synchronized void updateValuePanel() {
 			if (transform == null) {
-				SwingUtilities.invokeLater(() -> valuePanel.setEnabled(false));
+				SwingUtilities.invokeLater(() -> {
+					valuePanel.setEnabled(false);
+					label.setEnabled(false);
+				});
 			} else {
 				SwingUtilities.invokeLater(() -> {
 					synchronized (MaxSlopeEditor.this) {
 						blockUpdates = true;
 						valuePanel.setEnabled(true);
+						label.setEnabled(true);
 						valuePanel.setValue(valuePanel.getValue().withValue(transform.getMaxSlope()));
 						blockUpdates = false;
 					}
@@ -155,16 +185,28 @@ public class InteractiveShift2 {
 
 	static class MinSigmaEditor {
 
+		private final JLabel label;
 		private final BoundedValuePanel valuePanel;
+		private final GaussTransform.ChangeListener updateValuePanel;
 		private GaussTransform transform;
 
 		public MinSigmaEditor(
+				final JLabel label,
 				final BoundedValuePanel valuePanel,
 				final GaussTransform transform) {
+			this.label = label;
 			this.valuePanel = valuePanel;
-			this.transform = transform;
 			valuePanel.changeListeners().add(this::updateTransform);
-			transform.changeListeners().add(this::updateValuePanel);
+			updateValuePanel = this::updateValuePanel;
+			setTransform(transform);
+		}
+
+		public synchronized void setTransform(final GaussTransform transform) {
+			if (this.transform != null)
+				this.transform.changeListeners().remove(updateValuePanel);
+			this.transform = transform;
+			if (this.transform != null)
+				this.transform.changeListeners().add(updateValuePanel);
 			updateValuePanel();
 		}
 
@@ -215,12 +257,16 @@ public class InteractiveShift2 {
 
 		private synchronized void updateValuePanel() {
 			if (transform == null) {
-				SwingUtilities.invokeLater(() -> valuePanel.setEnabled(false));
+				SwingUtilities.invokeLater(() -> {
+					valuePanel.setEnabled(false);
+					label.setEnabled(false);
+				});
 			} else {
 				SwingUtilities.invokeLater(() -> {
 					synchronized (MinSigmaEditor.this) {
 						blockUpdates = true;
 						valuePanel.setEnabled(true);
+						label.setEnabled(true);
 						valuePanel.setValue(valuePanel.getValue().withValue(transform.getMinSigma()));
 						blockUpdates = false;
 					}

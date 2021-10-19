@@ -1,5 +1,6 @@
 package org.janelia.saalfeldlab.hotknife.tobi;
 
+import bdv.util.Affine3DHelpers;
 import bdv.viewer.OverlayRenderer;
 import bdv.viewer.TransformListener;
 import bdv.viewer.ViewerPanel;
@@ -52,6 +53,7 @@ public class GaussShiftEditor {
 	private final Behaviours behaviours;
 	private final BehaviourMap blockMap;
 	private final GaussShiftOverlay overlay;
+	private final DragCornerBehaviour dragCornerBehaviour;
 
 	public GaussShiftEditor(
 			final InputTriggerConfig keyconf,
@@ -66,7 +68,8 @@ public class GaussShiftEditor {
 		overlay = new GaussShiftOverlay(model);
 
 		behaviours = new Behaviours(keyconf);
-		behaviours.behaviour(new DragCornerBehaviour(overlay, model), DRAG_GAUSS_SHIFT_CORNER, DRAG_GAUSS_SHIFT_CORNER_KEYS);
+		dragCornerBehaviour = new DragCornerBehaviour(overlay, model);
+		behaviours.behaviour(dragCornerBehaviour, DRAG_GAUSS_SHIFT_CORNER, DRAG_GAUSS_SHIFT_CORNER_KEYS);
 
 		/*
 		 * Create BehaviourMap to block behaviours interfering with
@@ -96,6 +99,13 @@ public class GaussShiftEditor {
 		triggerbindings.removeBehaviourMap(GAUSS_SHIFT_MAP);
 
 		unblock();
+	}
+
+	public void setModel(final GaussTransform model) {
+		this.model = model;
+		overlay.setTransform(model);
+		dragCornerBehaviour.setModel(model);
+		viewer.getDisplay().repaint();
 	}
 
 	private void updateEditability() {
@@ -152,13 +162,17 @@ public class GaussShiftEditor {
 	static final class DragCornerBehaviour implements DragBehaviour {
 
 		private final GaussShiftOverlay overlay;
-		private final GaussTransform model;
+		private GaussTransform model;
 
 		private boolean moving = false;
 		private int cornerId;
 
 		public DragCornerBehaviour(final GaussShiftOverlay overlay, final GaussTransform model) {
 			this.overlay = overlay;
+			this.model = model;
+		}
+
+		public void setModel(final GaussTransform model) {
 			this.model = model;
 		}
 
@@ -176,6 +190,10 @@ public class GaussShiftEditor {
 		@Override
 		public void drag(final int x, final int y) {
 			if (!moving)
+				return;
+
+			final GaussTransform model = this.model;
+			if (model == null)
 				return;
 
 			overlay.getViewerTransform(tmp);
@@ -209,7 +227,7 @@ public class GaussShiftEditor {
 			void highlightedCornerChanged();
 		}
 
-		private final GaussTransform transform;
+		private GaussTransform transform;
 		private final AffineTransform3D viewerTransform;
 		private final CornerHighlighter cornerHighlighter;
 
@@ -222,9 +240,17 @@ public class GaussShiftEditor {
 			cornerHighlighter = new CornerHighlighter(DISTANCE_TOLERANCE);
 		}
 
+		public void setTransform(final GaussTransform transform) {
+			this.transform = transform;
+			cornerHighlighter.findHighlightedCorner();
+		}
 
 		@Override
 		public void drawOverlays(final Graphics g) {
+			final GaussTransform transform = this.transform;
+			if (transform == null)
+				return;
+
 			final Graphics2D graphics = (Graphics2D) g;
 			final Color color = Color.green;
 			final Stroke solid = new BasicStroke();
@@ -236,7 +262,7 @@ public class GaussShiftEditor {
 			final double sigma;
 			synchronized (viewerTransform) {
 				corners = transform.getCornersInViewerCoords(viewerTransform);
-				sigma = transform.getSigma() * viewerTransform.get(0,0);
+				sigma = transform.getSigma() * Affine3DHelpers.extractScale(viewerTransform, 0);
 			}
 
 			graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -338,18 +364,28 @@ public class GaussShiftEditor {
 				squTolerance = tolerance * tolerance;
 			}
 
+			private int x;
+			private int y;
+
 			@Override
 			public void mouseMoved(final MouseEvent e) {
-				final int x = e.getX();
-				final int y = e.getY();
-				final double[][] corners = transform.getCornersInViewerCoords(viewerTransform);
-				for (int i = 0; i < 2; i++) {
-					final double dx = x - corners[i][0];
-					final double dy = y - corners[i][1];
-					final double dr2 = dx * dx + dy * dy;
-					if (dr2 < squTolerance) {
-						setHighlightedCorner(i);
-						return;
+				x = e.getX();
+				y = e.getY();
+				findHighlightedCorner();
+			}
+
+			private void findHighlightedCorner() {
+				final GaussTransform transform = GaussShiftOverlay.this.transform;
+				if (transform != null) {
+					final double[][] corners = transform.getCornersInViewerCoords(viewerTransform);
+					for (int i = 0; i < 2; i++) {
+						final double dx = x - corners[i][0];
+						final double dy = y - corners[i][1];
+						final double dr2 = dx * dx + dy * dy;
+						if (dr2 < squTolerance) {
+							setHighlightedCorner(i);
+							return;
+						}
 					}
 				}
 				setHighlightedCorner(-1);
