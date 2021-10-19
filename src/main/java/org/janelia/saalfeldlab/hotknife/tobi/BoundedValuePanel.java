@@ -97,7 +97,7 @@ class BoundedValuePanel extends JPanel
 
 	public BoundedValuePanel( final BoundedValue value )
 	{
-		setLayout( new MigLayout( "ins 5 5 5 10, fillx, filly, hidemode 3", "[grow][][]", "[]0[]" ) );
+		setLayout( new MigLayout( "ins 5 0 5 10, fillx, filly, hidemode 3", "[grow]0[][]", "[]0[]" ) );
 
 		valueSpinner = new JSpinner( new SpinnerNumberModel( 1.0, 0.0, 1.0, 1.0 ) );
 		valueSlider = new JSlider( 0, SLIDER_LENGTH );

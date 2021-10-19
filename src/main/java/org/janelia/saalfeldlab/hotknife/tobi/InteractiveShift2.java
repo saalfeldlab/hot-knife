@@ -1,15 +1,23 @@
 package org.janelia.saalfeldlab.hotknife.tobi;
 
+import bdv.tools.brightness.ConverterSetup;
 import bdv.ui.BdvDefaultCards;
 import bdv.ui.CardPanel;
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvSource;
+import bdv.util.Bounds;
 import bdv.viewer.ViewerPanel;
 import java.awt.Insets;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
@@ -79,19 +87,71 @@ public class InteractiveShift2 {
 
 
 
-		JPanel panel = new JPanel(new MigLayout( "ins 0, fillx, filly", "[][grow]", "center" ));
-		final BoundedValuePanel sigmaSlider = new BoundedValuePanel(new BoundedValue(10, 200, 100));
+		JPanel panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));
+
+		final BoundedValuePanel sigmaSlider = new BoundedValuePanel(new BoundedValue(0, 1000, 100));
+		sigmaSlider.setBorder(null);
 		panel.add(new JLabel("min sigma"), "aligny baseline");
 		panel.add(sigmaSlider, "growx, wrap");
-		panel.add(new JButton("bla"), "growx, wrap");
-
 		new MinSigmaEditor(sigmaSlider, transform);
+
+		final BoundedValuePanel slopeSlider = new BoundedValuePanel(new BoundedValue(0, 1, 0.8));
+		slopeSlider.setBorder(null);
+		panel.add(new JLabel("slope"), "aligny baseline");
+		panel.add(slopeSlider, "growx, wrap");
+		new MaxSlopeEditor(slopeSlider, transform);
+
+		final ButtonPanel buttons = new ButtonPanel("Cancel", "Apply");
+		panel.add(buttons, "sx2, gaptop 10px, wrap, bottom");
+
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
 		cards.addCard("Face Transforms", panel, true, new Insets(0, 0, 0, 0));
 	}
 
+	static class MaxSlopeEditor {
+
+		private final BoundedValuePanel valuePanel;
+		private GaussTransform transform;
+
+		public MaxSlopeEditor(
+				final BoundedValuePanel valuePanel,
+				final GaussTransform transform) {
+			this.valuePanel = valuePanel;
+			this.transform = transform;
+			valuePanel.changeListeners().add(this::updateTransform);
+			transform.changeListeners().add(this::updateValuePanel);
+			updateValuePanel();
+		}
+
+		private boolean blockUpdates = false;
+
+		private synchronized void updateTransform() {
+			if (blockUpdates || transform == null)
+				return;
+
+			final BoundedValue value = valuePanel.getValue();
+			transform.setMaxSlope(value.getValue());
+
+			updateValuePanel();
+		}
+
+		private synchronized void updateValuePanel() {
+			if (transform == null) {
+				SwingUtilities.invokeLater(() -> valuePanel.setEnabled(false));
+			} else {
+				SwingUtilities.invokeLater(() -> {
+					synchronized (MaxSlopeEditor.this) {
+						blockUpdates = true;
+						valuePanel.setEnabled(true);
+						valuePanel.setValue(valuePanel.getValue().withValue(transform.getMaxSlope()));
+						blockUpdates = false;
+					}
+				});
+			}
+		}
+	}
 
 	static class MinSigmaEditor {
 
@@ -117,7 +177,40 @@ public class InteractiveShift2 {
 			final BoundedValue value = valuePanel.getValue();
 			transform.setMinSigma(value.getValue());
 
+			final JPopupMenu menu = new JPopupMenu();
+			menu.add(runnableItem("set bounds ...", valuePanel::setBoundsDialog));
+			menu.add(setBoundsItem("set bounds 0..10", 0, 10));
+			menu.add(setBoundsItem("set bounds 0..100", 0, 100));
+			menu.add(setBoundsItem("set bounds 0..1000", 0, 1000));
+			menu.add(setBoundsItem("set bounds 0..10000", 0, 10000));
+			valuePanel.setPopup(() -> menu);
+
 			updateValuePanel();
+		}
+
+		private JMenuItem setBoundsItem(final String text, final double min, final double max) {
+			final JMenuItem item = new JMenuItem(text);
+			item.addActionListener(e -> setBounds(new Bounds(min, max)));
+			return item;
+		}
+
+		private JMenuItem runnableItem(final String text, final Runnable action) {
+			final JMenuItem item = new JMenuItem(text);
+			item.addActionListener(e -> action.run());
+			return item;
+		}
+
+		private synchronized void setBounds(final Bounds bounds) {
+			if (transform == null)
+				return;
+
+			SwingUtilities.invokeLater(() -> {
+				synchronized (MinSigmaEditor.this) {
+					valuePanel.setValue(valuePanel.getValue()
+							.withMinBound(bounds.getMinBound())
+							.withMaxBound(bounds.getMaxBound()));
+				}
+			});
 		}
 
 		private synchronized void updateValuePanel() {
@@ -133,6 +226,38 @@ public class InteractiveShift2 {
 					}
 				});
 			}
+		}
+	}
+
+
+	/**
+	 * A panel containing buttons, and callback lists for each of them.
+	 */
+	public static class ButtonPanel extends JPanel {
+
+		private final List<List<Runnable>> runOnButton;
+
+		public ButtonPanel(final String... buttonLabels) {
+			if (buttonLabels.length == 0)
+				throw new IllegalArgumentException();
+
+			final int numButtons = buttonLabels.length;
+			runOnButton = new ArrayList<>(numButtons);
+
+			setLayout(new BoxLayout(this, BoxLayout.LINE_AXIS));
+			add(Box.createHorizontalGlue());
+
+			for (int i = 0; i < numButtons; i++) {
+				final List<Runnable> runnables = new ArrayList<>();
+				runOnButton.add(runnables);
+				final JButton button = new JButton(buttonLabels[i]);
+				button.addActionListener(e -> runnables.forEach(Runnable::run));
+				add(button);
+			}
+		}
+
+		public synchronized void onButton(final int index, final Runnable runnable) {
+			runOnButton.get(index).add(runnable);
 		}
 	}
 }
