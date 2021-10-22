@@ -3,8 +3,6 @@ package org.janelia.saalfeldlab.hotknife.tobi;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealPositionable;
-import net.imglib2.realtransform.AffineTransform2D;
-import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransform;
 import org.scijava.listeners.Listeners;
 
@@ -79,6 +77,10 @@ public class GaussTransform implements RealTransform {
 		notifyParametersChanged();
 	}
 
+	public double[] getLineStart() {
+		return new double[] {sx0, sy0};
+	}
+
 	public void setLineEnd(double sx1, double sy1) {
 		this.sx1 = sx1;
 		this.sy1 = sy1;
@@ -86,6 +88,10 @@ public class GaussTransform implements RealTransform {
 		sty = sy0 - sy1;
 		updateSigmaSqu();
 		notifyParametersChanged();
+	}
+
+	public double[] getLineEnd() {
+		return new double[] {sx1, sy1};
 	}
 
 	@Deprecated
@@ -102,28 +108,6 @@ public class GaussTransform implements RealTransform {
 	private void updateSigmaSqu() {
 		final double sigma = getSigma();
 		sigmaSqu = sigma * sigma;
-	}
-
-	public double[][] getCorners() {
-		return new double[][] {
-				{sx0, sy0},
-				{sx1, sy1}
-		};
-	}
-
-	public double[][] getCornersInViewerCoords(final AffineTransform3D viewerTransform) {
-		final double[][] corners = getCorners();
-
-		AffineTransform2D sourceToViewer = new AffineTransform2D();
-		sourceToViewer.set(
-				viewerTransform.get(0, 0), viewerTransform.get(0, 1), viewerTransform.get(0, 3),
-				viewerTransform.get(1, 0), viewerTransform.get(1, 1), viewerTransform.get(1, 3));
-
-		double[][] c = new double[2][2];
-		for (int i = 0; i < 2; i++) {
-			sourceToViewer.apply(corners[i], c[i]);
-		}
-		return c;
 	}
 
 	public Listeners<ChangeListener> changeListeners() {
