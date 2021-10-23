@@ -5,18 +5,16 @@ import bdv.ui.CardPanel;
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvSource;
-import bdv.util.Bounds;
 import bdv.viewer.ViewerPanel;
 import java.awt.Insets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccessibleInterval;
@@ -27,7 +25,9 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.miginfocom.swing.MigLayout;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.scijava.ui.behaviour.DragBehaviour;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
+import org.scijava.ui.behaviour.util.Behaviours;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 
 public class InteractiveShift2 {
@@ -84,8 +84,6 @@ public class InteractiveShift2 {
 				viewer, triggerbindings, transform);
 		editor.install();
 
-
-
 		JPanel panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));
 
 		final BoundedValuePanel minSigmaSlider = new BoundedValuePanel(new BoundedValue(0, 1000, 100));
@@ -110,168 +108,112 @@ public class InteractiveShift2 {
 			editor.setModel(null);
 			minSigmaEditor.setTransform(null);
 			maxSlopeEditor.setTransform(null);
+			transform.setActive(false);
 		}));
 
 		buttons.onButton(0, () -> SwingUtilities.invokeLater(() -> {
 			editor.setModel(transform);
 			minSigmaEditor.setTransform(transform);
 			maxSlopeEditor.setTransform(transform);
+			transform.setActive(true);
 		}));
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
 		cards.addCard("Face Transforms", panel, true, new Insets(0, 0, 0, 0));
+
+
+		new GaussTransformInitializer(keyconf, viewer, triggerbindings, transform, model -> {
+			editor.setModel(model);
+			minSigmaEditor.setTransform(model);
+			maxSlopeEditor.setTransform(model);
+			model.setActive(true);
+		}).install();
 	}
 
-	static class MaxSlopeEditor {
 
-		private final JLabel label;
-		private final BoundedValuePanel valuePanel;
-		private final GaussTransform.ChangeListener updateValuePanel;
-		private GaussTransform transform;
 
-		public MaxSlopeEditor(
-				final JLabel label,
-				final BoundedValuePanel valuePanel,
-				final GaussTransform transform) {
-			this.label = label;
-			this.valuePanel = valuePanel;
-			this.transform = transform;
-			valuePanel.changeListeners().add(this::updateTransform);
-			updateValuePanel = this::updateValuePanel;
-			setTransform(transform);
+
+
+
+
+
+	static class GaussTransformInitializer implements DragBehaviour {
+
+
+		public static final String DRAG_INIT_GAUSS_SHIFT = "drag init gauss-shift";
+		public static final String[] DRAG_INIT_GAUSS_SHIFT_KEYS = new String[] {"shift button1"};
+
+		public static final String INIT_GAUSS_SHIFT_MAP = "init-gauss-shift";
+
+		private final ViewerPanel viewer;
+		private final TriggerBehaviourBindings triggerbindings;
+		private final ViewerCoords viewerCoords;
+		private final Behaviours behaviours;
+
+
+		// TEMP:
+		private GaussTransform TEMPtransform;
+		private Consumer<GaussTransform> transformSetter;
+
+		private GaussTransform model;
+
+		public GaussTransformInitializer(
+				final InputTriggerConfig keyconf,
+				final ViewerPanel viewer,
+				final TriggerBehaviourBindings triggerbindings,
+				final GaussTransform TEMPtransform,
+				final Consumer<GaussTransform> transformSetter) {
+
+			this.viewer = viewer;
+			this.triggerbindings = triggerbindings;
+			this.TEMPtransform = TEMPtransform;
+			this.transformSetter = transformSetter;
+
+			viewerCoords = new ViewerCoords();
+
+			behaviours = new Behaviours(keyconf);
+			behaviours.behaviour(this, DRAG_INIT_GAUSS_SHIFT, DRAG_INIT_GAUSS_SHIFT_KEYS);
 		}
 
-		public synchronized void setTransform(final GaussTransform transform) {
-			if (this.transform != null)
-				this.transform.changeListeners().remove(updateValuePanel);
-			this.transform = transform;
-			if (this.transform != null)
-				this.transform.changeListeners().add(updateValuePanel);
-			updateValuePanel();
+		private int x0;
+		private int y0;
+
+		public void install() {
+			viewer.renderTransformListeners().add(viewerCoords);
+			behaviours.install(triggerbindings, INIT_GAUSS_SHIFT_MAP);
 		}
 
-		private boolean blockUpdates = false;
-
-		private synchronized void updateTransform() {
-			if (blockUpdates || transform == null)
-				return;
-
-			final BoundedValue value = valuePanel.getValue();
-			transform.setMaxSlope(value.getValue());
-
-			updateValuePanel();
+		public void uninstall() {
+			viewer.removeTransformListener(viewerCoords);
+			triggerbindings.removeInputTriggerMap(INIT_GAUSS_SHIFT_MAP);
+			triggerbindings.removeBehaviourMap(INIT_GAUSS_SHIFT_MAP);
 		}
 
-		private synchronized void updateValuePanel() {
-			if (transform == null) {
-				SwingUtilities.invokeLater(() -> {
-					valuePanel.setEnabled(false);
-					label.setEnabled(false);
-				});
+		@Override
+		public void init(final int x, final int y) {
+			x0 = x;
+			y0 = y;
+		}
+
+		@Override
+		public void drag(final int x, final int y) {
+			if (model == null) {
+				model = TEMPtransform; // new GaussTransform();
+				viewerCoords.applyTransformed(model::setLineStart, x0, y0);
+				viewerCoords.applyTransformed(model::setLineEnd, x, y);
+				model.setActive(true);
+				transformSetter.accept(model);
 			} else {
-				SwingUtilities.invokeLater(() -> {
-					synchronized (MaxSlopeEditor.this) {
-						blockUpdates = true;
-						valuePanel.setEnabled(true);
-						label.setEnabled(true);
-						valuePanel.setValue(valuePanel.getValue().withValue(transform.getMaxSlope()));
-						blockUpdates = false;
-					}
-				});
+				viewerCoords.applyTransformed(model::setLineEnd, x, y);
 			}
-		}
-	}
-
-	static class MinSigmaEditor {
-
-		private final JLabel label;
-		private final BoundedValuePanel valuePanel;
-		private final GaussTransform.ChangeListener updateValuePanel;
-		private GaussTransform transform;
-
-		public MinSigmaEditor(
-				final JLabel label,
-				final BoundedValuePanel valuePanel,
-				final GaussTransform transform) {
-			this.label = label;
-			this.valuePanel = valuePanel;
-			valuePanel.changeListeners().add(this::updateTransform);
-			updateValuePanel = this::updateValuePanel;
-			setTransform(transform);
+			viewer.requestRepaint(); // TODO: necessary?
 		}
 
-		public synchronized void setTransform(final GaussTransform transform) {
-			if (this.transform != null)
-				this.transform.changeListeners().remove(updateValuePanel);
-			this.transform = transform;
-			if (this.transform != null)
-				this.transform.changeListeners().add(updateValuePanel);
-			updateValuePanel();
-		}
-
-		private boolean blockUpdates = false;
-
-		private synchronized void updateTransform() {
-			if (blockUpdates || transform == null)
-				return;
-
-			final BoundedValue value = valuePanel.getValue();
-			transform.setMinSigma(value.getValue());
-
-			final JPopupMenu menu = new JPopupMenu();
-			menu.add(runnableItem("set bounds ...", valuePanel::setBoundsDialog));
-			menu.add(setBoundsItem("set bounds 0..10", 0, 10));
-			menu.add(setBoundsItem("set bounds 0..100", 0, 100));
-			menu.add(setBoundsItem("set bounds 0..1000", 0, 1000));
-			menu.add(setBoundsItem("set bounds 0..10000", 0, 10000));
-			valuePanel.setPopup(() -> menu);
-
-			updateValuePanel();
-		}
-
-		private JMenuItem setBoundsItem(final String text, final double min, final double max) {
-			final JMenuItem item = new JMenuItem(text);
-			item.addActionListener(e -> setBounds(new Bounds(min, max)));
-			return item;
-		}
-
-		private JMenuItem runnableItem(final String text, final Runnable action) {
-			final JMenuItem item = new JMenuItem(text);
-			item.addActionListener(e -> action.run());
-			return item;
-		}
-
-		private synchronized void setBounds(final Bounds bounds) {
-			if (transform == null)
-				return;
-
-			SwingUtilities.invokeLater(() -> {
-				synchronized (MinSigmaEditor.this) {
-					valuePanel.setValue(valuePanel.getValue()
-							.withMinBound(bounds.getMinBound())
-							.withMaxBound(bounds.getMaxBound()));
-				}
-			});
-		}
-
-		private synchronized void updateValuePanel() {
-			if (transform == null) {
-				SwingUtilities.invokeLater(() -> {
-					valuePanel.setEnabled(false);
-					label.setEnabled(false);
-				});
-			} else {
-				SwingUtilities.invokeLater(() -> {
-					synchronized (MinSigmaEditor.this) {
-						blockUpdates = true;
-						valuePanel.setEnabled(true);
-						label.setEnabled(true);
-						valuePanel.setValue(valuePanel.getValue().withValue(transform.getMinSigma()));
-						blockUpdates = false;
-					}
-				});
-			}
+		@Override
+		public void end(final int x, final int y) {
+			model = null;
+			viewer.requestRepaint(); // TODO: necessary?
 		}
 	}
 
