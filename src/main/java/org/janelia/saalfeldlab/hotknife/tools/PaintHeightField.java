@@ -18,6 +18,8 @@ package org.janelia.saalfeldlab.hotknife.tools;
 
 import ij.ImageJ;
 import ij.ImagePlus;
+import ij.plugin.filter.RankFilters;
+import ij.process.FloatProcessor;
 
 import java.awt.BorderLayout;
 import java.awt.Insets;
@@ -74,6 +76,8 @@ import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.img.basictypeaccess.FloatAccess;
+import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.multithreading.SimpleMultiThreading;
@@ -131,6 +135,24 @@ public class PaintHeightField implements Callable<Void>{
 
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
 
+	/*
+	--n5Path=/nrs/flyem/render/n5/Z0720_07m_BR
+	--n5FieldPath=/nrs/flyem/render/n5/Z0720_07m_BR
+	--n5Raw=/z_corr/Sec25/v5_acquire_trimmed_align_ic___20210709_144057
+	--n5FieldOutput=/heightfields_fix/Sec25/pass1/min
+	--n5Field=/heightfields/Sec25/trn_vld_single_head_jitter_flips_12-5-3-2-2-3_s3_s2_ft_20_cosine/s1/min
+	--scale=4,4,4
+	--heightfieldOffset=62,62,62
+	--offset=3
+
+	--n5Path=/nrs/flyem/render/n5/Z0720_07m_BR
+	--n5FieldPath=/nrs/flyem/render/n5/Z0720_07m_BR
+	--n5Raw=/z_corr/Sec22/v4_acquire_trimmed_align_ic___20210825_210921
+	--n5FieldOutput=/heightfields_fix/Sec22/pass1/min
+	--n5Field=/heightfields/Sec22/v4_acquire_trimmed_align_ic___20210825_210921_gauss/s1/min
+	--scale=6,6,1
+	--offset=3
+	*/
 
 	static protected InputTriggerConfig getInputTriggerConfig() throws IllegalArgumentException {
 
@@ -227,8 +249,8 @@ public class PaintHeightField implements Callable<Void>{
 			heightFieldSource = Views.interval( Views.translate( Views.extendBorder( heightFieldSource ), new long[] { heightfieldOffset[ 0 ], heightfieldOffset[ 1 ] } ), min, max);
 
 			// correct the location of the surface
-			heightFieldSource = Converters.convert( heightFieldSource, (i,o) -> o.set( (i.get() + heightfieldOffset[ 2 ]) * downsamplingFactors[ 2 ]), new FloatType() );
-			downsamplingFactors[ 2 ] = 1;
+			heightFieldSource = Converters.convert( heightFieldSource, (i,o) -> o.set( (i.get() + heightfieldOffset[ 2 ]) /* downsamplingFactors[ 2 ]*/), new FloatType() );
+			//downsamplingFactors[ 2 ] = 1;
 		}
 
 		ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
@@ -238,18 +260,26 @@ public class PaintHeightField implements Callable<Void>{
 		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
 		System.out.println("done.");
 
-		//System.out.print("Loading MANUAL heightfield.");
-		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec28/heighfield_max.tif" ).getProcessor().getPixels();
-		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
+		System.out.print("Loading MANUAL heightfield.");
+		float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec40/heighfield-gauss-min.tif" ).getProcessor().getPixels();
+		heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
+		for ( final FloatType t : heightField )
+			if ( t.get() <= 0 )
+				t.set( 0 );
 		//heightField = fix07mBRSec28HeightField( heightField );
 
-		System.out.print("Smoothing heightfield.");
-		Gauss3.gauss( 1, Views.extendBorder( heightField ), heightField );
-		System.out.println("done.");
+		//System.out.print("SMOOTHING heightfield.");
+		//Gauss3.gauss( 1.0, Views.extendBorder( heightField ), heightField );
+		//System.out.println("done.");
 
-		System.out.print("adding offset to heightfield.");
-		for ( final FloatType t : heightField )
-			t.set( t.get() - 4f );
+		//System.out.print("MEDIAN-FILTERING heightfield.");
+		//final FloatProcessor fp = new FloatProcessor( (int)heightField.dimension( 0 ), (int)heightField.dimension( 1 ), ((FloatArray)heightField.update( null )).getCurrentStorageArray() );
+		//new RankFilters().rank( fp, 10, RankFilters.MEDIAN );
+		//System.out.println("done.");
+
+		//System.out.print("adding offset to heightfield.");
+		//for ( final FloatType t : heightField )
+		//	t.set( t.get() + 0.75f );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
@@ -289,9 +319,9 @@ public class PaintHeightField implements Callable<Void>{
 		final ArrayImg<FloatType, ?> gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
 		Util.copy(gradient, gradientCopy);
 
-		//new ImageJ();
-		//ImageJFunctions.show( heightField ).setTitle( "heighfield");
-		//ImageJFunctions.show( gradientCopy ).setTitle( "gradients");
+		new ImageJ();
+		ImageJFunctions.show( heightField ).setTitle( "heighfield");
+		ImageJFunctions.show( gradientCopy ).setTitle( "gradients");
 		//SimpleMultiThreading.threadHaltUnClean(); 
 
 		final RealRandomAccessible< FloatType > gradientFull =
