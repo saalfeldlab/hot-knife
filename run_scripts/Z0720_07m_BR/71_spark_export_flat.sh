@@ -33,7 +33,7 @@ fi
 
 N5_HEIGHT_FIELDS_ATTRIBUTES="${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET}/attributes.json"
 if [[ ! -f "${N5_HEIGHT_FIELDS_ATTRIBUTES}" ]]; then
-  echo '{"downsamplingFactors":[6.0,6.0,1.0]}' > "${N5_HEIGHT_FIELDS_ATTRIBUTES}"
+  echo "{\"downsamplingFactors\":${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}}" > "${N5_HEIGHT_FIELDS_ATTRIBUTES}"
   echo "created default ${N5_HEIGHT_FIELDS_ATTRIBUTES}"
 fi
 

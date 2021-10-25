@@ -632,7 +632,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long padding,
 			final int maxStepSize) throws IOException {
 
-		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5ZarrReader(n5CostPath);
+		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5FSWriter(n5CostPath);
 		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 		@SuppressWarnings("unchecked")
@@ -771,18 +771,24 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final double maxDeltaZ,
 			final int maxDeltaZTimes) throws IOException {
 
-		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5ZarrReader(n5CostPath);
+		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5FSReader(n5CostPath);
 		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 		final int[] blockSizeOutInt = new int[blockSizeOut.length];
 		Arrays.setAll(blockSizeOutInt, i -> (int)blockSizeOut[i]);
 
 		final long[] dimensionsXZY = n5Cost.getAttribute(costDataset, "dimensions", long[].class);
+		if (dimensionsXZY == null) {
+			throw new IllegalArgumentException("dimensions attribute missing from costDataset " + costDataset);
+		}
 		final long[] dimensions = new long[] {
 				dimensionsXZY[0],
 				dimensionsXZY[2],
 				dimensionsXZY[1]};
 		final double[] downsamplingFactorsXZY = n5Cost.getAttribute(costDataset, "downsamplingFactors", double[].class);
+		if (downsamplingFactorsXZY == null) {
+			throw new IllegalArgumentException("downsamplingFactors attribute missing from costDataset " + costDataset);
+		}
 		final double[] downsamplingFactors = new double[] {
 				downsamplingFactorsXZY[0],
 				downsamplingFactorsXZY[2],
