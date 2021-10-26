@@ -38,9 +38,11 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvHandle;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.Interpolation;
 import bdv.viewer.ViewerPanel;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.Volatile;
 import net.imglib2.type.numeric.real.FloatType;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -70,14 +72,17 @@ public class ReviewFlattenedFace
 
 		final N5Reader n5Reader = new N5FSReader(containerPath);
 
-		final RandomAccessibleInterval<FloatType> img = N5Utils.open(n5Reader, datasetPath);
+		// open n5 as volatile and wrap it with a volatile view
+		// so that it can be loaded asynchronously and show progress as blocks are loaded
+		final RandomAccessibleInterval<FloatType> img = N5Utils.openVolatile(n5Reader, datasetPath);
+		final RandomAccessibleInterval<Volatile<FloatType>> imgView = VolatileViews.wrapAsVolatile(img);
 
 		final BdvOptions options = BdvOptions.options()
 				.is2D()
 				.screenScales(new double[] {0.5})
 				.numRenderingThreads(Runtime.getRuntime().availableProcessors());
 
-		BdvStackSource<?> bdv = BdvFunctions.show(img, datasetPath, options);
+		BdvStackSource<?> bdv = BdvFunctions.show(imgView, datasetPath, options);
 
 		final BdvHandle handle = bdv.getBdvHandle();
 
