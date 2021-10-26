@@ -38,6 +38,7 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvHandle;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.Interpolation;
 import bdv.viewer.ViewerPanel;
@@ -75,7 +76,8 @@ public class ReviewFlattenedFace
 		// open n5 as volatile and wrap it with a volatile view
 		// so that it can be loaded asynchronously and show progress as blocks are loaded
 		final RandomAccessibleInterval<FloatType> img = N5Utils.openVolatile(n5Reader, datasetPath);
-		final RandomAccessibleInterval<Volatile<FloatType>> imgView = VolatileViews.wrapAsVolatile(img);
+		final SharedQueue queue = new SharedQueue(64);
+		final RandomAccessibleInterval<Volatile<FloatType>> imgView = VolatileViews.wrapAsVolatile(img, queue);
 
 		final BdvOptions options = BdvOptions.options()
 				.is2D()
