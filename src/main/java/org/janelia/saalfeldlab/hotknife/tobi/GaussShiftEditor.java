@@ -17,7 +17,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import net.imglib2.realtransform.AffineTransform3D;
 import org.scijava.ui.behaviour.Behaviour;
 import org.scijava.ui.behaviour.BehaviourMap;
 import org.scijava.ui.behaviour.DragBehaviour;
@@ -37,20 +36,24 @@ import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 public class GaussShiftEditor {
 
 	public static final String DRAG_GAUSS_SHIFT_CORNER = "drag gauss-shift corner";
+	public static final String DRAG_INIT_GAUSS_SHIFT = "drag init gauss-shift";
+
 	public static final String[] DRAG_GAUSS_SHIFT_CORNER_KEYS = new String[] {"button1", "shift button1"};
+	public static final String[] DRAG_INIT_GAUSS_SHIFT_KEYS = new String[] {"shift button1"};
 
 	public static final String GAUSS_SHIFT_MAP = "gauss-shift";
 	public static final String BLOCKING_MAP = "gauss-shift-blocking";
 
 
-	private ViewerPanel viewer;
-	private TriggerBehaviourBindings triggerbindings;
+	private final ViewerPanel viewer;
+	private final TriggerBehaviourBindings triggerbindings;
 	private GaussTransform model;
 
 	private final ViewerCoords viewerCoords;
 	private final Behaviours behaviours;
 	private final BehaviourMap blockMap;
 	private final GaussShiftOverlay overlay;
+	private final DragInitBehaviour dragInitBehaviour;
 	private final DragCornerBehaviour dragCornerBehaviour;
 
 	public GaussShiftEditor(
@@ -67,7 +70,9 @@ public class GaussShiftEditor {
 		overlay = new GaussShiftOverlay(model, viewerCoords);
 
 		behaviours = new Behaviours(keyconf);
-		dragCornerBehaviour = new DragCornerBehaviour(viewerCoords, overlay, model);
+		dragInitBehaviour = new DragInitBehaviour();
+		dragCornerBehaviour = new DragCornerBehaviour();
+		behaviours.behaviour(dragInitBehaviour, DRAG_INIT_GAUSS_SHIFT, DRAG_INIT_GAUSS_SHIFT_KEYS);
 		behaviours.behaviour(dragCornerBehaviour, DRAG_GAUSS_SHIFT_CORNER, DRAG_GAUSS_SHIFT_CORNER_KEYS);
 
 		/*
@@ -103,7 +108,6 @@ public class GaussShiftEditor {
 	public void setModel(final GaussTransform model) {
 		this.model = model;
 		overlay.setTransform(model);
-		dragCornerBehaviour.setModel(model);
 		viewer.getDisplay().repaint();
 	}
 
@@ -158,27 +162,48 @@ public class GaussShiftEditor {
 	}
 
 
-	static final class DragCornerBehaviour implements DragBehaviour {
+	final class DragInitBehaviour implements DragBehaviour {
 
-		private final ViewerCoords viewerCoords;
-		private GaussShiftOverlay overlay;
-		private GaussTransform model;
+		private int x0;
+		private int y0;
+
+		@Override
+		public void init(final int x, final int y) {
+			System.out.println("DragInitBehaviour.init");
+			x0 = x;
+			y0 = y;
+		}
+
+		@Override
+		public void drag(final int x, final int y) {
+			System.out.println("DragInitBehaviour.drag");
+			final GaussTransform model = GaussShiftEditor.this.model;
+			if (model != null) {
+				viewerCoords.applyTransformed(model::setLineStart, x0, y0);
+				viewerCoords.applyTransformed(model::setLineEnd, x, y);
+				model.setActive(true); // TODO: necessary?
+				// TODO: signal initializing to overlay
+				viewer.requestRepaint(); // TODO: necessary?
+			}
+		}
+
+		@Override
+		public void end(final int x, final int y) {
+			System.out.println("DragInitBehaviour.end");
+			// TODO: signal init done to overlay
+		}
+	}
+
+
+
+	final class DragCornerBehaviour implements DragBehaviour {
 
 		private boolean moving = false;
 		private int cornerId;
 
-		public DragCornerBehaviour(final ViewerCoords viewerCoords, final GaussShiftOverlay overlay, final GaussTransform model) {
-			this.viewerCoords = viewerCoords;
-			this.overlay = overlay;
-			this.model = model;
-		}
-
-		public void setModel(final GaussTransform model) {
-			this.model = model;
-		}
-
 		@Override
 		public void init(final int x, final int y) {
+			System.out.println("DragCornerBehaviour.init");
 			cornerId = overlay.getHighlightedCornerIndex();
 			if (cornerId >= 0)
 				moving = true;
@@ -186,10 +211,11 @@ public class GaussShiftEditor {
 
 		@Override
 		public void drag(final int x, final int y) {
+			System.out.println("DragCornerBehaviour.drag");
 			if (!moving)
 				return;
 
-			final GaussTransform model = this.model;
+			final GaussTransform model = GaussShiftEditor.this.model;
 			if (model == null)
 				return;
 
@@ -201,6 +227,7 @@ public class GaussShiftEditor {
 
 		@Override
 		public void end(final int x, final int y) {
+			System.out.println("DragCornerBehaviour.end");
 			moving = false;
 		}
 	}
