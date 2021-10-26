@@ -38,6 +38,7 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvHandle;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
+import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.Interpolation;
 import bdv.viewer.ViewerPanel;
 import net.imglib2.RandomAccessibleInterval;
@@ -70,14 +71,15 @@ public class ReviewFlattenedFace
 
 		final N5Reader n5Reader = new N5FSReader(containerPath);
 
-		final RandomAccessibleInterval<FloatType> img = N5Utils.open(n5Reader, datasetPath);
+		final RandomAccessibleInterval<FloatType> img = N5Utils.openVolatile(n5Reader, datasetPath);
+
 
 		final BdvOptions options = BdvOptions.options()
 				.is2D()
-				//.screenScales(new double[] {0.5})
+				.screenScales(new double[] {0.5})
 				.numRenderingThreads(Runtime.getRuntime().availableProcessors());
 
-		BdvStackSource<?> bdv = BdvFunctions.show(img, datasetPath, options);
+		BdvStackSource<?> bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile( img ), datasetPath, options);
 
 		final BdvHandle handle = bdv.getBdvHandle();
 
