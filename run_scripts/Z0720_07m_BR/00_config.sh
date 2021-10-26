@@ -371,6 +371,14 @@ case "${TAB}" in
     export N5_Z_CORR_OFFSET="-1324,-2661,1"
     export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
   ;;
+  "Sec40")
+    export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="TBD"
+    export ALIGN_STACK="v1_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align"
+    export N5_Z_CORR_DATASET="/z_corr/Sec40/v1_acquire_trimmed_align___20211008_223626"
+    export N5_Z_CORR_OFFSET="-4564,-2560,1"
+  ;;
 esac
 
 # --------------------------------------------------------------------
