@@ -240,7 +240,7 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
     export ALIGN_STACK="v5_acquire_trimmed_align_custom"
     export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_custom_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec24/v5_acquire_trimmed_align_custom_ic___20210825_152725"
+    export N5_Z_CORR_DATASET="/z_corr/Sec24/v5_acquire_trimmed_align_custom_ic___20211020_074809"
     export N5_Z_CORR_OFFSET="-11068,-3162,1"
   ;;
   "Sec25")
