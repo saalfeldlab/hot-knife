@@ -63,7 +63,8 @@ public class GaussShiftEditor {
 	public interface GaussShiftEditorListener {
 		void activeChanged();
 
-		void apply(GaussTransform transform);
+		default void apply(GaussTransform transform) {
+		}
 	}
 
 	private final Listeners.List<GaussShiftEditorListener> listeners = new Listeners.SynchronizedList<>();
