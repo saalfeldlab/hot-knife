@@ -1,6 +1,9 @@
 package org.janelia.saalfeldlab.hotknife.tobi;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
@@ -9,7 +12,10 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.DoubleType;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 
@@ -41,6 +47,23 @@ public class PositionField {
 		offset = Grid.floorScaled(boundsMin, scale);
 		positionField = N5Utils.open(n5, datasetName);
 		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
+	}
+
+	public void write(final N5Writer n5, final String datasetName, int[] blockSize) throws IOException {
+		System.out.println("PositionField.write");
+		System.out.println("n5 = " + n5 + ", datasetName = " + datasetName);
+		final int nThreads = Runtime.getRuntime().availableProcessors();
+		final ExecutorService exec = Executors.newFixedThreadPool( nThreads );
+		try {
+			N5Utils.save(positionField, n5, datasetName, blockSize, new GzipCompression(), exec);
+			n5.setAttribute(datasetName, "scale", scale);
+			n5.setAttribute(datasetName, "boundsMin", boundsMin);
+			n5.setAttribute(datasetName, "boundsMax", boundsMax);
+		} catch (InterruptedException | ExecutionException e) {
+			throw new IOException(e);
+		} finally {
+			exec.shutdown();
+		}
 	}
 
 	public PositionField(final RandomAccessibleInterval<DoubleType> positionField, final double scale, final double[] boundsMin, final double[] boundsMax)

@@ -146,8 +146,8 @@ public class GaussShiftEditor {
 
 	public void apply() {
 		final GaussTransform transform = model.snapshot();
-		setActive(false);
 		listeners.list.forEach(l -> l.apply(transform));
+		setActive(false);
 	}
 
 	public void cancel() {
