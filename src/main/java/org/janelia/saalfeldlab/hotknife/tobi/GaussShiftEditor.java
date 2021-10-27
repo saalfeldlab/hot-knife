@@ -118,6 +118,10 @@ public class GaussShiftEditor {
 		unblock();
 	}
 
+	public GaussTransform getModel() {
+		return model;
+	}
+
 	public boolean isActive() {
 		return active;
 	}
@@ -126,7 +130,18 @@ public class GaussShiftEditor {
 		if ( this.active != active ) {
 			this.active = active;
 			listeners.list.forEach(GaussShiftEditorListener::activeChanged);
+			viewer.getDisplay().repaint();
 		}
+	}
+
+	public void apply() {
+		final GaussTransform transform = model.snapshot();
+		setActive(false);
+		listeners.list.forEach(l -> l.apply(transform));
+	}
+
+	public void cancel() {
+		setActive(false);
 	}
 
 	public Listeners<GaussShiftEditorListener> listeners() {

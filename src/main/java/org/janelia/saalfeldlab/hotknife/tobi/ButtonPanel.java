@@ -12,6 +12,8 @@ import javax.swing.JPanel;
  */
 public class ButtonPanel extends JPanel {
 
+	private final List<JButton> buttons;
+
 	private final List<List<Runnable>> runOnButton;
 
 	public ButtonPanel(final String... buttonLabels) {
@@ -19,6 +21,7 @@ public class ButtonPanel extends JPanel {
 			throw new IllegalArgumentException();
 
 		final int numButtons = buttonLabels.length;
+		buttons = new ArrayList<>(numButtons);
 		runOnButton = new ArrayList<>(numButtons);
 
 		setLayout(new BoxLayout(this, BoxLayout.LINE_AXIS));
@@ -29,11 +32,17 @@ public class ButtonPanel extends JPanel {
 			runOnButton.add(runnables);
 			final JButton button = new JButton(buttonLabels[i]);
 			button.addActionListener(e -> runnables.forEach(Runnable::run));
+			buttons.add(button);
 			add(button);
 		}
 	}
 
 	public synchronized void onButton(final int index, final Runnable runnable) {
 		runOnButton.get(index).add(runnable);
+	}
+
+	public void setEnabled(boolean enabled) {
+		super.setEnabled(enabled);
+		buttons.forEach(b -> b.setEnabled(enabled));
 	}
 }

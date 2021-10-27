@@ -15,6 +15,7 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.imglib2.type.numeric.ARGBType;
 import net.miginfocom.swing.MigLayout;
+import org.janelia.saalfeldlab.hotknife.tobi.GaussShiftEditor.GaussShiftEditorListener;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
@@ -36,17 +37,17 @@ public class ViewAlignmentPlayground12 {
 
 		final SurfacePyramid<?, ?> n5surfacePyramid = new N5SurfacePyramid<>(n5, faceGroup);
 		final PositionField n5positionField = new PositionField(n5, transformGroup);
+
+		final int blockWidth = 256;
 		final int minLevel = n5positionField.getLevel();
 		final int maxLevel = n5surfacePyramid.getNumMipmapLevels() - 1;
-		final int blockWidth = 256;
 
 
+		final List<PositionFieldPyramid> pfps = new ArrayList<>();
+		pfps.add(PositionFieldPyramid.createFullPyramid(n5positionField, blockWidth, minLevel, maxLevel));
 
-		final List<PositionFieldPyramid> pfs = new ArrayList<>();
-		pfs.add(PositionFieldPyramid.createSingleLevelPyramid(n5positionField));
-
-		final List<SurfacePyramid<?, ?>> rsp = new ArrayList<>();
-		rsp.add(new RenderedSurfacePyramid<>(n5surfacePyramid, pfs.get(0), blockWidth));
+		final List<SurfacePyramid<?, ?>> rsps = new ArrayList<>();
+		rsps.add(new RenderedSurfacePyramid<>(n5surfacePyramid, pfps.get(0), blockWidth));
 
 
 
@@ -55,7 +56,7 @@ public class ViewAlignmentPlayground12 {
 				n5surfacePyramid.getType(),
 				n5surfacePyramid.getVolatileType(),
 				"socWrapper");
-		socWrapper.setDelegate(rsp.get(0).getSourceAndConverter());
+		socWrapper.setDelegate(rsps.get(0).getSourceAndConverter());
 
 		final BdvStackSource<?> source0 = BdvFunctions.show(socWrapper.get(), Bdv.options().is2D());
 		source0.setDisplayRange(0, 255);
@@ -107,15 +108,43 @@ public class ViewAlignmentPlayground12 {
 
 
 		final ButtonPanel buttons = new ButtonPanel("Cancel", "Apply");
+		buttons.onButton(0, () -> SwingUtilities.invokeLater(editor::cancel));
+		buttons.onButton(1, () -> SwingUtilities.invokeLater(editor::apply));
 		panel.add(buttons, "sx2, gaptop 10px, wrap, bottom");
 
-		buttons.onButton(0, () -> SwingUtilities.invokeLater(() -> {
-			System.out.println("Cancel: TODO");
-		}));
 
-		buttons.onButton(1, () -> SwingUtilities.invokeLater(() -> {
-			System.out.println("Apply: TODO");
-		}));
+		editor.listeners().add(new GaussShiftEditorListener() {
+
+			@Override
+			public void activeChanged() {
+				final boolean active = editor.isActive();
+
+				final GaussTransform transform = active ? editor.getModel() : null;
+				minSigmaEditor.setTransform(transform);
+				maxSlopeEditor.setTransform(transform);
+				buttons.setEnabled(active);
+
+				if (active) {
+					final SurfacePyramid<?, ?> sp = rsps.get(rsps.size() - 1);
+					final SurfacePyramid<?, ?> tsp = new TransformedSurfacePyramid<>(sp, transform);
+					socWrapper.setDelegate(tsp.getSourceAndConverter());
+				}
+			}
+
+			@Override
+			public void apply(final GaussTransform transform) {
+				final PositionFieldPyramid pfp = Bake.bakePositionFieldPyramid(
+						pfps.get(pfps.size() - 1), transform,
+						blockWidth, minLevel, maxLevel);
+				pfps.add(pfp);
+				final RenderedSurfacePyramid<?, ?> rsp = new RenderedSurfacePyramid<>(n5surfacePyramid, pfp, blockWidth);
+				rsps.add(rsp);
+				socWrapper.setDelegate(rsp.getSourceAndConverter());
+
+				System.out.println("rsps.size() = " + rsps.size());
+			}
+		});
+
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
