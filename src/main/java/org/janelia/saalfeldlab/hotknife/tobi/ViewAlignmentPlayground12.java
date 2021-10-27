@@ -88,6 +88,7 @@ public class ViewAlignmentPlayground12 {
 		final GaussShiftEditor editor = new GaussShiftEditor(keyconf,
 				viewer, triggerbindings, transform);
 		editor.install();
+		editor.setActive(true);
 
 		JPanel panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));
 

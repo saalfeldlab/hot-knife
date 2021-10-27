@@ -17,6 +17,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
+import org.scijava.listeners.Listeners;
 import org.scijava.ui.behaviour.Behaviour;
 import org.scijava.ui.behaviour.BehaviourMap;
 import org.scijava.ui.behaviour.DragBehaviour;
@@ -56,6 +58,17 @@ public class GaussShiftEditor {
 	private final DragInitBehaviour dragInitBehaviour;
 	private final DragCornerBehaviour dragCornerBehaviour;
 
+	private boolean active = false;
+
+	public interface GaussShiftEditorListener {
+		void activeChanged();
+
+		void apply(GaussTransform transform);
+	}
+
+	private final Listeners.List<GaussShiftEditorListener> listeners = new Listeners.SynchronizedList<>();
+
+
 	public GaussShiftEditor(
 			final InputTriggerConfig keyconf,
 			final ViewerPanel viewer,
@@ -67,7 +80,7 @@ public class GaussShiftEditor {
 		this.model = model;
 
 		viewerCoords = new ViewerCoords();
-		overlay = new GaussShiftOverlay(model, viewerCoords);
+		overlay = new GaussShiftOverlay(model, viewerCoords, this::isActive);
 
 		behaviours = new Behaviours(keyconf);
 		dragInitBehaviour = new DragInitBehaviour();
@@ -103,6 +116,21 @@ public class GaussShiftEditor {
 		triggerbindings.removeBehaviourMap(GAUSS_SHIFT_MAP);
 
 		unblock();
+	}
+
+	public boolean isActive() {
+		return active;
+	}
+
+	public void setActive(final boolean active) {
+		if ( this.active != active ) {
+			this.active = active;
+			listeners.list.forEach(GaussShiftEditorListener::activeChanged);
+		}
+	}
+
+	public Listeners<GaussShiftEditorListener> listeners() {
+		return listeners;
 	}
 
 	private void updateEditability() {
@@ -226,22 +254,24 @@ public class GaussShiftEditor {
 			void highlightedCornerChanged();
 		}
 
-		private GaussTransform transform;
-		private ViewerCoords viewerCoords;
+		private final GaussTransform transform;
+		private final ViewerCoords viewerCoords;
+		private final BooleanSupplier isActive;
 		private final CornerHighlighter cornerHighlighter;
 
 		private HighlightedCornerListener highlightedCornerListener = null;
 		private int cornerId = -1;
 
-		public GaussShiftOverlay(final GaussTransform transform, final ViewerCoords viewerCoords) {
+		public GaussShiftOverlay(final GaussTransform transform, final ViewerCoords viewerCoords, final BooleanSupplier isActive) {
 			this.transform = transform;
 			this.viewerCoords = viewerCoords;
+			this.isActive = isActive;
 			cornerHighlighter = new CornerHighlighter(DISTANCE_TOLERANCE);
 		}
 
 		@Override
 		public void drawOverlays(final Graphics g) {
-			if (transform == null) // TODO: use other indicator
+			if (!isActive.getAsBoolean())
 				return;
 
 			final Graphics2D graphics = (Graphics2D) g;
@@ -352,9 +382,7 @@ public class GaussShiftEditor {
 			}
 
 			private void findHighlightedCorner() {
-				final ViewerCoords viewerCoords = GaussShiftOverlay.this.viewerCoords;
-				final GaussTransform transform = GaussShiftOverlay.this.transform;
-				if (transform != null) { // TODO: use other indicator
+				if (isActive.getAsBoolean()) {
 					final double[][] corners = new double[][] {
 							viewerCoords.of(transform::getLineStart),
 							viewerCoords.of(transform::getLineEnd),
