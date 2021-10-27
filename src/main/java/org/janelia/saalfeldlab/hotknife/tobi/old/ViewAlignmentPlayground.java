@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.hotknife.tobi;
+package org.janelia.saalfeldlab.hotknife.tobi.old;
 
 import bdv.util.AxisOrder;
 import bdv.util.Bdv;
@@ -10,6 +10,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.position.FunctionRandomAccessible;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.view.Views;
+import org.janelia.saalfeldlab.hotknife.tobi.CoordinatesAndValuesOverlay;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;

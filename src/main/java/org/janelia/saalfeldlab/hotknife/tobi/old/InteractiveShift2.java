@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.hotknife.tobi;
+package org.janelia.saalfeldlab.hotknife.tobi.old;
 
 import bdv.ui.BdvDefaultCards;
 import bdv.ui.CardPanel;
@@ -18,6 +18,13 @@ import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.miginfocom.swing.MigLayout;
+import org.janelia.saalfeldlab.hotknife.tobi.BoundedValue;
+import org.janelia.saalfeldlab.hotknife.tobi.BoundedValuePanel;
+import org.janelia.saalfeldlab.hotknife.tobi.ButtonPanel;
+import org.janelia.saalfeldlab.hotknife.tobi.GaussShiftEditor;
+import org.janelia.saalfeldlab.hotknife.tobi.GaussTransform;
+import org.janelia.saalfeldlab.hotknife.tobi.MaxSlopeEditor;
+import org.janelia.saalfeldlab.hotknife.tobi.MinSigmaEditor;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;

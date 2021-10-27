@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.hotknife.tobi;
+package org.janelia.saalfeldlab.hotknife.tobi.old;
 
 import bdv.tools.brightness.ConverterSetup;
 import bdv.util.Bdv;

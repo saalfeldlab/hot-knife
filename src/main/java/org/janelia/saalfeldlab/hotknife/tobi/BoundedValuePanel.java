@@ -58,7 +58,7 @@ import org.scijava.listeners.Listeners;
  *
  * @author Tobias Pietzsch
  */
-class BoundedValuePanel extends JPanel
+public class BoundedValuePanel extends JPanel
 {
 	private Supplier< JPopupMenu > popup;
 
