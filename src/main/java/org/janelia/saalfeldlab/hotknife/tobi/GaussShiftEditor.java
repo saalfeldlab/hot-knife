@@ -47,7 +47,7 @@ public class GaussShiftEditor {
 
 	private final ViewerPanel viewer;
 	private final TriggerBehaviourBindings triggerbindings;
-	private GaussTransform model;
+	private final GaussTransform model;
 
 	private final ViewerCoords viewerCoords;
 	private final Behaviours behaviours;
@@ -60,7 +60,7 @@ public class GaussShiftEditor {
 			final InputTriggerConfig keyconf,
 			final ViewerPanel viewer,
 			final TriggerBehaviourBindings triggerbindings,
-			final GaussTransform model // TODO: it should be possible to change this later (including setting it to null).
+			final GaussTransform model // TODO: should not need to be passed in
 	) {
 		this.viewer = viewer;
 		this.triggerbindings = triggerbindings;
@@ -103,12 +103,6 @@ public class GaussShiftEditor {
 		triggerbindings.removeBehaviourMap(GAUSS_SHIFT_MAP);
 
 		unblock();
-	}
-
-	public void setModel(final GaussTransform model) {
-		this.model = model;
-		overlay.setTransform(model);
-		viewer.getDisplay().repaint();
 	}
 
 	private void updateEditability() {
@@ -169,15 +163,12 @@ public class GaussShiftEditor {
 
 		@Override
 		public void init(final int x, final int y) {
-			System.out.println("DragInitBehaviour.init");
 			x0 = x;
 			y0 = y;
 		}
 
 		@Override
 		public void drag(final int x, final int y) {
-			System.out.println("DragInitBehaviour.drag");
-			final GaussTransform model = GaussShiftEditor.this.model;
 			if (model != null) {
 				viewerCoords.applyTransformed(model::setLineStart, x0, y0);
 				viewerCoords.applyTransformed(model::setLineEnd, x, y);
@@ -188,7 +179,6 @@ public class GaussShiftEditor {
 
 		@Override
 		public void end(final int x, final int y) {
-			System.out.println("DragInitBehaviour.end");
 			// TODO: signal init done to overlay
 		}
 	}
@@ -202,7 +192,6 @@ public class GaussShiftEditor {
 
 		@Override
 		public void init(final int x, final int y) {
-			System.out.println("DragCornerBehaviour.init");
 			cornerId = overlay.getHighlightedCornerIndex();
 			if (cornerId >= 0)
 				moving = true;
@@ -210,12 +199,7 @@ public class GaussShiftEditor {
 
 		@Override
 		public void drag(final int x, final int y) {
-			System.out.println("DragCornerBehaviour.drag");
 			if (!moving)
-				return;
-
-			final GaussTransform model = GaussShiftEditor.this.model;
-			if (model == null)
 				return;
 
 			if (cornerId == 0)
@@ -226,7 +210,6 @@ public class GaussShiftEditor {
 
 		@Override
 		public void end(final int x, final int y) {
-			System.out.println("DragCornerBehaviour.end");
 			moving = false;
 		}
 	}
@@ -256,15 +239,9 @@ public class GaussShiftEditor {
 			cornerHighlighter = new CornerHighlighter(DISTANCE_TOLERANCE);
 		}
 
-		public void setTransform(final GaussTransform transform) {
-			this.transform = transform;
-			cornerHighlighter.findHighlightedCorner();
-		}
-
 		@Override
 		public void drawOverlays(final Graphics g) {
-			final GaussTransform transform = this.transform;
-			if (transform == null)
+			if (transform == null) // TODO: use other indicator
 				return;
 
 			final Graphics2D graphics = (Graphics2D) g;
@@ -377,7 +354,7 @@ public class GaussShiftEditor {
 			private void findHighlightedCorner() {
 				final ViewerCoords viewerCoords = GaussShiftOverlay.this.viewerCoords;
 				final GaussTransform transform = GaussShiftOverlay.this.transform;
-				if (transform != null) {
+				if (transform != null) { // TODO: use other indicator
 					final double[][] corners = new double[][] {
 							viewerCoords.of(transform::getLineStart),
 							viewerCoords.of(transform::getLineEnd),

@@ -95,13 +95,11 @@ public class InteractiveShift2 {
 		panel.add(buttons, "sx2, gaptop 10px, wrap, bottom");
 
 		buttons.onButton(1, () -> SwingUtilities.invokeLater(() -> {
-			editor.setModel(null);
 			minSigmaEditor.setTransform(null);
 			maxSlopeEditor.setTransform(null);
 		}));
 
 		buttons.onButton(0, () -> SwingUtilities.invokeLater(() -> {
-			editor.setModel(transform);
 			minSigmaEditor.setTransform(transform);
 			maxSlopeEditor.setTransform(transform);
 		}));

@@ -111,13 +111,11 @@ public class ViewAlignmentPlayground11czi {
 		panel.add(buttons, "sx2, gaptop 10px, wrap, bottom");
 
 		buttons.onButton(1, () -> SwingUtilities.invokeLater(() -> {
-			editor.setModel(null);
 			minSigmaEditor.setTransform(null);
 			maxSlopeEditor.setTransform(null);
 		}));
 
 		buttons.onButton(0, () -> SwingUtilities.invokeLater(() -> {
-			editor.setModel(transform1);
 			minSigmaEditor.setTransform(transform1);
 			maxSlopeEditor.setTransform(transform1);
 		}));
