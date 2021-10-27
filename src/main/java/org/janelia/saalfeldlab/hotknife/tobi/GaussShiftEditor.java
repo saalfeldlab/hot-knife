@@ -72,8 +72,17 @@ public class GaussShiftEditor {
 	public GaussShiftEditor(
 			final InputTriggerConfig keyconf,
 			final ViewerPanel viewer,
-			final TriggerBehaviourBindings triggerbindings,
-			final GaussTransform model // TODO: should not need to be passed in
+			final TriggerBehaviourBindings triggerbindings
+	) {
+		this(keyconf, viewer, triggerbindings, new GaussTransform());
+	}
+
+	@Deprecated
+	public GaussShiftEditor(
+		final InputTriggerConfig keyconf,
+		final ViewerPanel viewer,
+		final TriggerBehaviourBindings triggerbindings,
+		final GaussTransform model // TODO: should not need to be passed in
 	) {
 		this.viewer = viewer;
 		this.triggerbindings = triggerbindings;

@@ -10,6 +10,7 @@ import java.awt.Insets;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -38,7 +39,7 @@ public class ViewAlignmentPlayground12 {
 		final SurfacePyramid<?, ?> n5surfacePyramid = new N5SurfacePyramid<>(n5, faceGroup);
 		final PositionField n5positionField = new PositionField(n5, transformGroup);
 
-		final int blockWidth = 256;
+		final int blockWidth = 64;
 		final int minLevel = n5positionField.getLevel();
 		final int maxLevel = n5surfacePyramid.getNumMipmapLevels() - 1;
 
@@ -46,8 +47,8 @@ public class ViewAlignmentPlayground12 {
 		final List<PositionFieldPyramid> pfps = new ArrayList<>();
 		pfps.add(PositionFieldPyramid.createFullPyramid(n5positionField, blockWidth, minLevel, maxLevel));
 
-		final List<SurfacePyramid<?, ?>> rsps = new ArrayList<>();
-		rsps.add(new RenderedSurfacePyramid<>(n5surfacePyramid, pfps.get(0), blockWidth));
+		final AtomicReference<SurfacePyramid<?, ?>> rsp = new AtomicReference<>();
+		rsp.set(new RenderedSurfacePyramid<>(n5surfacePyramid, pfps.get(0), blockWidth));
 
 
 
@@ -56,7 +57,7 @@ public class ViewAlignmentPlayground12 {
 				n5surfacePyramid.getType(),
 				n5surfacePyramid.getVolatileType(),
 				"socWrapper");
-		socWrapper.setDelegate(rsps.get(0).getSourceAndConverter());
+		socWrapper.setDelegate(rsp.get().getSourceAndConverter());
 
 		final BdvStackSource<?> source0 = BdvFunctions.show(socWrapper.get(), Bdv.options().is2D());
 		source0.setDisplayRange(0, 255);
@@ -70,24 +71,10 @@ public class ViewAlignmentPlayground12 {
 
 
 
-		// set up transform to append to pfp0
-		final double maxSlope=0.8;
-		final double minSigma=100.0;
-		final double sx0=3634.3391666666666;
-		final double sy0=14456.360833333334;
-		final double sx1=11067.172499999999;
-		final double sy1=14679.345833333335;
-		final GaussTransform transform = new GaussTransform(maxSlope, minSigma);
-		transform.setLine(sx0, sy0, sx1, sy1);
-
-
-
-
-
 		final TriggerBehaviourBindings triggerbindings = bdv.getBdvHandle().getTriggerbindings();
 		final InputTriggerConfig keyconf = new InputTriggerConfig();
 		final GaussShiftEditor editor = new GaussShiftEditor(keyconf,
-				viewer, triggerbindings, transform);
+				viewer, triggerbindings);
 		editor.install();
 
 		JPanel panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));
@@ -97,14 +84,14 @@ public class ViewAlignmentPlayground12 {
 		final JLabel minSigmaLabel = new JLabel("min sigma");
 		panel.add(minSigmaLabel, "aligny baseline");
 		panel.add(minSigmaSlider, "growx, wrap");
-		final MinSigmaEditor minSigmaEditor = new MinSigmaEditor(minSigmaLabel, minSigmaSlider, transform);
+		final MinSigmaEditor minSigmaEditor = new MinSigmaEditor(minSigmaLabel, minSigmaSlider, editor.getModel());
 
 		final BoundedValuePanel maxSlopeSlider = new BoundedValuePanel(new BoundedValue(0, 1, 0.8));
 		maxSlopeSlider.setBorder(null);
 		final JLabel maxSlopeLabel = new JLabel("max slope");
 		panel.add(maxSlopeLabel, "aligny baseline");
 		panel.add(maxSlopeSlider, "growx, wrap");
-		final MaxSlopeEditor maxSlopeEditor = new MaxSlopeEditor(maxSlopeLabel, maxSlopeSlider, transform);
+		final MaxSlopeEditor maxSlopeEditor = new MaxSlopeEditor(maxSlopeLabel, maxSlopeSlider, editor.getModel());
 
 
 		final ButtonPanel buttons = new ButtonPanel("Cancel", "Apply");
@@ -125,9 +112,10 @@ public class ViewAlignmentPlayground12 {
 				buttons.setEnabled(active);
 
 				if (active) {
-					final SurfacePyramid<?, ?> sp = rsps.get(rsps.size() - 1);
-					final SurfacePyramid<?, ?> tsp = new TransformedSurfacePyramid<>(sp, transform);
+					final SurfacePyramid<?, ?> tsp = new TransformedSurfacePyramid<>(rsp.get(), transform);
 					socWrapper.setDelegate(tsp.getSourceAndConverter());
+				} else {
+					socWrapper.setDelegate(rsp.get().getSourceAndConverter());
 				}
 			}
 
@@ -137,11 +125,10 @@ public class ViewAlignmentPlayground12 {
 						pfps.get(pfps.size() - 1), transform,
 						blockWidth, minLevel, maxLevel);
 				pfps.add(pfp);
-				final RenderedSurfacePyramid<?, ?> rsp = new RenderedSurfacePyramid<>(n5surfacePyramid, pfp, blockWidth);
-				rsps.add(rsp);
-				socWrapper.setDelegate(rsp.getSourceAndConverter());
+				rsp.set(new RenderedSurfacePyramid<>(n5surfacePyramid, pfp, blockWidth));
+				socWrapper.setDelegate(rsp.get().getSourceAndConverter());
 
-				System.out.println("rsps.size() = " + rsps.size());
+				System.out.println("pfps.size() = " + pfps.size());
 			}
 		});
 
