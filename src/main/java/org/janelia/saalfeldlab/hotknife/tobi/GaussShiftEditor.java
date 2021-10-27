@@ -197,17 +197,16 @@ public class GaussShiftEditor {
 
 		@Override
 		public void drag(final int x, final int y) {
-			if (model != null) {
-				viewerCoords.applyTransformed(model::setLineStart, x0, y0);
-				viewerCoords.applyTransformed(model::setLineEnd, x, y);
-				// TODO: signal initializing to overlay
-				viewer.requestRepaint(); // TODO: necessary?
-			}
+			viewerCoords.applyTransformed(model::setLineStart, x0, y0);
+			viewerCoords.applyTransformed(model::setLineEnd, x, y);
+			setActive(true);
+			// TODO: signal initializing to overlay?
+			viewer.requestRepaint(); // TODO: necessary?
 		}
 
 		@Override
 		public void end(final int x, final int y) {
-			// TODO: signal init done to overlay
+			// TODO: signal init done to overlay?
 		}
 	}
 
