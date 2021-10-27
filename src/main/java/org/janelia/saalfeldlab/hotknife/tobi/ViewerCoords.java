@@ -25,7 +25,7 @@ public class ViewerCoords implements TransformListener<AffineTransform3D> {
 		sourceToViewer.set(
 				m00, m01, m03,
 				m10, m11, m13);
-		scale = Math.sqrt(m00 * m00 + m01 * m11);
+		scale = Math.sqrt(m00 * m00 + m01 * m01);
 	}
 
 	public interface CoordinateConsumer {
