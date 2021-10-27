@@ -56,14 +56,12 @@ public class ViewAlignmentPlayground11czi {
 		// set up transform to append to pfp0
 		final double maxSlope=0.8;
 		final double minSigma=100.0;
-		final boolean active=true;
 		final double sx0=3634.3391666666666;
 		final double sy0=14456.360833333334;
 		final double sx1=11067.172499999999;
 		final double sy1=14679.345833333335;
 		final GaussTransform transform1 = new GaussTransform(maxSlope, minSigma);
 		transform1.setLine(sx0, sy0, sx1, sy1);
-		transform1.setActive(active);
 
 		final SurfacePyramid<?, ?> sp2 = new TransformedSurfacePyramid<>(sp1, transform1);
 
@@ -116,14 +114,12 @@ public class ViewAlignmentPlayground11czi {
 			editor.setModel(null);
 			minSigmaEditor.setTransform(null);
 			maxSlopeEditor.setTransform(null);
-			transform1.setActive(false);
 		}));
 
 		buttons.onButton(0, () -> SwingUtilities.invokeLater(() -> {
 			editor.setModel(transform1);
 			minSigmaEditor.setTransform(transform1);
 			maxSlopeEditor.setTransform(transform1);
-			transform1.setActive(true);
 		}));
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();

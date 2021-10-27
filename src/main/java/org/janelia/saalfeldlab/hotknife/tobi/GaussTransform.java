@@ -16,7 +16,6 @@ public class GaussTransform implements RealTransform {
 	private double maxSlope;
 	private double minSigma;
 	private double exph;
-	private boolean active = false;
 	private double sx0;
 	private double sy0;
 	private double sx1;
@@ -94,12 +93,6 @@ public class GaussTransform implements RealTransform {
 		return new double[] {sx1, sy1};
 	}
 
-	@Deprecated
-	public void setActive(boolean active) {
-		this.active = active;
-		notifyParametersChanged();
-	}
-
 	public double getSigma() {
 		double h = Math.sqrt(stx * stx + sty * sty);
 		return Math.max(minSigma, h * exph);
@@ -137,21 +130,17 @@ public class GaussTransform implements RealTransform {
 
 	@Override
 	public void apply(final RealLocalizable source, final RealPositionable target) {
-		if (active) {
-			double x = source.getDoublePosition(0);
-			double y = source.getDoublePosition(1);
+		double x = source.getDoublePosition(0);
+		double y = source.getDoublePosition(1);
 
-			double asqu = (x - sx1) * (x - sx1) + (y - sy1) * (y - sy1);
-			double dt = Math.exp(asqu / (-2.0 * sigmaSqu));
+		double asqu = (x - sx1) * (x - sx1) + (y - sy1) * (y - sy1);
+		double dt = Math.exp(asqu / (-2.0 * sigmaSqu));
 
-			double transformedX = x + dt * stx;
-			double transformedY = y + dt * sty;
+		double transformedX = x + dt * stx;
+		double transformedY = y + dt * sty;
 
-			target.setPosition(transformedX, 0);
-			target.setPosition(transformedY, 1);
-		} else {
-			target.setPosition(source);
-		}
+		target.setPosition(transformedX, 0);
+		target.setPosition(transformedY, 1);
 	}
 
 	@Override
@@ -162,7 +151,6 @@ public class GaussTransform implements RealTransform {
 	public GaussTransform snapshot() {
 		final GaussTransform t = new GaussTransform(maxSlope, minSigma);
 		t.setLine(sx0,sy0,sx1,sy1);
-		t.setActive(active);
 		return t;
 	}
 
@@ -171,7 +159,6 @@ public class GaussTransform implements RealTransform {
 		return "GaussTransform{" +
 				"maxSlope=" + maxSlope +
 				", minSigma=" + minSigma +
-				", active=" + active +
 				", sx0=" + sx0 +
 				", sy0=" + sy0 +
 				", sx1=" + sx1 +

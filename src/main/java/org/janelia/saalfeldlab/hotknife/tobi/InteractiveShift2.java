@@ -49,14 +49,12 @@ public class InteractiveShift2 {
 		// set up transform
 		final double maxSlope = 0.8;
 		final double minSigma = 100.0;
-		final boolean active = true;
 		final double sx0 = 611.9999999999999;
 		final double sy0 = 473.66666666666663;
 		final double sx1 = 780.3333333333333;
 		final double sy1 = 558.6666666666665;
 		final GaussTransform transform = new GaussTransform(maxSlope, minSigma);
 		transform.setLine(sx0, sy0, sx1, sy1);
-		transform.setActive(active);
 
 		final UnsignedByteType background = new UnsignedByteType(100);
 		final RandomAccessibleInterval<UnsignedByteType> transformed = Transform.createTransformedInterval(
@@ -100,14 +98,12 @@ public class InteractiveShift2 {
 			editor.setModel(null);
 			minSigmaEditor.setTransform(null);
 			maxSlopeEditor.setTransform(null);
-			transform.setActive(false);
 		}));
 
 		buttons.onButton(0, () -> SwingUtilities.invokeLater(() -> {
 			editor.setModel(transform);
 			minSigmaEditor.setTransform(transform);
 			maxSlopeEditor.setTransform(transform);
-			transform.setActive(true);
 		}));
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();

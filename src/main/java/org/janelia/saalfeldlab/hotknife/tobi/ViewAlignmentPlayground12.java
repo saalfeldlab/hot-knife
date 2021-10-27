@@ -72,14 +72,12 @@ public class ViewAlignmentPlayground12 {
 		// set up transform to append to pfp0
 		final double maxSlope=0.8;
 		final double minSigma=100.0;
-		final boolean active=false;
 		final double sx0=3634.3391666666666;
 		final double sy0=14456.360833333334;
 		final double sx1=11067.172499999999;
 		final double sy1=14679.345833333335;
 		final GaussTransform transform = new GaussTransform(maxSlope, minSigma);
 		transform.setLine(sx0, sy0, sx1, sy1);
-		transform.setActive(active);
 
 
 

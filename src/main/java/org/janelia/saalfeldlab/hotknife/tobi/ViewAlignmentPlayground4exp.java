@@ -109,7 +109,6 @@ public class ViewAlignmentPlayground4exp {
 			final double sy1 = source[1];
 
 			transform.setLine(sx0, sy0, sx1, sy1);
-			transform.setActive(true);
 
 			dragging = true;
 			viewer.requestRepaint();
@@ -117,7 +116,6 @@ public class ViewAlignmentPlayground4exp {
 
 		private synchronized void endTranslate(final int x, final int y) {
 			System.out.println("transform = " + transform);
-			transform.setActive(false);
 
 			dragging = false;
 			viewer.requestRepaint();

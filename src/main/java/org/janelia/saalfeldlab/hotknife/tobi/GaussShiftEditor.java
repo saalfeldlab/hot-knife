@@ -181,7 +181,6 @@ public class GaussShiftEditor {
 			if (model != null) {
 				viewerCoords.applyTransformed(model::setLineStart, x0, y0);
 				viewerCoords.applyTransformed(model::setLineEnd, x, y);
-				model.setActive(true); // TODO: necessary?
 				// TODO: signal initializing to overlay
 				viewer.requestRepaint(); // TODO: necessary?
 			}

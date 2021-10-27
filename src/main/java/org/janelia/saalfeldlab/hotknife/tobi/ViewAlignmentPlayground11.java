@@ -32,14 +32,12 @@ public class ViewAlignmentPlayground11 {
 		// set up transform to bake into positionField
 		final double maxSlope=0.8;
 		final double minSigma=100.0;
-		final boolean active=true;
 		final double sx0=3634.3391666666666;
 		final double sy0=14456.360833333334;
 		final double sx1=11067.172499999999;
 		final double sy1=14679.345833333335;
 		final GaussTransform movingTransform = new GaussTransform(maxSlope, minSigma);
 		movingTransform.setLine(sx0, sy0, sx1, sy1);
-		movingTransform.setActive(active);
 
 		final TwiceTransformedSurfacePyramid<?, ?> tpyramid = new TwiceTransformedSurfacePyramid<>(
 				pyramid,
