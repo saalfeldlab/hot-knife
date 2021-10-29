@@ -253,17 +253,17 @@ public class PaintHeightField implements Callable<Void>{
 
 		ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
 
-		// TODO: multi-threaded copy
+		// multi-threaded copy
 		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
 		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
 		System.out.println("done.");
 
-		System.out.print("Loading MANUAL heightfield.");
-		float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec40/heighfield-gauss-min.tif" ).getProcessor().getPixels();
-		heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
-		for ( final FloatType t : heightField )
-			if ( t.get() <= 0 )
-				t.set( 0 );
+		//System.out.print("Loading MANUAL heightfield.");
+		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec06/heighfield-max.tif" ).getProcessor().getPixels();
+		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
+		//for ( final FloatType t : heightField )
+		//	if ( t.get() <= 0 )
+		//		t.set( 0 );
 		//heightField = fix07mBRSec28HeightField( heightField );
 
 		//System.out.print("SMOOTHING heightfield.");
