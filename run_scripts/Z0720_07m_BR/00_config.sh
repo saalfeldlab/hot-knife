@@ -240,7 +240,7 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
     export ALIGN_STACK="v5_acquire_trimmed_align_custom"
     export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_custom_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec24/v5_acquire_trimmed_align_custom_ic___20210825_152725"
+    export N5_Z_CORR_DATASET="/z_corr/Sec24/v5_acquire_trimmed_align_custom_ic___20211020_074809"
     export N5_Z_CORR_OFFSET="-11068,-3162,1"
   ;;
   "Sec25")
@@ -370,6 +370,14 @@ case "${TAB}" in
     export N5_Z_CORR_DATASET="/z_corr/Sec39/v1_acquire_trimmed_sp1_ic_global_3___20210518_163431"
     export N5_Z_CORR_OFFSET="-1324,-2661,1"
     export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
+  ;;
+  "Sec40")
+    export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="TBD"
+    export ALIGN_STACK="v1_acquire_trimmed_align"
+    export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align"
+    export N5_Z_CORR_DATASET="/z_corr/Sec40/v1_acquire_trimmed_align___20211008_223626"
+    export N5_Z_CORR_OFFSET="-4564,-2560,1"
   ;;
 esac
 
