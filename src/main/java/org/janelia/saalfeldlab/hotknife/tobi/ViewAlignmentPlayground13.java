@@ -13,12 +13,10 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.imglib2.Volatile;
+import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.NumericType;
@@ -27,8 +25,6 @@ import org.janelia.saalfeldlab.hotknife.AbstractOptions;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
-import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -207,7 +203,7 @@ public class ViewAlignmentPlayground13 {
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
 		cards.addCard("Face Transforms",
-				new ViewAlignmentPlayground12.GaussShiftCard(editor).getPanel(),
+				new GaussShiftCard(editor).getPanel(),
 				true, new Insets(0, 0, 0, 0));
 
 
@@ -254,11 +250,12 @@ public class ViewAlignmentPlayground13 {
 		// undo stack
 		// positionFieldPyramids[0] is the one created from the N5 transform
 		private final List<PositionFieldPyramid> positionFieldPyramids = new ArrayList<>();
-		private final DelegatingSourceAndConverter<T, V> socWrapper;
-
 
 		// n5surfacePyramid rendered through positionFieldPyramids[current]
 		private SurfacePyramid<T, V> renderedSurfacePyramid;
+
+		// the source currently to display in BDV
+		private final DelegatingSourceAndConverter<T, V> socWrapper;
 
 
 		public TransformedSurfaceStack(
@@ -302,7 +299,7 @@ public class ViewAlignmentPlayground13 {
 			return positionFieldPyramids.get(current);
 		}
 
-		public void setIncrementalTransform(final GaussTransform transform) {
+		public void setIncrementalTransform(final RealTransform transform) {
 			if (transform != null) {
 				final SurfacePyramid<T, V> tsp = new TransformedSurfacePyramid<>(renderedSurfacePyramid, transform);
 				socWrapper.setDelegate(tsp.getSourceAndConverter());
@@ -311,7 +308,7 @@ public class ViewAlignmentPlayground13 {
 			}
 		}
 
-		public void bakeIncrementalTransform(final GaussTransform transform) {
+		public void bakeIncrementalTransform(final RealTransform transform) {
 			final int current = positionFieldPyramids.size() - 1; // TODO should be current index into undo stack
 			while(positionFieldPyramids.size() > current + 1)
 				positionFieldPyramids.remove(positionFieldPyramids.size() - 1);

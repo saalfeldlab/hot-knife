@@ -11,11 +11,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
 import net.imglib2.type.numeric.ARGBType;
-import net.miginfocom.swing.MigLayout;
 import org.janelia.saalfeldlab.hotknife.tobi.GaussShiftEditor.GaussShiftEditorListener;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -110,46 +106,4 @@ public class ViewAlignmentPlayground12 {
 				true, new Insets(0, 0, 0, 0));
 	}
 
-
-
-	public static class GaussShiftCard {
-
-		private final JPanel panel;
-
-		public GaussShiftCard(GaussShiftEditor editor) {
-			panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));
-
-			final BoundedValuePanel minSigmaSlider = new BoundedValuePanel(new BoundedValue(0, 1000, 100));
-			minSigmaSlider.setBorder(null);
-			final JLabel minSigmaLabel = new JLabel("min sigma");
-			panel.add(minSigmaLabel, "aligny baseline");
-			panel.add(minSigmaSlider, "growx, wrap");
-			final MinSigmaEditor minSigmaEditor = new MinSigmaEditor(minSigmaLabel, minSigmaSlider, editor.getModel());
-
-			final BoundedValuePanel maxSlopeSlider = new BoundedValuePanel(new BoundedValue(0, 1, 0.8));
-			maxSlopeSlider.setBorder(null);
-			final JLabel maxSlopeLabel = new JLabel("max slope");
-			panel.add(maxSlopeLabel, "aligny baseline");
-			panel.add(maxSlopeSlider, "growx, wrap");
-			final MaxSlopeEditor maxSlopeEditor = new MaxSlopeEditor(maxSlopeLabel, maxSlopeSlider, editor.getModel());
-
-			final ButtonPanel buttons = new ButtonPanel("Cancel", "Apply");
-			panel.add(buttons, "sx2, gaptop 10px, wrap, bottom");
-
-			buttons.onButton(0, () -> SwingUtilities.invokeLater(editor::cancel));
-			buttons.onButton(1, () -> SwingUtilities.invokeLater(editor::apply));
-
-			editor.listeners().add(() -> {
-				final boolean active = editor.isActive();
-				final GaussTransform transform = active ? editor.getModel() : null;
-				minSigmaEditor.setTransform(transform);
-				maxSlopeEditor.setTransform(transform);
-				buttons.setEnabled(active);
-			});
-		}
-
-		public JPanel getPanel() {
-			return panel;
-		}
-	}
 }
