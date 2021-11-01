@@ -113,6 +113,7 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 		Types(final N5Reader n5, final String group) throws IOException {
 			final DatasetAttributes attributes = n5.getDatasetAttributes(group + "/s0");
 			type = N5Utils.type(attributes.getDataType());
+//			System.out.println("type = " + type.getClass());
 			volatileType = Cast.unchecked(VolatileTypeMatcher.getVolatileTypeForType(type));
 		}
 	}

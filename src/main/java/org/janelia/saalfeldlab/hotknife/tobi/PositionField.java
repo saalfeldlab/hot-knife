@@ -12,7 +12,6 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.real.DoubleType;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -46,6 +45,7 @@ public class PositionField {
 		boundsMax = n5.getAttribute(datasetName, "boundsMax", double[].class);
 		offset = Grid.floorScaled(boundsMin, scale);
 		positionField = N5Utils.open(n5, datasetName);
+//		System.out.println("positionField = " + Intervals.toString(positionField));
 		positionFieldLookup = Transform.createPositionFieldTransform(positionField);
 	}
 
