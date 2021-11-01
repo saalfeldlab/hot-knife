@@ -261,6 +261,9 @@ public class ViewAlignmentPlayground13 {
 		// positionFieldPyramids[0] is the one created from the N5 transform
 		private final List<PositionFieldPyramid> positionFieldPyramids = new ArrayList<>();
 
+		// current position in undo/redo stack (index into positionFieldPyramids)
+		private int current;
+
 		// n5surfacePyramid rendered through positionFieldPyramids[current]
 		private SurfacePyramid<T, V> renderedSurfacePyramid;
 
@@ -305,7 +308,6 @@ public class ViewAlignmentPlayground13 {
 		}
 
 		public PositionFieldPyramid getPositionFieldPyramid() {
-			final int current = positionFieldPyramids.size() - 1; // TODO should be current index into undo stack
 			return positionFieldPyramids.get(current);
 		}
 
@@ -319,8 +321,9 @@ public class ViewAlignmentPlayground13 {
 		}
 
 		public void bakeIncrementalTransform(final RealTransform transform) {
-			final int current = positionFieldPyramids.size() - 1; // TODO should be current index into undo stack
-			while(positionFieldPyramids.size() > current + 1)
+			// We will put a new PositionFieldPyramid on the stack at index current+1.
+			// Remove previous entries above index current.
+			while (positionFieldPyramids.size() > current + 1)
 				positionFieldPyramids.remove(positionFieldPyramids.size() - 1);
 
 			final PositionFieldPyramid pfp = Bake.bakePositionFieldPyramid(
@@ -328,8 +331,30 @@ public class ViewAlignmentPlayground13 {
 					blockWidth, minLevel, maxLevel);
 			positionFieldPyramids.add(pfp);
 
+			++current;
+			updateRenderedSurfacePyramid();
+		}
+
+		public void undo() {
+			if (current == 0)
+				return; // nothing to undo.
+
+			--current;
+			updateRenderedSurfacePyramid();
+		}
+
+		private void updateRenderedSurfacePyramid() {
+			final PositionFieldPyramid pfp = positionFieldPyramids.get(current);
 			renderedSurfacePyramid = new RenderedSurfacePyramid<>(n5surfacePyramid, pfp, blockWidth);
 			socWrapper.setDelegate(renderedSurfacePyramid.getSourceAndConverter());
+		}
+
+		public void redo() {
+			if (current == positionFieldPyramids.size() - 1)
+				return; // nothing to redo.
+
+			++current;
+			updateRenderedSurfacePyramid();
 		}
 	}
 }
