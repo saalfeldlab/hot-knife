@@ -108,6 +108,7 @@ public class TransformedSurfaceStack<
 				blockWidth, minLevel, maxLevel);
 		positionFieldPyramids.add(pfp);
 
+		prevCurrent = -1;
 		updateRenderedSurfacePyramid(current + 1);
 	}
 

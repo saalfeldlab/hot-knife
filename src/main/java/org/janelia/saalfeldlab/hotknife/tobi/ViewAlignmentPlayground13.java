@@ -99,9 +99,13 @@ public class ViewAlignmentPlayground13 {
 
 	public static final String UNDO = "undo";
 	public static final String REDO = "redo";
+	public static final String APPLY_TRANSFORM = "apply incremental transform";
+	public static final String CANCEL_TRANSFORM = "cancel incremental transform";
 
 	static final String[] UNDO_KEYS = new String[] { "meta Z", "ctrl Z" };
 	static final String[] REDO_KEYS = new String[] { "meta shift Z", "ctrl shift Z" };
+	static final String[] APPLY_TRANSFORM_KEYS = new String[] { "ENTER" };
+	static final String[] CANCEL_TRANSFORM_KEYS = new String[] { "ESCAPE" };
 
 
 
@@ -143,7 +147,9 @@ public class ViewAlignmentPlayground13 {
 				n5, dataset2, n5Group + "/" + transform2, blockWidth, transform2);
 
 
-		final BdvStackSource<?> source1 = BdvFunctions.show(stack1.getSourceAndConverter(), Bdv.options().is2D());
+		final BdvStackSource<?> source1 = BdvFunctions.show(stack1.getSourceAndConverter(), Bdv.options().is2D()
+				.screenScales(new double[] {1, 0.5})
+				);
 		source1.setDisplayRange(0, 255);
 		source1.setDisplayRangeBounds(0, 350);
 		source1.setColor(new ARGBType(0xff7f7f));
@@ -234,14 +240,29 @@ public class ViewAlignmentPlayground13 {
 		final Actions actions = new Actions(keyconf);
 		actions.runnableAction( () -> {
 			System.out.println("UNDO");
-			stack1.undo();
-			viewer.requestRepaint();
+			if (!editor.isActive()) {
+				stack1.undo();
+				viewer.requestRepaint();
+				viewer.showMessage("Undo");
+			}
 		}, UNDO, UNDO_KEYS );
 		actions.runnableAction( () -> {
 			System.out.println("REDO");
-			stack1.redo();
-			viewer.requestRepaint();
+			if (!editor.isActive()) {
+				stack1.redo();
+				viewer.requestRepaint();
+				viewer.showMessage("Redo");
+			}
 		}, REDO, REDO_KEYS );
+		actions.runnableAction( () -> {
+			System.out.println("APPLY");
+			editor.apply();
+		}, APPLY_TRANSFORM, APPLY_TRANSFORM_KEYS);
+		actions.runnableAction( () -> {
+			System.out.println("CANCEL");
+			editor.cancel();
+		}, CANCEL_TRANSFORM, CANCEL_TRANSFORM_KEYS);
+
 		actions.install(bdv.getBdvHandle().getKeybindings(), "view alignment");
 	}
 

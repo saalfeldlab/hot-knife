@@ -137,7 +137,7 @@ public class GaussShiftEditor {
 	}
 
 	public void setActive(final boolean active) {
-		if ( this.active != active ) {
+		if (this.active != active) {
 			this.active = active;
 			listeners.list.forEach(GaussShiftEditorListener::activeChanged);
 			viewer.getDisplay().repaint();
@@ -145,9 +145,12 @@ public class GaussShiftEditor {
 	}
 
 	public void apply() {
-		final GaussTransform transform = model.snapshot();
-		listeners.list.forEach(l -> l.apply(transform));
-		setActive(false);
+		System.out.println("GaussShiftEditor.apply");
+		if (active) {
+			final GaussTransform transform = model.snapshot();
+			listeners.list.forEach(l -> l.apply(transform));
+			setActive(false);
+		}
 	}
 
 	public void cancel() {
