@@ -234,6 +234,16 @@ public class ViewAlignmentPlayground13 {
 	}
 
 
+	/**
+	 * Undo/redo stack of PositionFieldPyramid with baked incremental
+	 * transforms. Provides a {@link SourceAndConverter} of a SurfacePyarmid
+	 * transformed with the current PositionFieldPyramid.
+	 *
+	 * @param <T>
+	 * 		pixel type
+	 * @param <V>
+	 * 		volatile pixel type
+	 */
 	public static class TransformedSurfaceStack<
 			T extends NativeType<T> & NumericType<T>,
 			V extends Volatile<T> & NativeType<V> & NumericType<V>> {
