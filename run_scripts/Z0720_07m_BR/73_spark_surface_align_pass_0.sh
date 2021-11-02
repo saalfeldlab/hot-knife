@@ -12,7 +12,7 @@ N_NODES=1
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 MIN_SEC_NUM=6
-MAX_SEC_NUM=25
+MAX_SEC_NUM=40
 
 unset FACE_DATASET_ARGS
 for SEC_NUM in $( seq ${MIN_SEC_NUM} ${MAX_SEC_NUM} ); do
@@ -31,8 +31,7 @@ MODEL_39="'[[0.965177672396418, -0.204446406063681, 25052.735188858624], [0.2680
 
 FACE_DATASET_ARGS="${FACE_DATASET_ARGS} \
 -f /flat/Sec26/bot/face -fm ${MODEL_26} -f /flat/Sec26/top/face -fm ${MODEL_26} \
--f /flat/Sec39/bot/face -fm ${MODEL_39} -f /flat/Sec39/top/face -fm ${MODEL_39} \
--d /flat/Sec40/bot/face -d /flat/Sec40/top/face"
+-f /flat/Sec39/bot/face -fm ${MODEL_39} -f /flat/Sec39/top/face -fm ${MODEL_39}"
 
 ARGV="
 --n5Path=${N5_SAMPLE_PATH} \
