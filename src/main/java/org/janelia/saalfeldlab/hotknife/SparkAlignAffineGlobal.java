@@ -79,6 +79,12 @@ public class SparkAlignAffineGlobal {
 		@Option(name = "-o", aliases = {"--n5GroupOutput"}, required = true, usage = "N5 output group, e.g. /align-0")
 		private final String outGroup = null;
 
+		@Option(name = "-f", aliases = {"--fixDatasets"}, required = false, usage = "List of fixed N5 datasets, e.g. -f /slab-24/top -f slab-25/top")
+		private final List<String> fixedDatasetNames = null;
+
+		@Option(name = "-fm", aliases = {"--fixedModels"}, required = false, usage = "Affine transform for each fixed model, e.g. -fm '[[0.85, -0.575, 22704.7], [0.51, 0.80, 19373.73]]' -fm '[[0.95, -0.47, 12704.7], [0.41, 0.60, 7373.73]]'")
+		private final List<String> fixedModels = null;
+
 		@Option(name = "--scaleIndex", required = true, usage = "scale index, e.g. 4 (means scale = 1.0 / 2^4)")
 		private int scaleIndex = 0;
 
@@ -109,6 +115,20 @@ public class SparkAlignAffineGlobal {
 		 */
 		public List<String> getDatasetNames() {
 			return datasetNames;
+		}
+
+		/**
+		 * @return the fixedDatasetNames
+		 */
+		public List<String> getFixedDatasetNames() {
+			return fixedDatasetNames;
+		}
+
+		/**
+		 * @return the fixedModels
+		 */
+		public List<String> getFixedModels() {
+			return fixedModels;
 		}
 
 		/**
@@ -235,11 +255,15 @@ public class SparkAlignAffineGlobal {
 	 *
 	 * @param datasetNames names of
 	 * @param filteredMatches
+	 * @param fixedModels - map from datasetname to {@link AffineModel2D} for fixed tiles
+	 * @param fixedTiles - empty list that will be populated
 	 * @return
 	 */
 	public static ArrayList<Tile<?>> createConnectedTiles(
 			final List<String> datasetNames,
-			final JavaPairRDD<String[], ArrayList<PointMatch>> filteredMatches) {
+			final JavaPairRDD<String[], ArrayList<PointMatch>> filteredMatches,
+			final HashMap<String, AffineModel2D > fixedModels,
+			final List< Tile<?> > fixedTiles ) {
 
 		/* map matches to first slab-face */
 		final HashMap<String, ArrayList<PointMatch>> matchMap = new HashMap<>();
@@ -249,6 +273,8 @@ public class SparkAlignAffineGlobal {
 		final ArrayList<Tile<?>> tiles = Align.connectStackTiles(
 				datasetNames,
 				matchMap,
+				fixedModels,
+				fixedTiles,
 				new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
 						(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
 						(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
@@ -296,6 +322,47 @@ public class SparkAlignAffineGlobal {
 				.map(datasetName -> Util.flattenGroupName(datasetName))
 				.collect(Collectors.toList());
 
+		/* collect fix tile info if requested */
+		final HashMap<String, AffineModel2D > fixedModels;
+
+		if ( options.getFixedDatasetNames() != null && options.getFixedDatasetNames().size() > 0 )
+		{
+			fixedModels = new HashMap<>();
+
+			for ( int i = 0; i < options.getFixedDatasetNames().size(); ++i )
+			{
+				String dataset = options.getFixedDatasetNames().get( i );
+				String modelString = options.getFixedModels().get( i );
+
+				// [[0.85, -0.575, 22704.7], [0.51, 0.80, 19373.73]]
+				while ( modelString.contains( "[" ) )
+					modelString = modelString.replace( "[", "" );
+				while ( modelString.contains( "]" ) )
+					modelString = modelString.replace( "]", "" );
+				while ( modelString.contains( " " ) )
+					modelString = modelString.replace( " ", "" );
+
+				String[] ms = modelString.split( "," );
+				if ( ms.length != 6 )
+					throw new RuntimeException( "number of models does not match number of fixed datasets." );
+
+				final double[] m = new double[ ms.length ];
+				for ( int j = 0; i < ms.length; ++j )
+					m[ j ] = Double.parseDouble( ms[ j ] );
+
+				final AffineModel2D model = new AffineModel2D();
+				model.set(m[ 0 ], m[ 3 ], m[ 1 ], m[ 4 ], m[ 2 ], m[ 5 ]);
+
+				fixedModels.put( dataset, model );
+
+				System.out.println( "fixing " + dataset + ": model=" + net.imglib2.util.Util.printCoordinates( m ) + "; " + model );
+			}
+		}
+		else
+		{
+			fixedModels = null;
+		}
+
 		final SparkConf conf = new SparkConf().setAppName("SparkAlignAffineGlobal");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
@@ -327,15 +394,25 @@ public class SparkAlignAffineGlobal {
 				7);
 
 
+		/* remember fixed tiles if requested */
+		final List< Tile<?> > fixedTiles = new ArrayList<>();
+
 		final ArrayList<Tile<?>> tiles = createConnectedTiles(
 				datasetNames,
-				filteredMatches);
+				filteredMatches,
+				fixedModels,
+				fixedTiles );
 
+		System.out.println( "fixedTiles: " + fixedTiles.size() );
 
 		/* optimize */
 		/* feed all tiles that have connections into tile configuration, report those that are disconnected */
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles(tiles);
+
+		/* fix tiles if requested */
+		if ( fixedTiles.size() > 0 )
+			tiles.forEach( t -> tc.fixTile( t ) );
 
 		/* three pass optimization, first using the regularizer exclusively ... */
 		try {
