@@ -334,20 +334,12 @@ public class SparkAlignAffineGlobal {
 				String dataset = options.getFixedDatasetNames().get( i );
 				String modelString = options.getFixedModels().get( i );
 
-				// [[0.85, -0.575, 22704.7], [0.51, 0.80, 19373.73]]
-				while ( modelString.contains( "[" ) )
-					modelString = modelString.replace( "[", "" );
-				while ( modelString.contains( "]" ) )
-					modelString = modelString.replace( "]", "" );
-				while ( modelString.contains( " " ) )
-					modelString = modelString.replace( " ", "" );
-
-				String[] ms = modelString.split( "," );
+				String[] ms = modelString.replaceAll("[\\[\\]]", "").split(",");
 				if ( ms.length != 6 )
 					throw new RuntimeException( "number of models does not match number of fixed datasets." );
 
 				final double[] m = new double[ ms.length ];
-				for ( int j = 0; i < ms.length; ++j )
+				for ( int j = 0; j < ms.length; ++j )
 					m[ j ] = Double.parseDouble( ms[ j ] );
 
 				final AffineModel2D model = new AffineModel2D();
