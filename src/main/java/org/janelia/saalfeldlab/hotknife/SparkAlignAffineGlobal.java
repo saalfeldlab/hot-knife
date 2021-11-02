@@ -424,7 +424,9 @@ public class SparkAlignAffineGlobal {
 
 		/* ... then using the desired model with low regularization ... */
 		tiles.forEach(
-				t -> ((InterpolatedAffineModel2D<?, ?>)t.getModel()).setLambda(0.1));
+				t -> {
+					if (!fixedTiles.contains( t ))
+						((InterpolatedAffineModel2D<?, ?>)t.getModel()).setLambda(0.1); } );
 
 		try {
 			tc.optimize(0.01, 5000, 200, 0.5);
