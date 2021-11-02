@@ -323,12 +323,10 @@ public class SparkAlignAffineGlobal {
 				.collect(Collectors.toList());
 
 		/* collect fix tile info if requested */
-		final HashMap<String, AffineModel2D > fixedModels;
+		final HashMap<String, AffineModel2D > fixedModels = new HashMap<>();
 
 		if ( options.getFixedDatasetNames() != null && options.getFixedDatasetNames().size() > 0 )
 		{
-			fixedModels = new HashMap<>();
-
 			for ( int i = 0; i < options.getFixedDatasetNames().size(); ++i )
 			{
 				String dataset = options.getFixedDatasetNames().get( i );
@@ -349,10 +347,6 @@ public class SparkAlignAffineGlobal {
 
 				System.out.println( "fixing " + dataset + ": model=" + net.imglib2.util.Util.printCoordinates( m ) + "; " + model );
 			}
-		}
-		else
-		{
-			fixedModels = null;
 		}
 
 		final SparkConf conf = new SparkConf().setAppName("SparkAlignAffineGlobal");
@@ -488,6 +482,8 @@ public class SparkAlignAffineGlobal {
 							transforms.get(i).getRowPackedCopy()));
 		}
 
+		System.out.println("saving affines to " + options.getN5Path() + "/" + options.getOutGroup() );
+
 		saveAffines(
 				options.getN5Path(),
 				options.getOutGroup(),
@@ -496,7 +492,10 @@ public class SparkAlignAffineGlobal {
 				options.getScaleIndex(),
 				sc.parallelizePairs(transformTuples));
 
+		n5.close();
 
 		sc.close();
+
+		System.out.println("done.");
 	}
 }
