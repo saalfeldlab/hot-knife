@@ -83,7 +83,7 @@ export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass1"
 export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="[6.0,6.0,1.0]"
 export N5_FLAT_DATASET_ROOT="/flat/${RENDER_PROJECT}"
 export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
-export N5_SURFACE_ROOT="/surface-align-BR/run00"
+export N5_SURFACE_ROOT="/surface-align-BR/run01"
 
 # --------------------------------------------------------------------
 # Tab Customizations
@@ -371,7 +371,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_sp1_ic_global_3"
     export N5_Z_CORR_DATASET="/z_corr/Sec39/v1_acquire_trimmed_sp1_ic_global_3___20210518_163431"
     export N5_Z_CORR_OFFSET="-1324,-2661,1"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass3_preibischs"
   ;;
   "Sec40")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
