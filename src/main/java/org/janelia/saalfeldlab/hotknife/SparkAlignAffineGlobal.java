@@ -398,7 +398,7 @@ public class SparkAlignAffineGlobal {
 
 		/* fix tiles if requested */
 		if ( fixedTiles.size() > 0 )
-			tiles.forEach( t -> tc.fixTile( t ) );
+			fixedTiles.forEach( t -> tc.fixTile( t ) );
 
 		/* three pass optimization, first using the regularizer exclusively ... */
 		try {
