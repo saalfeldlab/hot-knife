@@ -85,6 +85,14 @@ public class SparkAlignAffineGlobal {
 		@Option(name = "-fm", aliases = {"--fixedModels"}, required = false, usage = "Affine transform for each fixed model, e.g. -fm '[[0.85, -0.575, 22704.7], [0.51, 0.80, 19373.73]]' -fm '[[0.95, -0.47, 12704.7], [0.41, 0.60, 7373.73]]'")
 		private final List<String> fixedModels = null;
 
+		@Option(name = "-bmin", aliases = {"--boundsMin"}, required = false, usage = "min bounds, e.g. '-34.4,213.12,9.12'")
+		private final String boundsMinString = null;
+		private double[] boundsMin;
+
+		@Option(name = "-bmax", aliases = {"--boundsMax"}, required = false, usage = "max bounds, e.g. '-324234.1,21213.12,9456.54'")
+		private final String boundsMaxString = null;
+		private double[] boundsMax;
+
 		@Option(name = "--scaleIndex", required = true, usage = "scale index, e.g. 4 (means scale = 1.0 / 2^4)")
 		private int scaleIndex = 0;
 
@@ -93,6 +101,12 @@ public class SparkAlignAffineGlobal {
 			final CmdLineParser parser = new CmdLineParser(this);
 			try {
 				parser.parseArgument(args);
+
+				if ( boundsMinString != null )
+					boundsMin = parseCSDoubleArray( boundsMinString );
+
+				if ( boundsMaxString != null )
+					boundsMax = parseCSDoubleArray( boundsMaxString );
 
 				parsedSuccessfully = true;
 
@@ -129,6 +143,14 @@ public class SparkAlignAffineGlobal {
 		 */
 		public List<String> getFixedModels() {
 			return fixedModels;
+		}
+
+		public double[] getBoundsMin() {
+			return boundsMin;
+		}
+
+		public double[] getBoundsMax() {
+			return boundsMax;
 		}
 
 		/**
@@ -458,6 +480,22 @@ public class SparkAlignAffineGlobal {
 				datasetNames,
 				0,
 				topBotTransforms);
+
+		System.out.println("Bounds from transform: " + Arrays.deepToString(bounds));
+
+		if ( options.getBoundsMin() != null )
+		{
+			System.out.println("Overriding bounds min: " + net.imglib2.util.Util.printCoordinates( options.getBoundsMin() ));
+			for ( int d = 0; d < bounds[0].length; ++d )
+				bounds[0][d] = options.getBoundsMin()[d];
+		}
+
+		if ( options.getBoundsMax() != null )
+		{
+			System.out.println("Overriding bounds max: " + net.imglib2.util.Util.printCoordinates( options.getBoundsMax() ));
+			for ( int d = 0; d < bounds[1].length; ++d )
+				bounds[1][d] = options.getBoundsMax()[d];
+		}
 
 		System.out.println("Bounds : " + Arrays.deepToString(bounds));
 
