@@ -2,12 +2,14 @@
 
 set -e
 
-if (( $# != 1 )); then
-  echo "USAGE $0 <start with pass (1-12)>"
+if (( $# != 3 )); then
+  echo "USAGE $0 <start with pass (1-12)> <min tab number> <max tab number>"
   exit 1
 fi
 
 START_PASS="${1}"
+MIN_SEC_NUM="$2"
+MAX_SEC_NUM="$3"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
@@ -30,7 +32,7 @@ for PASS in $( seq "${START_PASS}" 12 ); do
 waiting to start setup for pass ${PASS} ...
 "
   sleep 2
-  "${SCRIPT_DIR}"/74_spark_surface_align_pass_n.sh "${PASS}"
+  "${SCRIPT_DIR}"/74_spark_surface_align_pass_n.sh "${PASS}" "${MIN_SEC_NUM}" "${MAX_SEC_NUM}"
 done
 
 COUNT=0

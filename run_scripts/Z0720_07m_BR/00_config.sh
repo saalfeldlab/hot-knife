@@ -67,9 +67,10 @@ export N_TASKS_PER_EXECUTOR_CORE=3
 
 export N_CORES_DRIVER=1
 
-# export SPARK_JANELIA_ARGS="--consolidate_logs"
+# NOTE: must consolidate logs when changing run parent dir
+export SPARK_JANELIA_ARGS="--consolidate_logs --run_parent_dir /groups/flyem/data/trautmane/spark_logs"
 export LSF_PROJECT="${BILL_TO}"
-export RUNTIME="3:59"
+#export RUNTIME="3:59"
 
 export HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-SNAPSHOT.jar"
 export FLINTSTONE="/groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh"
@@ -83,7 +84,10 @@ export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass1"
 export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="[6.0,6.0,1.0]"
 export N5_FLAT_DATASET_ROOT="/flat/${RENDER_PROJECT}"
 export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
-export N5_SURFACE_ROOT="/surface-align-BR/run01"
+
+PADDED_MIN_SEC_NUM=$(printf %02d "${MIN_SEC_NUM}")
+PADDED_MAX_SEC_NUM=$(printf %02d "${MAX_SEC_NUM}")
+export N5_SURFACE_ROOT="/surface-align-BR/${PADDED_MIN_SEC_NUM}-${PADDED_MAX_SEC_NUM}/run_${RUN_TIMESTAMP}"
 
 # --------------------------------------------------------------------
 # Tab Customizations
