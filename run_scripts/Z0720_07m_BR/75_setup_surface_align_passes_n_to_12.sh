@@ -13,6 +13,7 @@ MAX_SEC_NUM="$3"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
+source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 SPARK_BATCH_WORK_DIR="${SCRIPT_DIR}/logs/spark_batch_${RUN_TIMESTAMP}"
@@ -23,7 +24,9 @@ mkdir -p "${SPARK_BATCH_WORK_DIR}"
 
 export BILL_TO="flyem"
 export SPARK_JANELIA_TASK="generate-run"
-export SPARK_JANELIA_ARGS="--run_parent_dir ${SPARK_BATCH_WORK_DIR}"
+
+# override args from 00_config.sh
+export SPARK_JANELIA_ARGS="--consolidate_logs --run_parent_dir ${SPARK_BATCH_WORK_DIR}"
 
 export SKIP_PRIOR_PASS_DIRECTORY_CHECK="true"
 
@@ -32,9 +35,10 @@ for PASS in $( seq "${START_PASS}" 12 ); do
 waiting to start setup for pass ${PASS} ...
 "
   sleep 2
-  "${SCRIPT_DIR}"/74_spark_surface_align_pass_n.sh "${PASS}" "${MIN_SEC_NUM}" "${MAX_SEC_NUM}"
+  source "${SCRIPT_DIR}"/74_spark_surface_align_pass_n.sh "${PASS}" "${MIN_SEC_NUM}" "${MAX_SEC_NUM}"
 done
 
+unset FIRST_LAUNCH_SCRIPT
 COUNT=0
 for Q_JOBS_SCRIPT in "${SPARK_BATCH_WORK_DIR}"/*/scripts/00-queue-lsf-jobs.sh; do
 
@@ -49,16 +53,24 @@ for Q_JOBS_SCRIPT in "${SPARK_BATCH_WORK_DIR}"/*/scripts/00-queue-lsf-jobs.sh; d
   SHUTDOWN_JOB_NAME=$( grep "^SHUTDOWN_JOB_NAME" "${Q_JOBS_SCRIPT}" | cut -f2 -d'"' )
 
   echo "#!/bin/bash
-          set -e
           umask 0002" > "${SPARK_BATCH_LAUNCH_SCRIPT}"
   chmod 755 "${SPARK_BATCH_LAUNCH_SCRIPT}"
   echo "created: ${SPARK_BATCH_LAUNCH_SCRIPT}"
 
   if (( PASS > START_PASS)); then
     echo "
-          PREVIOUS_EXCEPTION_COUNT=\$(grep -c Exception ${PREVIOUS_DRIVER_LOG})
+          DRIVER_LOG=\"${PREVIOUS_DRIVER_LOG}\"
+
+          echo \"checking \${DRIVER_LOG} for problems with prior pass run\"
+
+          if [[ ! -f \${DRIVER_LOG} ]]; then
+            echo \"\${DRIVER_LOG} not found!\"
+            exit 1
+          fi
+
+          PREVIOUS_EXCEPTION_COUNT=\$(grep -c Exception \${DRIVER_LOG})
           if (( PREVIOUS_EXCEPTION_COUNT > 0 )); then
-            grep Exception ${PREVIOUS_DRIVER_LOG}
+            grep Exception \${DRIVER_LOG}
             exit 1
           fi" >> "${SPARK_BATCH_LAUNCH_SCRIPT}"
   fi
@@ -74,8 +86,15 @@ for Q_JOBS_SCRIPT in "${SPARK_BATCH_WORK_DIR}"/*/scripts/00-queue-lsf-jobs.sh; d
 
   PREVIOUS_DRIVER_LOG=${Q_JOBS_SCRIPT/scripts\/00-queue-lsf-jobs.sh/logs\/04-driver.log}
 
+  if [[ -z "${FIRST_LAUNCH_SCRIPT}" ]]; then
+    FIRST_LAUNCH_SCRIPT="${SPARK_BATCH_LAUNCH_SCRIPT}"
+  fi
+
   COUNT=$(( COUNT + 1 ))
 
 done
 
-echo
+echo """
+To start everything, run:
+  ${FIRST_LAUNCH_SCRIPT}
+"""

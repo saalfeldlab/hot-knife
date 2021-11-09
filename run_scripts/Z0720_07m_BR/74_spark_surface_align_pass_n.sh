@@ -18,7 +18,11 @@ export MAX_SEC_NUM="$3"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
-source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
+
+# only load config if it has yet to be loaded
+if [ -z ${N5_SURFACE_ROOT} ]; then
+  source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
+fi
 
 PADDED_PASS=$(printf "%02d" "${PASS}")
 PADDED_PRIOR_PASS=$(printf "%02d" "$(( PASS - 1 ))")
