@@ -150,13 +150,13 @@ public class ViewAlignmentPlayground13 {
 		final BdvStackSource<?> source1 = BdvFunctions.show(stack1.getSourceAndConverter(), Bdv.options().is2D()
 				.screenScales(new double[] {1, 0.5})
 				);
-		source1.setDisplayRange(0, 255);
 		source1.setDisplayRangeBounds(0, 350);
+		source1.setDisplayRange(80, 240);
 		source1.setColor(new ARGBType(0xff7f7f));
 
 		final BdvStackSource<?> source2 = BdvFunctions.show(stack2.getSourceAndConverter(), Bdv.options().addTo(source1));
-		source2.setDisplayRange(0, 255);
 		source2.setDisplayRangeBounds(0, 350);
+		source1.setDisplayRange(80, 240);
 		source2.setColor(new ARGBType(0x7fff7f));
 
 		final Bdv bdv = source1;
