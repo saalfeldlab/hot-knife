@@ -64,6 +64,7 @@ public class PositionField {
 		} finally {
 			exec.shutdown();
 		}
+		System.out.println("PositionField.write finished.");
 	}
 
 	public PositionField(final RandomAccessibleInterval<DoubleType> positionField, final double scale, final double[] boundsMin, final double[] boundsMax)
