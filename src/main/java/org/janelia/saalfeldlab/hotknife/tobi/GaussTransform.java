@@ -100,7 +100,7 @@ public class GaussTransform implements RealTransform {
 
 	private void updateSigmaSqu() {
 		final double sigma = getSigma();
-		sigmaSqu = sigma * sigma;
+		sigmaSqu = sigma * sigma; // TODO --> sigmaSquInv = 1.0 / (-2.0 * sigma * sigma)
 	}
 
 	public Listeners<ChangeListener> changeListeners() {

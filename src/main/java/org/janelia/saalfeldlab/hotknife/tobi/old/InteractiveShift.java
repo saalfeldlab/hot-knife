@@ -27,6 +27,7 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.LinAlgHelpers;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.scijava.ui.behaviour.DragBehaviour;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
@@ -132,8 +133,19 @@ public class InteractiveShift {
 
 			double h = Math.sqrt(stx * stx + sty * sty);
 			double sigma = Math.max(minSigma, h * exph);
-			double asqu = (x - sx1) * (x - sx1) + (y - sy1) * (y - sy1);
-			double dt = Math.exp(asqu / (-2.0 * sigma * sigma));
+
+			double[][] R = {{stx / h, -sty / h}, {sty / h, stx / h}};
+			double[][] S = {{4 * sigma * sigma, 0}, {0, sigma * sigma}};
+			double[][] I = new double[2][2];
+			LinAlgHelpers.mult(R, S, I);
+			LinAlgHelpers.multABT(I, R, S);
+			LinAlgHelpers.invertSymmetric2x2(S, I);
+			double m00 = -0.5 * I[0][0];
+			double m01 = -1.0 * I[0][1];
+			double m11 = -0.5 * I[1][1];
+			double a = (x - sx1);
+			double b = (y - sy1);
+			double dt = Math.exp(m00 * a * a + m01 * a * b + m11 * b * b);
 
 			transformedX = x + dt * stx;
 			transformedY = y + dt * sty;
