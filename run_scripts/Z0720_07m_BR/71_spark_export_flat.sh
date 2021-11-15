@@ -35,6 +35,9 @@ N5_HEIGHT_FIELDS_ATTRIBUTES="${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET}/at
 if [[ ! -f "${N5_HEIGHT_FIELDS_ATTRIBUTES}" ]]; then
   echo "{\"downsamplingFactors\":${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}}" > "${N5_HEIGHT_FIELDS_ATTRIBUTES}"
   echo "created default ${N5_HEIGHT_FIELDS_ATTRIBUTES}"
+else
+  "${SCRIPT_DIR}"/add_heightfields_factors.sh "${TAB}" min "${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}"
+  "${SCRIPT_DIR}"/add_heightfields_factors.sh "${TAB}" max "${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}"
 fi
 
 ARGV="\
