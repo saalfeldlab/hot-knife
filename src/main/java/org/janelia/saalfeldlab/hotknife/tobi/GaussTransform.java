@@ -138,7 +138,7 @@ public class GaussTransform implements RealTransform {
 	private void updateCovariance() {
 		final double sigma = getSigma();
 
-		final double[][] R = {{ao[0], -ao[1]}, {ao[1], ao[0]}};
+		final double[][] R = {{ao[0], ao[1]}, {-ao[1], ao[0]}};
 		double sigmaX = sigma;
 		double sigmaY = sigma;
 		if ( af >= 0 ) {
@@ -204,6 +204,8 @@ public class GaussTransform implements RealTransform {
 
 	public GaussTransform snapshot() {
 		final GaussTransform t = new GaussTransform(maxSlope, minSigma);
+		t.setAnisotropyOrientation(ao[0], ao[1]);
+		t.setAnisotropyPow(af);
 		t.setLine(sx0,sy0,sx1,sy1);
 		return t;
 	}

@@ -26,6 +26,13 @@ public class GaussShiftCard {
 		panel.add(maxSlopeSlider, "growx, wrap");
 		final MaxSlopeEditor maxSlopeEditor = new MaxSlopeEditor(maxSlopeLabel, maxSlopeSlider, editor.getModel());
 
+		final BoundedValuePanel anisotropyPowSlider = new BoundedValuePanel(new BoundedValue(-8, 8, 0));
+		anisotropyPowSlider.setBorder(null);
+		final JLabel anisotropyPowLabel = new JLabel("anisotropy");
+		panel.add(anisotropyPowLabel, "aligny baseline");
+		panel.add(anisotropyPowSlider, "growx, wrap");
+		final AnisotropyPowEditor anisotropyPowEditor = new AnisotropyPowEditor(anisotropyPowLabel, anisotropyPowSlider, editor.getModel());
+
 		final ButtonPanel buttons = new ButtonPanel("Cancel", "Apply");
 		panel.add(buttons, "sx2, gaptop 10px, wrap, bottom");
 
@@ -37,6 +44,7 @@ public class GaussShiftCard {
 			final GaussTransform transform = active ? editor.getModel() : null;
 			minSigmaEditor.setTransform(transform);
 			maxSlopeEditor.setTransform(transform);
+			anisotropyPowEditor.setTransform(transform);
 			buttons.setEnabled(active);
 		});
 	}

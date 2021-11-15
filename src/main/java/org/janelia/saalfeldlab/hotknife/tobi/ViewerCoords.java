@@ -63,4 +63,10 @@ public class ViewerCoords implements TransformListener<AffineTransform3D> {
 	public synchronized double of(DoubleSupplier f) {
 		return f.getAsDouble() * scale;
 	}
+
+	public synchronized double[] toSource(CoordinateSupplier f) {
+		final double[] p = new double[2];
+		sourceToViewer.applyInverse(p, f.get());
+		return p;
+	}
 }
