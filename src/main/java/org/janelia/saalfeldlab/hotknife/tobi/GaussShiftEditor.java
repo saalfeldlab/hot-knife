@@ -11,8 +11,10 @@ import java.awt.Stroke;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.event.MouseMotionListener;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -333,13 +335,24 @@ public class GaussShiftEditor {
 
 				if ( i == 1 ) {
 					final double sigma = viewerCoords.of(transform::getSigma);
-					final Ellipse2D sigmaEllipse = new Ellipse2D.Double(
-							p[0] - sigma,
-							p[1] - sigma,
-							2 * sigma, 2 * sigma);
+					final double[] ao = viewerCoords.ofDirection(transform::getAnisotropyOrientation);
+					final double theta = Math.atan2(ao[1], ao[0]);
+					final double af = transform.getAnisotropyPow();
+					double hw = sigma;
+					double hh = sigma;
+					if ( af >= 0 ) {
+						hw *= Math.pow(2, af);
+					} else {
+						hh *= Math.pow(2, -af);
+					}
+					final Ellipse2D sigmaEllipse = new Ellipse2D.Double(-hw, -hh, 2 * hw, 2 * hh);
+					final AffineTransform torig = graphics.getTransform();
+					graphics.translate( p[ 0 ], p[ 1 ] );
+					graphics.rotate(theta);
 					graphics.setColor(color);
 					graphics.setStroke(dashed);
 					graphics.draw(sigmaEllipse);
+					graphics.setTransform( torig );
 				}
 			}
 		}
