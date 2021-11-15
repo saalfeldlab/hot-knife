@@ -81,7 +81,7 @@ export FLINTSTONE="/groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.s
 export N5_SAMPLE_PATH="/nrs/flyem/render/n5/${RENDER_OWNER}"
 export N5_HEIGHT_FIELDS_COMPUTED_DATASET="/heightfields/${RENDER_PROJECT}/pass1/s1"
 export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass1"
-export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="[6.0,6.0,1.0]"
+export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="6,6,1"
 export N5_FLAT_DATASET_ROOT="/flat/${RENDER_PROJECT}"
 export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
 
@@ -101,7 +101,7 @@ case "${TAB}" in
     export N5_Z_CORR_DATASET="/z_corr/Sec06/v1_acquire_align_ic___20210826_125429"
     export N5_Z_CORR_OFFSET="-5317,-1497,1"
     export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2"
-    # export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="[4.0,4.0,4.0]"
+    # export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="4,4,4"
   ;;
   "Sec07")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
@@ -111,7 +111,7 @@ case "${TAB}" in
     export N5_Z_CORR_DATASET="/z_corr/Sec07/v3_acquire_trimmed_align_ic___20210826_222827"
     export N5_Z_CORR_OFFSET="-6414,-2674,1"
     export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2"
-    # export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="[4.0,4.0,4.0]"
+    # export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="4,4,4"
   ;;
   "Sec08")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
