@@ -255,9 +255,9 @@ case "${TAB}" in
   "Sec25")
     export ACQUIRE_TRIMMED_STACK="v5_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
-    export ALIGN_STACK="v5_acquire_trimmed_align"
-    export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec25/v5_acquire_trimmed_align_ic___20210709_144057"
+    export ALIGN_STACK="v5_acquire_trimmed_align_fix"
+    export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_fix_ic"
+    export N5_Z_CORR_DATASET="/z_corr/Sec25/v5_acquire_trimmed_align_fix_ic___20211115_220727"
     export N5_Z_CORR_OFFSET="-20327,-4974,1"
   ;;
   "Sec26")
