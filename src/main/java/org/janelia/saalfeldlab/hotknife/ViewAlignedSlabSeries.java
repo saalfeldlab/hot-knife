@@ -51,6 +51,7 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.util.Util;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 
@@ -206,6 +207,10 @@ public class ViewAlignedSlabSeries {
 					new long[] {fMin[0], fMin[1], topOffsets.get(i)},
 					new long[] {fMax[0], fMax[1], botOffset});
 
+			System.out.println( "dataset: " + datasetName );
+			System.out.println( "Dimensions: " + Util.printCoordinates( dimensions ) );
+			System.out.println( "Interval: " + Util.printInterval( cropInterval ) );
+
 			final int numScales = n5.list(datasetName).length;
 
 			@SuppressWarnings("unchecked")
@@ -248,16 +253,29 @@ public class ViewAlignedSlabSeries {
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
 
-				//System.out.println( "Warning: adding custom transformation");
+				System.out.println( "Warning: adding custom transformation");
+
+				// 39-26:
+				// Interval: [-963, -650, 20] -> [45282, 54512, 2727], dimensions (46246, 55163, 2708)
+				// 3d-affine: (1.0, 0.0, 0.0, -22160.0, 0.0, 1.0, 0.0, -26931.0, 0.0, 0.0, 1.0, 0.0)
+
+				//final long rotationCenterX = (cropInterval.dimension(0)/2 + cropInterval.min( 0 ));
+				//final long rotationCenterY = (cropInterval.dimension(1)/2 + cropInterval.min( 1 ));
+
+				// rotate around the same point that 39-26 rotated around
+				final long rotationCenterX = 22160 + 3328;
+				final long rotationCenterY = 26931 + 6400;
+
 				final AffineTransform3D rigid = new AffineTransform3D();
 				rigid.translate(
-						-(cropInterval.dimension(0)/2 + cropInterval.min( 0 )),
-						-(cropInterval.dimension(1)/2 + cropInterval.min( 1 )),
+						-rotationCenterX,
+						-rotationCenterY,
 						0 );
+				//System.out.println( rigid );
 				rigid.rotate( 2, Math.toRadians( -18 ) );
 				rigid.translate(
-						(cropInterval.dimension(0)/2 + cropInterval.min( 0 )),
-						(cropInterval.dimension(1)/2 + cropInterval.min( 1 )),
+						rotationCenterX,
+						rotationCenterY,
 						0 );
 
 				transformSequence.add(rigid.inverse());
