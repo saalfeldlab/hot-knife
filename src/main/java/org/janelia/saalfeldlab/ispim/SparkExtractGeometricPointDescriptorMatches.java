@@ -106,7 +106,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 	private int distance = 3;
 
 	@Option(names = {"-r", "--redundancy"}, required = false, description = "redundancy for geometric descriptor matching (default: 0)")
-	private int redundancy = 1;
+	private int redundancy = 0;
 
 	@Option(names = "--minNumInliers", required = false, description = "minimal number of inliers for RANSAC (default: 25)")
 	private int minNumInliers = 25;
@@ -180,11 +180,14 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 					new int[] {1, 1},
 					DataType.OBJECT,
 					new GzipCompression());
+
 			n5.setAttribute(
 					matchesGroupName,
 					"distance",
 					distance);
 		}
+
+		System.out.println( "Initialized N5." );
 
 		/* get width and height from first slice */
 		final int width, height;
@@ -214,7 +217,9 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 		}
 
 		final double sigma = 2.5;
-		double thr = 0.03;
+		final double startThreshold = 0.03;
+		double thr = startThreshold;
+		double lowestThr = 0.03;
 
 		int numUnconnected = 0;
 		int lastUnconnected = Integer.MAX_VALUE;
@@ -474,6 +479,10 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 			System.out.println( "\nunconnected: " + numUnconnected + " (" + numMatches + "), " + " t=" + threshold );
 
+			// no iterative trying on the threshold if they are identical
+			if ( startThreshold == lowestThr )
+				break;
+
 			if ( numUnconnected < bestUnconnected )
 			{
 				bestUnconnected = numUnconnected;
@@ -485,7 +494,7 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 				thr /= 1.5;
 
 			// one final run, none before was good
-			if ( thr <= 0.001 || lastUnconnected < numUnconnected )
+			if ( thr <= lowestThr || lastUnconnected < numUnconnected )
 			{
 				System.out.println( "repeating best thr=" + bestThr );
 				thr = bestThr;
@@ -495,11 +504,12 @@ public class SparkExtractGeometricPointDescriptorMatches implements Callable<Voi
 
 		} while ( !extraRun && numUnconnected > 0 );
 
+		/*
 		if ( numUnconnected > 0 )
 		{
 			PrintWriter out = TextFileAccess.openFileWrite( id + "_" + channel +"_" + cam + "." + numUnconnected + ".txt" );
 			out.close();
-		}
+		}*/
 	}
 
 	public static ArrayList< RandomAccessibleInterval< UnsignedShortType> > loadStack( final List<Slice> stack, final List<Integer> slices, final int width, final int height ) throws IOException

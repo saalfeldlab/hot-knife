@@ -55,6 +55,7 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
 import net.preibisch.mvrecon.fiji.spimdata.explorer.util.ColorStream;
+import net.preibisch.mvrecon.process.interestpointregistration.TransformationTools;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -136,7 +137,7 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		{
 			for ( final String dataset : n5.list( idA ) )
 			{
-				if ( dataset.startsWith( "matches_" + idA ) && dataset.contains( "Ch488+561+647nm" ) )
+				if ( dataset.startsWith( "matches_" + idA ) /*&& dataset.contains( "Ch488+561+647nm" )*/ )
 				{
 					// TODO: store in dataset attributes!!!
 					final int indexA = dataset.indexOf( "matches_" ) + 8;
@@ -533,7 +534,6 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 		final boolean render = false;
 		solve( idToTile, preAlign, params, render );
 
-		/*
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Saving transformations ... " );
 
 		for ( final Description desc : allDescriptions( matches ) )
@@ -541,7 +541,6 @@ public class GlobalOptimize implements Callable<Void>, Serializable
 			System.out.println( desc + ": " + idToTile.get( desc ).getModel().createAffineModel3D() );
 			n5.setAttribute( desc.id + "/" + desc.channel, "3d-affine", TransformationTools.getAffineTransform( idToTile.get( desc ).getModel().createAffineModel3D() ) );
 		}
-		*/
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Computing errors." );
 

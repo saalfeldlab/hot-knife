@@ -1,28 +1,22 @@
-package org.janelia.saalfeldlab.hotknife.tools;
+package org.janelia.saalfeldlab.hotknife.tools.actions;
 
 import java.awt.Color;
 import java.awt.Cursor;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
-import java.text.DecimalFormat;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import javax.swing.ActionMap;
-import javax.swing.InputMap;
-
+import org.janelia.saalfeldlab.hotknife.tools.DisplayScaleOverlay;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.scijava.ui.behaviour.KeyStrokeAdder;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
-import org.scijava.ui.behaviour.util.AbstractNamedAction;
 import org.scijava.ui.behaviour.util.InputActionBindings;
 
 import bdv.util.Affine3DHelpers;
@@ -46,19 +40,16 @@ public class HeightFieldKeyActions {
 	final protected ViewerPanel viewer;
 	final protected RandomAccessibleInterval<FloatType> heightField;
 	final protected double avg;
+	final protected int[] downsamplingFactors;
 
 	final protected String n5Path;
 	final protected String heightFieldDataset;
-
-	// for keystroke actions
-	private final ActionMap ksActionMap = new ActionMap();
-	private final InputMap ksInputMap = new InputMap();
-	private final KeyStrokeAdder ksKeyStrokeAdder;
 
 	public HeightFieldKeyActions(
 			final ViewerPanel viewer,
 			final RandomAccessibleInterval<FloatType> heightField,
 			final double avg,
+			final int[] downsamplingFactors,
 			final String n5Path,
 			final String heightFieldDataset,
 			final InputTriggerConfig config,
@@ -67,46 +58,24 @@ public class HeightFieldKeyActions {
 		this.viewer = viewer;
 		this.heightField = heightField;
 		this.avg = avg;
+		this.downsamplingFactors = downsamplingFactors;
 		this.n5Path = n5Path;
 		this.heightFieldDataset = heightFieldDataset;
 
-		ksKeyStrokeAdder = config.keyStrokeAdder(ksInputMap, "persistence");
+		final KeyActionMaps keyActionMaps = new KeyActionMaps("persistence", config, inputActionBindings);
 
-		new SaveHeightField("save heightfield", "ctrl S").register();
-		new Undo("undo", "ctrl U").register();
-		new GoToZero("go to z=0", "ctrl C").register();
-		new DisplayZeroLine("display z=0", viewer, "ctrl 0").register();
-		new PrintScale("print current scaling", viewer, "ctrl 2").register();
+		keyActionMaps.register(new SaveHeightField("save heightfield", "ctrl S"));
+		keyActionMaps.register(new Undo("undo", "ctrl U"));
+		keyActionMaps.register(new GoToZero("go to z=0", "ctrl C"));
+		keyActionMaps.register(new DisplayZeroLine("display z=0", viewer, "ctrl 0"));
+		keyActionMaps.register(new PrintScale(viewer));
 
-		new MoveFixedSteps("move horizontal right", 0, false, "ctrl F").register();
-		new MoveFixedSteps("move horizontal left", 0, true, "ctrl D").register();
-
-		new MoveFixedSteps("move vertical up", 1, true, "ctrl R").register();
-		new MoveFixedSteps("move vertical down", 1, false, "ctrl V").register();
+		keyActionMaps.register(new MoveFixedSteps("move horizontal right", 0, false, "ctrl F"));
+		keyActionMaps.register(new MoveFixedSteps("move horizontal left", 0, true, "ctrl D"));
+		keyActionMaps.register(new MoveFixedSteps("move vertical up", 1, true, "ctrl R"));
+		keyActionMaps.register(new MoveFixedSteps("move vertical down", 1, false, "ctrl V"));
 
 		// TODO: INTENSITY overlay
-
-		inputActionBindings.addActionMap("persistence", ksActionMap);
-		inputActionBindings.addInputMap("persistence", ksInputMap);
-	}
-
-	private abstract class SelfRegisteringAction extends AbstractNamedAction {
-
-		private static final long serialVersionUID = -1032489117210681503L;
-
-		private final String[] defaultTriggers;
-
-		public SelfRegisteringAction(final String name, final String... defaultTriggers) {
-
-			super(name);
-			this.defaultTriggers = defaultTriggers;
-		}
-
-		public void register() {
-
-			put(ksActionMap);
-			ksKeyStrokeAdder.put(name(), defaultTriggers);
-		}
 	}
 
 	public void saveHeightField() throws IOException, InterruptedException, ExecutionException {
@@ -124,10 +93,11 @@ public class HeightFieldKeyActions {
 						exec);
 		exec.shutdown();
 		n5.setAttribute(heightFieldDataset, "avg", avg);
+		n5.setAttribute(heightFieldDataset, "downsamplingFactors", downsamplingFactors);
 		System.out.println("done.");
 	}
 
-	private class GoToZero extends SelfRegisteringAction {
+	private class GoToZero extends NamedTriggerAction {
 
 		private static final long serialVersionUID = 1679653174783245445L;
 
@@ -200,7 +170,7 @@ public class HeightFieldKeyActions {
 		}
 	}
 
-	private class SaveHeightField extends SelfRegisteringAction {
+	private class SaveHeightField extends NamedTriggerAction {
 
 		private static final long serialVersionUID = -7884038268749788208L;
 
@@ -225,7 +195,7 @@ public class HeightFieldKeyActions {
 		}
 	}
 
-	private class MoveFixedSteps extends SelfRegisteringAction {
+	private class MoveFixedSteps extends NamedTriggerAction {
 
 		private static final long serialVersionUID = -7884038268749788208L;
 		final int dim;
@@ -248,7 +218,7 @@ public class HeightFieldKeyActions {
 
 				final AffineTransform3D viewerTransform = viewer.state().getViewerTransform();
 
-				final double scale = computeScale(viewerTransform);
+				final double scale = DisplayScaleOverlay.computeScale(viewerTransform);
 
 				final double[] tStart = new double[]{viewerTransform.get(0, 3), viewerTransform.get(1, 3),
 						viewerTransform.get(2, 3)};
@@ -299,7 +269,7 @@ public class HeightFieldKeyActions {
 
 	}
 
-	private class Undo extends SelfRegisteringAction {
+	private class Undo extends NamedTriggerAction {
 
 		private static final long serialVersionUID = -7208806278835605976L;
 
@@ -331,7 +301,7 @@ public class HeightFieldKeyActions {
 		}
 	}
 
-	private class DisplayZeroLine extends SelfRegisteringAction {
+	private static class DisplayZeroLine extends NamedTriggerAction {
 
 		private static final long serialVersionUID = -7884038268749788208L;
 
@@ -354,7 +324,7 @@ public class HeightFieldKeyActions {
 				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
 				if (overlay == null) {
-					this.overlay = new ZeroLineOverlay(viewer);
+					this.overlay = new ZeroLineOverlay();
 					viewer.renderTransformListeners().add(overlay);
 					viewer.getDisplay().overlays().add(overlay);
 				} else {
@@ -367,121 +337,14 @@ public class HeightFieldKeyActions {
 		}
 	}
 
-	private class PrintScale extends SelfRegisteringAction {
-
-		private static final long serialVersionUID = -7884038268749788208L;
-
-		final ViewerPanel viewer;
-		DisplayScaleOverlay overlay;
-		boolean isVisible;
-
-		public PrintScale(final String name, final ViewerPanel viewer, final String... defaultTriggers) {
-
-			super(name, defaultTriggers);
-
-			this.viewer = viewer;
-			this.overlay = null;
-			this.isVisible = false;
-		}
-
-		@Override
-		public void actionPerformed(final ActionEvent event) {
-
-			synchronized (viewer) {
-
-				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-
-				if (overlay == null) {
-					this.overlay = new DisplayScaleOverlay(viewer);
-
-					viewer.addRenderTransformListener(overlay);
-					viewer.getDisplay().addOverlayRenderer(overlay);
-				} else {
-					overlay.toggleState();
-				}
-
-				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
-				viewer.requestRepaint();
-			}
-		}
-	}
-
-	private static class DisplayScaleOverlay implements OverlayRenderer, TransformListener<AffineTransform3D> {
-
-		private final DecimalFormat format = new DecimalFormat("0.####");
-		private final AffineTransform3D viewerTransform;
-		private final ViewerPanel viewer;
-		private Color col = Color.green.darker();
-
-		private int width = 0, height = 0;
-		private boolean draw;
-
-		public DisplayScaleOverlay(final ViewerPanel viewer) {
-
-			this.viewer = viewer;
-			this.viewerTransform = new AffineTransform3D();
-			this.draw = true;
-		}
-
-		@Override
-		public void setCanvasSize(final int width, final int height) {
-
-			this.width = width;
-			this.height = height;
-		}
-
-		@Override
-		public void transformChanged(final AffineTransform3D transform) {
-
-			viewerTransform.set(transform);
-		}
-
-		public void toggleState() {
-
-			this.draw = !this.draw;
-		}
-
-		@Override
-		public void drawOverlays(final Graphics g) {
-
-			if (!draw)
-				return;
-
-			// scale=det(A)^(1/3);
-			final double scale = computeScale(viewerTransform);
-
-			g.setFont(new Font("Monospaced", Font.PLAIN, 12));
-			g.setColor( Color.red );
-			g.drawString(
-							"s= " + format.format(scale) + " x",
-							(int)g.getClipBounds().getWidth() - 100,
-							(int)g.getClipBounds().getHeight() - 24);
-
-			// TransformAwareBufferedImageOverlayRenderer t = null;
-			// t.bufferedImage;
-		}
-	}
-
-	public static double computeScale(final AffineTransform3D t) {
-
-		final double[] m = t.getRowPackedCopy();
-
-		// scale=det(A)^(1/3);
-		return Math.pow(LinAlgHelpers.det3x3(m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]), 1.0 / 3.0);
-	}
-
 	private static class ZeroLineOverlay implements OverlayRenderer, TransformListener<AffineTransform3D> {
 
 		private final AffineTransform3D viewerTransform;
-		private final ViewerPanel viewer;
-		private Color col = Color.green.darker();
 
 		private int width = 0, height = 0;
 		private boolean draw;
 
-		public ZeroLineOverlay(final ViewerPanel viewer) {
-
-			this.viewer = viewer;
+		public ZeroLineOverlay() {
 			this.viewerTransform = new AffineTransform3D();
 			this.draw = true;
 		}

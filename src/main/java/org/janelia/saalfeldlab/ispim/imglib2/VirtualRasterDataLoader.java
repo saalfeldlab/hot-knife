@@ -63,8 +63,6 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 	{
 		try
 		{
-			final int numLoading = currentlyLoading.addAndGet( 1 );
-
 			final long[] min = new long[ output.numDimensions() ];
 			final long[] max = new long[ output.numDimensions() ];
 
@@ -90,9 +88,11 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 				return;
 			}
 
-			//System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is loading... (" + numLoading + " total)." );
+			final int numLoading = currentlyLoading.addAndGet( 1 );
 
-			final Pair< RealRandomAccessible<UnsignedShortType>, Interval > data =
+			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " is loading... (" + numLoading + " total)." );
+
+			Pair< RealRandomAccessible<UnsignedShortType>, Interval > data =
 					ViewISPIMStack.prepareCamSource(
 							slices,
 							new UnsignedShortType(0),
@@ -104,7 +104,7 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 							myLastSlice );
 
 			// TODO: do we have to load +-1 for proper interpolation?
-			final RandomAccessibleInterval< UnsignedShortType > img =
+			RandomAccessibleInterval< UnsignedShortType > img =
 					Views.interval( Views.raster( data.getA() ), new FinalInterval( min, max ) );
 
 			final Cursor< UnsignedShortType > in = Views.flatIterable( img ).cursor();
@@ -118,7 +118,12 @@ public class VirtualRasterDataLoader<T extends RealType<T> & NativeType<T>> impl
 				tOut.setReal( tIn.get() );
 			}
 
-			//System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " loaded... (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
+			data = null;
+			img = null;
+
+			System.out.println( "block: " + Util.printCoordinates( min ) + ">" + Util.printCoordinates( max ) + " loaded... (" + currentlyLoading.addAndGet( -1 ) + " still loading)." );
+
+			return;
 		}
 		catch ( IOException | FormatException e )
 		{

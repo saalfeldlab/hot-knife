@@ -141,6 +141,7 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		final String n5Path, id, channel, cam;
 		final double sigma, threshold, minIntensity, maxIntensity;
 		final double[] transform;
+		final int downsampling;
 
 		public Block(
 				final int from,
@@ -153,7 +154,8 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 				final double sigma,
 				final double threshold,
 				final double minIntensity,
-				final double maxIntensity)
+				final double maxIntensity,
+				final int downsampling )
 		{
 			this.from = from;
 			this.to = to;
@@ -163,10 +165,11 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 			this.cam = cam;
 			this.sigma = sigma;
 			this.threshold = threshold;
-			this.gaussOverhead = DoGImgLib2.radiusDoG( sigma );
+			this.gaussOverhead = DoGImgLib2.radiusDoG( sigma ) * downsampling;
 			this.transform = camtransform.getRowPackedCopy();
 			this.minIntensity = minIntensity;
 			this.maxIntensity = maxIntensity;
+			this.downsampling = downsampling;
 		}
 
 		public AffineTransform2D getTransform()
@@ -284,239 +287,6 @@ public class SparkPaiwiseAlignChannelsGeo implements Callable<Void>, Serializabl
 		// System.out.println(new Gson().toJson(stacks));
 
 		return n5data;
-	}
-
-	public static ArrayList< Block > assembleBlocks(
-			final String n5Path,
-			final String id,
-			final String channel,
-			final String cam,
-			final int blockSize,
-			final double sigma, // 2.0
-			final double threshold, // /*0.02*/0.004
-			final double minIntensity,
-			final double maxIntensity ) throws IOException
-	{
-		return assembleBlocks( openN5( n5Path, id ), id, channel, cam, blockSize, sigma, threshold, minIntensity, maxIntensity );
-	}
-
-	public static ArrayList< Block > assembleBlocks(
-			final N5Data n5data,
-			final String id,
-			final String channel,
-			final String cam,
-			final int blockSize,
-			final double sigma, // 2.0
-			final double threshold, // /*0.02*/0.004
-			final double minIntensity,
-			final double maxIntensity )
-	{
-		final int lastSliceIndex = n5data.lastSliceIndex;
-		final int numSlices = lastSliceIndex - + 1;
-		final int numBlocks = numSlices / blockSize + (numSlices % blockSize > 0 ? 1 : 0);
-
-		final ArrayList<Block> blocks = new ArrayList<>();
-
-		System.out.println( "numblocks = " + numBlocks + " from " + n5data.lastSliceIndex + " slices." );
-
-		for ( int i = 0; i < numBlocks; ++i )
-		{
-			final int from  = i * blockSize;
-			final int to = Math.min( lastSliceIndex, from + blockSize - 1 );
-
-			final Block block = new Block(from, to, n5data.n5path, id, channel, cam, n5data.camTransforms.get( channel ).get( cam ), sigma, threshold, minIntensity, maxIntensity );
-
-			blocks.add( block );
-	
-			System.out.println( "block " + i + ": " + from + " >> " + to + " for id=" + id + ", channel=" + channel + ", cam=" + cam );
-
-			/*
-			// visible error: from=200, to=219, ch=Ch515+594nm (cam=cam1) Pos012
-			if ( blockChannelB.from == 200 )
-			{
-				new ImageJ();
-				viewBlock( stacks.get( blockChannelB.channel ), blockChannelB, firstSliceIndex, localLastSlice, n5Path, id );
-				SimpleMultiThreading.threadHaltUnClean();
-			}*/
-		}
-
-		return blocks;
-	}
-
-	public static void extractPoints(
-			final JavaSparkContext sc,
-			final String n5Path,
-			final ArrayList< Block > blocks ) throws IOException
-	{
-		final JavaRDD<Block> rddSlices = sc.parallelize( blocks );
-
-		final JavaPairRDD<Block, ArrayList< InterestPoint >> rddFeatures = rddSlices.mapToPair(
-			block ->
-			{
-				final N5Data n5data = openN5( block.n5Path, block.id );
-
-				final HashMap<String, List<Slice>> ch = n5data.stacks.get( block.channel );
-				final List< Slice > slices = ch.get( block.cam );
-
-				/* this is the inverse */
-				final AffineTransform2D camtransform = block.getTransform();//camTransforms.get( block.channel ).get( block.cam );
-
-				final N5FSReader n5Local = new N5FSReader(
-						n5data.n5path,
-						new GsonBuilder().registerTypeAdapter(
-								AffineTransform2D.class,
-								new AffineTransform2DAdapter()));
-
-				final ArrayList<AffineTransform2D> transforms = n5Local.getAttribute(
-						block.id + "/" + block.channel,
-						"transforms",
-						new TypeToken<ArrayList<AffineTransform2D>>(){}.getType());
-
-				//if ( block.from != 200 || block.channel.equals( "Ch488+561+647nm" ) )
-				//	return new Tuple2<>(block, new ArrayList<>());
-
-				final RandomAccessible<AffineTransform2D> alignmentTransforms = Views.extendBorder(new ListImg<>(transforms, transforms.size()));
-
-				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): opening images for " + block.id );
-
-				final Pair<RandomAccessibleInterval< UnsignedShortType >, RandomAccessibleInterval< UnsignedShortType >> imgs =
-						PairwiseAlignChannelsUtil.openRandomAccessibleIntervals(
-								slices,
-								new UnsignedShortType(0),
-								Interpolation.NLINEAR,
-								camtransform.inverse(), // pass the forward transform
-								alignmentTransforms,//alignments.get( channelA ),
-								Math.max( 0, block.from  - block.gaussOverhead ),
-								Math.min( n5data.lastSliceIndex, block.to + block.gaussOverhead ) );
-
-				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): finding points for " + block.id );
-
-				//System.out.println( Util.printInterval( imgs.getA() ) );
-
-				final int zBlockSize = (int)( imgs.getA().dimension( 2 ) / 2  + imgs.getA().dimension( 2 ) % 2 );
-
-				final ExecutorService service = Executors.newFixedThreadPool( 1 );
-				final ArrayList< InterestPoint > initialPoints =
-						DoGImgLib2.computeDoG(
-								FusionTools.cacheRandomAccessibleInterval( imgs.getA(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } ),
-								FusionTools.cacheRandomAccessibleInterval( imgs.getB(), new UnsignedShortType(), new int[] { 64, 64, zBlockSize } ),
-								block.sigma,
-								block.threshold,
-								1, /*localization*/
-								false, /*findMin*/
-								true, /*findMax*/
-								block.minIntensity, /* min intensity */
-								block.maxIntensity, /* max intensity */
-								new int[] { 512, 512, zBlockSize }, // choose good blocksize in z
-								service,
-								1 );
-
-				service.shutdown();
-
-				// exclude points that lie within the Gauss overhead
-				final ArrayList< InterestPoint > points = new ArrayList<>();
-
-				for ( final InterestPoint ip : initialPoints )
-					if ( ip.getDoublePosition( 2 ) > block.from - 0.5 && ip.getDoublePosition( 2 ) < block.to + 0.5 )
-						points.add( ip );
-
-				System.out.println( new Date(System.currentTimeMillis() ) + ": from=" + block.from + ", to=" + block.to + ", ch=" + block.channel + " (cam=" + block.cam + "): " + points.size() + " points for " + block.id );
-
-				/*if ( block.from == 200 )
-				{
-					final ImagePlus impA = ImageJFunctions.wrap(imgs.getA(), block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
-					impA.setDimensions( 1, impA.getStackSize(), 1 );
-					impA.resetDisplayRange();
-					impA.show();
-	
-					//final ImagePlus impAw = ImageJFunctions.wrap(imgs.getB(), block.channel + "_w", Executors.newFixedThreadPool( 8 ) ).duplicate();
-					//impAw.setDimensions( 1, impAw.getStackSize(), 1 );
-					//impAw.resetDisplayRange();
-					//impAw.show();
-
-					final long[] dim = new long[ imgs.getA().numDimensions() ];
-					final long[] min = new long[ imgs.getA().numDimensions() ];
-					imgs.getA().dimensions( dim );
-					imgs.getA().min( min );
-
-					final RandomAccessibleInterval< FloatType > dots = Views.translate( ArrayImgs.floats( dim ), min );
-					final RandomAccess< FloatType > rDots = dots.randomAccess();
-
-					for ( final InterestPoint ip : points )
-					{
-						for ( int d = 0; d < dots.numDimensions(); ++d )
-							rDots.setPosition( Math.round( ip.getFloatPosition( d ) ), d );
-
-						rDots.get().setOne();
-					}
-
-					Gauss3.gauss( 1, Views.extendZero( dots ), dots );
-					final ImagePlus impP = ImageJFunctions.wrap( dots, "detections_" + block.channel, Executors.newFixedThreadPool( 8 ) ).duplicate();
-					impP.setDimensions( 1, impP.getStackSize(), 1 );
-					impP.setSlice( impP.getStackSize() / 2 );
-					impP.resetDisplayRange();
-					impP.show();
-				}*/
-
-				return new Tuple2<>(block, points);
-			});
-
-		/* cache the booleans, so features aren't regenerated every time */
-		rddFeatures.cache();
-
-		/* collect the results */
-		final List<Tuple2<Block, ArrayList< InterestPoint >>> results = rddFeatures.collect();
-
-		final HashMap< ValuePair< String, String >, ArrayList< InterestPoint > > allPoints = new HashMap<>();
-
-		for ( final Tuple2<Block, ArrayList< InterestPoint >> tuple : results )
-		{
-			final ValuePair< String, String > key = new ValuePair<>( tuple._1().id, tuple._1().channel );
-			allPoints.putIfAbsent( key, new ArrayList<>() );
-			allPoints.get( key ).addAll( tuple._2() );
-
-			if ( tuple._2().size() == 0 )
-				System.out.println( "Warning: block " + tuple._1.from + " has 0 detections (id=" + tuple._1().id + ", ch=" + tuple._1().channel + ")" );
-		}
-
-		//System.out.println( "fixing ids (they were duplicate due to paralell processing) ... " );
-
-		for ( final ArrayList< InterestPoint > points : allPoints.values() )
-			for ( int i = 0; i < points.size(); ++i )
-				points.set( i, new InterestPoint( i, points.get( i ).getL() ) );
-
-		//System.exit( 0 );
-
-		final N5FSWriter n5Writer = new N5FSWriter(n5Path);
-
-		for ( final Entry< ValuePair< String, String >, ArrayList< InterestPoint > > entry : allPoints.entrySet() )
-		{
-			if (entry.getValue().size() > 0)
-			{
-				System.out.println( "saving " + entry.getValue().size() + " points for id=" + entry.getKey().getA() + ", channel=" + entry.getKey().getB() + " ... " );
-
-				final String featuresGroupName = n5Writer.groupPath( entry.getKey().getA() + "/" + entry.getKey().getB(), "Stack-DoG-detections"); // id, channel
-	
-				if (n5Writer.exists(featuresGroupName))
-					n5Writer.remove(featuresGroupName);
-				
-				n5Writer.createDataset(
-						featuresGroupName,
-						new long[] {1},
-						new int[] {1},
-						DataType.OBJECT,
-						new GzipCompression());
-	
-				final String datasetName = entry.getKey().getA() + "/" + entry.getKey().getB() + "/Stack-DoG-detections";
-				final DatasetAttributes datasetAttributes = n5Writer.getDatasetAttributes(datasetName);
-	
-				n5Writer.writeSerializedBlock(
-						entry.getValue(),
-						datasetName,
-						datasetAttributes,
-						new long[] {0});
-			}
-		}
 	}
 
 	public static double align(

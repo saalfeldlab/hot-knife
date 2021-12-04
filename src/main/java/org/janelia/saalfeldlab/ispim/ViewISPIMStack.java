@@ -24,7 +24,11 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import org.janelia.saalfeldlab.hotknife.util.Util;
+import org.janelia.saalfeldlab.ispim.SparkPaiwiseAlignChannelsGeo.N5Data;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 
 import com.google.common.reflect.TypeToken;
@@ -36,6 +40,7 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.viewer.Interpolation;
+import ij.ImageJ;
 import loci.formats.FormatException;
 import loci.formats.in.TiffReader;
 import net.imglib2.FinalInterval;
@@ -47,6 +52,9 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.img.imageplus.ShortImagePlus;
 import net.imglib2.img.list.ListImg;
 import net.imglib2.interpolation.Interpolant;
 import net.imglib2.interpolation.InterpolatorFactory;
@@ -64,6 +72,7 @@ import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
@@ -73,6 +82,7 @@ import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.Views;
+import net.preibisch.mvrecon.fiji.spimdata.interestpoints.InterestPoint;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -102,6 +112,12 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 
 	@Option(names = "--shearY", required = false, description = "shearing of z into y, e.g. -1 (default 0)")
 	private double shearY = 0;
+
+	@Option(names = "--displayImageJStack", required = false, description = "display as ImageJ stack (default off)")
+	private boolean displayImageJStack = false;
+
+	@Option(names = "--overlayDoG", required = false, description = "overlay 3D DoG detections (default false)")
+	private boolean overlayDoG = false;
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
@@ -478,7 +494,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 			final HashMap<String, HashMap<String, List<Slice>>> stacks,
 			final HashMap<String, RandomAccessible<AffineTransform2D>> alignments,
 			final int firstSliceIndex,
-			final int lastSliceIndex) throws FormatException, IOException {
+			final int lastSliceIndex ) throws FormatException, IOException {
 
 		BdvStackSource<?> bdv = null;
 		// final SharedQueue queue = new SharedQueue(Math.max(1,
@@ -502,7 +518,6 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 						alignments.get(channel.getKey()),
 						firstSliceIndex,
 						lastSliceIndex);
-
 			}
 		}
 
@@ -529,7 +544,12 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 				new TypeToken<ArrayList<String>>() {}.getType());
 
 		if (!ids.contains(id))
+		{
+			for ( final String s : ids )
+				System.out.println( s );
+			System.out.println( id + " not present (available ones listed above).");
 			return null;
+		}
 
 		final HashMap<String, HashMap<String, List<Slice>>> stacks = new HashMap<>();
 		final HashMap<String, RandomAccessible<AffineTransform2D>> alignments = new HashMap<>();
@@ -590,10 +610,69 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 		System.out.println(gson.toJson(ids));
 		// System.out.println(new Gson().toJson(stacks));
 
-		final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
-//		final AffineTransform3D stretchTransform = new AffineTransform3D();
+//		final Scale3D stretchTransform = new Scale3D(0.2, 0.2, 0.85);
+		final AffineTransform3D stretchTransform = new AffineTransform3D();
 
-		run(camTransforms, stretchTransform, stacks, alignments, firstSliceIndex, localLastSliceIndex);
+		if ( displayImageJStack )
+		{
+			new ImageJ();
+
+			final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+
+			for (final Entry<String, HashMap<String, List<Slice>>> channel : stacks.entrySet()) {
+	
+				for (final Entry<String, List<Slice>> cam : channel.getValue().entrySet()) {
+	
+					/* this is the inverse */
+					final AffineTransform2D camTransform = camTransforms.get(channel.getKey()).get(cam.getKey());
+					final String title = channel.getKey() + " " + cam.getKey();
+					final Pair< RealRandomAccessible<UnsignedShortType>, Interval > data =
+							prepareCamSource(cam.getValue(), new UnsignedShortType(0), Interpolation.NLINEAR, camTransform.inverse(), stretchTransform, alignments.get(channel.getKey()), firstSliceIndex, localLastSliceIndex);
+	
+					RandomAccessibleInterval< UnsignedShortType > ra = Views.zeroMin( Views.interval( Views.raster( data.getA() ), data.getB() ) );
+					System.out.println( "copying..." );
+					ShortImagePlus<UnsignedShortType> img = ImagePlusImgs.unsignedShorts( ra.dimensionsAsLongArray() );
+					Util.copy(ra, img, service);
+					img.getImagePlus().setDimensions(1, (int)img.dimension( 2 ), 1 );
+					img.getImagePlus().setTitle(title);
+					img.getImagePlus().show();
+				}
+			}
+			service.shutdown();
+		}
+		else
+		{
+			BdvStackSource<?> bdv = run(camTransforms, stretchTransform, stacks, alignments, firstSliceIndex, localLastSliceIndex );
+			
+			if ( overlayDoG )
+			{
+				for (final Entry<String, HashMap<String, List<Slice>>> channel : stacks.entrySet()) {
+					
+					for (final Entry<String, List<Slice>> cam : channel.getValue().entrySet()) {
+
+						Pair<ArrayList<InterestPoint>, N5Data> points =
+								SparkPairwiseStitchSlabs.loadPoints( n5Path, id, channel.getKey(), cam.getKey(), null, 0 );
+
+						System.out.println( "Loaded " + points.getA().size() + " interest points.");
+
+						final AffineTransform3D t = new AffineTransform3D();
+						t.preConcatenate( stretchTransform );
+		
+						bdv = BdvFunctions.show(
+								SparkPaiwiseAlignChannelsGeo.renderPoints(
+										points.getA(),
+										false ),
+								Intervals.createMinMax( 0, 0, 0, 1, 1, 1),
+								"detections",
+								new BdvOptions().addTo( bdv ).sourceTransform( t ) );
+
+						bdv.setDisplayRange(0, 256);
+						bdv.setColor( new ARGBType( ARGBType.rgba(255, 0, 0, 0)));
+					}
+				}
+			}
+
+		}
 
 		return null;
 	}

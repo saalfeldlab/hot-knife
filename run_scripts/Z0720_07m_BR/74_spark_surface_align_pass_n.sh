@@ -2,23 +2,43 @@
 
 set -e
 
-# run times with default node counts
-# pass01:  7 min, pass02:  5 min, pass03: 14 min, pass04: 19 min, pass05: 24 min, pass06:  23 min
-# pass07: 23 min, pass08: 11 min, pass09: 11 min, pass10: 27 min, pass11: 39 min, pass12: 128 min
+# run times with 10 nodes for Z0720_07m_BR Sec06 - Sec26 (40 datasets)
+# pass01: 10 min
 
-if (( $# < 1 )); then
-  echo "USAGE $0 <pass (1-12)> [number of nodes (overrides default)]"
+# run times with 20 nodes for Z0720_07m_BR Sec06 - Sec26 (40 datasets)
+# pass02: 21 min, pass03: 20 min, pass04: 32 min, pass05: 48 min, pass06: 34 min
+# pass07: 44 min, pass08: 16 min, pass09: 18 min, pass10: 54 min, pass11: 86 min, pass12: >300 min
+
+# next time, will run with increased node counts (key is to get pass12 run under 4 hours)
+
+if (( $# < 3 )); then
+  echo "USAGE $0 <pass (1-12)> <min tab number> <max tab number> [number of nodes (overrides default)]"
   exit 1
 fi
 
 PASS="${1}"
+# needs to be exported so that 00_config picks it up for N5_SURFACE_ROOT definition
+export MIN_SEC_NUM="$2"
+export MAX_SEC_NUM="$3"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
-source "${SCRIPT_DIR}/00_config.sh" "${TAB}"
+
+# only load config if it has yet to be loaded
+if [ -z ${N5_SURFACE_ROOT} ]; then
+  source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
+fi
 
 PADDED_PASS=$(printf "%02d" "${PASS}")
 PADDED_PRIOR_PASS=$(printf "%02d" "$(( PASS - 1 ))")
+
+if [[ ! -d "${N5_SAMPLE_PATH}${N5_SURFACE_ROOT}" ]]; then
+  SURFACE_PARENT_DIR=$(dirname "${N5_SAMPLE_PATH}${N5_SURFACE_ROOT}")
+  if [[ -d "${SURFACE_PARENT_DIR}" ]]; then
+    LATEST_RUN_DIR=$(find "${SURFACE_PARENT_DIR}" -maxdepth 1 -type d -name "run_*" | tail -1)
+    export N5_SURFACE_ROOT=${LATEST_RUN_DIR##${N5_SAMPLE_PATH}}
+  fi
+fi
 
 N5_GROUP_INPUT="${N5_SURFACE_ROOT}/pass${PADDED_PRIOR_PASS}"
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass${PADDED_PASS}"
@@ -34,9 +54,10 @@ fi
 
 # setup pass specific run class
 case "${PASS}" in
-  1)            N_NODES=${2:-10}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-  2|3|4|5|6|7)  N_NODES=${2:-20}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-  8|9|10|11|12) N_NODES=${2:-20}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
+  1)            N_NODES=${4:-20}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  2|3|4|5|6|7)  N_NODES=${4:-40}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  8|9|10|11)    N_NODES=${4:-40}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
+  12)           N_NODES=${4:-80}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
   *)
     echo "ERROR: 'pass parameter ${PASS} must be between 1 and 12'"
     exit 1

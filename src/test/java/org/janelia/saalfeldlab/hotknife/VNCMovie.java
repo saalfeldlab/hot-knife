@@ -258,6 +258,7 @@ public class VNCMovie implements Callable<Void> {
 			final double inverseScale = 1.0 / scale;
 			final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
 
+			// TODO
 			final int blockRadius = (int)Math.round(511 * inverseScale);
 
 			final ImageJStackOp<UnsignedByteType> cllcn =
