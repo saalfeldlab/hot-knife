@@ -14,49 +14,49 @@ N_NODES="${1}"
 # setup export parameters
 
 ARGV="\
---n5PathInput /nrs/flyem/render/n5/Z0720_07m_BR \
--i /flat/Sec06/raw -t 20 -b 20 \
--i /flat/Sec07/raw -t 20 -b 20 \
--i /flat/Sec08/raw -t 20 -b 20 \
--i /flat/Sec09/raw -t 20 -b 20 \
--i /flat/Sec10/raw -t 20 -b 20 \
--i /flat/Sec11/raw -t 20 -b 20 \
--i /flat/Sec12/raw -t 20 -b 20 \
--i /flat/Sec13/raw -t 20 -b 20 \
--i /flat/Sec14/raw -t 20 -b 20 \
--i /flat/Sec15/raw -t 20 -b 20 \
--i /flat/Sec16/raw -t 20 -b 20 \
--i /flat/Sec17/raw -t 20 -b 20 \
--i /flat/Sec18/raw -t 20 -b 20 \
--i /flat/Sec19/raw -t 20 -b 20 \
--i /flat/Sec20/raw -t 20 -b 20 \
--i /flat/Sec21/raw -t 20 -b 20 \
--i /flat/Sec22/raw -t 20 -b 20 \
--i /flat/Sec23/raw -t 20 -b 20 \
--i /flat/Sec24/raw -t 20 -b 20 \
--i /flat/Sec25/raw -t 20 -b 20 \
--i /flat/Sec26/raw -t 20 -b 20 \
--i /flat/Sec27/raw -t 20 -b 20 \
--i /flat/Sec28/raw -t 20 -b 20 \
--i /flat/Sec29/raw -t 20 -b 20 \
--i /flat/Sec30/raw -t 20 -b 20 \
--i /flat/Sec31/raw -t 20 -b 20 \
--i /flat/Sec32/raw -t 20 -b 20 \
--i /flat/Sec33/raw -t 20 -b 20 \
--i /flat/Sec34/raw -t 20 -b 20 \
--i /flat/Sec35/raw -t 20 -b 20 \
--i /flat/Sec36/raw -t 20 -b 20 \
--i /flat/Sec37/raw -t 20 -b 20 \
--i /flat/Sec38/raw -t 20 -b 20 \
--i /flat/Sec39/raw -t 20 -b 20 \
--i /flat/Sec40/raw -t 20 -b 20 \
+--n5PathInput '/nrs/flyem/render/n5/Z0720_07m_BR' \
+-i /flat/Sec40/raw -t 20 -b -20 \
+-i /flat/Sec39/raw -t 20 -b -20 \
+-i /flat/Sec38/raw -t 20 -b -20 \
+-i /flat/Sec37/raw -t 20 -b -20 \
+-i /flat/Sec36/raw -t 20 -b -20 \
+-i /flat/Sec35/raw -t 20 -b -20 \
+-i /flat/Sec34/raw -t 20 -b -20 \
+-i /flat/Sec33/raw -t 20 -b -20 \
+-i /flat/Sec32/raw -t 20 -b -20 \
+-i /flat/Sec31/raw -t 20 -b -20 \
+-i /flat/Sec30/raw -t 20 -b -20 \
+-i /flat/Sec29/raw -t 20 -b -20 \
+-i /flat/Sec28/raw -t 20 -b -20 \
+-i /flat/Sec27/raw -t 20 -b -20 \
+-i /flat/Sec26/raw -t 20 -b -20 \
+-i /flat/Sec25/raw -t 20 -b -20 \
+-i /flat/Sec24/raw -t 20 -b -20 \
+-i /flat/Sec23/raw -t 20 -b -20 \
+-i /flat/Sec22/raw -t 20 -b -20 \
+-i /flat/Sec21/raw -t 20 -b -20 \
+-i /flat/Sec20/raw -t 20 -b -20 \
+-i /flat/Sec19/raw -t 20 -b -20 \
+-i /flat/Sec18/raw -t 20 -b -20 \
+-i /flat/Sec17/raw -t 20 -b -20 \
+-i /flat/Sec16/raw -t 20 -b -20 \
+-i /flat/Sec15/raw -t 20 -b -20 \
+-i /flat/Sec14/raw -t 20 -b -20 \
+-i /flat/Sec13/raw -t 20 -b -20 \
+-i /flat/Sec12/raw -t 20 -b -20 \
+-i /flat/Sec11/raw -t 20 -b -20 \
+-i /flat/Sec10/raw -t 20 -b -20 \
+-i /flat/Sec09/raw -t 20 -b -20 \
+-i /flat/Sec08/raw -t 20 -b -20 \
+-i /flat/Sec07/raw -t 20 -b -20 \
+-i /flat/Sec06/raw -t 20 -b -20 \
 --n5TransformGroup '/surface-align-BR/06-40' \
 --n5PathOutput '/nrs/flyem/render/n5/Z0720_07m_BR' \
 --n5DatasetOutput '/40-06/s0' \
 --blockSize 256,256,256"
 # --normalizeContrast
 
-HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-d3bd69d0bf57b41e43a9b9c01e6b918b1d415f4f-SNAPSHOT.jar"
+HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-xxx-SNAPSHOT.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportAlignedSlabSeries"
 
 # --------------------------------------------------------------------
