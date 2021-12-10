@@ -71,6 +71,52 @@ import net.imglib2.view.Views;
  */
 public class ViewAlignedSlabSeries {
 
+	/*
+	--n5Path '/nrs/flyem/render/n5/Z0720_07m_BR'
+	-j '/surface_align_final/pass12'
+	-i '/flat/Sec39/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec38/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec37/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec36/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec35/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec34/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec33/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec32/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec31/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec30/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec29/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec28/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec27/raw'
+	-t 20
+	-b -20
+	-i '/flat/Sec26/raw'
+	-t 20
+	-b -20
+	 */
 	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
 
