@@ -385,6 +385,8 @@ public class ViewAlignedSlabSeries {
 				// Interval: [-963, -650, 20] -> [45282, 54512, 2727], dimensions (46246, 55163, 2708)
 				// 3d-affine: (1.0, 0.0, 0.0, -22160.0, 0.0, 1.0, 0.0, -26931.0, 0.0, 0.0, 1.0, 0.0)
 
+				// 40-06:
+				// Interval: [-4291, -7050, 20] -> [55525, 66300, 2343], dimensions (59817, 73351, 2324)
 				//final long rotationCenterX = (cropInterval.dimension(0)/2 + cropInterval.min( 0 ));
 				//final long rotationCenterY = (cropInterval.dimension(1)/2 + cropInterval.min( 1 ));
 
