@@ -52,6 +52,7 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
@@ -388,6 +389,8 @@ public class SparkExportAlignedSlabSeries {
 		final List<Long> botOffsets = options.getBotOffsets();
 		final List<String> datasetNames = options.getInputDatasets();
 
+		for ( final String datasetName : datasetNames )
+			System.out.println( datasetName );
 
 		final double[] boundsMin = n5Input.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5Input.getAttribute(group, "boundsMax", double[].class);
@@ -424,6 +427,8 @@ public class SparkExportAlignedSlabSeries {
 				max[1] - min[1] + 1,
 				depth
 		};
+
+		System.out.println( "final volume: " + Util.printCoordinates( dimensions ));
 
 		/*
 		// flipping x-z axes
