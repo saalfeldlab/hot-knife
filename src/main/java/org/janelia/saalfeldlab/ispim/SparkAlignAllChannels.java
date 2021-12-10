@@ -58,8 +58,8 @@ public class SparkAlignAllChannels implements Callable<Void>, Serializable {
 	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/saalfeld/from_mdas/mar24_bis25_s5_r6.n5")
 	private String n5Path = null;
 
-	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 10")
-	private int distance = 10;
+	@Option(names = {"-d", "--distance"}, required = false, description = "max distance for two slices to be compared, e.g. 10 (default: 0, read from data)")
+	private int distance = 0;
 
 	//@Option(names = "--minIntensity", required = false, description = "min intensity")
 	//private double minIntensity = 0;

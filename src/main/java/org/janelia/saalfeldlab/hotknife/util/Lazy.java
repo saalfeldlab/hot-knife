@@ -26,6 +26,7 @@ import static net.imglib2.type.PrimitiveType.SHORT;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import net.imglib2.Dimensions;
 import org.janelia.saalfeldlab.hotknife.ops.UnaryComputerOpCellLoader;
 
 import net.imagej.ops.Op;
@@ -100,7 +101,7 @@ public class Lazy {
 	/**
 	 * Create a memory {@link CachedCellImg} with a {@link CellLoader}.
 	 *
-	 * @param targetInterval
+	 * @param targetDimensions
 	 * @param blockSize
 	 * @param type
 	 * @param accessFlags
@@ -108,13 +109,13 @@ public class Lazy {
 	 * @return
 	 */
 	public static <T extends NativeType<T>> CachedCellImg<T, ?> createImg(
-			final Interval targetInterval,
+			final Dimensions targetDimensions,
 			final int[] blockSize,
 			final T type,
 			final Set<AccessFlags> accessFlags,
 			final CellLoader<T> loader) {
 
-		final long[] dimensions = Intervals.dimensionsAsLongArray(targetInterval);
+		final long[] dimensions = Intervals.dimensionsAsLongArray(targetDimensions);
 		final CellGrid grid = new CellGrid(dimensions, blockSize);
 
 		@SuppressWarnings({"unchecked", "rawtypes"})
@@ -127,7 +128,7 @@ public class Lazy {
 	/**
 	 * Create a memory {@link CachedCellImg} with a cell generator {@link Consumer}.
 	 *
-	 * @param targetInterval
+	 * @param targetDimensions
 	 * @param blockSize
 	 * @param type
 	 * @param accessFlags
@@ -135,14 +136,14 @@ public class Lazy {
 	 * @return
 	 */
 	public static <T extends NativeType<T>> CachedCellImg<T, ?> process(
-			final Interval targetInterval,
+			final Dimensions targetDimensions,
 			final int[] blockSize,
 			final T type,
 			final Set<AccessFlags> accessFlags,
 			final Consumer<RandomAccessibleInterval<T>> op) {
 
 		return createImg(
-				targetInterval,
+				targetDimensions,
 				blockSize,
 				type,
 				accessFlags,

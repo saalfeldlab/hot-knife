@@ -104,7 +104,10 @@ public class SparkAlignAllChannelsAgain implements Callable<Void>, Serializable 
 		final JavaPairRDD<String[], double[]> rddShears = rddIdsChannels.mapToPair(idc -> {
 
 			if (excludeIds.contains(idc[0]))
+			{
+				System.out.println( "Ignoring " + idc[0]);
 				return null;
+			}
 
 			final N5Reader n5 = new N5FSReader(
 					n5Path,
@@ -113,14 +116,24 @@ public class SparkAlignAllChannelsAgain implements Callable<Void>, Serializable 
 							new AffineTransform2DAdapter()));
 
 			final ArrayList<AffineTransform2D> transforms = n5.getAttribute(n5.groupPath(idc), "transforms", new TypeToken<ArrayList<AffineTransform2D>>() {}.getType());
+
+			if ( transforms == null )
+			{
+				// empty stack most likely
+				return null;
+			}
+
+			//if ( idc[0].equals("Pos055"))
+			//for ( final AffineTransform2D t : transforms )
+			//System.out.println( t );
 			final HashSet<AffineTransform2D> consider = new HashSet<>(transforms);
 
 			final double[] shearX = AlignChannel.fit(transforms, consider, 0, 2);
 			final double[] shearY = AlignChannel.fit(transforms, consider, 1, 2);
 
 			System.out.println("Averaging shear " + idc[0] + "/" + idc[1]);
-			System.out.println("x : a = " + shearX[0] + ", b = " + shearX[1]);
-			System.out.println("y : a = " + shearY[0] + ", b = " + shearY[1]);
+			System.out.println("(" + idc[0] + "/" + idc[1] + ") x : a = " + shearX[0] + ", b = " + shearX[1]);
+			System.out.println("(" + idc[0] + "/" + idc[1] + ") y : a = " + shearY[0] + ", b = " + shearY[1]);
 
 			return new Tuple2<>(idc, new double[] {shearX[0], shearY[0]});
 		});
