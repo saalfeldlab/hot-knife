@@ -195,8 +195,11 @@ public class ViewAlignedSlabSeries {
 
 		long zOffset = 0;
 
+		// create the preview for 32x downsampling
+		// dataset: /flat/Sec06/raw
+		// 32 [0, 0, 0] -> [1869, 2292, 44], dimensions (1870, 2293, 45)  2840
 		new ImageJ();
-		ByteImagePlus<UnsignedByteType> render = ImagePlusImgs.unsignedBytes(1446, 1724, 1099 + 84 );
+		ByteImagePlus<UnsignedByteType> render = ImagePlusImgs.unsignedBytes(1870, 2293, 2840 + 45);
 		render.getImagePlus().show();
 
 		for (int i = 0; i < datasetNames.size(); ++i) {
@@ -305,14 +308,24 @@ public class ViewAlignedSlabSeries {
 				final SubsampleIntervalView<UnsignedByteType> subsampledTransformedSource = Views.subsample(transformedSource, scale);
 				final RandomAccessibleInterval<UnsignedByteType> cachedSource = Show.wrapAsVolatileCachedCellImg(subsampledTransformedSource, new int[]{64, 64, 64});
 
-				if ( scale == 32 )
+				if ( scale == 32 /*&& (datasetName.contains( "Sec24") || datasetName.contains( "Sec23") || datasetName.contains( "Sec22") || datasetName.contains( "Sec21") )*/ )
 				{
+					System.out.println( "fusing " + datasetName );
+					final long time = System.currentTimeMillis();
+					// 39-26
 					// last offset = 1099
 					// last size = 84
+
+					// 40-06
+					// last offset = 2840
+					// last size = 45
 					System.out.println( scale  + " " + Util.printInterval( subsampledTransformedSource ) + "  " + (zOffset / scale) );
 
-					// TODO: write this below into render
+					// writing this below into render image
 					RandomAccessibleInterval<UnsignedByteType> view = Views.translate(cachedSource, new long[] { 0, 0, (zOffset / scale) } );
+
+					System.out.println( "input: " + Util.printInterval( view ) );
+					System.out.println( "output: " + Util.printInterval( render ) );
 
 					final int numThreads = Runtime.getRuntime().availableProcessors();
 					final List< Callable< Void > > tasks = new ArrayList<>();
@@ -353,7 +366,8 @@ public class ViewAlignedSlabSeries {
 						e.printStackTrace();
 						throw new RuntimeException( e );
 					}
-					System.out.println( "done" );
+
+					System.out.println( "done, took " + (System.currentTimeMillis() - time)/(1024*60) + " min." );
 				}
 
 				mipmaps[s] = cachedSource;
