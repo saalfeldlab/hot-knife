@@ -45,6 +45,12 @@ public class LocationsPanel
 
     public LocationsPanel(final ViewerPanel viewer,
                           final String locationsFilePath) {
+        this(viewer, locationsFilePath, null);
+    }
+
+    public LocationsPanel(final ViewerPanel viewer,
+                          final String locationsFilePath,
+                          final Double sourceScale) {
         super(new BorderLayout());
 
         final LocationTableModel tableModel = new LocationTableModel();
@@ -55,7 +61,7 @@ public class LocationsPanel
         descriptionColumn.setCellEditor(new DescriptionCellEditor(tableModel));
         descriptionColumn.setPreferredWidth(180);
 
-        final GoButton goButton = new GoButton(locationTable, tableModel, viewer);
+        final GoButton goButton = new GoButton(locationTable, tableModel, viewer, sourceScale);
         final RemoveButton removeButton = new RemoveButton(locationTable, tableModel);
         final LocationActionsPanel actionsPanel = new LocationActionsPanel(goButton, removeButton);
         final LocationActionsCellRenderer renderer = new LocationActionsCellRenderer(actionsPanel);
@@ -75,6 +81,16 @@ public class LocationsPanel
             final double cY = viewer.getDisplay().getHeight() / 2.0;
             t.set( t.get( 0, 3 ) - cX, 0, 3 );
             t.set( t.get( 1, 3 ) - cY, 1, 3 );
+
+            // scale transform tx, ty, and tz to full scale pixels so that locations can be easily used in other viewers
+            if (sourceScale != null) {
+                final double[][] m = new double[3][4];
+                t.toMatrix(m);
+                t.set(m[0][0], m[0][1], m[0][2], m[0][3] * sourceScale,
+                      m[1][0], m[1][1], m[1][2], m[1][3] * sourceScale,
+                      m[2][0], m[2][1], m[2][2], m[2][3] * sourceScale);
+            }
+
             tableModel.add(new LocationOfInterest(t));
             locationTable.editCellAt(tableModel.getRowCount() - 1, 0);
             locationTable.getEditorComponent().requestFocus();
@@ -108,6 +124,11 @@ public class LocationsPanel
 
         final JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
+
+            // stop any active editing to make sure most recent description changes are saved
+            if (locationTable.isEditing()) {
+                locationTable.getCellEditor().stopCellEditing();
+            }
 
             final File outputDirectory = this.defaultLocationsFile.getParentFile();
             if (! outputDirectory.exists()) {
@@ -231,7 +252,8 @@ public class LocationsPanel
     private static final class GoButton extends JButton {
         public GoButton(final JTable table,
                         final LocationTableModel tableModel,
-                        final ViewerPanel viewer) {
+                        final ViewerPanel viewer,
+                        final Double sourceScale) {
             super("Go");
 
             setPreferredSize(new Dimension(60, 20));
@@ -242,6 +264,17 @@ public class LocationsPanel
                 final LocationOfInterest location = tableModel.getLocationForRow(selectedRow);
                 if (location != null) {
                     final AffineTransform3D locationTransform = location.getTransform();
+
+                    // scale full scale transform tx, ty, and tz to current viewer source scale
+                    if (sourceScale != null) {
+                        final double invertedScale = 1.0 / sourceScale;
+                        final double[][] m = new double[3][4];
+                        locationTransform.toMatrix(m);
+                        locationTransform.set(m[0][0], m[0][1], m[0][2], m[0][3] * invertedScale,
+                                              m[1][0], m[1][1], m[1][2], m[1][3] * invertedScale,
+                                              m[2][0], m[2][1], m[2][2], m[2][3] * invertedScale);
+                    }
+
                     final AffineTransform3D viewerCenter = new AffineTransform3D();
                     viewer.state().getViewerTransform(viewerCenter);
                     final double cX = viewer.getDisplay().getWidth() / 2.0;

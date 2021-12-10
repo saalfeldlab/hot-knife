@@ -214,7 +214,7 @@ public class SparkExportAlignedSlabSeries {
 								bot,
 								topOffset,
 								botOffset);
-				
+
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 
 				final AffineTransform3D rigid = new AffineTransform3D();
@@ -230,7 +230,6 @@ public class SparkExportAlignedSlabSeries {
 
 				transformSequence.add(rigid.inverse());
 				transformSequence.add(transition);
-				
 
 				final long[] cropMin = new long[] {min[0], min[1], topOffset};
 				final long[] cropMax = new long[] {max[0], max[1], botOffset};
@@ -272,7 +271,7 @@ public class SparkExportAlignedSlabSeries {
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
 					source,
 					cropInterval,
-					transformSequence,
+					transition,
 					new UnsignedByteType(0));
 
 				final IntervalView<UnsignedByteType> extendedTransformedSource =

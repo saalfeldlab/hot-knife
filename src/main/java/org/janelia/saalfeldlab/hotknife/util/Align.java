@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -36,6 +37,7 @@ import mpicbg.ij.FeatureTransform;
 import mpicbg.ij.SIFT;
 import mpicbg.imagefeatures.Feature;
 import mpicbg.imagefeatures.FloatArray2DSIFT;
+import mpicbg.models.AffineModel2D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.Model;
 import mpicbg.models.NotEnoughDataPointsException;
@@ -304,27 +306,63 @@ public class Align {
 		return modelTransformConverter.apply(model);
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	protected static <S extends Supplier<? extends Model<?>>> Tile<?> assignTile(
+			final String datasetName, // slab-0-bot, slab-0-top, slab-1-bot, ...
+			final S modelSupplier,
+			final HashMap<String, AffineModel2D > fixedModels,
+			final List< Tile<?> > fixedTiles )
+	{
+		final Tile<?> t;
+
+		if ( fixedModels.containsKey( datasetName ) )
+		{
+			t = new Tile( fixedModels.get( datasetName ) );
+			fixedTiles.add( t );
+		}
+		else
+		{
+			t =  new Tile(modelSupplier.get());
+		}
+
+		return t;
+	}
+
 	@SuppressWarnings("unchecked")
 	public static <S extends Supplier<? extends Model<?>>> ArrayList<Tile<?>> connectStackTiles(
-			final List<String> datasetNames,
+			final List<String> datasetNames, // slab-0-bot, slab-0-top, slab-1-bot, ...
 			final Map<String, ArrayList<PointMatch>> matches,
+			final HashMap<String, AffineModel2D > fixedModels,
+			final List< Tile<?> > fixedTiles,
 			final S modelSupplier) {
 
 		final ArrayList<Tile<?>> tiles = new ArrayList<>();
+
 		@SuppressWarnings("rawtypes")
-		Tile a = new Tile(modelSupplier.get());
+		Tile a = assignTile(datasetNames.get( 1 ), modelSupplier, fixedModels, fixedTiles);
 		tiles.add(a);
 		for (int i = 1; i < datasetNames.size() - 1; i += 2) {
-			@SuppressWarnings("rawtypes")
-			final Tile b = new Tile(modelSupplier.get());
-			tiles.add(b);
 			final ArrayList<PointMatch> match = matches.get(datasetNames.get(i));
+			@SuppressWarnings("rawtypes")
+			final Tile b = assignTile(datasetNames.get(i+1), modelSupplier, fixedModels, fixedTiles);
+			tiles.add(b);
 			if (match != null) {
 				a.connect(b, match);
 				System.out.printf("[%s, %s] : connected by %d matches.", datasetNames.get(i), datasetNames.get(i + 1), match.size());
 				System.out.println();
 			}
 			a = b;
+			/*
+			 * make Tile a
+			 * make Tile b
+			 * 
+			 * connect a to b with matches from 1
+			 * 
+			 * a <= b
+			 * make Tile b
+			 * 
+			 * connect a to b with matches from 3
+			 */
 		}
 
 		return tiles;

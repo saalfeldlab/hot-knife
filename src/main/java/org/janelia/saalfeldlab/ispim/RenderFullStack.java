@@ -40,6 +40,7 @@ import net.imglib2.RealInterval;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.position.FunctionRandomAccessible;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.Scale3D;
@@ -116,7 +117,7 @@ public class RenderFullStack implements Callable<Void>, Serializable
 						new UnsignedShortType() );
 
 		final int blockSizeXY = (int)Math.min( interval.dimension( 0 ), interval.dimension( 1 ) );
-		final int[] blockSize = new int[] { blockSizeXY, blockSizeXY, 10 };
+		final int[] blockSize = new int[] { 2048, 2048, 4 };
 		System.out.println( new Date(System.currentTimeMillis() ) + ": " + id + "," + channel + "," + cam + ": blocksize=" + Util.printCoordinates( blockSize ) );
 
 		final RandomAccessibleInterval<UnsignedShortType> cachedImg =
@@ -192,6 +193,11 @@ public class RenderFullStack implements Callable<Void>, Serializable
 
 	public static RandomAccessibleInterval< UnsignedShortType > fuseMax(final String n5Path, final List<String> ids, final String channel, final String cam ) throws IOException, FormatException
 	{
+		return fuseMax(n5Path, ids, channel, cam, null );
+	}
+
+	public static RandomAccessibleInterval< UnsignedShortType > fuseMax(final String n5Path, final List<String> ids, final String channel, final String cam, final Interval targetInterval ) throws IOException, FormatException
+	{
 		final ArrayList< Pair< RandomAccessibleInterval< UnsignedShortType >, AffineTransform3D > > toFuse = new ArrayList<>();
 
 		//final Scale3D anisotropy = new Scale3D(1, 1, 0.85/0.2);
@@ -203,13 +209,13 @@ public class RenderFullStack implements Callable<Void>, Serializable
 			toFuse.add( new ValuePair<>( stack.getA(), transformA ) );
 		}
 
+		// find out the total interval
 		final long[] min = new long[] { Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE };
 		final long[] max = new long[] { -Long.MAX_VALUE, -Long.MAX_VALUE, -Long.MAX_VALUE };
-
 		for ( final Pair< RandomAccessibleInterval< UnsignedShortType >, AffineTransform3D > data : toFuse )
 		{
-			Interval interval = Intervals.smallestContainingInterval( data.getB().estimateBounds( data.getA() ) );
-			
+			final Interval interval = Intervals.smallestContainingInterval( data.getB().estimateBounds( data.getA() ) );
+
 			for ( int d = 0; d < interval.numDimensions(); ++d )
 			{
 				min[ d ] = Math.min( min[ d ], interval.min( d ) );
@@ -218,6 +224,32 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		}
 
 		final Interval bb = new FinalInterval(min, max);
+
+		// identify those that lie within the interval
+		if ( targetInterval != null )
+		{
+A:			for ( int i = toFuse.size() - 1; i >= 0;--i )
+			{
+				final Pair< RandomAccessibleInterval< UnsignedShortType >, AffineTransform3D > data = toFuse.get( i );
+				final Interval interval = Intervals.smallestContainingInterval( data.getB().estimateBounds( data.getA() ) );
+
+				//System.out.println( ids.get( i ) + ": " + Util.printInterval( interval ) );
+				final FinalInterval intersection = Intervals.intersect(interval, targetInterval );
+
+				for ( int d = 0; d < intersection.numDimensions(); ++d )
+					if ( intersection.dimension( d ) <= 0 )
+					{
+						toFuse.remove( i );
+						System.out.println( "Removing " + ids.get( i ));
+						continue A;
+					}
+			}
+
+			if ( toFuse.size() == 0 )
+				return Views.interval( new FunctionRandomAccessible<UnsignedShortType>( 3, (l,t)->t.setZero(), UnsignedShortType::new ), bb);
+		}
+
+		System.out.println( "bounding box: " + Util.printInterval( bb ) );
 
 		final ArrayList< RandomAccessibleInterval< FloatType > > images = new ArrayList<>();
 
@@ -255,7 +287,18 @@ public class RenderFullStack implements Callable<Void>, Serializable
 		final List<String> allIds = SparkPaiwiseAlignChannelsGeoAll.getIds(n5);
 		Collections.sort( allIds );
 
+		/*
+		String view0 = allIds.get( 5 );
+		String view1 = allIds.get( 1 );
+
+		allIds.clear();
+		allIds.add( view0 );
+		allIds.add( view1 );
+
+		RandomAccessibleInterval<UnsignedShortType> maxFusion = fuseMax(n5Path, allIds, channel, cam, Intervals.createMinMax( 1792, 17044, -848, 49294, 23000, 11544 ) );
+		BdvStackSource<UnsignedShortType> bdv1 = BdvFunctions.show( maxFusion, "" );
 		SimpleMultiThreading.threadHaltUnClean();
+		*/
 
 		final int numFetchThreads = Runtime.getRuntime().availableProcessors() / 2;
 		System.out.println( new Date(System.currentTimeMillis() ) + ": building SharedQueue with " + numFetchThreads + " FetcherThreads" );
@@ -270,7 +313,7 @@ public class RenderFullStack implements Callable<Void>, Serializable
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Loaded all stacks." );
 
-		final Scale3D anisotropy = new Scale3D(0.2, 0.2, 0.85);
+		final Scale3D anisotropy = new Scale3D( 1, 1,1);//new Scale3D(0.2, 0.2, 0.85);
 
 		BdvStackSource<?> bdv = null;
 
@@ -280,8 +323,9 @@ public class RenderFullStack implements Callable<Void>, Serializable
 
 			RandomAccessibleInterval< VolatileUnsignedShortType > vstack = VolatileViews.wrapAsVolatile( stack.getA() );
 			bdv = BdvFunctions.show( Views.extendValue( vstack, 0 ), new FinalInterval( stack.getA() ), stack.getB().id + "," + channel + "," + cam, options );
-			bdv.setDisplayRange( 0, 1000 );
+			bdv.setDisplayRange( 50, 200 );
 			bdv.setColor( new ARGBType( ColorStream.next() ) );
+			bdv.setDisplayRange( 50, 200 );
 		}
 
 		System.out.println( new Date(System.currentTimeMillis() ) + ": Displayed all stacks." );
