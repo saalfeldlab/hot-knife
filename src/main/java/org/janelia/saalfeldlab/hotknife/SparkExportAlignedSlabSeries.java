@@ -204,11 +204,15 @@ public class SparkExportAlignedSlabSeries {
 				final long botOffset = botOffsets.get(i);
 				final long depth = botOffset - topOffset + 1;
 
+				// TODO: this does not help here, because every block is within at least one slab, doesn't hurt either
 				/* do not include blocks that do not intersect with the gridBlock */
 				if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
 					isIncluded = true;
 					break;
 				}
+
+				// TODO: test with a downsampled version if the block is black
+
 				zOffset += depth;
 			}
 		}
