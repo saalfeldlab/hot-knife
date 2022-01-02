@@ -53,10 +53,10 @@ ARGV="\
 --n5TransformGroup '/surface-align-BR/06-40' \
 --n5PathOutput '/nrs/flyem/render/n5/Z0720_07m_BR' \
 --n5DatasetOutput '/40-06/s0' \
---blockSize 256,256,256"
+--blockSize 128,128,128"
 # --normalizeContrast
 
-HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-xxx-SNAPSHOT.jar"
+HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-fb63d9739322c8b753514d5e259dfca07be2bd34-SNAPSHOT.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportAlignedSlabSeries"
 
 # --------------------------------------------------------------------
