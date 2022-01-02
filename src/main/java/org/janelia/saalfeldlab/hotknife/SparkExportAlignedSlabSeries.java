@@ -19,10 +19,13 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.spark.SparkConf;
+import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
@@ -41,6 +44,8 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
@@ -62,7 +67,7 @@ import net.imglib2.view.Views;
  */
 public class SparkExportAlignedSlabSeries {
 
-	@SuppressWarnings("serial")
+	@SuppressWarnings({"FieldMayBeFinal", "unused"})
 	public static class Options extends AbstractOptions implements Serializable {
 
 		@Option(name = "--n5PathInput", required = true, usage = "Input N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
@@ -89,8 +94,13 @@ public class SparkExportAlignedSlabSeries {
 		@Option(name = "--blockSize", usage = "blockSize, e.g. 128,128,128")
 		private String blockSizeString = null;
 
-		@Option(name = "-n", aliases = {"--normalizeContrast"}, required = false, usage = "optionally normalize contrast")
+		@Option(name = "-n", aliases = {"--normalizeContrast"}, usage = "optionally normalize contrast")
 		private boolean normalizeContrast;
+
+		@Option(name = "--runTaskId",
+				usage = "Only processes blocks for the specified task id(s).  " +
+						"Task ids are those generated for a full run.")
+		List<Long> runTaskIds = new ArrayList<>();
 
 		public Options(final String[] args) {
 
@@ -174,6 +184,36 @@ public class SparkExportAlignedSlabSeries {
 		public boolean normalizeContrast() {
 			return normalizeContrast;
 		}
+	}
+
+	private static boolean isBlockIncluded(final List<String> datasetNames,
+										   final List<Long> topOffsets,
+										   final List<Long> botOffsets,
+										   final long[][] gridBlock,
+										   final Set<Long> runTaskIds) {
+
+		boolean isIncluded = false;
+
+		final TaskContext taskContext = TaskContext.get();
+		final Long taskId = taskContext.taskAttemptId();
+
+		if ((runTaskIds == null) || (runTaskIds.size() == 0) || runTaskIds.contains(taskId)) {
+			long zOffset = 0;
+			for (int i = 0; i < datasetNames.size(); ++i) {
+				final long topOffset = topOffsets.get(i);
+				final long botOffset = botOffsets.get(i);
+				final long depth = botOffset - topOffset + 1;
+
+				/* do not include blocks that do not intersect with the gridBlock */
+				if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
+					isIncluded = true;
+					break;
+				}
+				zOffset += depth;
+			}
+		}
+
+		return isIncluded;
 	}
 
 	private static void saveBlock(
@@ -275,7 +315,7 @@ public class SparkExportAlignedSlabSeries {
 				{
 					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName + "/s0" );
 	
-					final int blockRadius = (int)Math.round(511);
+					final int blockRadius = Math.round(511);
 	
 					final ImageJStackOp<UnsignedByteType> cllcn =
 							new ImageJStackOp<>(
@@ -366,7 +406,7 @@ public class SparkExportAlignedSlabSeries {
 		}
 	}
 
-	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		// TODO: doesn't work right now, see saalfeld's change to ViewAlignedSlabSeries
 		final Options options = new Options(args);
@@ -449,32 +489,56 @@ public class SparkExportAlignedSlabSeries {
 		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
 		n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
-		final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
+		// Filter the full set of input blocks down to only those that should be processed.
+		// Minimally, this better balances the workload because only valid/intersecting blocks are parallelized
+		// in the following/primary pGrid.forEach step.
+		// This also supports task id based filtering for reruns which is the original reason it was added.
+		final List<long[][]> gridFull = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
+
+		LOG.info("full data set contains {} grid blocks", gridFull.size());
+
+		final JavaRDD<long[][]> pGridFull = sc.parallelize(gridFull);
+
+		final Set<Long> runTaskIds = new HashSet<>(options.runTaskIds);
+
+		if (runTaskIds.size() > 0) {
+			LOG.info("filtering runTaskIds {}", runTaskIds.stream().sorted());
+		}
+
+		final List<long[][]> grid = pGridFull.filter(gridBlock -> isBlockIncluded(datasetNames,
+																				  topOffsets,
+																				  botOffsets,
+																				  gridBlock,
+																				  runTaskIds)).collect();
+
+		LOG.info("filtered data set contains {} grid blocks", grid.size());
+
+		// final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
 		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
 
 		pGrid.foreach(
-				gridBlock -> {
-					saveBlock(
-							n5PathInput,
-							n5PathOutput,
-							datasetNames,
-							group,
-							datasetNameOutput,
-							transformDatasetNames,
-							topOffsets,
-							botOffsets,
-							min,
-							max,
-							dimensions,
-							blockSize,
-							gridBlock,
-							normalizeContrast);
-				});
+				gridBlock -> saveBlock(
+						n5PathInput,
+						n5PathOutput,
+						datasetNames,
+						group,
+						datasetNameOutput,
+						transformDatasetNames,
+						topOffsets,
+						botOffsets,
+						min,
+						max,
+						dimensions,
+						blockSize,
+						gridBlock,
+						normalizeContrast));
 
 		sc.close();
 
 		n5Input.close();
 		n5Output.close();
 	}
+
+	private static final Logger LOG = LoggerFactory.getLogger(SparkExportAlignedSlabSeries.class);
 }
