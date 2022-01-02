@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.TaskContext;
@@ -44,8 +45,6 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
@@ -495,14 +494,15 @@ public class SparkExportAlignedSlabSeries {
 		// This also supports task id based filtering for reruns which is the original reason it was added.
 		final List<long[][]> gridFull = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
-		LOG.info("full data set contains {} grid blocks", gridFull.size());
+		System.out.println("SparkExportAlignedSlabSeries: full data set contains " + gridFull.size() + " grid blocks");
 
 		final JavaRDD<long[][]> pGridFull = sc.parallelize(gridFull);
 
 		final Set<Long> runTaskIds = new HashSet<>(options.runTaskIds);
 
 		if (runTaskIds.size() > 0) {
-			LOG.info("filtering runTaskIds {}", runTaskIds.stream().sorted());
+			System.out.println("SparkExportAlignedSlabSeries: filtering runTaskIds " +
+							   runTaskIds.stream().sorted().collect(Collectors.toList()));
 		}
 
 		final List<long[][]> grid = pGridFull.filter(gridBlock -> isBlockIncluded(datasetNames,
@@ -511,7 +511,7 @@ public class SparkExportAlignedSlabSeries {
 																				  gridBlock,
 																				  runTaskIds)).collect();
 
-		LOG.info("filtered data set contains {} grid blocks", grid.size());
+		System.out.println("SparkExportAlignedSlabSeries: filtered data set contains " + grid.size() + " grid blocks");
 
 		// final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
@@ -540,5 +540,4 @@ public class SparkExportAlignedSlabSeries {
 		n5Output.close();
 	}
 
-	private static final Logger LOG = LoggerFactory.getLogger(SparkExportAlignedSlabSeries.class);
 }
