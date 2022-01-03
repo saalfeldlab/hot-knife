@@ -46,7 +46,6 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
@@ -103,6 +102,8 @@ public class SparkExportAlignedSlabSeries {
 						"Task ids are those generated for a full run.")
 		List<Long> runTaskIds = new ArrayList<>();
 
+		// TIP: To aggregate and sort explain plan info by task id:
+		//   grep " returning " ${SPARK_LOGS_DIR}/work*/app*/*/stdout | sed 's/.*task//' | sort -n > task.log
 		@Option(name = "--explainPlan",
 				usage = "Only report input grid block counts (the plan) and skip actual output generation.")
 		private boolean explainPlan;
@@ -191,14 +192,12 @@ public class SparkExportAlignedSlabSeries {
 		}
 	}
 
-	private static boolean isBlockIncluded(final String n5PathInput,
-										   final List<String> datasetNames,
+	private static boolean isBlockIncluded(final List<String> datasetNames,
 										   final List<Long> topOffsets,
 										   final List<Long> botOffsets,
 										   final long[][] gridBlock,
 										   final Set<Long> runTaskIds,
-										   final boolean explainPlan)
-			throws IOException {
+										   final boolean explainPlan) {
 
 		boolean isIncluded = false;
 
@@ -214,60 +213,35 @@ public class SparkExportAlignedSlabSeries {
 				gridBlock[1][1],
 				gridBlock[1][2]);
 
-		if (explainPlan) {
-			System.out.println("SparkExportAlignedSlabSeries: isBlockIncluded task " + taskId +
-							   " entry for block " + gridBlockInterval);
-		}
-
-		final N5Reader n5Input = new N5FSReader(n5PathInput);
-		final UnsignedByteType emptyUnsignedByteType = new UnsignedByteType();
-		String datasetName = "?";
+		final List<String> gridDatasetNames = new ArrayList<>();
 
 		if ((runTaskIds == null) || (runTaskIds.size() == 0) || runTaskIds.contains(taskId)) {
+
+			isIncluded = true;
+
+			// Find which datasets contain the grid block for explain plan logging.
+			// Later, this will be needed to look for empty transformed blocks.
 			long zOffset = 0;
 			for (int i = 0; i < datasetNames.size(); ++i) {
 				final long topOffset = topOffsets.get(i);
 				final long botOffset = botOffsets.get(i);
 				final long depth = botOffset - topOffset + 1;
 
-				// only include non-empty blocks that intersect with the gridBlock
 				if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
-
-					datasetName = datasetNames.get(i) + "/s0";
-
-					// TODO: Presibish suggested using down-sampled block - discuss if that is needed
-					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Input, datasetName);
-					final RandomAccessibleInterval<UnsignedByteType> sourceBlock =
-							Views.offsetInterval(Views.extendMirrorDouble(source), gridBlock[0], gridBlock[1]);
-
-					boolean isEmpty = true;
-					for (Cursor<UnsignedByteType> s = Views.flatIterable(sourceBlock).cursor(); s.hasNext();) {
-						final UnsignedByteType ts = s.next();
-						if (! emptyUnsignedByteType.valueEquals(ts)) {
-							isEmpty = false;
-							break;
-						}
-					}
-
-					if (! isEmpty) {
-						isIncluded = true;
-					}
-
-					break;
-
+					final String datasetName = datasetNames.get(i) + "/s0";
+					gridDatasetNames.add(datasetName);
 				}
-
 
 				zOffset += depth;
 			}
-		}
 
-		n5Input.close();
+			// TODO: filter out black transformed blocks by testing with a down-sampled version
+		}
 
 		if (explainPlan) {
 			System.out.println("SparkExportAlignedSlabSeries: isBlockIncluded task " + taskId +
 							   " returning " + isIncluded + " for block " + gridBlockInterval +
-							   " in dataset " + datasetName);
+							   " in dataset(s) " + gridDatasetNames);
 		}
 
 		return isIncluded;
@@ -564,8 +538,7 @@ public class SparkExportAlignedSlabSeries {
 		}
 
 		final boolean explainPlan = options.explainPlan;
-		final List<long[][]> grid = pGridFull.filter(gridBlock -> isBlockIncluded(n5PathInput,
-																				  datasetNames,
+		final List<long[][]> grid = pGridFull.filter(gridBlock -> isBlockIncluded(datasetNames,
 																				  topOffsets,
 																				  botOffsets,
 																				  gridBlock,
