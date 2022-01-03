@@ -46,6 +46,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
@@ -101,6 +102,10 @@ public class SparkExportAlignedSlabSeries {
 				usage = "Only processes blocks for the specified task id(s).  " +
 						"Task ids are those generated for a full run.")
 		List<Long> runTaskIds = new ArrayList<>();
+
+		@Option(name = "--explainPlan",
+				usage = "Only report input grid block counts (the plan) and skip actual output generation.")
+		private boolean explainPlan;
 
 		public Options(final String[] args) {
 
@@ -186,16 +191,37 @@ public class SparkExportAlignedSlabSeries {
 		}
 	}
 
-	private static boolean isBlockIncluded(final List<String> datasetNames,
+	private static boolean isBlockIncluded(final String n5PathInput,
+										   final List<String> datasetNames,
 										   final List<Long> topOffsets,
 										   final List<Long> botOffsets,
 										   final long[][] gridBlock,
-										   final Set<Long> runTaskIds) {
+										   final Set<Long> runTaskIds,
+										   final boolean explainPlan)
+			throws IOException {
 
 		boolean isIncluded = false;
 
 		final TaskContext taskContext = TaskContext.get();
 		final Long taskId = taskContext.taskAttemptId();
+
+		final FinalInterval gridBlockInterval = Intervals.createMinSize(
+				gridBlock[0][0],
+				gridBlock[0][1],
+				gridBlock[0][2],
+
+				gridBlock[1][0],
+				gridBlock[1][1],
+				gridBlock[1][2]);
+
+		if (explainPlan) {
+			System.out.println("SparkExportAlignedSlabSeries: isBlockIncluded task " + taskId +
+							   " entry for block " + gridBlockInterval);
+		}
+
+		final N5Reader n5Input = new N5FSReader(n5PathInput);
+		final UnsignedByteType emptyUnsignedByteType = new UnsignedByteType();
+		String datasetName = "?";
 
 		if ((runTaskIds == null) || (runTaskIds.size() == 0) || runTaskIds.contains(taskId)) {
 			long zOffset = 0;
@@ -204,17 +230,44 @@ public class SparkExportAlignedSlabSeries {
 				final long botOffset = botOffsets.get(i);
 				final long depth = botOffset - topOffset + 1;
 
-				// TODO: this does not help here, because every block is within at least one slab, doesn't hurt either
-				/* do not include blocks that do not intersect with the gridBlock */
+				// only include non-empty blocks that intersect with the gridBlock
 				if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
-					isIncluded = true;
+
+					datasetName = datasetNames.get(i) + "/s0";
+
+					// TODO: Presibish suggested using down-sampled block - discuss if that is needed
+					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Input, datasetName);
+					final RandomAccessibleInterval<UnsignedByteType> sourceBlock =
+							Views.offsetInterval(Views.extendMirrorDouble(source), gridBlock[0], gridBlock[1]);
+
+					boolean isEmpty = true;
+					for (Cursor<UnsignedByteType> s = Views.flatIterable(sourceBlock).cursor(); s.hasNext();) {
+						final UnsignedByteType ts = s.next();
+						if (! emptyUnsignedByteType.valueEquals(ts)) {
+							isEmpty = false;
+							break;
+						}
+					}
+
+					if (! isEmpty) {
+						isIncluded = true;
+					}
+
 					break;
+
 				}
 
-				// TODO: test with a downsampled version if the block is black
 
 				zOffset += depth;
 			}
+		}
+
+		n5Input.close();
+
+		if (explainPlan) {
+			System.out.println("SparkExportAlignedSlabSeries: isBlockIncluded task " + taskId +
+							   " returning " + isIncluded + " for block " + gridBlockInterval +
+							   " in dataset " + datasetName);
 		}
 
 		return isIncluded;
@@ -491,19 +544,15 @@ public class SparkExportAlignedSlabSeries {
 		final int[] blockSize = options.getBlockSize();
 		final boolean normalizeContrast = options.normalizeContrast();
 
-		final String n5PathOutput = options.getN5OutputPath();
-
-		/* create output dataset */
-		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
-		n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
-
 		// Filter the full set of input blocks down to only those that should be processed.
-		// Minimally, this better balances the workload because only valid/intersecting blocks are parallelized
-		// in the following/primary pGrid.forEach step.
-		// This also supports task id based filtering for reruns which is the original reason it was added.
-		final List<long[][]> gridFull = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
+		// Filtering removes empty source blocks and (optionally) blocks for non-included re-run tasks.
+		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 
-		System.out.println("SparkExportAlignedSlabSeries: full data set contains " + gridFull.size() + " grid blocks");
+		final List<long[][]> gridFull = Grid.create(dimensions, gridBlockSize, blockSize);
+
+		final String gridBlockSizeString = " " + gridBlockSize[0] + "x" + gridBlockSize[1] + "x" + gridBlockSize[2];
+		System.out.println("SparkExportAlignedSlabSeries: original grid contains " +
+						   gridFull.size() + gridBlockSizeString + " blocks");
 
 		final JavaRDD<long[][]> pGridFull = sc.parallelize(gridFull);
 
@@ -514,39 +563,52 @@ public class SparkExportAlignedSlabSeries {
 							   runTaskIds.stream().sorted().collect(Collectors.toList()));
 		}
 
-		final List<long[][]> grid = pGridFull.filter(gridBlock -> isBlockIncluded(datasetNames,
+		final boolean explainPlan = options.explainPlan;
+		final List<long[][]> grid = pGridFull.filter(gridBlock -> isBlockIncluded(n5PathInput,
+																				  datasetNames,
 																				  topOffsets,
 																				  botOffsets,
 																				  gridBlock,
-																				  runTaskIds)).collect();
+																				  runTaskIds,
+																				  explainPlan)).collect();
 
-		System.out.println("SparkExportAlignedSlabSeries: filtered data set contains " + grid.size() + " grid blocks");
+		System.out.println("SparkExportAlignedSlabSeries: filtered grid contains " +
+						   grid.size() + gridBlockSizeString + " blocks");
 
 		// final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
-		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
+		// if explainPlan option is not set, go ahead and generate output ...
+		if (! explainPlan) {
 
-		pGrid.foreach(
-				gridBlock -> saveBlock(
-						n5PathInput,
-						n5PathOutput,
-						datasetNames,
-						group,
-						datasetNameOutput,
-						transformDatasetNames,
-						topOffsets,
-						botOffsets,
-						min,
-						max,
-						dimensions,
-						blockSize,
-						gridBlock,
-						normalizeContrast));
+			/* create output dataset */
+			final String n5PathOutput = options.getN5OutputPath();
+			final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+			n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+
+			final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
+
+			pGrid.foreach(
+					gridBlock -> saveBlock(
+							n5PathInput,
+							n5PathOutput,
+							datasetNames,
+							group,
+							datasetNameOutput,
+							transformDatasetNames,
+							topOffsets,
+							botOffsets,
+							min,
+							max,
+							dimensions,
+							blockSize,
+							gridBlock,
+							normalizeContrast));
+
+			n5Output.close();
+		}
 
 		sc.close();
-
 		n5Input.close();
-		n5Output.close();
 	}
 
 }
