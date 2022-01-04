@@ -22,7 +22,6 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
-import org.scijava.plugin.Plugin;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.Actions;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
@@ -206,11 +205,10 @@ public class ViewAlignmentPlayground13 {
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
+		cards.addCard("ZNCC",  new ZNCCCard(stack1, stack2, bdv).getPanel(), true );
 		cards.addCard("Face Transforms",
 				new GaussShiftCard(editor).getPanel(),
 				true, new Insets(0, 0, 0, 0));
-
-
 
 
 		final JPanel panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));
