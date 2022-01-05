@@ -42,6 +42,7 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.jruby.RubyProcess.Sys;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -504,19 +505,35 @@ public class SparkExportAlignedSlabSeries {
 
 		System.out.println( "final volume: " + Util.printCoordinates( dimensions ));
 
-		/*
-		// flipping x-z axes
-		// TODO: Remove
-		long tmp = min[ 2 ];
-		min[ 2 ] = min[ 0 ];
-		min[ 0 ] = tmp;
-		tmp = max[ 2 ];
-		max[ 2 ] = max[ 0 ];
-		max[ 0 ] = tmp;
-		tmp = dimensions[ 2 ];
-		dimensions[ 2 ] = dimensions[ 0 ];
-		dimensions[ 0 ] = tmp;
-		*/
+		// how many partitions in z?
+		final int numPortions = 10; // paramter
+
+		// TODO: just use one parameter and add them
+		for ( int myPortion = 0; myPortion < numPortions; ++myPortion )
+		{
+			long portionsize = dimensions[ 2 ] / numPortions;
+	
+			// e.g. 89434, 11 portions
+			// 8130 per portion, now align this to the blocksize
+	
+			portionsize = ( portionsize / options.getBlockSize()[ 2 ] ) * options.getBlockSize()[ 2 ];
+	
+			// 8064
+	
+			final long minZ = myPortion * portionsize;
+			final long maxZ;
+			
+			// now 11 * 8064 is only 88704, so 89434-88704=730 missing
+			if ( myPortion == numPortions - 1 )
+				maxZ = dimensions[ 2 ] - 1;
+			else
+				maxZ = minZ + portionsize - 1;
+
+			System.out.println( "portion=" + myPortion + " min=" + minZ + " max=" + maxZ );
+		}
+
+		// TODO: ...
+		System.out.println( "Proccesing now portion = ");
 
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
@@ -527,6 +544,9 @@ public class SparkExportAlignedSlabSeries {
 		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 
 		final List<long[][]> gridFull = Grid.create(dimensions, gridBlockSize, blockSize);
+
+		//TODO: reject blocks that are not within min/max
+		//TOOD: do not re-create the N5 if it exists?
 
 		final String gridBlockSizeString = " " + gridBlockSize[0] + "x" + gridBlockSize[1] + "x" + gridBlockSize[2];
 		System.out.println("SparkExportAlignedSlabSeries: original grid contains " +
