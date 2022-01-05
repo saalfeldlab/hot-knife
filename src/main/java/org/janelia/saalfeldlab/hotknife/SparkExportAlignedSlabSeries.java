@@ -211,6 +211,8 @@ public class SparkExportAlignedSlabSeries {
 					break;
 				}
 
+				// TODO: if we do it in chunks along z, do that here
+
 				// TODO: test with a downsampled version if the block is black
 
 				zOffset += depth;
