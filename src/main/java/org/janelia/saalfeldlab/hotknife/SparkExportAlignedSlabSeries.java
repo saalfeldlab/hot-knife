@@ -346,7 +346,7 @@ public class SparkExportAlignedSlabSeries {
 				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
 					source,
 					cropInterval,
-					transition,
+					transformSequence,
 					new UnsignedByteType(0));
 
 				final IntervalView<UnsignedByteType> extendedTransformedSource =
