@@ -19,10 +19,13 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
@@ -42,8 +45,6 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.jruby.RubyProcess.Sys;
-import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -98,6 +99,15 @@ public class SparkExportAlignedSlabSeries {
 		@Option(name = "-n", aliases = {"--normalizeContrast"}, usage = "optionally normalize contrast")
 		private boolean normalizeContrast;
 
+		@Option(name = "--zBatch",
+				usage = "Separate blocks into batches by z and run only one batch.  " +
+						"Format is <one-based-batch-for-current-run>:<total-batch-count>.  " +
+						"For example, specify 1:10 to run first batch of ten and 10:10 to run last batch of ten."
+		)
+		String zBatchString = null;
+		Integer zBatchForCurrentRun = null;
+		Integer zBatchTotalCount = null;
+
 		@Option(name = "--runTaskId",
 				usage = "Only processes blocks for the specified task id(s).  " +
 						"Task ids are those generated for a full run.")
@@ -114,10 +124,31 @@ public class SparkExportAlignedSlabSeries {
 			final CmdLineParser parser = new CmdLineParser(this);
 			try {
 				parser.parseArgument(args);
+				setDerivedZBatchFields();
 				parsedSuccessfully = datasetsInput.size() == topOffsets.size() && datasetsInput.size() == botOffsets.size();
-			} catch (final CmdLineException e) {
-				System.err.println(e.getMessage());
+			} catch (final Exception e) {
+				e.printStackTrace(System.err);
 				parser.printUsage(System.err);
+			}
+		}
+
+		private void setDerivedZBatchFields() throws IllegalArgumentException {
+			if (zBatchString != null) {
+				final Matcher m = Pattern.compile("^(\\d++):(\\d++)$").matcher(zBatchString);
+				if (m.matches()) {
+					zBatchForCurrentRun = Integer.parseInt(m.group(1));
+					zBatchTotalCount = Integer.parseInt(m.group(2));
+					if (zBatchTotalCount < 1) {
+						throw new IllegalArgumentException("total z batch count must be greater than 0");
+					}
+					if ((zBatchForCurrentRun < 1) || (zBatchForCurrentRun > zBatchTotalCount)) {
+						throw new IllegalArgumentException(
+								"z batch for current run must be between 1 and " + zBatchTotalCount);
+					}
+				} else {
+					throw new IllegalArgumentException(
+							"--zBatch must have format <one-based-batch-for-current-run>:<total-batch-count>");
+				}
 			}
 		}
 
@@ -197,6 +228,8 @@ public class SparkExportAlignedSlabSeries {
 										   final List<Long> topOffsets,
 										   final List<Long> botOffsets,
 										   final long[][] gridBlock,
+										   final long minZForRun,
+										   final long maxZForRun,
 										   final Set<Long> runTaskIds,
 										   final boolean explainPlan) {
 
@@ -216,7 +249,15 @@ public class SparkExportAlignedSlabSeries {
 
 		final List<String> gridDatasetNames = new ArrayList<>();
 
-		if ((runTaskIds == null) || (runTaskIds.size() == 0) || runTaskIds.contains(taskId)) {
+		final long minZForBlock = gridBlock[0][2];
+		final long maxZForBlock = gridBlock[0][2] + gridBlock[1][2];
+		final boolean isBlockWithinZRangeForRun =
+				((minZForBlock >= minZForRun) && (maxZForBlock <= maxZForRun));
+
+		final boolean isTaskIncludedInRun =
+				(runTaskIds == null) || (runTaskIds.size() == 0) || runTaskIds.contains(taskId);
+
+		if (isBlockWithinZRangeForRun && isTaskIncludedInRun) {
 
 			isIncluded = true;
 
@@ -233,15 +274,12 @@ public class SparkExportAlignedSlabSeries {
 					gridDatasetNames.add(datasetName);
 				}
 
-				// TODO: if we do it in chunks along z, do that here
-
-				// TODO: test with a downsampled version if the block is black
-
 				zOffset += depth;
 			}
 
-			// TODO: filter out black transformed blocks by testing with a down-sampled version
 		}
+
+		// TODO: if block is included, filter out black transformed blocks by testing with a down-sampled version
 
 		if (explainPlan) {
 			System.out.println("SparkExportAlignedSlabSeries: isBlockIncluded task " + taskId +
@@ -505,36 +543,6 @@ public class SparkExportAlignedSlabSeries {
 
 		System.out.println( "final volume: " + Util.printCoordinates( dimensions ));
 
-		// how many partitions in z?
-		final int numPortions = 10; // paramter
-
-		// TODO: just use one parameter and add them
-		for ( int myPortion = 0; myPortion < numPortions; ++myPortion )
-		{
-			long portionsize = dimensions[ 2 ] / numPortions;
-	
-			// e.g. 89434, 11 portions
-			// 8130 per portion, now align this to the blocksize
-	
-			portionsize = ( portionsize / options.getBlockSize()[ 2 ] ) * options.getBlockSize()[ 2 ];
-	
-			// 8064
-	
-			final long minZ = myPortion * portionsize;
-			final long maxZ;
-			
-			// now 11 * 8064 is only 88704, so 89434-88704=730 missing
-			if ( myPortion == numPortions - 1 )
-				maxZ = dimensions[ 2 ] - 1;
-			else
-				maxZ = minZ + portionsize - 1;
-
-			System.out.println( "portion=" + myPortion + " min=" + minZ + " max=" + maxZ );
-		}
-
-		// TODO: ...
-		System.out.println( "Proccesing now portion = ");
-
 		final String datasetNameOutput = options.getOutputDataset();
 		final int[] blockSize = options.getBlockSize();
 		final boolean normalizeContrast = options.normalizeContrast();
@@ -543,10 +551,31 @@ public class SparkExportAlignedSlabSeries {
 		// Filtering removes empty source blocks and (optionally) blocks for non-included re-run tasks.
 		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 
-		final List<long[][]> gridFull = Grid.create(dimensions, gridBlockSize, blockSize);
+		final long minZForRun;
+		final long maxZForRun;
+		if (options.zBatchTotalCount == null) {
+			minZForRun = min[2];
+			maxZForRun = max[2];
+		} else {
+			if (options.explainPlan) {
+				System.out.println("explaining all zBatch information: ");
+				for (int zBatch = 1; zBatch <= options.zBatchTotalCount; zBatch++) {
+					getMinAndMaxZForBatch(zBatch,
+										  options.zBatchTotalCount,
+										  dimensions[2],
+										  gridBlockSize[2]);
+				}
+				System.out.println("\n\nzBatch information for current run batch is below\n");
+			}
+			final long[] minAndMax = getMinAndMaxZForBatch(options.zBatchForCurrentRun,
+														   options.zBatchTotalCount,
+														   dimensions[2],
+														   gridBlockSize[2]);
+			minZForRun = minAndMax[0];
+			maxZForRun = minAndMax[1];
+		}
 
-		//TODO: reject blocks that are not within min/max
-		//TOOD: do not re-create the N5 if it exists?
+		final List<long[][]> gridFull = Grid.create(dimensions, gridBlockSize, blockSize);
 
 		final String gridBlockSizeString = " " + gridBlockSize[0] + "x" + gridBlockSize[1] + "x" + gridBlockSize[2];
 		System.out.println("SparkExportAlignedSlabSeries: original grid contains " +
@@ -566,6 +595,8 @@ public class SparkExportAlignedSlabSeries {
 																				  topOffsets,
 																				  botOffsets,
 																				  gridBlock,
+																				  minZForRun,
+																				  maxZForRun,
 																				  runTaskIds,
 																				  explainPlan)).collect();
 
@@ -580,7 +611,22 @@ public class SparkExportAlignedSlabSeries {
 			/* create output dataset */
 			final String n5PathOutput = options.getN5OutputPath();
 			final N5Writer n5Output = new N5FSWriter(n5PathOutput);
-			n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+
+			if (n5Output.exists(datasetNameOutput)) {
+				// if dataset already exists (e.g. from prior batch run), verify consistency of attributes
+				final DatasetAttributes datasetAttributes = n5Output.getDatasetAttributes(datasetNameOutput);
+				verifyConsistency(datasetNameOutput + " dimensions",
+								  Arrays.toString(dimensions), Arrays.toString(datasetAttributes.getDimensions()));
+				verifyConsistency(datasetNameOutput + " blockSize",
+								  Arrays.toString(blockSize), Arrays.toString(datasetAttributes.getBlockSize()));
+				verifyConsistency(datasetNameOutput + " dataType",
+								  DataType.UINT8.toString(), datasetAttributes.getDataType().toString());
+				verifyConsistency(datasetNameOutput + " compression",
+								  GzipCompression.class.toString(),
+								  datasetAttributes.getCompression().getClass().toString());
+			} else {
+				n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+			}
 
 			final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
 
@@ -608,4 +654,44 @@ public class SparkExportAlignedSlabSeries {
 		n5Input.close();
 	}
 
+	public static long[] getMinAndMaxZForBatch(final int zBatchForCurrentRun,
+											   final int zBatchTotalCount,
+											   final long lastZForVolume,
+											   final long zSizeForBlock) {
+
+		final int batchIndex = zBatchForCurrentRun - 1; // adapt one-based command line parameter
+
+		// ensure each batch is block aligned and evenly distribute remainder blocks among batches ...
+
+		final long lastGridBlockForVolume = (long) Math.ceil((double) lastZForVolume / zSizeForBlock);
+		final long blocksPerBatch = lastGridBlockForVolume / zBatchTotalCount;
+		final long remainder = lastGridBlockForVolume % zBatchTotalCount;
+
+		final long normalBatchZSize = (blocksPerBatch * zSizeForBlock);
+		final long extraBlockBatchZSize = ((blocksPerBatch + 1) * zSizeForBlock);
+
+		final long zSizeForRun = (batchIndex < remainder) ? extraBlockBatchZSize : normalBatchZSize;
+		final long extraBlockBatchCount = (batchIndex < remainder) ? batchIndex : remainder;
+		final long normalBlockBatchCount = (batchIndex < remainder) ? 0 : (batchIndex - remainder);
+
+		final long minZForRun = (extraBlockBatchCount * extraBlockBatchZSize) +
+								(normalBlockBatchCount * normalBatchZSize);
+		final long maxZForRun = minZForRun + zSizeForRun - 1;
+
+		final double blocksForRun = (double) zSizeForRun / zSizeForBlock;
+
+		System.out.println("getMinAndMaxZForBatch: returning z " + minZForRun + " to " + maxZForRun +
+						   " (" + blocksForRun + " input blocks) for zBatch " + zBatchForCurrentRun +
+						   " of " + zBatchTotalCount);
+
+		return new long[] { minZForRun, maxZForRun };
+	}
+
+	private static void verifyConsistency(final String context,
+										  final String expected,
+										  final String actual) throws IllegalStateException {
+		if (! expected.equals(actual)) {
+			throw new IllegalStateException(context + " is " + actual + " but should be " + expected);
+		}
+	}
 }
