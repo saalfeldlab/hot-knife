@@ -108,10 +108,9 @@ public class SparkExportAlignedSlabSeries {
 		Integer zBatchForCurrentRun = null;
 		Integer zBatchTotalCount = null;
 
-		@Option(name = "--runTaskId",
-				usage = "Only processes blocks for the specified task id(s).  " +
-						"Task ids are those generated for a full run.")
-		List<Long> runTaskIds = new ArrayList<>();
+		@Option(name = "--zGridPosition",
+				usage = "Only processes blocks with these z grid positions.")
+		List<Long> zGridPositions = new ArrayList<>();
 
 		// TIP: To aggregate and sort explain plan info by task id:
 		//   grep " returning " ${SPARK_LOGS_DIR}/work*/app*/*/stdout | sed 's/.*task//' | sort -n > task.log
@@ -224,28 +223,16 @@ public class SparkExportAlignedSlabSeries {
 		}
 	}
 
-	private static boolean isBlockIncluded(final List<String> datasetNames,
-										   final List<Long> topOffsets,
-										   final List<Long> botOffsets,
-										   final long[][] gridBlock,
-										   final long minZForRun,
-										   final long maxZForRun,
-										   final Set<Long> runTaskIds,
-										   final boolean explainPlan) {
+	public static boolean isBlockIncluded(final List<String> datasetNames,
+										  final List<Long> topOffsets,
+										  final List<Long> botOffsets,
+										  final long[][] gridBlock,
+										  final long minZForRun,
+										  final long maxZForRun,
+										  final Set<Long> zGridPositions,
+										  final boolean explainPlan) {
 
 		boolean isIncluded = false;
-
-		final TaskContext taskContext = TaskContext.get();
-		final Long taskId = taskContext.taskAttemptId();
-
-		final FinalInterval gridBlockInterval = Intervals.createMinSize(
-				gridBlock[0][0],
-				gridBlock[0][1],
-				gridBlock[0][2],
-
-				gridBlock[1][0],
-				gridBlock[1][1],
-				gridBlock[1][2]);
 
 		final List<String> gridDatasetNames = new ArrayList<>();
 
@@ -254,10 +241,11 @@ public class SparkExportAlignedSlabSeries {
 		final boolean isBlockWithinZRangeForRun =
 				((minZForBlock >= minZForRun) && (maxZForBlock <= maxZForRun));
 
-		final boolean isTaskIncludedInRun =
-				(runTaskIds == null) || (runTaskIds.size() == 0) || runTaskIds.contains(taskId);
+		final long[] gridPosition = gridBlock[2];
+		final boolean isZPositionIncludedInRun =
+				(zGridPositions == null) || (zGridPositions.size() == 0) || zGridPositions.contains(gridPosition[2]);
 
-		if (isBlockWithinZRangeForRun && isTaskIncludedInRun) {
+		if (isBlockWithinZRangeForRun && isZPositionIncludedInRun) {
 
 			isIncluded = true;
 
@@ -281,10 +269,9 @@ public class SparkExportAlignedSlabSeries {
 
 		// TODO: if block is included, filter out black transformed blocks by testing with a down-sampled version
 
-		if (explainPlan) {
-			System.out.println("SparkExportAlignedSlabSeries: isBlockIncluded task " + taskId +
-							   " returning " + isIncluded + " for block " + gridBlockInterval +
-							   " in dataset(s) " + gridDatasetNames);
+		if ((explainPlan) || (isIncluded && (zGridPositions.size() > 0))) {
+			System.out.println("SparkExportAlignedSlabSeries: isBlockIncluded returning " + isIncluded +
+							   " for block " + printBlock(gridBlock) + " in dataset(s) " + gridDatasetNames);
 		}
 
 		return isIncluded;
@@ -502,9 +489,6 @@ public class SparkExportAlignedSlabSeries {
 		final List<Long> botOffsets = options.getBotOffsets();
 		final List<String> datasetNames = options.getInputDatasets();
 
-		for ( final String datasetName : datasetNames )
-			System.out.println( datasetName );
-
 		final double[] boundsMin = n5Input.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5Input.getAttribute(group, "boundsMax", double[].class);
 
@@ -521,6 +505,11 @@ public class SparkExportAlignedSlabSeries {
 				botOffsets.set(i, botOffset);
 			}
 			depth += botOffset - topOffsets.get(i) + 1;
+		}
+
+		for (int i = 0; i < datasetNames.size(); i++) {
+			System.out.println("dataset " + datasetNames.get(i) + " has botOffset " + botOffsets.get(i) +
+							   " and topOffset " + topOffsets.get(i));
 		}
 
 		final long[] min = new long[] {
@@ -583,11 +572,11 @@ public class SparkExportAlignedSlabSeries {
 
 		final JavaRDD<long[][]> pGridFull = sc.parallelize(gridFull);
 
-		final Set<Long> runTaskIds = new HashSet<>(options.runTaskIds);
+		final Set<Long> zGridPositions = new HashSet<>(options.zGridPositions);
 
-		if (runTaskIds.size() > 0) {
-			System.out.println("SparkExportAlignedSlabSeries: filtering runTaskIds " +
-							   runTaskIds.stream().sorted().collect(Collectors.toList()));
+		if (zGridPositions.size() > 0) {
+			System.out.println("SparkExportAlignedSlabSeries: filtering zGridPositions " +
+							   zGridPositions.stream().sorted().collect(Collectors.toList()));
 		}
 
 		final boolean explainPlan = options.explainPlan;
@@ -597,11 +586,19 @@ public class SparkExportAlignedSlabSeries {
 																				  gridBlock,
 																				  minZForRun,
 																				  maxZForRun,
-																				  runTaskIds,
+																				  zGridPositions,
 																				  explainPlan)).collect();
 
 		System.out.println("SparkExportAlignedSlabSeries: filtered grid contains " +
 						   grid.size() + gridBlockSizeString + " blocks");
+		if (grid.size() > 1) {
+			System.out.println("SparkExportAlignedSlabSeries: first grid block is " +
+							   printBlock(gridFull.get(0)));
+			System.out.println("SparkExportAlignedSlabSeries: middle grid block is " +
+							   printBlock(gridFull.get(gridFull.size() / 2)));
+			System.out.println("SparkExportAlignedSlabSeries: last grid block is " +
+							   printBlock(gridFull.get(gridFull.size() - 1)));
+		}
 
 		// final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
 
@@ -685,6 +682,11 @@ public class SparkExportAlignedSlabSeries {
 						   " of " + zBatchTotalCount);
 
 		return new long[] { minZForRun, maxZForRun };
+	}
+
+	public static String printBlock(final long[][] gridBlock) {
+		return "{ offset: " + Util.printCoordinates(gridBlock[0]) + ", size: " + Util.printCoordinates(gridBlock[1]) +
+			   ", position: " + Util.printCoordinates(gridBlock[2]) + " }";
 	}
 
 	private static void verifyConsistency(final String context,
