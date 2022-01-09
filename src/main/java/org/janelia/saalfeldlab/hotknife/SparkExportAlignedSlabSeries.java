@@ -250,7 +250,7 @@ public class SparkExportAlignedSlabSeries {
 		final List<String> gridDatasetNames = new ArrayList<>();
 
 		final long minZForBlock = gridBlock[0][2];
-		final long maxZForBlock = gridBlock[0][2] + gridBlock[1][2];
+		final long maxZForBlock = gridBlock[0][2] + gridBlock[1][2] - 1;
 		final boolean isBlockWithinZRangeForRun =
 				((minZForBlock >= minZForRun) && (maxZForBlock <= maxZForRun));
 
