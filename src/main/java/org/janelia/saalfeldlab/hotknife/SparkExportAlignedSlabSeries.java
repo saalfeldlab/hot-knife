@@ -318,8 +318,8 @@ public class SparkExportAlignedSlabSeries {
 				//final long rotationCenterY = (cropInterval.dimension(1)/2 + cropInterval.min( 1 ));
 
 				// rotate around the same point that 39-26 rotated around
-				final long rotationCenterX = 22160 + 3328;
-				final long rotationCenterY = 26931 + 6400;
+				final long rotationCenterX = 22160;// + 3328; <<< Was wrong
+				final long rotationCenterY = 26931;// + 6400; <<< Was wrong
 
 				final AffineTransform3D rigid = new AffineTransform3D();
 				rigid.translate(
