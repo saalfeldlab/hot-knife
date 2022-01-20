@@ -243,7 +243,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v4_acquire_trimmed_align_2_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec23/v4_acquire_trimmed_align_2_ic___20210825_085238"
     export N5_Z_CORR_OFFSET="-20503,-1663,1"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass3"
   ;;
   "Sec24")
     export ACQUIRE_TRIMMED_STACK="v5_acquire_trimmed"
