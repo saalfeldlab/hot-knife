@@ -58,6 +58,8 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 	private final VolatileGlobalCellCache cache;
 	private final RandomAccessibleInterval<T>[] imgs;
 	private final RandomAccessibleInterval<V>[] vimgs;
+	private final double[] boundsMin = new double[2];
+	private final double[] boundsMax = new double[2];
 	private final SourceAndConverter<T> sourceAndConverter;
 
 	public N5SurfacePyramid(final N5Reader n5, final String group) throws IOException {
@@ -96,7 +98,12 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 
 	@Override
 	public double[] getBoundsMin() {
-		return new double[] {0, 0};
+		return boundsMin;
+	}
+
+	@Override
+	public double[] getBoundsMax() {
+		return boundsMax;
 	}
 
 //	@Override
@@ -152,9 +159,12 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 			vimgs[level] = cache.createImg(grid, timepointId, setupId, level, cacheHintsV, loader, volatileType);
 		}
 
-		final Source<V> vs = new SurfaceSource<>(volatileType, vimgs, "flat");
+		boundsMax[0] = imgs[0].max(0);
+		boundsMax[1] = imgs[0].max(1);
+
+		final Source<V> vs = new SurfaceSource<>(volatileType, vimgs, boundsMin, "flat");
 		final SourceAndConverter<V> vsoc = new SourceAndConverter<>(vs, createConverterToARGB(volatileType));
-		final Source<T> s = new SurfaceSource<>(type, imgs, "flat");
+		final Source<T> s = new SurfaceSource<>(type, imgs, boundsMin,"flat");
 		sourceAndConverter = new SourceAndConverter<>(s, createConverterToARGB(type), vsoc);
 	}
 

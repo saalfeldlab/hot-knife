@@ -108,6 +108,11 @@ public class TransformedSurfacePyramid<T extends NativeType<T> & NumericType<T>,
 		return pyramid.getBoundsMin();
 	}
 
+	@Override
+	public double[] getBoundsMax() {
+		return pyramid.getBoundsMax();
+	}
+
 
 	private static class TransformedSurfaceSource<T extends NumericType<T>> implements Source<T> {
 

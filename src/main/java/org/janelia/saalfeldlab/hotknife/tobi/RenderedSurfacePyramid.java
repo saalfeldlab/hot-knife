@@ -52,6 +52,7 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 	private final SourceAndConverter<T> sourceAndConverter;
 	private final SharedQueue queue;
 	private final double[] boundsMin;
+	private final double[] boundsMax;
 
 	@Override
 	public SourceAndConverter<T> getSourceAndConverter() {
@@ -88,6 +89,11 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 		return boundsMin;
 	}
 
+	@Override
+	public double[] getBoundsMax() {
+		return boundsMax;
+	}
+
 //	@Override
 //	public void close() {
 //		// TODO: if passed queue was given as constructor argument, don't shut it down
@@ -114,7 +120,7 @@ public class RenderedSurfacePyramid<T extends NativeType<T> & NumericType<T>, V 
 		imgs = new RandomAccessibleInterval[numScales];
 		vimgs = new RandomAccessibleInterval[numScales];
 		boundsMin = positionFieldPyramid.getBoundsMin();
-		final double[] boundsMax = positionFieldPyramid.getBoundsMax();
+		boundsMax = positionFieldPyramid.getBoundsMax();
 		for (int level = 0; level < numScales; ++level) {
 
 			final double scale = 1.0 / (1 << level);

@@ -37,6 +37,7 @@ public class TwiceTransformedSurfacePyramid<T extends NativeType<T> & NumericTyp
 		implements SurfacePyramid<T, V> {
 
 	private final SurfacePyramid<T, V> pyramid;
+	private final PositionFieldPyramid positionFieldPyramid;
 	private final RandomAccessibleInterval<T>[] imgs;
 	private final RandomAccessibleInterval<V>[] vimgs;
 	private final SourceAndConverter<T> sourceAndConverter;
@@ -54,6 +55,7 @@ public class TwiceTransformedSurfacePyramid<T extends NativeType<T> & NumericTyp
 			final RealTransform incrementalTransform,
 			final String name) {
 		this.pyramid = pyramid;
+		this.positionFieldPyramid = positionFieldPyramid;
 		final int numScales = pyramid.getNumMipmapLevels();
 		final RandomAccessibleInterval<T>[] imgs = new RandomAccessibleInterval[numScales];
 		final RandomAccessibleInterval<V>[] vimgs = new RandomAccessibleInterval[numScales];
@@ -105,7 +107,12 @@ public class TwiceTransformedSurfacePyramid<T extends NativeType<T> & NumericTyp
 
 	@Override
 	public double[] getBoundsMin() {
-		return new double[] {0, 0};
+		return positionFieldPyramid.getBoundsMin();
+	}
+
+	@Override
+	public double[] getBoundsMax() {
+		return positionFieldPyramid.getBoundsMax();
 	}
 
 
