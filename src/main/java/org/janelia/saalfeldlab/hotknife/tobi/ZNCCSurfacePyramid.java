@@ -4,6 +4,7 @@ import bdv.util.volatiles.SharedQueue;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.Source;
 import bdv.viewer.SourceAndConverter;
+import java.util.Arrays;
 import net.imglib2.Dimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
@@ -116,9 +117,7 @@ public class ZNCCSurfacePyramid implements SurfacePyramid<FloatType, VolatileFlo
 		imgs = new RandomAccessibleInterval[numScales];
 		vimgs = new RandomAccessibleInterval[numScales];
 
-		// TODO: Our boundsMin / boundsMax are min/max of pyramid0 and pyramid1
-
-
+		// Our boundsMin / boundsMax are min/max of pyramid0 and pyramid1
 		final double[] bmin0 = surfacePyramid0.getBoundsMin();
 		final double[] bmin1 = surfacePyramid1.getBoundsMin();
 		boundsMin[0] = Math.min(bmin0[0], bmin1[0]);
@@ -137,7 +136,14 @@ public class ZNCCSurfacePyramid implements SurfacePyramid<FloatType, VolatileFlo
 			final long[] max = Grid.ceilScaled(boundsMax, scale);
 			final Dimensions dims = new FinalInterval(min, max);
 			final int[] blockDims = {blockSize, blockSize};
-			CellLoader<FloatType> loader = new ZNCCLoader(surfacePyramid0, surfacePyramid1, windowWidth, level);
+
+			final long[] shift0 = Grid.floorScaled(bmin0, scale);
+			shift0[0] -= min[0];
+			shift0[1] -= min[1];
+			final long[] shift1 = Grid.floorScaled(bmin1, scale);
+			shift1[0] -= min[0];
+			shift1[1] -= min[1];
+			CellLoader<FloatType> loader = new ZNCCLoader(surfacePyramid0, shift0, surfacePyramid1, shift1, windowWidth, level);
 			imgs[level] = Lazy.createImg(dims, blockDims, type, AccessFlags.setOf(VOLATILE), loader);
 
 			final int priority = numScales - 1 - level;
@@ -145,9 +151,9 @@ public class ZNCCSurfacePyramid implements SurfacePyramid<FloatType, VolatileFlo
 			vimgs[level] = VolatileViews.wrapAsVolatile(imgs[level], queue, hints);
 		}
 
-		final Source<VolatileFloatType> vs = new SurfaceSource<>(volatileType, vimgs, this.boundsMin, "baked");
+		final Source<VolatileFloatType> vs = new SurfaceSource<>(volatileType, vimgs, this.boundsMin, "zncc");
 		final SourceAndConverter<VolatileFloatType> vsoc = new SourceAndConverter<>(vs, createConverterToARGB(volatileType));
-		final Source<FloatType> s = new SurfaceSource<>(type, imgs, this.boundsMin, "baked");
+		final Source<FloatType> s = new SurfaceSource<>(type, imgs, this.boundsMin, "zncc");
 		sourceAndConverter = new SourceAndConverter<>(s, createConverterToARGB(type), vsoc);
 	}
 
@@ -160,18 +166,20 @@ public class ZNCCSurfacePyramid implements SurfacePyramid<FloatType, VolatileFlo
 
 		public ZNCCLoader(
 				final SurfacePyramid<?, ?> pyramid0,
+				final long[] shift0,
 				final SurfacePyramid<?, ?> pyramid1,
+				final long[] shift1,
 				final int windowWidth,
 				final int level) {
 
 			final RandomAccessibleInterval<?> imgIunpadded = pyramid0.getImg(level);
 			tlBlocksImgI = ThreadLocal.withInitial( () -> new ViewBlocks<>(
-					new ViewProps(Views.extendMirrorSingle(imgIunpadded)),
+					new ViewProps(Views.translate(Views.extendMirrorSingle(imgIunpadded), shift0)),
 					new FloatType())
 			);
 			final RandomAccessibleInterval<?> imgJunpadded = pyramid1.getImg(level);
 			tlBlocksImgJ = ThreadLocal.withInitial( () -> new ViewBlocks<>(
-					new ViewProps(Views.extendMirrorSingle(imgJunpadded)),
+					new ViewProps(Views.translate(Views.extendMirrorSingle(imgJunpadded), shift1)),
 					new FloatType())
 			);
 
