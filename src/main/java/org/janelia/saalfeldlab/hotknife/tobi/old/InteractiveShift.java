@@ -27,6 +27,8 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.LinAlgHelpers;
+import org.janelia.saalfeldlab.hotknife.tobi.ViewerCoords;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.scijava.ui.behaviour.DragBehaviour;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
@@ -106,6 +108,7 @@ public class InteractiveShift {
 	static class TransformEditor {
 
 		private final ViewerPanel viewer;
+		private final ViewerCoords viewerCoords;
 
 		public TransformEditor(Bdv bdv) {
 
@@ -117,6 +120,8 @@ public class InteractiveShift {
 
 			final Overlay overlay = new Overlay();
 			viewer.getDisplay().overlays().add(overlay);
+			viewerCoords = new ViewerCoords();
+			viewer.renderTransformListeners().add(viewerCoords);
 		}
 
 		private static final double maxSlope = 0.8;
@@ -132,8 +137,25 @@ public class InteractiveShift {
 
 			double h = Math.sqrt(stx * stx + sty * sty);
 			double sigma = Math.max(minSigma, h * exph);
-			double asqu = (x - sx1) * (x - sx1) + (y - sy1) * (y - sy1);
-			double dt = Math.exp(asqu / (-2.0 * sigma * sigma));
+
+			double[] s0 = viewerCoords.of(() -> new double[] {0, 0});
+			double[] s1 = viewerCoords.of(() -> new double[] {1, 0});
+			double svx = s1[0] - s0[0];
+			double svy = s1[1] - s0[1];
+			double l = Math.sqrt(svx * svx + svy * svy);
+			double[][] R = {{svx / l, -svy / l}, {svy / l, svx / l}};
+//			double[][] R = {{stx / h, sty / h}, {-sty / h, stx / h}};
+			double[][] S = {{4 * sigma * sigma, 0}, {0, sigma * sigma}};
+			double[][] I = new double[2][2];
+			LinAlgHelpers.multATB(R, S, I);
+			LinAlgHelpers.mult(I, R, S);
+			LinAlgHelpers.invertSymmetric2x2(S, I);
+			double m00 = -0.5 * I[0][0];
+			double m01 = -1.0 * I[0][1];
+			double m11 = -0.5 * I[1][1];
+			double a = (x - sx1);
+			double b = (y - sy1);
+			double dt = Math.exp(m00 * a * a + m01 * a * b + m11 * b * b);
 
 			transformedX = x + dt * stx;
 			transformedY = y + dt * sty;

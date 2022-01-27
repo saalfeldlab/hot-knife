@@ -105,7 +105,7 @@ public class Bake {
 	 * A {@code CellLoader<DoubleType>} that produces position field vectors,
 	 * from a source {@code PositionField} and a concatenated {@code RealTransform}.
 	 * <p>
-	 * The scale level of the produced position field must not match the scale
+	 * The scale level of the produced position field doesn't have to match the scale
 	 * level of the source position field.
 	 */
 	static class BakedPositionFieldLoader implements CellLoader<DoubleType> {

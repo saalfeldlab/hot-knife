@@ -4,6 +4,7 @@ import bdv.viewer.TransformListener;
 import java.util.function.DoubleSupplier;
 import net.imglib2.realtransform.AffineTransform2D;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.util.LinAlgHelpers;
 
 public class ViewerCoords implements TransformListener<AffineTransform3D> {
 
@@ -50,7 +51,22 @@ public class ViewerCoords implements TransformListener<AffineTransform3D> {
 		return p;
 	}
 
+	public synchronized double[] ofDirection(CoordinateSupplier f) {
+		final double[] p = new double[2];
+		final double[] q = new double[2];
+		sourceToViewer.apply(p, q); // p == (0,0) here
+		sourceToViewer.apply(f.get(), p);
+		LinAlgHelpers.subtract(p, q, p);
+		return p;
+	}
+
 	public synchronized double of(DoubleSupplier f) {
 		return f.getAsDouble() * scale;
+	}
+
+	public synchronized double[] toSource(CoordinateSupplier f) {
+		final double[] p = new double[2];
+		sourceToViewer.applyInverse(p, f.get());
+		return p;
 	}
 }

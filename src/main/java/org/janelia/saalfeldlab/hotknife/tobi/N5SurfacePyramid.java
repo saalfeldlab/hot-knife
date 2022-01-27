@@ -32,6 +32,7 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import static bdv.BigDataViewer.createConverterToARGB;
+import static bdv.img.n5.N5ImageLoader.createCacheArrayLoader;
 
 /**
  * Surface pyramid of 2D images read from N5 datasets named "s0", "s1", etc for
@@ -58,6 +59,8 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 	private final VolatileGlobalCellCache cache;
 	private final RandomAccessibleInterval<T>[] imgs;
 	private final RandomAccessibleInterval<V>[] vimgs;
+	private final double[] boundsMin = new double[2];
+	private final double[] boundsMax = new double[2];
 	private final SourceAndConverter<T> sourceAndConverter;
 
 	public N5SurfacePyramid(final N5Reader n5, final String group) throws IOException {
@@ -96,7 +99,12 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 
 	@Override
 	public double[] getBoundsMin() {
-		return new double[] {0, 0};
+		return boundsMin;
+	}
+
+	@Override
+	public double[] getBoundsMax() {
+		return boundsMax;
 	}
 
 //	@Override
@@ -152,78 +160,12 @@ public class N5SurfacePyramid<T extends NativeType<T> & NumericType<T>, V extend
 			vimgs[level] = cache.createImg(grid, timepointId, setupId, level, cacheHintsV, loader, volatileType);
 		}
 
-		final Source<V> vs = new SurfaceSource<>(volatileType, vimgs, "flat");
+		boundsMax[0] = imgs[0].max(0);
+		boundsMax[1] = imgs[0].max(1);
+
+		final Source<V> vs = new SurfaceSource<>(volatileType, vimgs, boundsMin, "flat");
 		final SourceAndConverter<V> vsoc = new SourceAndConverter<>(vs, createConverterToARGB(volatileType));
-		final Source<T> s = new SurfaceSource<>(type, imgs, "flat");
+		final Source<T> s = new SurfaceSource<>(type, imgs, boundsMin,"flat");
 		sourceAndConverter = new SourceAndConverter<>(s, createConverterToARGB(type), vsoc);
-	}
-
-
-	// TODO: this should be in bdv-core. (it's there but not released yet)
-	private static SimpleCacheArrayLoader<?> createCacheArrayLoader(final N5Reader n5, final String pathName) throws IOException {
-		final DatasetAttributes attributes = n5.getDatasetAttributes(pathName);
-		final int numElements = (int) Intervals.numElements(attributes.getBlockSize());
-		switch (attributes.getDataType()) {
-		case UINT8:
-		case INT8:
-			return new N5CacheArrayLoader<>(n5, pathName, attributes,
-					dataBlock -> new VolatileByteArray(Cast.unchecked(dataBlock.getData()), true),
-					() -> new VolatileByteArray(numElements, true));
-		case UINT16:
-		case INT16:
-			return new N5CacheArrayLoader<>(n5, pathName, attributes,
-					dataBlock -> new VolatileShortArray(Cast.unchecked(dataBlock.getData()), true),
-					() -> new VolatileShortArray(numElements, true));
-		case UINT32:
-		case INT32:
-			return new N5CacheArrayLoader<>(n5, pathName, attributes,
-					dataBlock -> new VolatileIntArray(Cast.unchecked(dataBlock.getData()), true),
-					() -> new VolatileIntArray(numElements, true));
-		case UINT64:
-		case INT64:
-			return new N5CacheArrayLoader<>(n5, pathName, attributes,
-					dataBlock -> new VolatileLongArray(Cast.unchecked(dataBlock.getData()), true),
-					() -> new VolatileLongArray(numElements, true));
-		case FLOAT32:
-			return new N5CacheArrayLoader<>(n5, pathName, attributes,
-					dataBlock -> new VolatileFloatArray(Cast.unchecked(dataBlock.getData()), true),
-					() -> new VolatileFloatArray(numElements, true));
-		case FLOAT64:
-			return new N5CacheArrayLoader<>(n5, pathName, attributes,
-					dataBlock -> new VolatileDoubleArray(Cast.unchecked(dataBlock.getData()), true),
-					() -> new VolatileDoubleArray(numElements, true));
-		default:
-			throw new IllegalArgumentException();
-		}
-	}
-
-
-	// TODO: this should be in bdv-core. (it's there but not released yet)
-	private static class N5CacheArrayLoader<A> implements SimpleCacheArrayLoader<A> {
-
-		private final N5Reader n5;
-		private final String pathName;
-		private final DatasetAttributes attributes;
-		private final Function<DataBlock<?>, A> createArray;
-		private final Supplier<A> emptyArray;
-
-		N5CacheArrayLoader(final N5Reader n5, final String pathName, final DatasetAttributes attributes,
-				final Function<DataBlock<?>, A> createArray,
-				final Supplier<A> emptyArray) {
-			this.n5 = n5;
-			this.pathName = pathName;
-			this.attributes = attributes;
-			this.createArray = createArray;
-			this.emptyArray = emptyArray;
-		}
-
-		@Override
-		public A loadArray(final long[] gridPosition) throws IOException {
-			final DataBlock<?> dataBlock = n5.readBlock(pathName, attributes, gridPosition);
-			if (dataBlock == null)
-				return emptyArray.get();
-			else
-				return createArray.apply(dataBlock);
-		}
 	}
 }

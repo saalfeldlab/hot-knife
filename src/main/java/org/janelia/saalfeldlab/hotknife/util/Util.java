@@ -1,4 +1,4 @@
-/**
+/*
  * License: GPL
  *
  * This program is free software; you can redistribute it and/or
@@ -16,19 +16,19 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Vector;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import ij.IJ;
 import ij.process.FloatProcessor;
+
+import org.janelia.saalfeldlab.n5.N5FSReader;
+
 import net.imglib2.Cursor;
 import net.imglib2.IterableInterval;
-import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgs;
@@ -39,7 +39,6 @@ import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import net.preibisch.legacy.io.IOFunctions;
 import net.preibisch.mvrecon.Threads;
-import net.preibisch.mvrecon.process.fusion.ImagePortion;
 
 /**
  *
@@ -193,5 +192,28 @@ public class Util {
 	public static String flattenGroupName(final String groupName) {
 
 		return flattenGroupName(groupName, "/", ".");
+	}
+
+	public static String getAttributesJsonPath(final String groupName,
+											   final String dataSetName) {
+		return groupName + dataSetName + "/attributes.json";
+	}
+
+	public static <T> T readRequiredAttribute(final N5FSReader n5Reader,
+											  final String groupName,
+											  final String key,
+											  final Class<T> clazz) throws IOException {
+		T value;
+		try {
+			value = n5Reader.getAttribute(groupName, key, clazz);
+		} catch (IOException e) {
+			throw new IOException("failed to read from " + getAttributesJsonPath(n5Reader.getBasePath(), groupName),
+								  e);
+		}
+		if (value == null) {
+			throw new IOException("required " + key + " attribute is missing from " +
+								  getAttributesJsonPath(n5Reader.getBasePath(), groupName));
+		}
+		return value;
 	}
 }

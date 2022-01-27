@@ -9,6 +9,7 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.NumericType;
 import org.janelia.saalfeldlab.n5.N5Reader;
+import org.scijava.listeners.Listeners;
 
 import static org.janelia.saalfeldlab.hotknife.tobi.PositionFieldPyramid.createFullPyramid;
 
@@ -47,6 +48,8 @@ public class TransformedSurfaceStack<
 
 	// the source currently to display in BDV
 	private final DelegatingSourceAndConverter<T, V> socWrapper;
+
+	private final Listeners.List<Runnable> changeListeners = new Listeners.SynchronizedList<>();
 
 	public TransformedSurfaceStack(
 			final N5Reader n5,
@@ -87,6 +90,10 @@ public class TransformedSurfaceStack<
 	public PositionFieldPyramid getPositionFieldPyramid() {
 		return positionFieldPyramids.get(current);
 	}
+
+	public SurfacePyramid<T, V> getRenderedSurfacePyramid() {return renderedSurfacePyramid;}
+
+	public Listeners<Runnable> changeListeners() {return changeListeners;}
 
 	public void setIncrementalTransform(final RealTransform transform) {
 		if (transform != null) {
@@ -138,6 +145,7 @@ public class TransformedSurfaceStack<
 			renderedSurfacePyramid = new RenderedSurfacePyramid<>(n5surfacePyramid, pfp, blockWidth);
 		}
 		socWrapper.setDelegate(renderedSurfacePyramid.getSourceAndConverter());
+		changeListeners.list.forEach(Runnable::run);
 	}
 
 	public void redo() {

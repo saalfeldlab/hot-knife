@@ -79,6 +79,20 @@ public class SparkAlignAffineGlobal {
 		@Option(name = "-o", aliases = {"--n5GroupOutput"}, required = true, usage = "N5 output group, e.g. /align-0")
 		private final String outGroup = null;
 
+		@Option(name = "-f", aliases = {"--fixDatasets"}, required = false, usage = "List of fixed N5 datasets, e.g. -f /slab-24/top -f slab-25/top")
+		private final List<String> fixedDatasetNames = null;
+
+		@Option(name = "-fm", aliases = {"--fixedModels"}, required = false, usage = "Affine transform for each fixed model, e.g. -fm '[[0.85, -0.575, 22704.7], [0.51, 0.80, 19373.73]]' -fm '[[0.95, -0.47, 12704.7], [0.41, 0.60, 7373.73]]'")
+		private final List<String> fixedModels = null;
+
+		@Option(name = "-bmin", aliases = {"--boundsMin"}, required = false, usage = "min bounds, e.g. '-34.4,213.12,9.12'")
+		private final String boundsMinString = null;
+		private double[] boundsMin;
+
+		@Option(name = "-bmax", aliases = {"--boundsMax"}, required = false, usage = "max bounds, e.g. '-324234.1,21213.12,9456.54'")
+		private final String boundsMaxString = null;
+		private double[] boundsMax;
+
 		@Option(name = "--scaleIndex", required = true, usage = "scale index, e.g. 4 (means scale = 1.0 / 2^4)")
 		private int scaleIndex = 0;
 
@@ -87,6 +101,12 @@ public class SparkAlignAffineGlobal {
 			final CmdLineParser parser = new CmdLineParser(this);
 			try {
 				parser.parseArgument(args);
+
+				if ( boundsMinString != null )
+					boundsMin = parseCSDoubleArray( boundsMinString );
+
+				if ( boundsMaxString != null )
+					boundsMax = parseCSDoubleArray( boundsMaxString );
 
 				parsedSuccessfully = true;
 
@@ -109,6 +129,28 @@ public class SparkAlignAffineGlobal {
 		 */
 		public List<String> getDatasetNames() {
 			return datasetNames;
+		}
+
+		/**
+		 * @return the fixedDatasetNames
+		 */
+		public List<String> getFixedDatasetNames() {
+			return fixedDatasetNames;
+		}
+
+		/**
+		 * @return the fixedModels
+		 */
+		public List<String> getFixedModels() {
+			return fixedModels;
+		}
+
+		public double[] getBoundsMin() {
+			return boundsMin;
+		}
+
+		public double[] getBoundsMax() {
+			return boundsMax;
 		}
 
 		/**
@@ -235,11 +277,15 @@ public class SparkAlignAffineGlobal {
 	 *
 	 * @param datasetNames names of
 	 * @param filteredMatches
+	 * @param fixedModels - map from datasetname to {@link AffineModel2D} for fixed tiles
+	 * @param fixedTiles - empty list that will be populated
 	 * @return
 	 */
 	public static ArrayList<Tile<?>> createConnectedTiles(
 			final List<String> datasetNames,
-			final JavaPairRDD<String[], ArrayList<PointMatch>> filteredMatches) {
+			final JavaPairRDD<String[], ArrayList<PointMatch>> filteredMatches,
+			final HashMap<String, AffineModel2D > fixedModels,
+			final List< Tile<?> > fixedTiles ) {
 
 		/* map matches to first slab-face */
 		final HashMap<String, ArrayList<PointMatch>> matchMap = new HashMap<>();
@@ -249,6 +295,8 @@ public class SparkAlignAffineGlobal {
 		final ArrayList<Tile<?>> tiles = Align.connectStackTiles(
 				datasetNames,
 				matchMap,
+				fixedModels,
+				fixedTiles,
 				new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
 						(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
 						(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
@@ -296,6 +344,33 @@ public class SparkAlignAffineGlobal {
 				.map(datasetName -> Util.flattenGroupName(datasetName))
 				.collect(Collectors.toList());
 
+		/* collect fix tile info if requested */
+		final HashMap<String, AffineModel2D > fixedModels = new HashMap<>();
+
+		if ( options.getFixedDatasetNames() != null && options.getFixedDatasetNames().size() > 0 )
+		{
+			for ( int i = 0; i < options.getFixedDatasetNames().size(); ++i )
+			{
+				String dataset = options.getFixedDatasetNames().get( i );
+				String modelString = options.getFixedModels().get( i );
+
+				String[] ms = modelString.replaceAll("[\\[\\]]", "").split(",");
+				if ( ms.length != 6 )
+					throw new RuntimeException( "number of models does not match number of fixed datasets." );
+
+				final double[] m = new double[ ms.length ];
+				for ( int j = 0; j < ms.length; ++j )
+					m[ j ] = Double.parseDouble( ms[ j ] );
+
+				final AffineModel2D model = new AffineModel2D();
+				model.set(m[ 0 ], m[ 3 ], m[ 1 ], m[ 4 ], m[ 2 ], m[ 5 ]);
+
+				fixedModels.put( dataset, model );
+
+				System.out.println( "fixing " + dataset + ": model=" + net.imglib2.util.Util.printCoordinates( m ) + "; " + model );
+			}
+		}
+
 		final SparkConf conf = new SparkConf().setAppName("SparkAlignAffineGlobal");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
@@ -327,15 +402,25 @@ public class SparkAlignAffineGlobal {
 				7);
 
 
+		/* remember fixed tiles if requested */
+		final List< Tile<?> > fixedTiles = new ArrayList<>();
+
 		final ArrayList<Tile<?>> tiles = createConnectedTiles(
 				datasetNames,
-				filteredMatches);
+				filteredMatches,
+				fixedModels,
+				fixedTiles );
 
+		System.out.println( "fixedTiles: " + fixedTiles.size() );
 
 		/* optimize */
 		/* feed all tiles that have connections into tile configuration, report those that are disconnected */
 		final TileConfiguration tc = new TileConfiguration();
 		tc.addTiles(tiles);
+
+		/* fix tiles if requested */
+		if ( fixedTiles.size() > 0 )
+			fixedTiles.forEach( t -> tc.fixTile( t ) );
 
 		/* three pass optimization, first using the regularizer exclusively ... */
 		try {
@@ -347,7 +432,9 @@ public class SparkAlignAffineGlobal {
 
 		/* ... then using the desired model with low regularization ... */
 		tiles.forEach(
-				t -> ((InterpolatedAffineModel2D<?, ?>)t.getModel()).setLambda(0.1));
+				t -> {
+					if (!fixedTiles.contains( t ))
+						((InterpolatedAffineModel2D<?, ?>)t.getModel()).setLambda(0.1); } );
 
 		try {
 			tc.optimize(0.01, 5000, 200, 0.5);
@@ -394,6 +481,22 @@ public class SparkAlignAffineGlobal {
 				0,
 				topBotTransforms);
 
+		System.out.println("Bounds from transform: " + Arrays.deepToString(bounds));
+
+		if ( options.getBoundsMin() != null )
+		{
+			System.out.println("Overriding bounds min: " + net.imglib2.util.Util.printCoordinates( options.getBoundsMin() ));
+			for ( int d = 0; d < bounds[0].length; ++d )
+				bounds[0][d] = options.getBoundsMin()[d];
+		}
+
+		if ( options.getBoundsMax() != null )
+		{
+			System.out.println("Overriding bounds max: " + net.imglib2.util.Util.printCoordinates( options.getBoundsMax() ));
+			for ( int d = 0; d < bounds[1].length; ++d )
+				bounds[1][d] = options.getBoundsMax()[d];
+		}
+
 		System.out.println("Bounds : " + Arrays.deepToString(bounds));
 
 		/* save transforms */
@@ -417,6 +520,8 @@ public class SparkAlignAffineGlobal {
 							transforms.get(i).getRowPackedCopy()));
 		}
 
+		System.out.println("saving affines to " + options.getN5Path() + "/" + options.getOutGroup() );
+
 		saveAffines(
 				options.getN5Path(),
 				options.getOutGroup(),
@@ -425,7 +530,10 @@ public class SparkAlignAffineGlobal {
 				options.getScaleIndex(),
 				sc.parallelizePairs(transformTuples));
 
+		n5.close();
 
 		sc.close();
+
+		System.out.println("done.");
 	}
 }

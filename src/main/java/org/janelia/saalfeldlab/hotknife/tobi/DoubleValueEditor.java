@@ -74,12 +74,13 @@ public class DoubleValueEditor {
 				label.setEnabled(false);
 			});
 		} else {
+			final double modelValue = model.getValue();
 			SwingUtilities.invokeLater(() -> {
 				synchronized (this) {
 					blockUpdates = true;
 					valuePanel.setEnabled(true);
 					label.setEnabled(true);
-					valuePanel.setValue(valuePanel.getValue().withValue(model.getValue()));
+					valuePanel.setValue(valuePanel.getValue().withValue(modelValue));
 					blockUpdates = false;
 				}
 			});

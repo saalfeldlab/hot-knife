@@ -70,6 +70,7 @@ public interface SurfacePyramid<T extends NativeType<T> & NumericType<T>, V exte
 	 */
 	double[] getBoundsMin();
 
+	double[] getBoundsMax();
 
 	class SurfaceSource<T extends NumericType<T>> implements Source<T> {
 
@@ -79,10 +80,6 @@ public interface SurfacePyramid<T extends NativeType<T> & NumericType<T>, V exte
 		private final RealRandomAccessible<T>[][] interpolatedImgs;
 		private final double[] boundsMin;
 		private final DefaultVoxelDimensions voxelDimensions = new DefaultVoxelDimensions(3);
-
-		public SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final String name) {
-			this(type, imgs, new double[] {0, 0}, name);
-		}
 
 		public SurfaceSource(final T type, final RandomAccessibleInterval<T>[] imgs, final double[] boundsMin, final String name) {
 			this.type = type;

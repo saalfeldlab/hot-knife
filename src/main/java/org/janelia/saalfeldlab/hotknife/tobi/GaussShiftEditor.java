@@ -11,8 +11,10 @@ import java.awt.Stroke;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.event.MouseMotionListener;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -61,6 +63,7 @@ public class GaussShiftEditor {
 	private boolean active = false;
 
 	public interface GaussShiftEditorListener {
+
 		void activeChanged();
 
 		default void apply(GaussTransform transform) {
@@ -80,10 +83,10 @@ public class GaussShiftEditor {
 
 	@Deprecated
 	public GaussShiftEditor(
-		final InputTriggerConfig keyconf,
-		final ViewerPanel viewer,
-		final TriggerBehaviourBindings triggerbindings,
-		final GaussTransform model // TODO: should not need to be passed in
+			final InputTriggerConfig keyconf,
+			final ViewerPanel viewer,
+			final TriggerBehaviourBindings triggerbindings,
+			final GaussTransform model // TODO: should not need to be passed in
 	) {
 		this.viewer = viewer;
 		this.triggerbindings = triggerbindings;
@@ -110,6 +113,11 @@ public class GaussShiftEditor {
 		viewer.getDisplay().overlays().add(overlay);
 		viewer.getDisplay().addHandler(overlay.getCornerHighlighter());
 		viewer.renderTransformListeners().add(viewerCoords);
+		viewer.addTransformListener(t -> {
+			final double[] s0 = viewerCoords.toSource(() -> new double[] {0, 0});
+			final double[] s1 = viewerCoords.toSource(() -> new double[] {1, 0});
+			getModel().setAnisotropyOrientation(s1[0] - s0[0], s1[1] - s0[1]);
+		});
 
 		model.changeListeners().add(() -> viewer.requestRepaint());
 
@@ -239,7 +247,6 @@ public class GaussShiftEditor {
 	}
 
 
-
 	final class DragCornerBehaviour implements DragBehaviour {
 
 		private boolean moving = false;
@@ -304,7 +311,7 @@ public class GaussShiftEditor {
 			final Graphics2D graphics = (Graphics2D) g;
 			final Color color = Color.green;
 			final Stroke solid = new BasicStroke();
-			final Stroke dashed = new BasicStroke( 1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 1f, new float[] { 5f, 5f }, 0f );
+			final Stroke dashed = new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 1f, new float[] {5f, 5f}, 0f);
 
 			final int id = getHighlightedCornerIndex();
 			final double[][] corners = new double[][] {
@@ -331,15 +338,26 @@ public class GaussShiftEditor {
 //				graphics.setColor(cornerColor.darker().darker());
 //				graphics.draw(cornerHandle);
 
-				if ( i == 1 ) {
+				if (i == 1) {
 					final double sigma = viewerCoords.of(transform::getSigma);
-					final Ellipse2D sigmaEllipse = new Ellipse2D.Double(
-							p[0] - sigma,
-							p[1] - sigma,
-							2 * sigma, 2 * sigma);
+					final double[] ao = viewerCoords.ofDirection(transform::getAnisotropyOrientation);
+					final double theta = Math.atan2(-ao[1], ao[0]);
+					final double af = transform.getAnisotropyPow();
+					double hw = sigma;
+					double hh = sigma;
+					if (af >= 0) {
+						hw *= Math.pow(2, af);
+					} else {
+						hh *= Math.pow(2, -af);
+					}
+					final Ellipse2D sigmaEllipse = new Ellipse2D.Double(-hw, -hh, 2 * hw, 2 * hh);
+					final AffineTransform torig = graphics.getTransform();
+					graphics.translate(p[0], p[1]);
+					graphics.rotate(-theta);
 					graphics.setColor(color);
 					graphics.setStroke(dashed);
 					graphics.draw(sigmaEllipse);
+					graphics.setTransform(torig);
 				}
 			}
 		}
