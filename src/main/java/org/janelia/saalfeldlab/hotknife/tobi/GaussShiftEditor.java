@@ -113,7 +113,7 @@ public class GaussShiftEditor {
 		viewer.getDisplay().overlays().add(overlay);
 		viewer.getDisplay().addHandler(overlay.getCornerHighlighter());
 		viewer.renderTransformListeners().add(viewerCoords);
-		viewer.renderTransformListeners().add(t -> {
+		viewer.addTransformListener(t -> {
 			final double[] s0 = viewerCoords.toSource(() -> new double[] {0, 0});
 			final double[] s1 = viewerCoords.toSource(() -> new double[] {1, 0});
 			getModel().setAnisotropyOrientation(s1[0] - s0[0], s1[1] - s0[1]);
