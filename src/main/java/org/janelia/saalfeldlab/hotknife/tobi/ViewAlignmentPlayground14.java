@@ -147,7 +147,7 @@ public class ViewAlignmentPlayground14 {
 				n5, dataset1, n5Group + "/" + transform1, blockWidth, transform1);
 		final TransformedSurfaceStack<?, ?> stack2 = new TransformedSurfaceStack<>(
 				n5, dataset2, n5Group + "/" + transform2, blockWidth, transform2);
-		final UpdatingZNCCSurfacePyramid zncc = new UpdatingZNCCSurfacePyramid(stack1, stack2, 11); // TODO create UI for blockSize
+		final UpdatingZNCCSurfacePyramid zncc = new UpdatingZNCCSurfacePyramid(stack1, stack2, blockWidth);
 
 
 		final BdvStackSource<?> source1 = BdvFunctions.show(stack1.getSourceAndConverter(), Bdv.options().is2D()
@@ -213,10 +213,12 @@ public class ViewAlignmentPlayground14 {
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
-		cards.addCard("ZNCC",  new ZNCCCard().getPanel(), true );
 		cards.addCard("Face Transforms",
 				new GaussShiftCard(editor).getPanel(),
 				true, new Insets(0, 0, 0, 0));
+
+		cards.addCard("ZNCC",  new ZNCCCard(zncc).getPanel(), true );
+		zncc.changeListeners().add(() -> bdv.getBdvHandle().getViewerPanel().requestRepaint());
 
 
 		final JPanel panel = new JPanel(new MigLayout( "gap 0, ins 5 5 5 0, fill", "[right][grow]", "center" ));

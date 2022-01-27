@@ -102,11 +102,12 @@ public class ZNCCSurfacePyramid implements SurfacePyramid<FloatType, VolatileFlo
 	public ZNCCSurfacePyramid(
 			final SurfacePyramid<?, ?> surfacePyramid0,
 			final SurfacePyramid<?, ?> surfacePyramid1,
-			final int blockSize) {
+			final int blockSize,
+			final int windowWidth) {
 
 		final int numScales = surfacePyramid0.getNumMipmapLevels();
 
-		final int numFetcherThreads = Math.max(1, Runtime.getRuntime().availableProcessors());
+		final int numFetcherThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
 		queue = new SharedQueue(numFetcherThreads, numScales);
 		// TODO: Optionally pass queue as constructor argument
 		//   	 Does queue clamp priorities? --> Yes
@@ -128,7 +129,6 @@ public class ZNCCSurfacePyramid implements SurfacePyramid<FloatType, VolatileFlo
 		boundsMax[0] = Math.max(bmax0[0], bmax1[0]);
 		boundsMax[1] = Math.max(bmax0[1], bmax1[1]);
 		
-		final int windowWidth = 15;
 		for (int level = 0; level < numScales; ++level) {
 
 			final double scale = 1.0 / (1 << level);

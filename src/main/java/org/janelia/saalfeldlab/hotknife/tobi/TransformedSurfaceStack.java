@@ -49,12 +49,7 @@ public class TransformedSurfaceStack<
 	// the source currently to display in BDV
 	private final DelegatingSourceAndConverter<T, V> socWrapper;
 
-	interface ChangeListener {
-
-		void renderedSurfacePyramidChanged();
-	}
-
-	private final Listeners.List<ChangeListener> changeListeners = new Listeners.SynchronizedList<>();
+	private final Listeners.List<Runnable> changeListeners = new Listeners.SynchronizedList<>();
 
 	public TransformedSurfaceStack(
 			final N5Reader n5,
@@ -98,7 +93,7 @@ public class TransformedSurfaceStack<
 
 	public SurfacePyramid<T, V> getRenderedSurfacePyramid() {return renderedSurfacePyramid;}
 
-	public Listeners<ChangeListener> changeListeners() {return changeListeners;}
+	public Listeners<Runnable> changeListeners() {return changeListeners;}
 
 	public void setIncrementalTransform(final RealTransform transform) {
 		if (transform != null) {
@@ -150,7 +145,7 @@ public class TransformedSurfaceStack<
 			renderedSurfacePyramid = new RenderedSurfacePyramid<>(n5surfacePyramid, pfp, blockWidth);
 		}
 		socWrapper.setDelegate(renderedSurfacePyramid.getSourceAndConverter());
-		changeListeners.list.forEach(ChangeListener::renderedSurfacePyramidChanged);
+		changeListeners.list.forEach(Runnable::run);
 	}
 
 	public void redo() {
