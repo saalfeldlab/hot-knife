@@ -17,7 +17,6 @@
 
 		<bigdataviewer-core.version>10.3.0</bigdataviewer-core.version>
 
-		<n5.version>2.3.0</n5.version>
 		<n5-imglib2.version>3.5.1</n5-imglib2.version>
 		<n5-hdf5.version>1.2.0</n5-hdf5.version>
 		<n5-aws-s3.version>3.2.0</n5-aws-s3.version>
@@ -25,6 +24,11 @@
 		<n5-zarr.version>0.0.6</n5-zarr.version>
 		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>
 		<n5-google-cloud>3.3.1</n5-google-cloud>
+
+		<!-- note: when upgrading to newer n5 versions, please also update render's n5 version to keep in sync -->
+		<n5.version>2.5.1</n5.version>
+
+		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -57,7 +61,7 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5</artifactId>
-			<version>2.5.1</version>
+			<version>${n5.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
@@ -140,6 +144,10 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-hdf5</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-zarr</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>info.picocli</groupId>

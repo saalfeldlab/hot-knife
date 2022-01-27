@@ -494,7 +494,7 @@ public class Show {
 			final int n = rawMipmaps[ s ].numDimensions();
 			final Interval interval = Intervals.expand( new FinalInterval( rawMipmaps[ s ] ), rawMipmaps[ s ].dimension( n - 1), n - 1 );
 
-			System.out.println( "expanding interval for scale " + s + ": " + Util.printInterval( rawMipmaps[ s ] ) + ">>>" + Util.printInterval( interval ) );
+			//System.out.println( "expanding interval for scale " + s + ": " + Util.printInterval( rawMipmaps[ s ] ) + ">>>" + Util.printInterval( interval ) );
 
 			mipmaps[s] = VolatileViews.wrapAsVolatile( rawMipmaps[s], queue);
 			mipmaps[s] = Views.interval( Views.extendZero( mipmaps[ s ] ), interval );
