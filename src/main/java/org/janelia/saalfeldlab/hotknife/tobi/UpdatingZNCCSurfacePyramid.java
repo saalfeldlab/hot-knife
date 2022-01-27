@@ -23,6 +23,7 @@ public class UpdatingZNCCSurfacePyramid {
 		socWrapper = new DelegatingSourceAndConverter<>(new FloatType(), new VolatileFloatType(), "cross correlation");
 		surfaceStack0.changeListeners().add(this::update);
 		surfaceStack1.changeListeners().add(this::update);
+		update();
 	}
 
 	private void update()

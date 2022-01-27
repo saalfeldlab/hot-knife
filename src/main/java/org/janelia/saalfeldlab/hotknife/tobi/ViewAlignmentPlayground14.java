@@ -4,7 +4,10 @@ import bdv.ui.BdvDefaultCards;
 import bdv.ui.CardPanel;
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
+import bdv.util.BdvSource;
 import bdv.util.BdvStackSource;
+import bdv.util.volatiles.SharedQueue;
+import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
 import java.awt.Insets;
 import java.io.IOException;
@@ -27,7 +30,7 @@ import org.scijava.ui.behaviour.util.Actions;
 import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 
 // transform baking in a CellLoader
-public class ViewAlignmentPlayground13 {
+public class ViewAlignmentPlayground14 {
 
 
 
@@ -144,6 +147,7 @@ public class ViewAlignmentPlayground13 {
 				n5, dataset1, n5Group + "/" + transform1, blockWidth, transform1);
 		final TransformedSurfaceStack<?, ?> stack2 = new TransformedSurfaceStack<>(
 				n5, dataset2, n5Group + "/" + transform2, blockWidth, transform2);
+		final UpdatingZNCCSurfacePyramid zncc = new UpdatingZNCCSurfacePyramid(stack1, stack2, 11); // TODO create UI for blockSize
 
 
 		final BdvStackSource<?> source1 = BdvFunctions.show(stack1.getSourceAndConverter(), Bdv.options().is2D()
@@ -164,16 +168,20 @@ public class ViewAlignmentPlayground13 {
 		final InputTriggerConfig keyconf = new InputTriggerConfig();
 
 
-		final BdvStackSource<?> source3 = BdvFunctions.show(stack1.createSocWrapper(), Bdv.options().addTo(source1));
+		final BdvStackSource<?> source3 = BdvFunctions.show(stack1.createSocWrapper(), Bdv.options().addTo(bdv));
 		source3.setDisplayRange(0, 255);
 		source3.setDisplayRangeBounds(0, 255);
 		source3.setActive(false);
 
-		final BdvStackSource<?> source4 = BdvFunctions.show(stack2.createSocWrapper(), Bdv.options().addTo(source1));
+		final BdvStackSource<?> source4 = BdvFunctions.show(stack2.createSocWrapper(), Bdv.options().addTo(bdv));
 		source4.setDisplayRange(0, 255);
 		source4.setDisplayRangeBounds(0, 255);
 		source4.setActive(false);
 
+		final BdvSource source5 = BdvFunctions.show(zncc.getSourceAndConverter(), Bdv.options().addTo(bdv));
+		source5.setDisplayRangeBounds(0, 10);
+		source5.setDisplayRange( 0, 1 );
+		source5.setColor( new ARGBType( 0x00ff00 ) );
 
 
 
@@ -205,6 +213,7 @@ public class ViewAlignmentPlayground13 {
 
 		final CardPanel cards = bdv.getBdvHandle().getCardPanel();
 		cards.setCardExpanded(BdvDefaultCards.DEFAULT_SOURCEGROUPS_CARD, false);
+		cards.addCard("ZNCC",  new ZNCCCard().getPanel(), true );
 		cards.addCard("Face Transforms",
 				new GaussShiftCard(editor).getPanel(),
 				true, new Insets(0, 0, 0, 0));
