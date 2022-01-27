@@ -89,11 +89,6 @@
 			<artifactId>imglib2-algorithm</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>net.imglib2</groupId>
-			<artifactId>imglib2-blk</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
-		</dependency>
-		<dependency>
 			<groupId>org.scala-lang</groupId>
 			<artifactId>scala-library</artifactId>
 			<version>2.11.8</version>
