@@ -126,7 +126,7 @@ public class VNCMovie implements Callable<Void> {
 	/**
 	 * Cosine shape of linear [0,1]
 	 */
-	private static double cos(final double x) {
+	protected static double cos(final double x) {
 
 		return 0.5 - 0.5 * Math.cos(Math.PI * x);
 	}
@@ -142,7 +142,7 @@ public class VNCMovie implements Callable<Void> {
 	 *   4  soft slow start
 	 *   5  soft slow end
 	 */
-	private static double accel(final double t, final int type) {
+	protected static double accel(final double t, final int type) {
 
 		switch (type) {
 		case 1:		// slow start
@@ -244,7 +244,9 @@ public class VNCMovie implements Callable<Void> {
 		new CommandLine(new VNCMovie()).execute(args);
 	}
 
-	public RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource() throws IOException {
+	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
+			final String n5Path,
+			final String n5Group ) throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -258,6 +260,7 @@ public class VNCMovie implements Callable<Void> {
 			final double inverseScale = 1.0 / scale;
 			final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
 
+			/*
 			// TODO
 			final int blockRadius = (int)Math.round(511 * inverseScale);
 
@@ -274,8 +277,8 @@ public class VNCMovie implements Callable<Void> {
 					new UnsignedByteType(),
 					AccessFlags.setOf(AccessFlags.VOLATILE),
 					cllcn);
-
-			mipmaps[scaleIndex] = cllcned;
+			*/
+			mipmaps[scaleIndex] = img;//cllcned;
 			scales[scaleIndex] = new double[]{scale, scale, scale};
 		}
 
@@ -293,7 +296,7 @@ public class VNCMovie implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = createMipmapSource();
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = createMipmapSource( n5Path, n5Group );
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1) / 2));
 //		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
