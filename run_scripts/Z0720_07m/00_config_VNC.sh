@@ -80,7 +80,7 @@ export FLINTSTONE="/groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.s
 # --------------------------------------------------------------------
 export N5_SAMPLE_PATH="/nrs/flyem/render/n5/${RENDER_OWNER}"
 export N5_HEIGHT_FIELDS_COMPUTED_DATASET="/heightfields/${RENDER_PROJECT}/pass1/s1"
-export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass1"
+export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass1_preibischs"
 export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="6,6,1"
 export N5_FLAT_DATASET_ROOT="/flat/${RENDER_PROJECT}"
 export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
@@ -100,16 +100,16 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
     export ALIGN_STACK="v5_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec06/v3_acquire_trimmed_align_ic___20220406_104101"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_DATASET="/z_corr/Sec06/v5_acquire_trimmed_align_ic___20220415_051548"
+    export N5_Z_CORR_OFFSET="-12365,-2185,2"
   ;;
   "Sec07")
     export ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
     export ALIGN_STACK="v4_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v4_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec07/v2_acquire_trimmed_align_ic___20220406_105604"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_DATASET="/z_corr/Sec07/v4_acquire_trimmed_align_ic___20220615_112850"
+    export N5_Z_CORR_OFFSET="-9135,-1861,1"
   ;;
   "Sec08")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
@@ -117,7 +117,7 @@ case "${TAB}" in
     export ALIGN_STACK="v1_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec08/v1_acquire_trimmed_align_ic___20220406_110928"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-12560,-2857,2"
   ;;
   "Sec09")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
@@ -125,7 +125,7 @@ case "${TAB}" in
     export ALIGN_STACK="v3_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec09/v3_acquire_trimmed_align_ic___20220406_121510"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-13343,-1460,1"
   ;;
   "Sec10")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -133,7 +133,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec10/v2_acquire_trimmed_align_ic___20220406_135057"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-15266,-5967,2"
   ;;
   "Sec11")
     export ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
@@ -157,7 +157,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec13/v2_acquire_trimmed_align_ic___20220406_144232"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-15403,-6327,2"
   ;;
   "Sec14")
     export ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
@@ -165,7 +165,7 @@ case "${TAB}" in
     export ALIGN_STACK="v4_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v4_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec14/v4_acquire_trimmed_align_ic___20220414_154911"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-15711,-5791,2"
   ;;
   "Sec15")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -173,7 +173,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec15/v2_acquire_trimmed_align_ic___20220415_051315"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-18890,-4464,1"
   ;;
   "Sec16")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -181,7 +181,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec16/v2_acquire_trimmed_align_ic___20220412_190848"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-17567,-1823,1"
   ;;
   "Sec17")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -189,7 +189,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec17/v2_acquire_trimmed_align_ic___20220414_211553"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-16181,-4070,1"
   ;;
   "Sec18")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
@@ -197,7 +197,7 @@ case "${TAB}" in
     export ALIGN_STACK="v1_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec18/v1_acquire_trimmed_align_ic___20220412_141755"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-16899,-3978,1"
   ;;
   "Sec19")
     export ACQUIRE_TRIMMED_STACK="v6_acquire_trimmed"
@@ -213,7 +213,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec20/v2_acquire_trimmed_align_ic___20220406_165947"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-14910,-7309,1"
   ;;
   "Sec21")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
@@ -221,7 +221,7 @@ case "${TAB}" in
     export ALIGN_STACK="v1_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec21/v1_acquire_trimmed_align_ic___20220406_165800"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-15734,-4020,2"
   ;;
   "Sec22")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
@@ -229,23 +229,15 @@ case "${TAB}" in
     export ALIGN_STACK="v1_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec22/v1_acquire_trimmed_align_ic___20220412_110718"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-15104,-2742,1"
   ;;
   "Sec23")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="TBD"
     export ALIGN_STACK="v1_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec23/v1_acquire_trimmed_align_ic___20220411_202230"
-    export N5_Z_CORR_OFFSET=""
-  ;;
-  "Sec23_v1")
-    export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
-    export OLD_ACQUIRE_TRIMMED_STACK="TBD"
-    export ALIGN_STACK="v1_acquire_trimmed_align"
-    export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec23_v1/???"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_DATASET="/z_corr/Sec23/v1_acquire_trimmed_align_ic___20220412_082609"
+    export N5_Z_CORR_OFFSET="-5304,-2604,2"
   ;;
   "Sec24")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -253,7 +245,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec24/v2_acquire_trimmed_align_ic___20220412_223828"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-16426,-4002,73"
   ;;
   "Sec25")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
@@ -261,7 +253,7 @@ case "${TAB}" in
     export ALIGN_STACK="v3_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec25/v3_acquire_trimmed_align_ic___20220412_192353"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-16116,-4169,1581"
   ;;
   "Sec26")
     export ACQUIRE_TRIMMED_STACK="v7_acquire_trimmed"
@@ -269,7 +261,7 @@ case "${TAB}" in
     export ALIGN_STACK="v7_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v7_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec26/???"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-18936,-5597,402"
   ;;
   "Sec27")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -277,7 +269,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec27/v2_acquire_trimmed_align_ic___20210919_074405"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-18319,-4828,1"
   ;;
   "Sec28")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -285,7 +277,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec28/v2_acquire_trimmed_align_ic___20220411_213036"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-19524,-5639,302"
   ;;
   "Sec29")
     export ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
@@ -309,7 +301,7 @@ case "${TAB}" in
     export ALIGN_STACK="v4_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v4_acquire_trimmed_align_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec31/v4_acquire_trimmed_align_ic___20220411_184328"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="205,-2031,601"
   ;;
   "Sec32")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
@@ -317,7 +309,7 @@ case "${TAB}" in
     export ALIGN_STACK="v1_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_straightened_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec32/v1_acquire_trimmed_align_straightened_ic___20220307_142422"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="251,1221,1"
   ;;
   "Sec33")
     export ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
@@ -325,7 +317,7 @@ case "${TAB}" in
     export ALIGN_STACK="v1_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_straightened_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec33/v1_acquire_trimmed_align_straightened_ic___20220307_142254"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-936,1793,1"
   ;;
   "Sec34")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -333,7 +325,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_straightened_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec34/v2_acquire_trimmed_align_straightened_ic___20220307_142207"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-917,-2220,2715"
   ;;
   "Sec35")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -341,7 +333,7 @@ case "${TAB}" in
     export ALIGN_STACK="v2_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_straightened_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec35/v2_acquire_trimmed_align_straightened_ic___20220210_101244"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="185,-2303,6"
   ;;
   "Sec36")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
@@ -349,7 +341,7 @@ case "${TAB}" in
     export ALIGN_STACK="v3_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_straightened_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec36/v3_acquire_trimmed_align_straightened_ic___20220210_101421"
-    export N5_Z_CORR_OFFSET=""
+    export N5_Z_CORR_OFFSET="-6743,-442,52"
   ;;
 esac
 
