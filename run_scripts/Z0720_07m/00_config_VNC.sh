@@ -108,7 +108,7 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
     export ALIGN_STACK="v4_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v4_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec07/v4_acquire_trimmed_align_ic___20220615_112850"
+    export N5_Z_CORR_DATASET="/z_corr/Sec07/v4_acquire_trimmed_align___20220729_163950"
     export N5_Z_CORR_OFFSET="-9135,-1861,1"
   ;;
   "Sec08")
@@ -138,18 +138,18 @@ case "${TAB}" in
   "Sec11")
     export ACQUIRE_TRIMMED_STACK="v5_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="v4_acquire_trimmed"
-    export ALIGN_STACK="v5_acquire_trimmed_align"
-    export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec11/???"
-    export N5_Z_CORR_OFFSET=""
+    export ALIGN_STACK="v5_acquire_trimmed_align_untwisted"
+    export INTENSITY_CORRECTED_STACK="v5_acquire_trimmed_align_untwisted_ic"
+    export N5_Z_CORR_DATASET="/z_corr/Sec11/v5_acquire_trimmed_align_untwisted_ic___20220727_124526"
+    export N5_Z_CORR_OFFSET="-15094,-2935,1725"
   ;;
   "Sec12")
     export ACQUIRE_TRIMMED_STACK="v7_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="v5_acquire_trimmed"
-    export ALIGN_STACK="v7_acquire_trimmed_align"
-    export INTENSITY_CORRECTED_STACK="v7_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec12/v7_acquire_trimmed_align_ic___20220615_154150"
-    export N5_Z_CORR_OFFSET="-15715,-7523,1"
+    export ALIGN_STACK="v7_acquire_trimmed_align_straightened"
+    export INTENSITY_CORRECTED_STACK="v7_acquire_trimmed_align_straightened_ic"
+    export N5_Z_CORR_DATASET="/z_corr/Sec12/v7_acquire_trimmed_align_straightened_ic___20220727_124208"
+    export N5_Z_CORR_OFFSET="-15715,-5104,1"
   ;;
   "Sec13")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
@@ -202,10 +202,10 @@ case "${TAB}" in
   "Sec19")
     export ACQUIRE_TRIMMED_STACK="v7_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="v6_acquire_trimmed"
-    export ALIGN_STACK="v7_acquire_trimmed_align"
-    export INTENSITY_CORRECTED_STACK="v7_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec19/???"
-    export N5_Z_CORR_OFFSET=""
+    export ALIGN_STACK="v7_acquire_trimmed_align_straightened"
+    export INTENSITY_CORRECTED_STACK="v7_acquire_trimmed_align_straightened_ic"
+    export N5_Z_CORR_DATASET="/z_corr/Sec19/v7_acquire_trimmed_align_straightened___20220729_141830"
+    export N5_Z_CORR_OFFSET="-16903,-3082,1"
   ;;
   "Sec20")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -258,10 +258,10 @@ case "${TAB}" in
   "Sec26")
     export ACQUIRE_TRIMMED_STACK="v8_acquire_trimmed"
     export OLD_ACQUIRE_TRIMMED_STACK="v7_acquire_trimmed"
-    export ALIGN_STACK="v8_acquire_trimmed_align_straightened"
-    export INTENSITY_CORRECTED_STACK="v8_acquire_trimmed_align_straightened_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec26/v8_acquire_trimmed_align_straightened_ic___20220703_174059"
-    export N5_Z_CORR_OFFSET="-18995,-4141,401"
+    export ALIGN_STACK="v8_acquire_trimmed_align_untwisted"
+    export INTENSITY_CORRECTED_STACK="v8_acquire_trimmed_align_untwisted_ic"
+    export N5_Z_CORR_DATASET="/z_corr/Sec26/v8_acquire_trimmed_align_untwisted_ic___20220720_113625"
+    export N5_Z_CORR_OFFSET="-19019,-3683,401"
   ;;
   "Sec27")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
@@ -280,12 +280,12 @@ case "${TAB}" in
     export N5_Z_CORR_OFFSET="-19761,-2416,301"
   ;;
   "Sec29")
-    export ACQUIRE_TRIMMED_STACK="v6_acquire_trimmed"
-    export OLD_ACQUIRE_TRIMMED_STACK="v5_acquire_trimmed"
-    export ALIGN_STACK="v6_acquire_trimmed_align"
-    export INTENSITY_CORRECTED_STACK="v6_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec29/???"
-    export N5_Z_CORR_OFFSET=""
+    export ACQUIRE_TRIMMED_STACK="v8_acquire_trimmed"
+    export OLD_ACQUIRE_TRIMMED_STACK="v7_acquire_trimmed"
+    export ALIGN_STACK="v8_acquire_trimmed_align_untwisted"
+    export INTENSITY_CORRECTED_STACK="v8_acquire_trimmed_align_untwisted_ic"
+    export N5_Z_CORR_DATASET="/z_corr/Sec29/v8_acquire_trimmed_align_untwisted_ic___20220729_132411"
+    export N5_Z_CORR_OFFSET="-2,-1159,701"
   ;;
   "Sec30")
     export ACQUIRE_TRIMMED_STACK="v5_acquire_trimmed"
