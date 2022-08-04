@@ -259,7 +259,7 @@ public class PaintHeightField implements Callable<Void>{
 		System.out.println("done.");
 
 		//System.out.print("Loading MANUAL heightfield.");
-		//float[] hf = (float[])new ImagePlus( "/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec06/heighfield-max.tif" ).getProcessor().getPixels();
+		//float[] hf = (float[])new ImagePlus( "/Users/preibischs/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/VNC-Sec 29/heighfield_max_hybrid.tif" ).getProcessor().getPixels();
 		//heightField = ArrayImgs.floats( hf, heightFieldSource.dimensionsAsLongArray() );
 		//for ( final FloatType t : heightField )
 		//	if ( t.get() <= 0 )
@@ -267,17 +267,17 @@ public class PaintHeightField implements Callable<Void>{
 		//heightField = fix07mBRSec28HeightField( heightField );
 
 		//System.out.print("SMOOTHING heightfield.");
-		//Gauss3.gauss( 1.0, Views.extendBorder( heightField ), heightField );
+		//Gauss3.gauss( 2.0, Views.extendBorder( heightField ), heightField );
 		//System.out.println("done.");
 
 		//System.out.print("MEDIAN-FILTERING heightfield.");
 		//final FloatProcessor fp = new FloatProcessor( (int)heightField.dimension( 0 ), (int)heightField.dimension( 1 ), ((FloatArray)heightField.update( null )).getCurrentStorageArray() );
-		//new RankFilters().rank( fp, 10, RankFilters.MEDIAN );
+		//new RankFilters().rank( fp, 30, RankFilters.MEDIAN );
 		//System.out.println("done.");
 
 		//System.out.print("adding offset to heightfield.");
 		//for ( final FloatType t : heightField )
-		//	t.set( t.get() + 0.75f );
+		//	t.set( t.get() + 1f );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
@@ -319,7 +319,10 @@ public class PaintHeightField implements Callable<Void>{
 
 		new ImageJ();
 		ImageJFunctions.show( heightField ).setTitle( "heighfield");
-		ImageJFunctions.show( gradientCopy ).setTitle( "gradients");
+		ImagePlus grad = ImageJFunctions.show( gradientCopy );
+		grad.setTitle( "gradients");
+		grad.setDisplayRange(0, 10);
+		grad.updateAndDraw();
 		//SimpleMultiThreading.threadHaltUnClean(); 
 
 		final RealRandomAccessible< FloatType > gradientFull =
