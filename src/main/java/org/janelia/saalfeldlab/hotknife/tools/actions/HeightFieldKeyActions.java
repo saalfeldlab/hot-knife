@@ -6,6 +6,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
+import java.util.Date;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -80,7 +81,7 @@ public class HeightFieldKeyActions {
 
 	public void saveHeightField() throws IOException, InterruptedException, ExecutionException {
 
-		System.out.print("Saving heightfield " + n5Path + ":/" + heightFieldDataset + " ... ");
+		System.out.print( "(" +new Date( System.currentTimeMillis()) + "): Saving heightfield " + n5Path + ":/" + heightFieldDataset + " ... ");
 		final ExecutorService exec = Executors.newFixedThreadPool(4);
 		final N5FSWriter n5 = new N5FSWriter(n5Path);
 		N5Utils
