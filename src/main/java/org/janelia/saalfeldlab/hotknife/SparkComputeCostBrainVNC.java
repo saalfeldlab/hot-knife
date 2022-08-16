@@ -1,14 +1,22 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Show;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import bdv.tools.boundingbox.TransformedBoxSelectionDialog.Result;
@@ -29,7 +37,9 @@ import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
@@ -40,8 +50,14 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 	@Option(names = {"-i", "--n5Path"}, required = true, description = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 	private String n5Path = null;
 
-	@Option(names = {"-d", "--n5Raw"}, required = true, description = "N5 input group for raw, e.g. /raw")
-	private String rawGroup = null;
+	@Option(names = {"-d", "--n5Dataset"}, required = true, description = "N5 input group for raw data, e.g. /raw")
+	private String n5Dataset = null;
+
+	@Option(names = {"-ci", "--costN5Path"}, required = true, description = "N5 input group for raw, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
+	private String costN5Path = null;
+
+	@Option(names = {"-cd", "--costN5Dataset"}, required = true, description = "N5 input group for raw, e.g. /raw")
+	private String costN5Dataset = null;
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 		//CommandLine.call(new SparkComputeCostBrainVNC(), args);
@@ -151,27 +167,224 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 				kernelSize);
 	}
 
+	private static Pair< RandomAccessibleInterval<UnsignedByteType>, int[] > openCropFullBrain(
+			final String n5Path,
+			final String n5Dataset,
+			final long[] minInterval,
+			final long[] maxInterval ) throws IOException
+	{
+		final N5Reader n5 = new N5FSReader(n5Path);
+		final String fullRes = n5Dataset + "/s0";
+
+		final int[] zcorrBlockSize = n5.getAttribute(fullRes, "blockSize", int[].class);
+		final RandomAccessibleInterval<UnsignedByteType> fullBrain = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5, fullRes);
+		double[] scale = n5.getAttribute(fullRes, "downsamplingFactors", double[].class);
+		scale = (scale == null) ? new double[] {1, 1, 1} : scale;
+
+		System.out.println( "scale: "+ Util.printCoordinates( scale ) );
+		System.out.println( "dimensions: "+ Util.printInterval( fullBrain ) );
+
+		final RandomAccessibleInterval<UnsignedByteType> cropped =
+				Views.rotate(
+						Views.interval( fullBrain, minInterval, maxInterval ),
+						1,
+						0 );
+
+		return new ValuePair<>(cropped, zcorrBlockSize);
+	}
+
+	public static void processCostSpark(
+			final JavaSparkContext sparkContext,
+			final String n5Path,
+			final String n5Dataset,
+			final Interval cropInterval,
+			final String costN5Path,
+			final String costN5Dataset ) throws IOException
+	{
+		// for serialization
+		final long[] min = new long[ cropInterval.numDimensions() ];
+		final long[] max = new long[ cropInterval.numDimensions() ];
+
+		cropInterval.min( min );
+		cropInterval.max( max );
+
+		System.out.println( "crop interval: " + Util.printInterval( cropInterval ) );
+
+		final Pair< RandomAccessibleInterval<UnsignedByteType>, int[] > data = openCropFullBrain( n5Path, n5Dataset, min, max );
+		final RandomAccessibleInterval<UnsignedByteType> cropped = data.getA();
+		final int[] zcorrBlockSize = data.getB();
+
+		System.out.println( "zcorrBlockSize: " + Util.printCoordinates( zcorrBlockSize ) );
+
+		final long[] zcorrSize = new long[3];
+		cropped.dimensions( zcorrSize );
+
+		final int[] costBlockSize = new int[]{
+				zcorrBlockSize[1],
+				zcorrBlockSize[0], // above we switch x and y
+				zcorrBlockSize[2]
+		};
+
+		final int[] costSteps = new int[]{6,1,6};
+		final int costAxis=2;
+
+		long[] costSize = new long[]{ zcorrSize[0] / costSteps[0], zcorrSize[1] / costSteps[1], zcorrSize[2] / costSteps[2] };
+
+		final N5Writer n5w = new N5FSWriter(costN5Path);
+
+		n5w.createDataset(costN5Dataset, costSize, costBlockSize, DataType.UINT8, new GzipCompression());
+		n5w.setAttribute(costN5Dataset, "downsamplingFactors", costSteps);
+
+		n5w.close();
+
+		final ArrayList<Long[]> gridCoords = new ArrayList<>();
+
+		final int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
+		final int gridZSize = (int)Math.ceil(costSize[2] / (float)costBlockSize[2]);
+
+		System.out.println( "gridXSize: " + gridXSize );
+		System.out.println( "gridZSize: " + gridZSize );
+
+		System.exit( 0 );
+
+		//for (long x = 25; x < 26; x++) {
+		//	for (long z = 23; z < 24; z++) {
+		for (long x = 0; x < gridXSize; x++)
+		{
+			for (long z = 0; z < gridZSize; z++)
+			{
+				if ( x == 35 ) System.out.println( "z: " + z + ": " + SparkComputeCost.getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
+				gridCoords.add(new Long[]{x, z});
+			}
+			System.out.println( "x: " + x + ": " + SparkComputeCost.getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
+		}
+		//System.exit( 0 );
+		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
+
+		// Grids are w.r.t cost blocks
+		final JavaRDD<Long[]> rddSlices = sparkContext.parallelize(gridCoords);
+
+		final boolean filter = false;
+		final boolean gauss = true;
+
+		final int bandSize=50;
+		final float maxSlope=0.04f;
+		final float minSlope = 0;
+		final float slopeCorrBandFactor=5.5f;
+		final int slopeCorrXRange=20;
+		final int minGradient = 20;
+		final int startThresh = 50;
+		final int kernelSize = 5;
+
+		rddSlices.foreachPartition( gridCoordPartition -> {
+
+			ExecutorService executorService =  Executors.newFixedThreadPool(1 );
+
+			gridCoordPartition.forEachRemaining(gridCoord -> {
+
+				try {
+					// load, crop, rotate full brain
+					final RandomAccessibleInterval<UnsignedByteType> croppedLocal = openCropFullBrain( n5Path, n5Dataset, min, max ).getA();
+
+					// run cost
+					RandomAccessibleInterval<UnsignedByteType> cost = SparkComputeCost.processColumnAlongAxis(
+							croppedLocal,
+							new FinalInterval( croppedLocal ), 
+							filter,
+							gauss,
+							//costBlockSize,
+							//zcorrBlockSize,
+							zcorrSize,
+							costSteps,
+							costAxis,
+							gridCoord,
+							executorService,
+							bandSize,
+							minGradient,
+							slopeCorrXRange,
+							slopeCorrBandFactor,
+							maxSlope,
+							minSlope,
+							startThresh,
+							kernelSize);
+
+					//ImageJFunctions.show( cost );
+					//SimpleMultiThreading.threadHaltUnClean();
+
+					// save cost
+					System.out.println("Writing blocks");
+
+					final N5Writer n5costWriter = new N5FSWriter(costN5Path);
+
+					// Now loop over blocks and write
+					for( int yGrid = 0; yGrid <= Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
+						long[] gridOffset = new long[]{gridCoord[0], yGrid, gridCoord[1]};
+						RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
+								Views.extendZero( cost ),
+								new FinalInterval(
+										new long[]{0, yGrid * zcorrBlockSize[1], 0},
+										new long[]{cost.dimension(0) - 1, (yGrid + 1) * zcorrBlockSize[1] - 1, cost.dimension(2) - 1}));
+						N5Utils.saveBlock(
+								block,
+								n5costWriter,
+								costN5Dataset,
+								gridOffset);
+					}
+
+					n5costWriter.close();
+					/*
+				    processColumn(
+						  n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, axisMode, gridCoord, executorService,
+						  options.bandSize, options.minGradient, options.slopeCorrXRange, options.slopeCorrBandFactor, options.maxSlope,
+						  options.minSlope, options.startThresh, options.kernelSize);
+					*/
+				} catch (Exception e) {
+				    e.printStackTrace(); // TODO: is there a reason we are swallowing exceptions?
+				}
+				
+			    });
+
+			executorService.shutdown();
+
+		    });
+
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public final Void call() throws Exception
 	{
-		final N5Reader n5 = new N5FSReader(n5Path);
-
 		// crop interval (manually specified)
 		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756+5000}, new long[] {55779-4000, 59038, 53664-5000} );
+		//final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756/*+5000*/}, new long[] {55779/*-4000*/, 59038, 53664/*-5000*/} );
 
-		// show crop
+		final N5Reader n5 = new N5FSReader(n5Path);
+
+		/*
+		 * show crop
+		 */
 		// defineCrop( n5, rawGroup, crop );
 
 		/*
-		 * raw data
+		 * run full res on spark
 		 */
-		final int numScales = n5.list(rawGroup).length;
+		final SparkConf conf = new SparkConf().setAppName("SparkComputeCostBrainVNC");
+		conf.set("spark.driver.bindAddress", "127.0.0.1");
+		final JavaSparkContext sc = new JavaSparkContext(conf);
+
+		processCostSpark(sc, n5Path, n5Dataset, crop, costN5Path, costN5Dataset );
+
+		System.exit( 0 );
+
+		/*
+		 * run cost on low-res version
+		 */
+		final int numScales = n5.list(n5Dataset).length;
 		final double[][] scales = new double[numScales][];
 		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = new RandomAccessibleInterval[numScales];
 		for (int s = 0; s < numScales; ++s) {
 
-			final String mipmapName = rawGroup + "/s" + s;
+			final String mipmapName = n5Dataset + "/s" + s;
 			mipmaps[s] = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5, mipmapName);
 			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
 			scales[s] = (scale == null) ? new double[] {1, 1, 1} : scale;

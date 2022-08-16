@@ -648,7 +648,7 @@ public class SparkComputeCost {
 		return cost;//CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
 	}
 
-	private static Interval getZcorrInterval(Long gridX, Long gridZ, long[] zcorrSize, int[] zcorrBlockSize, int[] costSteps) {
+	protected static Interval getZcorrInterval(Long gridX, Long gridZ, long[] zcorrSize, int[] zcorrBlockSize, int[] costSteps) {
 		long startX = ( gridX * costSteps[0] ) * zcorrBlockSize[0];
 		long startY = 0;
 		long startZ = ( gridZ * costSteps[2] ) * zcorrBlockSize[2];
