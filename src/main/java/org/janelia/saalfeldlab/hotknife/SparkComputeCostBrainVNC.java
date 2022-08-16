@@ -74,8 +74,10 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 	 * @throws IOException
 	 */
 	@SuppressWarnings("unchecked")
-	public static Interval defineCrop( final N5Reader n5, final String rawGroup, final Interval crop ) throws IOException
+	public static Interval defineCrop( final String n5Path, final String rawGroup, final Interval crop ) throws IOException
 	{
+		final N5Reader n5 = new N5FSReader(n5Path);
+
 		final int numScales = n5.list(rawGroup).length;
 		final double[][] scales = new double[numScales][];
 		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = new RandomAccessibleInterval[numScales];
@@ -115,7 +117,64 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		System.out.println( Util.printInterval( box.getInterval() ) );
 		// [47204, 46557, 40906] -> [55779, 59038, 55164], dimensions (8576, 12482, 14259)
 
+		n5.close();
+
 		return box.getInterval();
+	}
+
+	public static void lowResCost(
+			final String n5Path,
+			final String n5Dataset,
+			final Interval crop ) throws Exception
+	{
+		final N5Reader n5 = new N5FSReader(n5Path);
+		final int numScales = n5.list(n5Dataset).length;
+		final double[][] scales = new double[numScales][];
+		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = new RandomAccessibleInterval[numScales];
+		for (int s = 0; s < numScales; ++s) {
+
+			final String mipmapName = n5Dataset + "/s" + s;
+			mipmaps[s] = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5, mipmapName);
+			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
+			scales[s] = (scale == null) ? new double[] {1, 1, 1} : scale;
+
+			System.out.println( "scale: "+ Util.printCoordinates( scales[s] ) );
+			System.out.println( "dimensions: "+ Util.printInterval( mipmaps[ s ]));
+
+			if ( crop != null )
+			{
+				final AffineTransform3D mipmapTransform = new AffineTransform3D();
+				mipmapTransform.set(
+						scales[s][ 0 ], 0, 0, 0.5 * ( scales[s][ 0 ] - 1 ),
+						0, scales[s][ 1 ], 0, 0.5 * ( scales[s][ 1 ] - 1 ),
+						0, 0, scales[s][ 2 ], 0.5 * ( scales[s][ 2 ] - 1 ) );
+				//mipmapTransform.preConcatenate(sourceTransform);
+				//mipmapTransforms[ s ] = mipmapTransform;
+
+				double[] min = new double[] {crop.min(0), crop.min(1), crop.min(2)};
+				double[] max = new double[] {crop.max(0), crop.max(1), crop.max(2)};
+
+				mipmapTransform.applyInverse(min, min);
+				mipmapTransform.applyInverse(max, max);
+
+				System.out.println( "mipmap transform: "+ mipmapTransform );
+				System.out.println( "updated interval: "+ Util.printCoordinates( min ) + " >>> " + Util.printCoordinates( max ) );
+
+				if ( scales[s][ 0 ] == 8 )
+				{
+					final RealInterval bb = new FinalRealInterval(min, max);
+					final RandomAccessibleInterval<UnsignedByteType> cropped =
+							Views.interval( mipmaps[ s ], Intervals.smallestContainingInterval( bb ) );
+
+					//new ImageJ();
+					//ImageJFunctions.show( cropped );
+
+					computeCost( Views.rotate( cropped, 1, 0 ) );
+				}
+			}
+			System.out.println();
+		}
+
 	}
 
 	public static void computeCost( final RandomAccessibleInterval<UnsignedByteType> cropped ) throws Exception
@@ -278,7 +337,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 		rddSlices.foreachPartition( gridCoordPartition -> {
 
-			ExecutorService executorService =  Executors.newFixedThreadPool(1 );
+			final ExecutorService executorService =  Executors.newFixedThreadPool(1 );
 
 			gridCoordPartition.forEachRemaining(gridCoord -> {
 
@@ -342,28 +401,30 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 				    e.printStackTrace(); // TODO: is there a reason we are swallowing exceptions?
 				}
 				
-			    });
+			});
 
 			executorService.shutdown();
 
-		    });
+			});
 
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
 	public final Void call() throws Exception
 	{
-		// crop interval (manually specified)
+		// crop interval (was manually specified using method 'defineCrop')
 		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756+5000}, new long[] {55779-4000, 59038, 53664-5000} );
 		//final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756/*+5000*/}, new long[] {55779/*-4000*/, 59038, 53664/*-5000*/} );
-
-		final N5Reader n5 = new N5FSReader(n5Path);
 
 		/*
 		 * show crop
 		 */
-		// defineCrop( n5, rawGroup, crop );
+		// defineCrop( n5Path, n5Dataset, crop );
+
+		/*
+		 * run cost on low-res version
+		 */
+		// lowResCost(costN5Path, costN5Dataset, crop);
 
 		/*
 		 * run full res on spark
@@ -374,86 +435,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 		processCostSpark(sc, n5Path, n5Dataset, crop, costN5Path, costN5Dataset );
 
-		System.exit( 0 );
 
-		/*
-		 * run cost on low-res version
-		 */
-		final int numScales = n5.list(n5Dataset).length;
-		final double[][] scales = new double[numScales][];
-		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = new RandomAccessibleInterval[numScales];
-		for (int s = 0; s < numScales; ++s) {
-
-			final String mipmapName = n5Dataset + "/s" + s;
-			mipmaps[s] = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5, mipmapName);
-			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
-			scales[s] = (scale == null) ? new double[] {1, 1, 1} : scale;
-
-			System.out.println( "scale: "+ Util.printCoordinates( scales[s] ) );
-			System.out.println( "dimensions: "+ Util.printInterval( mipmaps[ s ]));
-
-			if ( crop != null )
-			{
-				final AffineTransform3D mipmapTransform = new AffineTransform3D();
-				mipmapTransform.set(
-						scales[s][ 0 ], 0, 0, 0.5 * ( scales[s][ 0 ] - 1 ),
-						0, scales[s][ 1 ], 0, 0.5 * ( scales[s][ 1 ] - 1 ),
-						0, 0, scales[s][ 2 ], 0.5 * ( scales[s][ 2 ] - 1 ) );
-				//mipmapTransform.preConcatenate(sourceTransform);
-				//mipmapTransforms[ s ] = mipmapTransform;
-
-				double[] min = new double[] {crop.min(0), crop.min(1), crop.min(2)};
-				double[] max = new double[] {crop.max(0), crop.max(1), crop.max(2)};
-
-				mipmapTransform.applyInverse(min, min);
-				mipmapTransform.applyInverse(max, max);
-
-				System.out.println( "mipmap transform: "+ mipmapTransform );
-				System.out.println( "updated interval: "+ Util.printCoordinates( min ) + " >>> " + Util.printCoordinates( max ) );
-
-				if ( scales[s][ 0 ] == 8 )
-				{
-					final RealInterval bb = new FinalRealInterval(min, max);
-					final RandomAccessibleInterval<UnsignedByteType> cropped =
-							Views.interval( mipmaps[ s ], Intervals.smallestContainingInterval( bb ) );
-
-					//new ImageJ();
-					//ImageJFunctions.show( cropped );
-
-					computeCost( Views.rotate( cropped, 1, 0 ) );
-				}
-			}
-			System.out.println();
-		}
-
-		/*
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource =
-				new RandomAccessibleIntervalMipmapSource<>(
-						mipmaps,
-						new UnsignedByteType(),
-						scales,
-						new FinalVoxelDimensions("px", 1.0, 1.0, 1.0),
-						new AffineTransform3D(),
-						rawGroup);
-
-		final boolean useVolatile = true;
-
-		final int numProc = Runtime.getRuntime().availableProcessors();
-		final SharedQueue queue = new SharedQueue(Math.min(12, Math.max(1, numProc - 2)));
-
-		final Source<?> volatileMipmapSource;
-		if (useVolatile)
-			volatileMipmapSource = mipmapSource.asVolatile(queue);
-		else
-			volatileMipmapSource = mipmapSource;
-
-		final BdvOptions options =
-				BdvOptions.options()
-				.screenScales(new double[] {0.5})
-				.numRenderingThreads(Runtime.getRuntime().availableProcessors());
-
-		final BdvStackSource<?> bdv = Show.mipmapSource(volatileMipmapSource, null, options);
-		*/
 
 		return null;
 	}
