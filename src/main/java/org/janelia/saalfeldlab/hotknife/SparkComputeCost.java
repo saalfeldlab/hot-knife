@@ -525,8 +525,8 @@ public class SparkComputeCost {
 		System.out.println("Zcorr interval: " + Util.printInterval( zcorrInterval ) );
 		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
 
-		new ij.ImageJ();
-		ImageJFunctions.show( zcorr );
+		//new ij.ImageJ();
+		//ImageJFunctions.show( zcorr );
 		//SimpleMultiThreading.threadHaltUnClean();
 
 		// Loop over slices and populate cost
@@ -552,7 +552,7 @@ public class SparkComputeCost {
 				e.printStackTrace();
 			}
 
-			ImageJFunctions.show( sliceCopy ).setTitle( "sliceCopy");
+			//ImageJFunctions.show( sliceCopy ).setTitle( "sliceCopy");
 
 			System.out.println("Compute resin.");
 
@@ -616,8 +616,8 @@ public class SparkComputeCost {
 								new FloatType() );
 			}
 
-			ImageJFunctions.show( costSliceFullRes ).setDisplayRange(0, 255);;
-			SimpleMultiThreading.threadHaltUnClean();
+			//ImageJFunctions.show( costSliceFullRes ).setDisplayRange(0, 255);;
+			//SimpleMultiThreading.threadHaltUnClean();
 
 			SubsampleIntervalView<FloatType> costSlice =
 					Views.subsample(

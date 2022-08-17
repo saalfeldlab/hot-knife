@@ -374,8 +374,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 							startThresh,
 							kernelSize);
 
-					ImageJFunctions.show( cost );
-					SimpleMultiThreading.threadHaltUnClean();
+					//ImageJFunctions.show( cost );
+					//SimpleMultiThreading.threadHaltUnClean();
 
 					// save cost
 					System.out.println("Writing blocks");
