@@ -306,7 +306,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		System.out.println( "gridXSize: " + gridXSize );
 		System.out.println( "gridZSize: " + gridZSize );
 
-		for (long x = 12; x <= 12; x++) {
+		for (long x = 10; x <= 10; x++) {
 			for (long z = 1; z <= 1; z++) {
 		//for (long x = 0; x < gridXSize; x++) {
 		//	for (long z = 0; z < gridZSize; z++) {
@@ -326,7 +326,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		final boolean filter = false;
 		final boolean gauss = true;
 
-		final int bandSize=50;
+		final int bandSize=300;
 		final float maxSlope=0.04f;
 		final float minSlope = 0;
 		final float slopeCorrBandFactor=5.5f;
