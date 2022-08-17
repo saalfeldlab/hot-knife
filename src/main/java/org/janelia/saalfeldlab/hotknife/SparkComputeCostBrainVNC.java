@@ -31,9 +31,11 @@ import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
@@ -240,8 +242,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		double[] scale = n5.getAttribute(fullRes, "downsamplingFactors", double[].class);
 		scale = (scale == null) ? new double[] {1, 1, 1} : scale;
 
-		System.out.println( "scale: "+ Util.printCoordinates( scale ) );
-		System.out.println( "dimensions: "+ Util.printInterval( fullBrain ) );
+		//System.out.println( "scale: "+ Util.printCoordinates( scale ) );
+		//System.out.println( "dimensions: "+ Util.printInterval( fullBrain ) );
 
 		final RandomAccessibleInterval<UnsignedByteType> cropped =
 				Views.rotate(
@@ -304,21 +306,19 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		System.out.println( "gridXSize: " + gridXSize );
 		System.out.println( "gridZSize: " + gridZSize );
 
-		System.exit( 0 );
+		for (long x = 12; x <= 12; x++) {
+			for (long z = 1; z <= 1; z++) {
+		//for (long x = 0; x < gridXSize; x++) {
+		//	for (long z = 0; z < gridZSize; z++) {
 
-		//for (long x = 25; x < 26; x++) {
-		//	for (long z = 23; z < 24; z++) {
-		for (long x = 0; x < gridXSize; x++)
-		{
-			for (long z = 0; z < gridZSize; z++)
-			{
 				if ( x == 35 ) System.out.println( "z: " + z + ": " + SparkComputeCost.getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
 				gridCoords.add(new Long[]{x, z});
 			}
 			System.out.println( "x: " + x + ": " + SparkComputeCost.getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
 		}
-		//System.exit( 0 );
+
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
+		//System.exit( 0 );
 
 		// Grids are w.r.t cost blocks
 		final JavaRDD<Long[]> rddSlices = sparkContext.parallelize(gridCoords);
@@ -343,12 +343,19 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 				try {
 					// load, crop, rotate full brain
-					final RandomAccessibleInterval<UnsignedByteType> croppedLocal = openCropFullBrain( n5Path, n5Dataset, min, max ).getA();
+					// zero-min is needed because the spark blocks assume that
+					final RandomAccessibleInterval<UnsignedByteType> brainVNCvolume = Views.zeroMin( openCropFullBrain( n5Path, n5Dataset, min, max ).getA() );
+
+					// cut out the relevant block
+					final Interval zcorrInterval = SparkComputeCost.getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
+					final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( brainVNCvolume, zcorrInterval );
+
+					System.out.println("Processing inteval " + Util.printInterval( zcorrInterval ) );
 
 					// run cost
-					RandomAccessibleInterval<UnsignedByteType> cost = SparkComputeCost.processColumnAlongAxis(
-							croppedLocal,
-							new FinalInterval( croppedLocal ), 
+					final RandomAccessibleInterval<UnsignedByteType> cost = SparkComputeCost.processColumnAlongAxis(
+							zcorr,
+							new FinalInterval( zcorr ), 
 							filter,
 							gauss,
 							//costBlockSize,
@@ -367,8 +374,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 							startThresh,
 							kernelSize);
 
-					//ImageJFunctions.show( cost );
-					//SimpleMultiThreading.threadHaltUnClean();
+					ImageJFunctions.show( cost );
+					SimpleMultiThreading.threadHaltUnClean();
 
 					// save cost
 					System.out.println("Writing blocks");
@@ -414,7 +421,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 	{
 		// crop interval (was manually specified using method 'defineCrop')
 		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756+5000}, new long[] {55779-4000, 59038, 53664-5000} );
-		//final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756/*+5000*/}, new long[] {55779/*-4000*/, 59038, 53664/*-5000*/} );
+		//final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756}, new long[] {55779, 59038, 53664} );
 
 		/*
 		 * show crop
