@@ -68,12 +68,6 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 	/**
 	 * Code snippet used to identify the bounding box in the brain volume
-	 *
-	 * @param n5
-	 * @param rawGroup
-	 * @param crop
-	 * @return
-	 * @throws IOException
 	 */
 	@SuppressWarnings("unchecked")
 	public static Interval defineCrop( final String n5Path, final String rawGroup, final Interval crop ) throws IOException
@@ -437,7 +431,11 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		 * run full res on spark
 		 */
 		final SparkConf conf = new SparkConf().setAppName("SparkComputeCostBrainVNC");
-		conf.set("spark.driver.bindAddress", "127.0.0.1");
+
+		// This killed me SP!
+		// It took hours to figure out why driver connections were failing on LSF until I finally noticed this line.
+		// conf.set("spark.driver.bindAddress", "127.0.0.1");
+
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
 		processCostSpark(sc, n5Path, n5Dataset, crop, costN5Path, costN5Dataset );
