@@ -303,10 +303,10 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		System.out.println( "gridXSize: " + gridXSize );
 		System.out.println( "gridZSize: " + gridZSize );
 
-		for (long x = 10; x <= 10; x++) {
-			for (long z = 1; z <= 1; z++) {
-		//for (long x = 0; x < gridXSize; x++) {
-		//	for (long z = 0; z < gridZSize; z++) {
+		//for (long x = 10; x <= 10; x++) {
+		//	for (long z = 1; z <= 1; z++) {
+		for (long x = 0; x < gridXSize; x++) {
+			for (long z = 0; z < gridZSize; z++) {
 
 				if ( x == 35 ) System.out.println( "z: " + z + ": " + SparkComputeCost.getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
 				gridCoords.add(new Long[]{x, z});
