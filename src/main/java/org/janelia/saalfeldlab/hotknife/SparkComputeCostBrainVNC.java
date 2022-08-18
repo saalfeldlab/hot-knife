@@ -460,8 +460,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 	public final Void call() throws Exception
 	{
 		// crop interval (was manually specified using method 'defineCrop')
-		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756+5000}, new long[] {55779-4000, 59038, 53664-5000} );
-		//final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756}, new long[] {55779, 59038, 53664} );
+//		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756+5000}, new long[] {55779-4000, 59038, 53664-5000} );
+		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756}, new long[] {55779, 59038, 53664} );
 
 		/*
 		 * show crop
