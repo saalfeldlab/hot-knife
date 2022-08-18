@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.SparkComputeCost.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -18,6 +19,7 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
 
 import bdv.tools.boundingbox.TransformedBoxSelectionDialog.Result;
 import bdv.util.BdvFunctions;
@@ -60,6 +62,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 	@Option(names = {"-cd", "--costN5Dataset"}, required = true, description = "N5 input group for raw, e.g. /raw")
 	private String costN5Dataset = null;
+
+	private int[][] costSteps = {{6,1,6},{3,1,3}, {3,1,3}, {3,1,3}, {3,1,3}, {1,4,1}, {1,4,1}, {1,4,1}};
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 		//CommandLine.call(new SparkComputeCostBrainVNC(), args);
@@ -254,7 +258,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 			final String n5Dataset,
 			final Interval cropInterval,
 			final String costN5Path,
-			final String costN5Dataset ) throws IOException
+			final String costN5Dataset,
+			final int[][] costStepsDownsample ) throws IOException
 	{
 		// for serialization
 		final long[] min = new long[ cropInterval.numDimensions() ];
@@ -280,15 +285,15 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 				zcorrBlockSize[2]
 		};
 
-		final int[] costSteps = new int[]{6,1,6};
+		final int[] costSteps = costStepsDownsample[ 0 ];//new int[]{6,1,6};
 		final int costAxis=2;
 
 		long[] costSize = new long[]{ zcorrSize[0] / costSteps[0], zcorrSize[1] / costSteps[1], zcorrSize[2] / costSteps[2] };
 
 		final N5Writer n5w = new N5FSWriter(costN5Path);
 
-		n5w.createDataset(costN5Dataset, costSize, costBlockSize, DataType.UINT8, new GzipCompression());
-		n5w.setAttribute(costN5Dataset, "downsamplingFactors", costSteps);
+		n5w.createDataset(costN5Dataset +"/s1", costSize, costBlockSize, DataType.UINT8, new GzipCompression());
+		n5w.setAttribute(costN5Dataset +"/s1", "downsamplingFactors", costSteps);
 
 		n5w.close();
 
@@ -387,7 +392,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 						N5Utils.saveBlock(
 								block,
 								n5costWriter,
-								costN5Dataset,
+								costN5Dataset +"/s1",
 								gridOffset);
 					}
 
@@ -407,6 +412,19 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 			executorService.shutdown();
 
 			});
+
+		// downsample
+		final N5PathSupplier n5PathSupplier = new N5PathSupplier(costN5Path);
+		for (int i = 1; i < costStepsDownsample.length; i++) {
+			N5DownsamplerSpark.downsample(
+					sparkContext,
+					n5PathSupplier,
+					costN5Dataset + "/s" + i, //options.getCostDatasetName(i - 1),
+					costN5Dataset + "/s" + (i+1), //options.getCostDatasetName(i),
+					costStepsDownsample[i],
+					costBlockSize
+			);
+		}
 
 	}
 
@@ -438,9 +456,9 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
-		processCostSpark(sc, n5Path, n5Dataset, crop, costN5Path, costN5Dataset );
+		processCostSpark(sc, n5Path, n5Dataset, crop, costN5Path, costN5Dataset, costSteps );
 
-
+		sc.close();
 
 		return null;
 	}
