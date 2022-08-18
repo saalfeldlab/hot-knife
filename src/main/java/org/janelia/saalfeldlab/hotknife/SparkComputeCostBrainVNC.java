@@ -27,24 +27,18 @@ import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
-import bdv.viewer.Source;
-import ij.ImageJ;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
-import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
-import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.util.ValuePair;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -62,6 +56,9 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 	@Option(names = {"-cd", "--costN5Dataset"}, required = true, description = "N5 input group for raw, e.g. /raw")
 	private String costN5Dataset = null;
+
+	@Option(names = {"-so", "--surfaceN5Output"}, required = false, description = "N5 output group for surface heighfields, e.g. /heightfields/Sec39/v1_acquire_trimmed_sp1, omit to skip surface fit")
+	private String surfaceN5Output = null;
 
 	private int[][] costSteps = {{6,1,6},{3,1,3}, {3,1,3}, {3,1,3}, {3,1,3}, {1,4,1}, {1,4,1}, {1,4,1}};
 
@@ -259,7 +256,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 			final Interval cropInterval,
 			final String costN5Path,
 			final String costN5Dataset,
-			final int[][] costStepsDownsample ) throws IOException
+			final int[][] costStepsDownsample,
+			final String surfaceN5Output) throws IOException
 	{
 		// for serialization
 		final long[] min = new long[ cropInterval.numDimensions() ];
@@ -426,6 +424,32 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 			);
 		}
 
+		// surface fit
+		final int surfaceFirstScale = 8;
+		final int surfaceLastScale = 1;
+		final double surfaceMaxDeltaZ=0.25;
+		final double surfaceInitMaxDeltaZ=0.3;
+		final int surfaceMinDistance=2000;
+		final int surfaceMaxDistance=4000;
+		
+		if (surfaceN5Output != null)
+		{
+			SparkSurfaceFit sparkSurfaceFit = new SparkSurfaceFit(
+					costN5Path,
+					costN5Path,
+					costN5Dataset,
+					null, // only needed for visualization
+					surfaceN5Output,
+					surfaceFirstScale,
+					surfaceLastScale,
+					surfaceMaxDeltaZ,
+					surfaceInitMaxDeltaZ,
+					surfaceMinDistance,
+					surfaceMaxDistance,
+					false);
+			sparkSurfaceFit.callWithSparkContext(sparkContext);
+		}
+
 	}
 
 	@Override
@@ -456,7 +480,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
-		processCostSpark(sc, n5Path, n5Dataset, crop, costN5Path, costN5Dataset, costSteps );
+		processCostSpark(sc, n5Path, n5Dataset, crop, costN5Path, costN5Dataset, costSteps, surfaceN5Output );
 
 		sc.close();
 
