@@ -308,10 +308,10 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		for (long x = 0; x < gridXSize; x++) {
 			for (long z = 0; z < gridZSize; z++) {
 
-				if ( x == 35 ) System.out.println( "z: " + z + ": " + SparkComputeCost.getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
+				//if ( x == 35 ) System.out.println( "z: " + z + ": " + SparkComputeCost.getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
 				gridCoords.add(new Long[]{x, z});
 			}
-			System.out.println( "x: " + x + ": " + SparkComputeCost.getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
+			//System.out.println( "x: " + x + ": " + SparkComputeCost.getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
 		}
 
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
@@ -347,7 +347,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 					final Interval zcorrInterval = SparkComputeCost.getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 					final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( brainVNCvolume, zcorrInterval );
 
-					System.out.println("Processing inteval " + Util.printInterval( zcorrInterval ) );
+					System.out.println("Processing inteval " + Util.printInterval( zcorrInterval ) + " for gridCoord " + gridCoord[ 0 ] + "," + gridCoord[ 1 ] );
 
 					// run cost
 					final RandomAccessibleInterval<UnsignedByteType> cost = SparkComputeCost.processColumnAlongAxis(
@@ -375,7 +375,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 					//SimpleMultiThreading.threadHaltUnClean();
 
 					// save cost
-					System.out.println("Writing blocks");
+					System.out.println("Writing blocks for gridCoord " + gridCoord[ 0 ] + "," + gridCoord[ 1 ] );
 
 					final N5Writer n5costWriter = new N5FSWriter(costN5Path);
 
@@ -412,6 +412,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 			});
 
 		// downsample
+		System.out.println( "Downsampling ... ");
+
 		final N5PathSupplier n5PathSupplier = new N5PathSupplier(costN5Path);
 		for (int i = 1; i < costStepsDownsample.length; i++) {
 			N5DownsamplerSpark.downsample(
@@ -425,6 +427,8 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 		}
 
 		// surface fit
+		System.out.println( "Surface fit ... ");
+
 		final int surfaceFirstScale = 8;
 		final int surfaceLastScale = 1;
 		final double surfaceMaxDeltaZ=0.25;
