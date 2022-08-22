@@ -230,7 +230,12 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 			final long[] maxInterval ) throws IOException
 	{
 		final N5Reader n5 = new N5FSReader(n5Path);
-		final String fullRes = n5Dataset + "/s0";
+		final String fullRes;
+
+		if ( n5Dataset.trim().toLowerCase().endsWith( "s0") )
+			fullRes = n5Dataset;
+		else
+			fullRes = n5Dataset + "/s0";
 
 		final int[] zcorrBlockSize = n5.getAttribute(fullRes, "blockSize", int[].class);
 		final RandomAccessibleInterval<UnsignedByteType> fullBrain = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5, fullRes);
