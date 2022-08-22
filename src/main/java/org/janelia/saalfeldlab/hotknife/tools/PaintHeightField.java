@@ -415,9 +415,9 @@ public class PaintHeightField implements Callable<Void>{
 		//new RankFilters().rank( fp, 30, RankFilters.MEDIAN );
 		//System.out.println("done.");
 
-		System.out.print("adding offset to heightfield.");
-		for ( final FloatType t : heightField )
-			t.set( t.get() + 1000f );
+		//System.out.print("adding offset to heightfield.");
+		//for ( final FloatType t : heightField )
+		//	t.set( t.get() + 200f );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
