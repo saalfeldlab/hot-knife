@@ -223,7 +223,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 				kernelSize);
 	}
 
-	private static Pair< RandomAccessibleInterval<UnsignedByteType>, int[] > openCropFullBrain(
+	public static Pair< RandomAccessibleInterval<UnsignedByteType>, int[] > openCropFullBrain(
 			final String n5Path,
 			final String n5Dataset,
 			final long[] minInterval,
@@ -480,7 +480,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 
 		// This killed me SP!
 		// It took hours to figure out why driver connections were failing on LSF until I finally noticed this line.
-		// conf.set("spark.driver.bindAddress", "127.0.0.1");
+		//conf.set("spark.driver.bindAddress", "127.0.0.1");
 
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 
