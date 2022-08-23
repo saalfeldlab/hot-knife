@@ -83,6 +83,14 @@ public class SparkExportFlattenedVolumeBrainVNC implements Callable<Void>, Seria
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
+		// for serialization
+		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756}, new long[] {55779, 59038, 53664} );
+		final long[] minCrop = new long[ crop.numDimensions() ];
+		final long[] maxCrop = new long[ crop.numDimensions() ];
+
+		crop.min( minCrop );
+		crop.max( maxCrop );
+
 		final int[] rawBlockSize;
 		final long[] dimensions;
 		final String minFieldName;
@@ -126,7 +134,9 @@ public class SparkExportFlattenedVolumeBrainVNC implements Callable<Void>, Seria
 
 			final DatasetAttributes attributes = n5RawReader.getDatasetAttributes(rawDataset);
 			rawBlockSize = attributes.getBlockSize();
-			final long[] rawDimensions = attributes.getDimensions();
+			//final long[] rawDimensions = attributes.getDimensions();
+			final long[] rawDimensions = new long[ 3 ];
+			crop.dimensions( rawDimensions );
 
 			dimensions = new long[] {
 					rawDimensions[0],
@@ -161,14 +171,6 @@ public class SparkExportFlattenedVolumeBrainVNC implements Callable<Void>, Seria
 		new N5FSReader(n5FieldPath);
 		new N5FSWriter(n5OutPath);
 		N5Utils.open(setupRawReader, rawDataset);
-
-		// for serialization
-		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756}, new long[] {55779, 59038, 53664} );
-		final long[] minCrop = new long[ crop.numDimensions() ];
-		final long[] maxCrop = new long[ crop.numDimensions() ];
-
-		crop.min( minCrop );
-		crop.max( maxCrop );
 
 		rdd.foreach(
 				gridBlock -> {
