@@ -33,7 +33,7 @@ FIXED_MODEL="'[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]'"
 #TODO: fix here!
 FIXED_ARGS="${BOUNDS_ARGS} -f /flat/Sec37/bot/face -fm ${FIXED_MODEL} -f /flat/Sec37/top/face -fm ${FIXED_MODEL}"
 
-FACE_DATASET_ARGS="${FACE_DATASET_ARGS} ${FIXED_ARGS}"
+FACE_DATASET_ARGS="${FIXED_ARGS} ${FACE_DATASET_ARGS}"
 
 ARGV="
 --n5Path=${N5_SAMPLE_PATH} \
