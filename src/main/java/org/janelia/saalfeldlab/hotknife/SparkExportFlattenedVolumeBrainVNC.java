@@ -139,7 +139,7 @@ public class SparkExportFlattenedVolumeBrainVNC implements Callable<Void>, Seria
 			crop.dimensions( rawDimensions );
 
 			dimensions = new long[] {
-					rawDimensions[0],
+					rawDimensions[1],//rawDimensions[0], // account for the fact that the bounding box is rotated by 90 degrees
 					rawDimensions[2],
 					Math.round(max + padding) - Math.round(min - padding)
 			};
