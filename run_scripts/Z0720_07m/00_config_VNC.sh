@@ -68,7 +68,7 @@ export N_TASKS_PER_EXECUTOR_CORE=3
 export N_CORES_DRIVER=1
 
 # NOTE: must consolidate logs when changing run parent dir
-export SPARK_JANELIA_ARGS="--consolidate_logs --run_parent_dir /groups/flyem/data/trautmane/spark_logs"
+export SPARK_JANELIA_ARGS="--consolidate_logs --run_parent_dir /groups/flyem/data/${USER}/spark_logs"
 export LSF_PROJECT="${BILL_TO}"
 export RUNTIME="3:59"
 
