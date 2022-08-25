@@ -38,8 +38,11 @@ public class ViewAlignmentPlayground13 {
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /flyem/render/n5/Z0720_07m_BR")
 		private String n5Path = null;
 
-		@Option(name = "--n5Group", required = true, usage = "N5 group, e.g. /surface_align/pass02")
-		private String n5Group = null;
+		@Option(name = "--n5Group1", required = true, usage = "N5 group, e.g. /surface_align/pass02")
+		private String n5Group1 = null;
+
+		@Option(name = "--n5Group2", required = true, usage = "N5 group, e.g. /surface_align/pass02")
+		private String n5Group2 = null;
 
 		@Option(name = "--transform1", required = true, usage = "first transform flat.Sec26.top.face")
 		private String transform1 = null;
@@ -73,8 +76,12 @@ public class ViewAlignmentPlayground13 {
 			return n5Path;
 		}
 
-		public String getN5Group() {
-			return n5Group;
+		public String getN5Group1() {
+			return n5Group1;
+		}
+
+		public String getN5Group2() {
+			return n5Group2;
 		}
 
 		public String getTransform1() {
@@ -121,19 +128,23 @@ public class ViewAlignmentPlayground13 {
 		final String n5Path = options.getN5Path();
 		final N5Reader n5 = new N5FSReader(n5Path);
 
-		final String n5Group = options.getN5Group();
-		final List<String> datasetNames = Arrays.asList(n5.getAttribute(n5Group, "datasets", String[].class));
-		final List<String> transformDatasetNames = Arrays.asList(n5.getAttribute(n5Group, "transforms", String[].class));
+		final String n5Group1 = options.getN5Group1();
+		final List<String> datasetNames1 = Arrays.asList(n5.getAttribute(n5Group1, "datasets", String[].class));
+		final List<String> transformDatasetNames1 = Arrays.asList(n5.getAttribute(n5Group1, "transforms", String[].class));
 //		final double[] boundsMin = n5.getAttribute(n5Group, "boundsMin", double[].class);
 //		final double[] boundsMax = n5.getAttribute(n5Group, "boundsMax", double[].class);
 
+		final String n5Group2 = options.getN5Group2();
+		final List<String> datasetNames2 = Arrays.asList(n5.getAttribute(n5Group2, "datasets", String[].class));
+		final List<String> transformDatasetNames2 = Arrays.asList(n5.getAttribute(n5Group2, "transforms", String[].class));
+
 		final String transform1 = options.getTransform1();
-		final int i1 = transformDatasetNames.indexOf(transform1);
-		final String dataset1 = datasetNames.get(i1);
+		final int i1 = transformDatasetNames1.indexOf(transform1);
+		final String dataset1 = datasetNames1.get(i1);
 
 		final String transform2 = options.getTransform2();
-		final int i2 = transformDatasetNames.indexOf(transform2);
-		final String dataset2 = datasetNames.get(i2);
+		final int i2 = transformDatasetNames2.indexOf(transform2);
+		final String dataset2 = datasetNames2.get(i2);
 
 
 
@@ -142,9 +153,9 @@ public class ViewAlignmentPlayground13 {
 
 		// open pyramids
 		final TransformedSurfaceStack<?, ?> stack1 = new TransformedSurfaceStack<>(
-				n5, dataset1, n5Group + "/" + transform1, blockWidth, transform1);
+				n5, dataset1, n5Group1 + "/" + transform1, blockWidth, transform1);
 		final TransformedSurfaceStack<?, ?> stack2 = new TransformedSurfaceStack<>(
-				n5, dataset2, n5Group + "/" + transform2, blockWidth, transform2);
+				n5, dataset2, n5Group2 + "/" + transform2, blockWidth, transform2);
 
 
 		final BdvStackSource<?> source1 = BdvFunctions.show(stack1.getSourceAndConverter(), Bdv.options().is2D()
