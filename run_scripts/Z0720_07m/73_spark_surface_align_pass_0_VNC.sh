@@ -4,7 +4,7 @@ set -e
 
 # needs to be exported so that 00_config picks it up for N5_SURFACE_ROOT definition
 export MIN_SEC_NUM="6"
-export MAX_SEC_NUM="36"
+export MAX_SEC_NUM="37"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
