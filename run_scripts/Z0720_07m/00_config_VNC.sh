@@ -222,6 +222,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v1_acquire_trimmed_align_untwisted_sp_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec21/v1_acquire_trimmed_align_untwisted_sp_ic___20220702_135646"
     export N5_Z_CORR_OFFSET="-15734,-3221,1"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
   ;;
   "Sec22")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -262,6 +263,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v8_acquire_trimmed_align_untwisted_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec26/v8_acquire_trimmed_align_untwisted_ic___20220720_113625"
     export N5_Z_CORR_OFFSET="-19019,-3683,401"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
   ;;
   "Sec27")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
@@ -270,6 +272,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v3_acquire_trimmed_align_straightened_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec27/v3_acquire_trimmed_align_straightened_ic___20220705_085639"
     export N5_Z_CORR_OFFSET="-18279,-3367,1"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
   ;;
   "Sec28")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
