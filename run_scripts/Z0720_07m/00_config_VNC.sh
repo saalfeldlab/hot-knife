@@ -108,7 +108,7 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
     export ALIGN_STACK="v4_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v4_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec07/v4_acquire_trimmed_align___20220729_163950"
+    export N5_Z_CORR_DATASET="/z_corr/Sec07/v4_acquire_trimmed_align_ic___20220901_210457"
     export N5_Z_CORR_OFFSET="-9135,-1861,1"
   ;;
   "Sec08")
@@ -204,7 +204,7 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v6_acquire_trimmed"
     export ALIGN_STACK="v7_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v7_acquire_trimmed_align_straightened_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec19/v7_acquire_trimmed_align_straightened___20220729_141830"
+    export N5_Z_CORR_DATASET="/z_corr/Sec19/v7_acquire_trimmed_align_straightened_ic___20220901_223908"
     export N5_Z_CORR_OFFSET="-16903,-3082,1"
   ;;
   "Sec20")
