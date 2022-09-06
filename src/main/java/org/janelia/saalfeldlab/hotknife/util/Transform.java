@@ -328,6 +328,8 @@ public class Transform {
 			final RandomAccessibleInterval<T> source,
 			final Interval targetInterval,
 			final RealTransform transformFromSource,
+			// TODO: why is this called transform__From__Source
+			//       (it is passed to RealTransformRealRandomAccessible as transform__To__Source)
 			final T background) {
 
 		return Views.interval(
