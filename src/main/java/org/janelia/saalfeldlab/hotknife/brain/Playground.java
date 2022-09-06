@@ -18,8 +18,8 @@ public class Playground {
 
 		System.setProperty("apple.laf.useScreenMenuBar", "true");
 
-		final String n5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/full_brain_final.n5";
-		final String imgGroup = "/setup0/timepoint0/s0";
+		final String n5Path = "/Users/pietzsch/Downloads/s5";
+		final String imgGroup = ".";
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -30,5 +30,15 @@ public class Playground {
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
+
+
+
+		final String n5Path2 = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/full_brain_final.n5";
+		final String imgGroup2 = "/setup0/timepoint0/s0";
+		final N5Reader n52 = new N5FSReader(n5Path2);
+		final RandomAccessibleInterval<UnsignedByteType> imgBrain2 = N5Utils.openVolatile(n52, imgGroup2);
+		BdvFunctions.show(VolatileViews.wrapAsVolatile(imgBrain2), "full brain final - old", Bdv.options().addTo(bdv));
+
+
 	}
 }
