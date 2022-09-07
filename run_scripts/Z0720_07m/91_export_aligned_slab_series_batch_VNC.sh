@@ -30,13 +30,12 @@ export RUNTIME=${3:-4320} # default is minutes in 3 days
 # setup export parameters
 
 N5_PATH="/nrs/flyem/render/n5/Z0720_07m_VNC"
-TRANSFORM_GROUP="/surface-align-VNC/06-37/run_20220902_140600/pass12" # TODO: validate/update
-DATA_SET_OUTPUT="/06-36/20220907_112200/s0"                           # TODO: validate/update
+TRANSFORM_GROUP="/surface-align-VNC/06-37/run_20220902_140600/pass12" # TODO: update this to latest pass12
+DATA_SET_OUTPUT="/06-36/20220907_112200/s0"                           # TODO: get final name from Preibisch
 
-# TODO: should Sec37 be included?
+# note: Sec37 is not included because it only exists to position Sec36 to brain
 ARGV="\
 --n5PathInput ${N5_PATH} \
--i /flat/Sec37/raw -t 20 -b -20 \
 -i /flat/Sec36/raw -t 20 -b -20 \
 -i /flat/Sec35/raw -t 20 -b -20 \
 -i /flat/Sec34/raw -t 20 -b -20 \
@@ -76,7 +75,7 @@ ARGV="\
 # --normalizeContrast
 # --explainPlan        # use --explainPlan option to output debug info without running export
 
-COMMIT="???" # TODO: update
+COMMIT="???" # TODO: update commit
 HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-${COMMIT}-SNAPSHOT.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportAlignedSlabSeries"
 

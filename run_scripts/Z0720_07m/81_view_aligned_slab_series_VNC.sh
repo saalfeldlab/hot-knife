@@ -41,14 +41,13 @@ CLASS="org.janelia.saalfeldlab.hotknife.ViewAlignedSlabSeries"
 ARGV="--n5Path /nrs/flyem/render/n5/Z0720_07m_VNC -j /surface-align-VNC/06-37/run_20220902_140600/pass12"
 
 N5_PATH="/nrs/flyem/render/n5/Z0720_07m_VNC"
-TRANSFORM_GROUP="/surface-align-VNC/06-37/run_20220902_140600/pass12" # TODO: validate/update
+TRANSFORM_GROUP="/surface-align-VNC/06-37/run_20220902_140600/pass12" # TODO: update this to latest pass12
 
-# TODO: should Sec37 be included?
+# note: Sec37 is not included because it only exists to position Sec36 to brain
 # TODO: should order be reversed (6 to 37 instead of 37 to 6)?
 ARGV="\
 --n5Path ${N5_PATH} \
 -j ${TRANSFORM_GROUP} \
--i /flat/Sec37/raw -t 20 -b -20 \
 -i /flat/Sec36/raw -t 20 -b -20 \
 -i /flat/Sec35/raw -t 20 -b -20 \
 -i /flat/Sec34/raw -t 20 -b -20 \

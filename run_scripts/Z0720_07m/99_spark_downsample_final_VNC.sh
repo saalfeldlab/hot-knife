@@ -15,7 +15,7 @@ source "${SCRIPT_DIR}/00_config.sh" "ALL"
 
 #export RUNTIME="3:59"
 
-INPUT_DATASET_ROOT="/06-36/20220907_112200" # TODO: validate/update
+INPUT_DATASET_ROOT="/06-36/20220907_112200" # TODO: get final name from Preibisch
 
 OUTPUT_DATASET_PATHS="${INPUT_DATASET_ROOT}/s1"
 FACTORS="2,2,2"
