@@ -305,11 +305,20 @@ public class ViewAlignedSlabSeries {
 
 		long zOffset = 0;
 
+		// important, first you need to find out the size needed for fusion
+		// xy is defined by the size of the requested scale
+		// z is the zoffset of the last slab + z-size of last slab
+
+		// Render interval: [-11153, -19528, 20] -> [35023, 29161, 2682], dimensions (46177, 48690, 2663)
+		// zoffset: 80024
+
 		// create the preview for 32x downsampling
-		// dataset: /flat/Sec06/raw
-		// 32 [0, 0, 0] -> [1869, 2292, 44], dimensions (1870, 2293, 45)  2840
 		new ImageJ();
-		ByteImagePlus<UnsignedByteType> render = ImagePlusImgs.unsignedBytes(1870, 2293, 2840 + 45);
+		// at 32x
+		//ByteImagePlus<UnsignedByteType> render = ImagePlusImgs.unsignedBytes(1444, 1522, 2501 + 84);
+		
+		// at 64x
+		ByteImagePlus<UnsignedByteType> render = ImagePlusImgs.unsignedBytes(722, 761, 1251 + 42);
 		render.getImagePlus().show();
 
 		for (int i = 0; i < datasetNames.size(); ++i) {
@@ -336,6 +345,8 @@ public class ViewAlignedSlabSeries {
 			System.out.println( "dataset: " + datasetName );
 			System.out.println( "Dimensions: " + Util.printCoordinates( dimensions ) );
 			System.out.println( "Render interval: " + Util.printInterval( cropInterval ) );
+
+			System.out.println( "zoffset: " + zOffset );
 
 			final int numScales = n5.list(datasetName).length;
 
@@ -378,7 +389,7 @@ public class ViewAlignedSlabSeries {
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
-
+				/*
 				System.out.println( "Warning: adding custom transformation");
 
 				// 39-26:
@@ -407,7 +418,7 @@ public class ViewAlignedSlabSeries {
 						0 );
 
 				transformSequence.add(rigid.inverse());
-
+				*/
 				transformSequence.add(transition);
 				transformSequence.add(scale3D);
 
@@ -420,7 +431,7 @@ public class ViewAlignedSlabSeries {
 				final SubsampleIntervalView<UnsignedByteType> subsampledTransformedSource = Views.subsample(transformedSource, scale);
 				final RandomAccessibleInterval<UnsignedByteType> cachedSource = Show.wrapAsVolatileCachedCellImg(subsampledTransformedSource, new int[]{64, 64, 64});
 
-				if ( scale == 32 /*&& (datasetName.contains( "Sec24") || datasetName.contains( "Sec23") || datasetName.contains( "Sec22") || datasetName.contains( "Sec21") )*/ )
+				if ( scale == 64 )
 				{
 					System.out.println( "fusing " + datasetName );
 					final long time = System.currentTimeMillis();
@@ -507,7 +518,7 @@ public class ViewAlignedSlabSeries {
 
 			bdv = Show.mipmapSource(transformedVolatileMipmapSource, bdv);
 
-			zOffset += botOffset - topOffsets.get(i) + 1;
+			zOffset += (botOffset - topOffsets.get(i) + 1);
 		}
 
 		return bdv;
