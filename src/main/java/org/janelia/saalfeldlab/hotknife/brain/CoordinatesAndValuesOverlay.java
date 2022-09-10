@@ -52,6 +52,8 @@ public class CoordinatesAndValuesOverlay implements OverlayRenderer
 		final ViewerState state = viewer.state();
 		final int timepoint = state.getCurrentTimepoint();
 		final Interpolation interpolation = state.getInterpolation();
+
+		// TODO: sort by state.sourceOrder()
 		final Set< SourceAndConverter< ? > > sources = state.getVisibleAndPresentSources();
 		int si = 0;
 		for ( SourceAndConverter< ? > source : sources )
