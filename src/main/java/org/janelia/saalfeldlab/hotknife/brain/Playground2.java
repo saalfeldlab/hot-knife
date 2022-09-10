@@ -8,8 +8,6 @@ import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
 import java.io.IOException;
 import java.util.Arrays;
-import net.imglib2.FinalInterval;
-import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.view.IntervalView;
@@ -20,13 +18,14 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 public class Playground2 {
 
+	// load raw data and crop.
 	public static void main(String[] args) throws IOException {
 
 		System.setProperty("apple.laf.useScreenMenuBar", "true");
 
 //		final String n5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/full_brain_final.n5";
 //		final String imgGroup = "/setup0/timepoint0/s0";
-		final String n5Path = "/Users/pietzsch/Downloads/s5";
+		final String n5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/s5/";
 		final String imgGroup = ".";
 
 		final N5Reader n5 = new N5FSReader(n5Path);
