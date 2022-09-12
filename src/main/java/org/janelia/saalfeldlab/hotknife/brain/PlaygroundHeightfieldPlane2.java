@@ -62,10 +62,10 @@ public class PlaygroundHeightfieldPlane2 {
 				FloatType::new);
 
 		final RandomAccessible<FloatType> planeDiffExt = Views.extendBorder(Views.interval(planeDiff, heightfield));
-		final ToDoubleFunction<Localizable> fade = intervalDistWeights(heightfield, 1000);
+		final ToDoubleFunction<Localizable> fadeDiff = intervalDistWeights(heightfield, 1000);
 		final RandomAccessible<DoubleType> weights = new FunctionRandomAccessible<>(2,
 				(pos, w) -> {
-					w.set(fade.applyAsDouble(pos));
+					w.set(fadeDiff.applyAsDouble(pos));
 				}, DoubleType::new);
 
 		final ThreadLocal<RandomAccess<FloatType>> pdAccess = ThreadLocal.withInitial(() -> planeDiffExt.randomAccess());
@@ -74,7 +74,7 @@ public class PlaygroundHeightfieldPlane2 {
 					final RandomAccess<FloatType> a = pdAccess.get();
 					a.setPosition(xy);
 					final double z = a.get().getRealDouble();
-					t.set((float) (z * fade.applyAsDouble(xy)));
+					t.set((float) (z * fadeDiff.applyAsDouble(xy)));
 				},
 				FloatType::new);
 		final RandomAccessible<FloatType> planeFade = new FunctionRandomAccessible<>(2,
@@ -83,9 +83,25 @@ public class PlaygroundHeightfieldPlane2 {
 					final double y = xy.getDoublePosition(1);
 					final RandomAccess<FloatType> a = pdAccess.get();
 					a.setPosition(xy);
-					final double z = a.get().getRealDouble() * fade.applyAsDouble(xy);
+					final double z = a.get().getRealDouble() * fadeDiff.applyAsDouble(xy);
 					final double pz = plane[0] * x + plane[1] * y + plane[2];
 					t.set((float) (z + pz));
+				},
+				FloatType::new);
+
+		final ToDoubleFunction<Localizable> fadePlane = intervalDistWeights(heightfield, 2000);
+		final double avg = 4658.6666161072235;
+		final RandomAccessible<FloatType> planeFadeToAvg = new FunctionRandomAccessible<>(2,
+				(xy, t) -> {
+					final double x = xy.getDoublePosition(0);
+					final double y = xy.getDoublePosition(1);
+					final RandomAccess<FloatType> a = pdAccess.get();
+					a.setPosition(xy);
+					final double z = a.get().getRealDouble() * fadeDiff.applyAsDouble(xy);
+					final double pz = plane[0] * x + plane[1] * y + plane[2];
+
+					final double w = fadePlane.applyAsDouble(xy);
+					t.set((float) (avg + (z + pz - avg) * w));
 				},
 				FloatType::new);
 
@@ -97,6 +113,7 @@ public class PlaygroundHeightfieldPlane2 {
 		ws.setColor(new ARGBType(0x00ff00));
 		BdvFunctions.show(planeDiffFade, Intervals.expand(heightfield,1000),"planeDiff extended faded", BdvOptions.options().addTo(bdv));
 		BdvFunctions.show(planeFade, Intervals.expand(heightfield,1000),"plane extended faded", BdvOptions.options().addTo(bdv));
+		BdvFunctions.show(planeFadeToAvg, Intervals.expand(heightfield,1000),"plane extended faded to avg", BdvOptions.options().addTo(bdv));
 
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
