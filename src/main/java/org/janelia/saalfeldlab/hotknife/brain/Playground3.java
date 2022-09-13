@@ -58,15 +58,14 @@ public class Playground3 {
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
 
-		final MyHeightField hf = new MyHeightField("/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/", ".", new double[] {6, 6, 1});
+		final MyHeightField hf = new MyHeightField("/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/", ".", new double[] {6, 6, 1}, 4658.6666161072235);
 		final RandomAccessibleInterval<FloatType> heightfield = hf.heightfield();
 		final double[] hfDownsamplingFactors = hf.downsamplingFactors();
 		final double[] hfRelativeScale = new double[3];
 		Arrays.setAll(hfRelativeScale, d -> hfDownsamplingFactors[d] / n5DownsamplingFactors[d]);
 		final RealRandomAccessible<DoubleType> scaledHeightfield = Transform.scaleAndShiftHeightFieldAndValues(heightfield, hfRelativeScale);
 
-		final double avg = 4658.6666161072235;
-		final double scaledAvg = (avg + 0.5) * hfRelativeScale[2] - 0.5;
+		final double scaledAvg = (hf.avg() + 0.5) * hfRelativeScale[2] - 0.5;
 
 
 ////		new FlattenTransform<>()
@@ -96,17 +95,20 @@ public class Playground3 {
 
 		private RandomAccessibleInterval<FloatType> heightfield;
 		private double[] downsamplingFactors;
+		private double avg;
 
 		public MyHeightField() throws IOException {
 			this(
 					"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/",
 					".",
-					new double[] {6, 6, 1}
+					new double[] {6, 6, 1},
+					4658.6666161072235
 			);
 		}
 
-		public MyHeightField(final String n5Path, final String group, final double[] downsamplingFactors) throws IOException {
+		public MyHeightField(final String n5Path, final String group, final double[] downsamplingFactors, final double avg) throws IOException {
 			this.downsamplingFactors = downsamplingFactors;
+			this.avg = avg;
 
 			final N5Reader hfReader = new N5FSReader(n5Path);
 			final RandomAccessibleInterval<FloatType> tmpHF3 = N5Utils.openVolatile(hfReader, group);
@@ -119,6 +121,10 @@ public class Playground3 {
 
 		public double[] downsamplingFactors() {
 			return downsamplingFactors;
+		}
+
+		public double avg() {
+			return avg;
 		}
 	}
 }

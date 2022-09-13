@@ -39,7 +39,9 @@ public class PlaygroundHeightfieldPlane2 {
 
 		System.setProperty("apple.laf.useScreenMenuBar", "true");
 
-		final MyHeightField hf = new MyHeightField("/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/", ".", new double[] {6, 6, 1});
+		final MyHeightField hf = new MyHeightField("/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/", ".",
+				new double[] {6, 6, 1},
+				4658.6666161072235);
 		final RandomAccessibleInterval<FloatType> heightfield = hf.heightfield();
 
 		// plane[] = {a,b,c} represents the plane z = ax + by + c
@@ -90,7 +92,7 @@ public class PlaygroundHeightfieldPlane2 {
 				FloatType::new);
 
 		final ToDoubleFunction<Localizable> fadePlane = intervalDistWeights(heightfield, 2000);
-		final double avg = 4658.6666161072235;
+		final double avg = hf.avg();
 		final RandomAccessible<FloatType> planeFadeToAvg = new FunctionRandomAccessible<>(2,
 				(xy, t) -> {
 					final double x = xy.getDoublePosition(0);

@@ -7,6 +7,7 @@ import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
 import java.io.IOException;
 import java.util.Arrays;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
@@ -50,7 +51,11 @@ public class Playground4 {
 		final IntervalView<UnsignedByteType> crop1 = Views.interval(imgBrain, minInterval, maxInterval);
 		final RandomAccessibleInterval<UnsignedByteType> crop2 = Views.rotate(crop1, 1, 0 );
 		final RandomAccessibleInterval<UnsignedByteType> crop3 = Views.permute(crop2, 1, 2 );
-		final IntervalView<UnsignedByteType> crop = Views.zeroMin(crop3);
+		final IntervalView<UnsignedByteType> crop = Views.translate(crop3, -minInterval[1], -minInterval[2], maxInterval[0]);
+//		final IntervalView<UnsignedByteType> crop = Views.zeroMin(crop3);
+//		final RandomAccess<UnsignedByteType> a = crop.randomAccess();
+//		a.setPosition(new long[] {0,0,0});
+//		System.out.println("{0,0,0} ==> " + Arrays.toString(a.positionAsLongArray()));
 
 		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
 
@@ -58,14 +63,16 @@ public class Playground4 {
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
 
-		final MyHeightField hf = new MyHeightField("/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/", ".", new double[] {6, 6, 1});
+		final MyHeightField hf = new MyHeightField("/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/", ".",
+				new double[] {6, 6, 1},
+				4658.6666161072235);
 		final RandomAccessibleInterval<FloatType> heightfield = hf.heightfield();
 		final double[] hfDownsamplingFactors = hf.downsamplingFactors();
 		final double[] hfRelativeScale = new double[3];
 		Arrays.setAll(hfRelativeScale, d -> hfDownsamplingFactors[d] / n5DownsamplingFactors[d]);
 		final RealRandomAccessible<DoubleType> scaledHeightfield = Transform.scaleAndShiftHeightFieldAndValues(heightfield, hfRelativeScale);
 
-		final double avg = 4658.6666161072235;
+		final double avg = hf.avg();
 		final double scaledAvg = (avg + 0.5) * hfRelativeScale[2] - 0.5;
 
 		final long max = crop.max(2);
