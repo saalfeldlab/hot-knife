@@ -124,6 +124,11 @@ public class PlaygroundHeightfieldPlane2 {
 	}
 
 	/**
+	 * Create a {@code ToDoubleFunction} that computes a weight for a
+	 * coordinate. The weight is 1, if the coordinate is inside the specified
+	 * {@code interval}. Outside the interval, the weight fades to 0
+	 * exponentially with the distance to the interval.
+	 *
 	 * @param fadeDist
 	 * 		approximate distance to interval where weight fades to zero
 	 */
