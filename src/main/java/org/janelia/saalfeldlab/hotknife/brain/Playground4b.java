@@ -28,7 +28,7 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 public class Playground4b {
 
-	// apply FlattenTransform to transformed crop
+	// extend crop region to full image along YZ
 	public static void main(String[] args) throws IOException {
 
 		System.setProperty("apple.laf.useScreenMenuBar", "true");

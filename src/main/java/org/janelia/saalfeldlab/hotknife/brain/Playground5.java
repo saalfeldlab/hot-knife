@@ -150,8 +150,8 @@ public class Playground5 {
 			final RandomAccessibleInterval<FloatType> heightfield,
 			final double avg,
 			final double[] plane,
-			final int fadeToPlaneDist,
-			final int fadeToAvgDist)
+			final double fadeToPlaneDist,
+			final double fadeToAvgDist)
 	{
 		// make a FunctionRandomAccessible that subtracts the plane from the heightfield
 		final ThreadLocal<RandomAccess<FloatType>> hfAccess = ThreadLocal.withInitial(() -> heightfield.randomAccess());
