@@ -7,6 +7,7 @@ import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
 import java.io.IOException;
 import java.util.Arrays;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
@@ -14,9 +15,13 @@ import net.imglib2.RealPoint;
 import net.imglib2.RealPositionable;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
+import net.imglib2.realtransform.AffineGet;
+import net.imglib2.realtransform.AffineRealRandomAccessible;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InverseRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -36,6 +41,7 @@ import static org.janelia.saalfeldlab.hotknife.brain.Playground5.lscale;
 
 public class Playground6 {
 
+	// Apply heightfield transform to full volume
 	public static void main(String[] args) throws IOException {
 
 		System.setProperty("apple.laf.useScreenMenuBar", "true");
@@ -57,15 +63,11 @@ public class Playground6 {
 		final long[] maxInterval = lscale(maxIntervalS0, n5Level);
 		final long[] translation = {-minInterval[1], -minInterval[2], maxInterval[0]};
 
-		minInterval[1] = imgBrain.min(1);
-		minInterval[2] = imgBrain.min(2);
-		maxInterval[1] = imgBrain.max(1);
-		maxInterval[2] = imgBrain.max(2);
-
-		final IntervalView<UnsignedByteType> crop1 = Views.interval(imgBrain, minInterval, maxInterval);
-		final RandomAccessibleInterval<UnsignedByteType> crop2 = Views.rotate(crop1, 1, 0 );
+		final RandomAccessibleInterval<UnsignedByteType> crop2 = Views.rotate(imgBrain, 1, 0 );
 		final RandomAccessibleInterval<UnsignedByteType> crop3 = Views.permute(crop2, 1, 2 );
 		final IntervalView<UnsignedByteType> crop = Views.translate(crop3, translation);
+//		final RandomAccess<UnsignedByteType> a = crop.randomAccess();
+//		a.setPosition(new long[] {0,0,0});
 
 
 
@@ -93,7 +95,8 @@ public class Playground6 {
 
 		final double scaledAvg = (avg + 0.5) * hfRelativeScale[2] - 0.5;
 
-		final long max = crop.max(2);
+//		final long max = maxInterval[0] - minInterval[0];
+		final long max = 500;
 		final RealRandomAccessible<DoubleType> constHeightfield = ConstantUtils.constantRealRandomAccessible(new DoubleType(max), 2);
 		final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
 				scaledHeightfield,
@@ -117,6 +120,16 @@ public class Playground6 {
 		// --------------------------------------------------------------------
 		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
 		final BdvSource flattenedCropSource = BdvFunctions.show(flattenedCrop, crop, "flattened", Bdv.options().addTo(bdv));
+
+
+		final AffineTransform3D uncrop = new AffineTransform3D();
+		uncrop.set(
+				0, 1, 0, translation[0],
+				0, 0, 1, translation[1],
+				-1, 0, 0, translation[2] );
+		final RealRandomAccessible<UnsignedByteType> flattenedBrain = RealViews.affineReal(flattenedCrop, uncrop.inverse());
+		final BdvSource bdv2 = BdvFunctions.show(VolatileViews.wrapAsVolatile(imgBrain), "imgBrain", Bdv.options());
+		final BdvSource flattenedBrainSource = BdvFunctions.show(flattenedBrain, imgBrain, "flattenedBrain", Bdv.options().addTo(bdv2));
 
 
 

@@ -7,7 +7,6 @@ import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
 import java.io.IOException;
 import java.util.Arrays;
-import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
