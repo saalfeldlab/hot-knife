@@ -1,0 +1,80 @@
+package org.janelia.saalfeldlab.hotknife.brain;
+
+import bdv.util.AxisOrder;
+import bdv.util.Bdv;
+import bdv.util.BdvFunctions;
+import bdv.util.BdvSource;
+import bdv.util.BdvStackSource;
+import bdv.util.volatiles.VolatileViews;
+import bdv.viewer.ViewerPanel;
+import java.io.IOException;
+import java.util.Arrays;
+import net.imglib2.RandomAccess;
+import net.imglib2.RandomAccessible;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealLocalizable;
+import net.imglib2.RealPoint;
+import net.imglib2.RealPositionable;
+import net.imglib2.RealRandomAccessible;
+import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
+import net.imglib2.position.FunctionRandomAccessible;
+import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformRealRandomAccessible;
+import net.imglib2.realtransform.RealViews;
+import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.ConstantUtils;
+import net.imglib2.view.IntervalView;
+import net.imglib2.view.Views;
+import org.janelia.saalfeldlab.hotknife.FlattenTransform;
+import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
+import org.janelia.saalfeldlab.hotknife.tobi.N5SurfacePyramid;
+import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
+import org.janelia.saalfeldlab.hotknife.tobi.SurfacePyramid;
+import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+
+import static org.janelia.saalfeldlab.hotknife.brain.Playground5.extendHeightfield;
+import static org.janelia.saalfeldlab.hotknife.brain.Playground5.lscale;
+
+public class Playground7PositionField {
+
+	// load and show position field
+	public static void main(String[] args) throws IOException {
+
+		System.setProperty("apple.laf.useScreenMenuBar", "true");
+
+		final String n5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield";
+		final String transformGroup = "/flat.Sec37.bot.face";
+		final N5Reader n5 = new N5FSReader(n5Path);
+		final PositionField positionField = new PositionField(n5, transformGroup);
+		System.out.println("positionField = " + positionField);
+
+		final RandomAccessibleInterval<DoubleType> pf = positionField.getPositionFieldRAI();
+		final BdvStackSource< DoubleType > bdv = BdvFunctions.show( pf, "field", Bdv.options().is2D().axisOrder( AxisOrder.XYC ) );
+
+		final RandomAccessibleInterval< DoubleType > rpf = Views.interval(
+				new FunctionRandomAccessible<>(
+						pf.numDimensions(),
+						() -> {
+							final RandomAccess< DoubleType > input = Views.extendBorder( pf ).randomAccess();
+							return ( pos, value ) -> {
+								input.setPosition( pos );
+								final int d = pos.getIntPosition( pos.numDimensions() - 1 );
+								value.set( input.get().get() - pos.getDoublePosition( d ) );
+							};
+						},
+						DoubleType::new ),
+				pf );
+ 		BdvFunctions.show(rpf, "relative positionfield", Bdv.options().axisOrder(AxisOrder.XYC).addTo(bdv));
+
+		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
+		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
+		viewerPanel.getDisplay().overlays().add(overlay);
+	}
+}
