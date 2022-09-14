@@ -9,6 +9,8 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccessible;
@@ -53,8 +55,8 @@ public class CoordinatesAndValuesOverlay implements OverlayRenderer
 		final int timepoint = state.getCurrentTimepoint();
 		final Interpolation interpolation = state.getInterpolation();
 
-		// TODO: sort by state.sourceOrder()
-		final Set< SourceAndConverter< ? > > sources = state.getVisibleAndPresentSources();
+		final List<SourceAndConverter<?>> sources = new ArrayList<>(state.getVisibleAndPresentSources());
+		sources.sort(state.sourceOrder());
 		int si = 0;
 		for ( SourceAndConverter< ? > source : sources )
 		{
