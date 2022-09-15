@@ -5,13 +5,18 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvSource;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
+import ij.ImageJ;
 import java.io.IOException;
 import java.util.Arrays;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -26,7 +31,7 @@ import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
-public class Playground4 {
+public class Playground4ExtractFlattenedCrop {
 
 	// apply FlattenTransform to transformed crop
 	public static void main(String[] args) throws IOException {
@@ -94,6 +99,30 @@ public class Playground4 {
 		hfSource.setColor(new ARGBType(0x00ff00));
 
 		final BdvSource flattenedCropSource = BdvFunctions.show(flattenedCrop, crop, "flattened", Bdv.options().addTo(bdv));
+
+		final AffineTransform3D translate = new AffineTransform3D();
+		translate.translate(0,0,-(scaledAvg+1));
+
+		final long[] cmin = crop.minAsLongArray();
+		final long[] cmax = crop.maxAsLongArray();
+		cmin[2] = 0;
+		cmax[2] = 0;
+
+		final IntervalView<UnsignedByteType> thick = Views.interval(
+				Views.raster(RealViews.affineReal(flattenedCrop, translate)),
+				new FinalInterval(cmin, cmax));
+		new ImageJ();
+		ImageJFunctions.show(Views.hyperSlice(thick, 2, 0));
+//		BdvFunctions.show(thick, "thick", Bdv.options());
+//		BdvFunctions.show(RealViews.affineReal(flattenedCrop, translate), new FinalInterval(cmin, cmax), "real thick", Bdv.options());
+
+//		final IntervalView<UnsignedByteType> rasterized = Views.interval(Views.raster(flattenedCrop), crop);
+//		System.out.println("scaledAvg = " + scaledAvg);
+//		Bdv bdv2 = BdvFunctions.show(Views.hyperSlice(rasterized, 2, -1 + (int) scaledAvg), "(int) scaledAvg slice -1", Bdv.options().is2D());
+//		BdvFunctions.show(Views.hyperSlice(rasterized, 2, (int) scaledAvg), "(int) scaledAvg slice", Bdv.options().options().addTo(bdv2));
+//		BdvFunctions.show(Views.hyperSlice(rasterized, 2, (int) Math.rscaledAvg), "(int) scaledAvg slice +1", Bdv.options().addTo(bdv2));
+//		BdvFunctions.show(Views.hyperSlice(rasterized, 2, 2 + (int) scaledAvg), "(int) scaledAvg slice +2", Bdv.options().addTo(bdv2));
+//		BdvFunctions.show(Views.hyperSlice(rasterized, 2, 3 + (int) scaledAvg), "(int) scaledAvg slice +3", Bdv.options().addTo(bdv2));
 	}
 
 	static long[] lscale(long[] pos, int level) {
