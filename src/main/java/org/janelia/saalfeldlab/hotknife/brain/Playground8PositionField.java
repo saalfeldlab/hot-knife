@@ -176,6 +176,10 @@ public class Playground8PositionField {
 			irpf = Views.interpolate(rpf, new NLinearInterpolatorFactory<>());
 		}
 
+		public RandomAccessibleInterval<DoubleType> getRelativePositionFieldRAI() {
+			return rpf;
+		}
+
 		public RealTransform getTransform() {
 			return new PFTransform();
 		}
