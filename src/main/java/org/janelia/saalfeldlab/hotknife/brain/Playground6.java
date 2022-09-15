@@ -5,8 +5,10 @@ import bdv.util.BdvFunctions;
 import bdv.util.BdvSource;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
+import ij.ImageJ;
 import java.io.IOException;
 import java.util.Arrays;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
@@ -14,6 +16,7 @@ import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealPositionable;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineRealRandomAccessible;
@@ -61,6 +64,8 @@ public class Playground6 {
 		final long[] maxIntervalS0 = {55779, 59038, 53664};
 		final long[] minInterval = lscale(minIntervalS0, n5Level);
 		final long[] maxInterval = lscale(maxIntervalS0, n5Level);
+		System.out.println("minInterval = " + Arrays.toString(minInterval));
+		System.out.println("maxInterval = " + Arrays.toString(maxInterval));
 		final long[] translation = {-minInterval[1], -minInterval[2], maxInterval[0]};
 
 		final RandomAccessibleInterval<UnsignedByteType> crop2 = Views.rotate(imgBrain, 1, 0 );
@@ -114,13 +119,33 @@ public class Playground6 {
 				flatten);
 
 
+		{
+			final AffineTransform3D translate = new AffineTransform3D();
+			translate.translate(0, 0, -(scaledAvg + 1));
+
+			final long[] cmin = crop.minAsLongArray();
+			final long[] cmax = crop.maxAsLongArray();
+			cmin[2] = 0;
+			cmax[2] = 0;
+
+			final IntervalView<UnsignedByteType> thick = Views.interval(
+					Views.raster(RealViews.affineReal(flattenedCrop, translate)),
+					new FinalInterval(cmin, cmax));
+			new ImageJ();
+			ImageJFunctions.show(Views.hyperSlice(thick, 2, 0));
+		}
+
+
+
+
+
+
 
 		// --------------------------------------------------------------------
 		// show in BDV: crop, flattened crop, extended heightfield
 		// --------------------------------------------------------------------
 		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
 		final BdvSource flattenedCropSource = BdvFunctions.show(flattenedCrop, crop, "flattened", Bdv.options().addTo(bdv));
-
 
 		final AffineTransform3D uncrop = new AffineTransform3D();
 		uncrop.set(
