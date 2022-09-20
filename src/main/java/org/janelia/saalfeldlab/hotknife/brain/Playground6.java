@@ -26,6 +26,7 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -102,16 +103,7 @@ public class Playground6 {
 
 //		final long max = maxInterval[0] - minInterval[0];
 		final long max = 500;
-		final RealRandomAccessible<DoubleType> constHeightfield = ConstantUtils.constantRealRandomAccessible(new DoubleType(max), 2);
-		final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
-				scaledHeightfield,
-				constHeightfield,
-				scaledAvg, max);
-
-//		final RealTransform flatten = flattenTransform.inverse();
-		final RealTransform flatten = new ExtendedFlattenTransform(
-				flattenTransform.inverse(),
-				scaledAvg, max, 1000);
+		final RealTransform flatten = extendFlattenTransform(scaledHeightfield, scaledAvg, max, 1000);
 		final RealRandomAccessible<UnsignedByteType> flattenedCrop = new RealTransformRealRandomAccessible<>(
 				Views.interpolate(
 						Views.extendValue(crop, new UnsignedByteType()),
@@ -169,6 +161,28 @@ public class Playground6 {
 		viewerPanel.getDisplay().overlays().add(overlay);
 	}
 
+
+	/**
+	 * Transform that behaves like a {@code FlattenTransform} from {@code
+	 * minHeightfield} at {@code z=minZ} to constant height {@code maxZ} at
+	 * {@code z=maxZ}. For {@code z>maxZ}, the transformation is identity.
+	 * For {@code z<minZ} the heightfield exponentially fades to identity at
+	 * distance {@code fadeDist}, approximately.
+	 */
+	public static RealTransform extendFlattenTransform(
+			final RealRandomAccessible<DoubleType> minHeightfield,
+			final double minZ,
+			final double maxZ,
+			final double fadeDist)
+	{
+		final RealRandomAccessible<DoubleType> maxHeightfield = ConstantUtils.constantRealRandomAccessible(new DoubleType(maxZ), 2);
+		final FlattenTransform<?> flattenTransform = new FlattenTransform<>(
+				minHeightfield,
+				maxHeightfield,
+				minZ, maxZ);
+		return new ExtendedFlattenTransform(flattenTransform.inverse(), minZ, maxZ, fadeDist);
+	}
+
 	static class ExtendedFlattenTransform implements RealTransform {
 
 		private final RealTransform invFlatten;
@@ -178,7 +192,7 @@ public class Playground6 {
 
 		final RealPoint flattened = new RealPoint(3);
 
-		public ExtendedFlattenTransform(final RealTransform invFlatten, final double minZ, final double maxZ, final double fadeDist) {
+		ExtendedFlattenTransform(final RealTransform invFlatten, final double minZ, final double maxZ, final double fadeDist) {
 			assert invFlatten.numSourceDimensions() == 3;
 			assert invFlatten.numTargetDimensions() == 3;
 			this.invFlatten = invFlatten;
