@@ -75,7 +75,7 @@ ARGV="\
 # --normalizeContrast
 # --explainPlan        # use --explainPlan option to output debug info without running export
 
-COMMIT="577734d00f9c4f4c6b26da745c17840a85dfaa55"
+COMMIT="db085854100f84ec9de178b1ac0ea2ddfa60ab03"
 HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.4-${COMMIT}-SNAPSHOT.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportAlignedSlabSeries"
 
