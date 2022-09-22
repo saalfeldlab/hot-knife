@@ -299,79 +299,83 @@ public class SparkExportAlignedSlabSeries {
 		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> sources = new ArrayList<>();
 		long zOffset = 0;
 		for (int i = 0; i < datasetNames.size(); ++i) {
+			final String datasetName = datasetNames.get(i);
+			try {
+				final long topOffset = topOffsets.get(i);
+				final long botOffset = botOffsets.get(i);
+				final long depth = botOffset - topOffset + 1;
 
-			final long topOffset = topOffsets.get(i);
-			final long botOffset = botOffsets.get(i);
-			final long depth = botOffset - topOffset + 1;
+				/* do not include blocks that do not intersect with the gridBlock */
+				if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
 
-			/* do not include blocks that do not intersect with the gridBlock */
-			if (!((gridBlock[0][2] > zOffset + depth) | (gridBlock[0][2] + gridBlock[1][2] < zOffset))) {
+					final RealTransform top =
+							Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2]);
+					final RealTransform bot =
+							Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2 + 1]);
+					final RealTransform transition =
+							new ClippedTransitionRealTransform(
+									top,
+									bot,
+									topOffset,
+									botOffset);
 
-				final RealTransform top = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2]);
-				final RealTransform bot = Transform.loadScaledTransform(n5Input, group + "/" + transformDatasetNames[i * 2 + 1]);
-				final RealTransform transition =
-						new ClippedTransitionRealTransform(
-								top,
-								bot,
-								topOffset,
-								botOffset);
+					final long[] cropMin = new long[]{min[0], min[1], topOffset};
+					final long[] cropMax = new long[]{max[0], max[1], botOffset};
 
-				final long[] cropMin = new long[] {min[0], min[1], topOffset};
-				final long[] cropMax = new long[] {max[0], max[1], botOffset};
+					final FinalInterval cropInterval = new FinalInterval(
+							cropMin,
+							cropMax);
 
-				final FinalInterval cropInterval = new FinalInterval(
-						cropMin,
-						cropMax);
+					final RandomAccessibleInterval<UnsignedByteType> source;
 
-				final String datasetName = datasetNames.get(i);
+					if (normalizeContrast) {
+						final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
 
-				final RandomAccessibleInterval<UnsignedByteType> source;
+						final int blockRadius = Math.round(511);
 
-				if ( normalizeContrast )
-				{
-					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
-	
-					final int blockRadius = Math.round(511);
-	
-					final ImageJStackOp<UnsignedByteType> cllcn =
-							new ImageJStackOp<>(
-									Views.extendZero(sourceRaw),
-									(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
-									blockRadius,
-									0,
-									255);
-	
-					source = Lazy.process(
-							sourceRaw,
-							new int[] {128, 128, 16},
-							new UnsignedByteType(),
-							AccessFlags.setOf(AccessFlags.VOLATILE),
-							cllcn);
+						final ImageJStackOp<UnsignedByteType> cllcn =
+								new ImageJStackOp<>(
+										Views.extendZero(sourceRaw),
+										(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+										blockRadius,
+										0,
+										255);
+
+						source = Lazy.process(
+								sourceRaw,
+								new int[]{128, 128, 16},
+								new UnsignedByteType(),
+								AccessFlags.setOf(AccessFlags.VOLATILE),
+								cllcn);
+					} else {
+						source = N5Utils.open(n5Input, datasetName);
+					}
+
+					final RandomAccessibleInterval<UnsignedByteType> transformedSource =
+							Transform.createTransformedInterval(
+									source,
+									cropInterval,
+									transition,
+									new UnsignedByteType(0));
+
+					final IntervalView<UnsignedByteType> extendedTransformedSource =
+							Views.interval(
+									Views.extendValue(
+											Views.translate(
+													Views.zeroMin(transformedSource),
+													0, 0, zOffset),
+											new UnsignedByteType(0)),
+									new FinalInterval(min, max));
+
+					sources.add(extendedTransformedSource);
 				}
-				else
-				{
-					source =  N5Utils.open(n5Input, datasetName);
-				}
 
-				final RandomAccessibleInterval<UnsignedByteType> transformedSource = Transform.createTransformedInterval(
-					source,
-					cropInterval,
-					transition,
-					new UnsignedByteType(0));
+				zOffset += depth;
 
-				final IntervalView<UnsignedByteType> extendedTransformedSource =
-						Views.interval(
-							Views.extendValue(
-									Views.translate(
-											Views.zeroMin(transformedSource),
-											0, 0, zOffset),
-									new UnsignedByteType(0)),
-							new FinalInterval(min, max));
-
-				sources.add(extendedTransformedSource);
+			} catch (final Throwable t) {
+				final String errorMessage = "failed to open " + n5PathInput + " dataset " + datasetName;
+				throw new IOException(errorMessage, t);
 			}
-
-			zOffset += depth;
 		}
 
 		final FinalInterval gridBlockInterval = Intervals.createMinSize(
