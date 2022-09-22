@@ -78,7 +78,7 @@ public class SparkExportAlignedSlabSeries {
 		@Option(name = "--n5PathOutput", required = true, usage = "Output N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 		private String n5PathOutput = null;
 
-		@Option(name = "-i", aliases = {"--n5DatasetInput"}, required = true, usage = "N5 slab dataset, e.g. /slab-22/raw/s0")
+		@Option(name = "-i", aliases = {"--n5DatasetInput"}, required = true, usage = "N5 slab dataset, e.g. /slab-22/raw")
 		private ArrayList<String> datasetsInput = new ArrayList<>();
 
 		@Option(name = "-t", aliases = {"--top"}, required = true, usage = "top slab face offset")
@@ -299,7 +299,7 @@ public class SparkExportAlignedSlabSeries {
 		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> sources = new ArrayList<>();
 		long zOffset = 0;
 		for (int i = 0; i < datasetNames.size(); ++i) {
-			final String datasetName = datasetNames.get(i);
+			final String datasetName = datasetNames.get(i) + "/s0";
 			try {
 				final long topOffset = topOffsets.get(i);
 				final long botOffset = botOffsets.get(i);
