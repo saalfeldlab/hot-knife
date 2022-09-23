@@ -227,13 +227,9 @@ public class Playground6 {
 				final double dd = ( minZ - z ) * 4.0 / fadeDist;
 				final double s = Math.exp(dd * dd / (-2.0));
 				invFlatten.apply(source, flattened);
-				final double x = source.getDoublePosition(0);
-				final double y = source.getDoublePosition(1);
-				final double fx = flattened.getDoublePosition(0);
-				final double fy = flattened.getDoublePosition(1);
 				final double fz = flattened.getDoublePosition(2);
-				target.setPosition(s * (fx - x) + x, 0);
-				target.setPosition(s * (fy - y) + y, 1);
+				target.setPosition(source.getDoublePosition(0), 0);
+				target.setPosition(source.getDoublePosition(1), 1);
 				target.setPosition(s * (fz - z) + z, 2);
 			}
 		}

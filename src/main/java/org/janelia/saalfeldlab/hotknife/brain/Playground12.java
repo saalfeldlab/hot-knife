@@ -4,20 +4,25 @@ import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvSource;
 import bdv.util.volatiles.VolatileViews;
+import bdv.viewer.DisplayMode;
 import bdv.viewer.ViewerPanel;
 import java.io.IOException;
 import java.util.Arrays;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
+import net.imglib2.position.FunctionRealRandomAccessible;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
 import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.LinAlgHelpers;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
@@ -32,7 +37,7 @@ import static org.janelia.saalfeldlab.hotknife.brain.Playground5.extendHeightfie
 import static org.janelia.saalfeldlab.hotknife.brain.Playground5.lscale;
 import static org.janelia.saalfeldlab.hotknife.brain.Playground6.extendFlattenTransform;
 
-public class Playground10 {
+public class Playground12 {
 
 	// Apply heightfield transform to full volume (transformed to crop coordinates), then apply position field
 	public static void main(String[] args) throws IOException {
@@ -87,7 +92,6 @@ public class Playground10 {
 		final RandomAccessible<FloatType> extendHeightfield = extendHeightfield(heightfield, avg, plane, fadeToPlaneDist, fadeToAvgDist);
 
 
-
 		// --------------------------------------------------------------------
 		// flatten crop with expanded heightfield
 		// --------------------------------------------------------------------
@@ -99,64 +103,93 @@ public class Playground10 {
 
 		final double scaledAvg = (avg + 0.5) * hfRelativeScale[2] - 0.5;
 		// TODO: max should be <= 335 to match stuart's line
-		final double max = 500;
+		final double max = 330;
 		final RealTransform flatten = extendFlattenTransform(scaledHeightfield, scaledAvg, max, 1000);
-		final RealRandomAccessible<UnsignedByteType> flattenedCrop = new RealTransformRealRandomAccessible<>(
-				Views.interpolate(
-						Views.extendValue(crop, new UnsignedByteType()),
-						new ClampingNLinearInterpolatorFactory<>()),
-				flatten);
-
 
 
 		// --------------------------------------------------------------------
-		// apply position field transform
+		// position field transform
 		// --------------------------------------------------------------------
 		final String n5PathPositionField = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield";
 		final String positionFieldGroup = "/flat.Sec37.bot.face";
 		final N5Reader n5PositionField = new N5FSReader(n5PathPositionField);
 		final PositionField positionField = new PositionField(n5PositionField, positionFieldGroup);
-		System.out.println("positionField = " + positionField);
-
-//		final long[] cropMin = {minInterval[1], minInterval[2]};
 		final long[] cropMin = {0, 0};
 		final Playground8PositionField.TransformedPositionField transformedPositionField = new Playground8PositionField.TransformedPositionField(positionField, n5Level, cropMin);
-		final RealTransform pft = transformedPositionField.getTransform();
-
 		final RealTransform transition =
 				new ClippedTransitionRealTransform(
-						pft,
+						transformedPositionField.getTransform(),
 						IdentityTransform.get(),
 						scaledAvg,
 						max);
 
-		// TODO concat transformations instead of applying sequentially
-		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = new RealTransformRealRandomAccessible<>(
-				flattenedCrop,
-				transition);
 
-
-		// --------------------------------------------------------------------
-		// show in BDV: crop, flattened crop, unwarped crop
-		// --------------------------------------------------------------------
-		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
-		final BdvSource flattenedCropSource = BdvFunctions.show(flattenedCrop, crop, "flattened", Bdv.options().addTo(bdv));
-		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, crop, "unwarped", Bdv.options().addTo(bdv));
-
-
-		// --------------------------------------------------------------------
-		// recreate unwarpedCrop using RealTransformSequence
-		// --------------------------------------------------------------------
 		final RealTransformSequence tfseq = new RealTransformSequence();
 		tfseq.add(transition);
 		tfseq.add(flatten);
-		final RealRandomAccessible<UnsignedByteType> tfseqCrop = new RealTransformRealRandomAccessible<>(
+		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = new RealTransformRealRandomAccessible<>(
 				Views.interpolate(
 						Views.extendValue(crop, new UnsignedByteType()),
 						new ClampingNLinearInterpolatorFactory<>()),
 				tfseq);
-		final BdvSource tfseqCropSource = BdvFunctions.show(tfseqCrop, crop, "tfseq", Bdv.options().addTo(bdv));
 
+
+		final FunctionRealRandomAccessible<DoubleType> absDisplacement = new FunctionRealRandomAccessible<>(
+				3,
+				() -> {
+					final double[] p1 = new double[3];
+					final double[] p2 = new double[3];
+					final RealTransform transform = tfseq.copy();
+					return (pos, t) -> {
+						pos.localize(p1);
+						transform.apply(p1, p2);
+						t.set(LinAlgHelpers.distance(p1, p2));
+					};
+				},
+				DoubleType::new);
+
+		final FunctionRealRandomAccessible<DoubleType> gradMag = new FunctionRealRandomAccessible<>(
+				3,
+				() -> {
+					final double[] p1 = new double[3];
+					final double[] p2 = new double[3];
+					final double[] p3 = new double[3];
+					final double[] g = new double[3];
+					final RealTransform transform = tfseq.copy();
+//					final RealTransform transform = flatten.copy();
+					return (pos, t) -> {
+						pos.localize(p1);
+						for (int d = 0; d < 3; ++d) {
+							p1[d] -= 0.5;
+							transform.apply(p1, p2);
+							LinAlgHelpers.subtract(p2, p1, p2);
+							p1[d] += 1;
+							transform.apply(p1, p3);
+							LinAlgHelpers.subtract(p3, p1, p3);
+							p1[d] -= 0.5;
+							g[d] = LinAlgHelpers.distance(p2, p3);
+						}
+						t.set(LinAlgHelpers.length(g));
+					};
+				},
+				DoubleType::new);
+
+		// --------------------------------------------------------------------
+		// show in BDV: crop, unwarped crop
+		// --------------------------------------------------------------------
+		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
+		bdv.getBdvHandle().getViewerPanel().setDisplayMode(DisplayMode.SINGLE);
+		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, crop, "unwarped", Bdv.options().addTo(bdv));
+		final BdvSource absDisplacementSource = BdvFunctions.show(absDisplacement, crop, "absolute displacement", Bdv.options().addTo(bdv));
+		absDisplacementSource.setColor(new ARGBType(0xff00ff));
+		absDisplacementSource.setDisplayRangeBounds(0, 200);
+		absDisplacementSource.setDisplayRange(0, 100);
+
+
+		final BdvSource gradMagSource = BdvFunctions.show(gradMag, crop, "displacement gradient magnitude", Bdv.options().addTo(bdv));
+		gradMagSource.setColor(new ARGBType(0xff00ff));
+		gradMagSource.setDisplayRangeBounds(0, 2);
+		gradMagSource.setDisplayRange(0, 0.5);
 
 
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();

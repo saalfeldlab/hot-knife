@@ -7,6 +7,7 @@ import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.ViewerPanel;
 import java.io.IOException;
 import java.util.Arrays;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
@@ -14,10 +15,10 @@ import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
-import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
@@ -32,9 +33,9 @@ import static org.janelia.saalfeldlab.hotknife.brain.Playground5.extendHeightfie
 import static org.janelia.saalfeldlab.hotknife.brain.Playground5.lscale;
 import static org.janelia.saalfeldlab.hotknife.brain.Playground6.extendFlattenTransform;
 
-public class Playground10 {
+public class Playground11 {
 
-	// Apply heightfield transform to full volume (transformed to crop coordinates), then apply position field
+	// Apply heightfield transform to full volume (transformed to crop coordinates), then apply IntervalShift
 	public static void main(String[] args) throws IOException {
 
 		System.setProperty("apple.laf.useScreenMenuBar", "true");
@@ -110,30 +111,21 @@ public class Playground10 {
 
 
 		// --------------------------------------------------------------------
-		// apply position field transform
+		// apply IntervalShift
 		// --------------------------------------------------------------------
-		final String n5PathPositionField = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield";
-		final String positionFieldGroup = "/flat.Sec37.bot.face";
-		final N5Reader n5PositionField = new N5FSReader(n5PathPositionField);
-		final PositionField positionField = new PositionField(n5PositionField, positionFieldGroup);
-		System.out.println("positionField = " + positionField);
 
-//		final long[] cropMin = {minInterval[1], minInterval[2]};
-		final long[] cropMin = {0, 0};
-		final Playground8PositionField.TransformedPositionField transformedPositionField = new Playground8PositionField.TransformedPositionField(positionField, n5Level, cropMin);
-		final RealTransform pft = transformedPositionField.getTransform();
-
-		final RealTransform transition =
-				new ClippedTransitionRealTransform(
-						pft,
-						IdentityTransform.get(),
-						scaledAvg,
-						max);
-
-		// TODO concat transformations instead of applying sequentially
-		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = new RealTransformRealRandomAccessible<>(
+		final FinalInterval interval = Intervals.createMinSize(
+				-100, 0, (long) scaledAvg,
+				maxInterval[1] - minInterval[1] + 1,
+				maxInterval[2] - minInterval[2] + 1,
+				1);
+		System.out.println("Intervals.toString(interval) = " + Intervals.toString(interval));
+		final double[] shift = {-100, 0, 0};
+		final double[] weights = {100, 100, 200};
+		final RealTransform intervalShift = new IntervalShift(interval, shift, weights);
+		final RealRandomAccessible<UnsignedByteType> shiftedCrop = new RealTransformRealRandomAccessible<>(
 				flattenedCrop,
-				transition);
+				intervalShift);
 
 
 		// --------------------------------------------------------------------
@@ -141,21 +133,16 @@ public class Playground10 {
 		// --------------------------------------------------------------------
 		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
 		final BdvSource flattenedCropSource = BdvFunctions.show(flattenedCrop, crop, "flattened", Bdv.options().addTo(bdv));
-		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, crop, "unwarped", Bdv.options().addTo(bdv));
+		final BdvSource shiftedCropSource = BdvFunctions.show(shiftedCrop, crop, "shifted", Bdv.options().addTo(bdv));
 
 
-		// --------------------------------------------------------------------
-		// recreate unwarpedCrop using RealTransformSequence
-		// --------------------------------------------------------------------
-		final RealTransformSequence tfseq = new RealTransformSequence();
-		tfseq.add(transition);
-		tfseq.add(flatten);
-		final RealRandomAccessible<UnsignedByteType> tfseqCrop = new RealTransformRealRandomAccessible<>(
-				Views.interpolate(
-						Views.extendValue(crop, new UnsignedByteType()),
-						new ClampingNLinearInterpolatorFactory<>()),
-				tfseq);
-		final BdvSource tfseqCropSource = BdvFunctions.show(tfseqCrop, crop, "tfseq", Bdv.options().addTo(bdv));
+
+
+
+
+
+
+
 
 
 
