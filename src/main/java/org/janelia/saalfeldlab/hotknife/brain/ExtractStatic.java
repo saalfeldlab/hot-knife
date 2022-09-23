@@ -22,7 +22,6 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.LinAlgHelpers;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
 import org.janelia.saalfeldlab.hotknife.tobi.IdentityTransform;
@@ -31,10 +30,6 @@ import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-
-import static org.janelia.saalfeldlab.hotknife.brain.Playground5.extendHeightfield;
-import static org.janelia.saalfeldlab.hotknife.brain.Playground5.lscale;
-import static org.janelia.saalfeldlab.hotknife.brain.Playground6.extendFlattenTransform;
 
 public class ExtractStatic {
 
@@ -63,6 +58,9 @@ public class ExtractStatic {
 		private double fadeFlattenToIdentityDist;
 		private PositionField positionField;
 
+
+		// permuted, translated input
+		private RandomAccessibleInterval<UnsignedByteType> crop;
 
 		// outputs
 		private RealRandomAccessible<UnsignedByteType> unwarpedCrop;
@@ -143,13 +141,13 @@ public class ExtractStatic {
 			// is slice Z'=0, and X=max-1 is slice Z'=1, etc.
 			// ==> And this all with respect to the [minInterval, maxInterval] crop region.
 			final long[] translation = {-minInterval[1], -minInterval[2], maxInterval[0]};
-			final RandomAccessibleInterval<UnsignedByteType> crop = Views.translate(crop2, translation);
+			crop = Views.translate(crop2, translation);
 
 
 			// --------------------------------------------------------------------
 			// expand heightfield
 			// --------------------------------------------------------------------
-			final RandomAccessible<FloatType> extendHeightfield = extendHeightfield(heightfield, avg, plane, fadeToPlaneDist, fadeToAvgDist);
+			final RandomAccessible<FloatType> extendHeightfield = ExtendHeightField.extendHeightfield(heightfield, avg, plane, fadeToPlaneDist, fadeToAvgDist);
 
 
 			// --------------------------------------------------------------------
@@ -160,7 +158,7 @@ public class ExtractStatic {
 			Arrays.setAll(hfRelativeScale, d -> hfDownsamplingFactors[d] / n5DownsamplingFactors[d]);
 			final RealRandomAccessible<DoubleType> scaledHeightfield = Transform.scaleAndShiftHeightFieldAndValues(extendHeightfield, hfRelativeScale);
 			final double scaledAvg = (avg + 0.5) * hfRelativeScale[2] - 0.5;
-			final RealTransform flatten = extendFlattenTransform(scaledHeightfield, scaledAvg, max, fadeFlattenToIdentityDist);
+			final RealTransform flatten = ExtendFlattenTransform.extendFlattenTransform(scaledHeightfield, scaledAvg, max, fadeFlattenToIdentityDist);
 
 
 			// --------------------------------------------------------------------
@@ -210,6 +208,10 @@ public class ExtractStatic {
 					DoubleType::new);
 		}
 
+		public RandomAccessibleInterval<UnsignedByteType> getCrop() {
+			return crop;
+		}
+
 		public RealRandomAccessible<DoubleType> getAbsDisplacement() {
 			return absDisplacement;
 		}
@@ -226,15 +228,7 @@ public class ExtractStatic {
 			Arrays.setAll(spos, d -> pos[d] >> level);
 			return spos;
 		}
-
 	}
-
-
-
-
-
-
-
 
 
 	// Apply heightfield transform to full volume (transformed to crop coordinates), then apply position field
@@ -255,12 +249,6 @@ public class ExtractStatic {
 
 		final long[] minIntervalS0 = {47204, 46557, 42756};
 		final long[] maxIntervalS0 = {55779, 59038, 53664};
-		final long[] minInterval = lscale(minIntervalS0, n5Level);
-		final long[] maxInterval = lscale(maxIntervalS0, n5Level);
-		final RandomAccessibleInterval<UnsignedByteType> crop2 = Views.rotate(imgBrain, 1, 0 );
-		final RandomAccessibleInterval<UnsignedByteType> crop3 = Views.permute(crop2, 1, 2 );
-		final long[] translation = {-minInterval[1], -minInterval[2], maxInterval[0]};
-		final IntervalView<UnsignedByteType> crop = Views.translate(crop3, translation);
 
 
 		// --------------------------------------------------------------------
@@ -293,6 +281,7 @@ public class ExtractStatic {
 				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, max, 1000,
 				positionField);
 
+		final RandomAccessibleInterval<UnsignedByteType> crop = fau.getCrop();
 		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
 		final RealRandomAccessible<DoubleType> absDisplacement =fau.getAbsDisplacement();
 
