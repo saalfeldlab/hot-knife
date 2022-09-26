@@ -112,7 +112,10 @@ public class Playground3 {
 
 			final N5Reader hfReader = new N5FSReader(n5Path);
 			final RandomAccessibleInterval<FloatType> tmpHF3 = N5Utils.openVolatile(hfReader, group);
-			heightfield = Views.hyperSlice(tmpHF3, 2, 0);
+			if ( tmpHF3.numDimensions() == 3 )
+				heightfield = Views.hyperSlice(tmpHF3, 2, 0);
+			else
+				heightfield = tmpHF3;
 		}
 
 		public RandomAccessibleInterval<FloatType> heightfield() {
