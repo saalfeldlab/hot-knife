@@ -63,7 +63,7 @@ public class SparkTransformBrainS5 {
 		final String n5PathPositionField = "/nrs/flyem/render/n5/Z0720_07m_VNC/surface-align-VNC/06-37/run_20220908_121000/pass12_edit/";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield";
 		final String positionFieldGroup = "/flat.Sec37.bot.face";
 
-		final String n5PathOutput = "/nrs/flyem/render/n5/Z0720_07m_BR";
+		final String n5PathOutput = "/nrs/flyem/render/n5/Z0720_07m_CNS.n5";
 		final String datasetNameOutput = args.length == 1 ? args[0] : "/preibischs_test/s5";
 
 		final SparkConf conf = new SparkConf().setAppName( "SparkTransformBrainS5" );
