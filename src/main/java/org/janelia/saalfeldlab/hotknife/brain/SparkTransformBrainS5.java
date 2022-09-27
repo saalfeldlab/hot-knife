@@ -3,7 +3,9 @@ package org.janelia.saalfeldlab.hotknife.brain;
 import java.io.IOException;
 import java.util.List;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.FlattenAndUnwarp;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
@@ -24,6 +26,7 @@ import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Util;
 
 /**
  * Class to deform the brain using Spark and methods in ExtractStatic for the s5 downsampled brain
@@ -51,7 +54,8 @@ public class SparkTransformBrainS5 {
 		final String n5PathPositionField = "/nrs/flyem/render/n5/Z0720_07m_VNC/surface-align-VNC/06-37/run_20220908_121000/pass12_edit/";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield";
 		final String positionFieldGroup = "/flat.Sec37.bot.face";
 		
-		display(n5Path, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup );
+		saveSpark(n5Path, imgGroup);
+		//display(n5Path, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup );
 	}
 
 	public static void display(
@@ -126,15 +130,29 @@ public class SparkTransformBrainS5 {
 		viewerPanel.getDisplay().overlays().add(overlay);
 	}
 	
-	public static void saveSpark()
+	public static void saveSpark(
+			final String n5Path,
+			final String imgGroup ) throws IOException
 	{
-		/*
-		final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
+		final N5Reader n5 = new N5FSReader(n5Path);
+		final long[] dim = n5.getAttribute(imgGroup, "dimensions", long[].class );
+		final int[] blockSize = n5.getAttribute(imgGroup, "blockSize", int[].class );
+		System.out.println( "dimensions: " + Util.printCoordinates( dim ) + ", blocksize: " + Util.printCoordinates(blockSize) );
+
+		final List<long[][]> grid = Grid.create(dim, new int[]{blockSize[0] * 4, blockSize[1] * 4, blockSize[2] * 4}, blockSize);
+
+		System.out.println( grid.size() + " jobs." );
+
+		//N5Utils.openVolatile(n5, imgGroup);
+
+		final SparkConf conf = new SparkConf().setAppName( "SparkTransformBrainS5" );
+		final JavaSparkContext sc = new JavaSparkContext(conf);
 
 		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
 
 		pGrid.foreach(
 				gridBlock -> {
+					/*
 					saveBlock(
 							n5PathInput,
 							n5PathOutput,
@@ -149,11 +167,10 @@ public class SparkTransformBrainS5 {
 							dimensions,
 							blockSize,
 							gridBlock,
-							normalizeContrast);
+							normalizeContrast);*/
 				});
 
 		sc.close();
-		*/
 
 	}
 }
