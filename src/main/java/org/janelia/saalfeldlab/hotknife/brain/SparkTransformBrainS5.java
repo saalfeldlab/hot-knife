@@ -234,11 +234,16 @@ public class SparkTransformBrainS5 {
 			final String n5PathOutput,
 			final String datasetNameOutput) throws IOException
 	{
-		final N5Reader n5 = new N5FSReader(n5PathInput);
-		final long[] dimensions = n5.getAttribute(imgGroup, "dimensions", long[].class );
-		final int[] blockSize = n5.getAttribute(imgGroup, "blockSize", int[].class );
+		final N5Reader n5Input = new N5FSReader(n5PathInput);
+
+		final long[] dimensions = n5Input.getAttribute(imgGroup, "dimensions", long[].class );
+		final int[] blockSize = n5Input.getAttribute(imgGroup, "blockSize", int[].class );
 		System.out.println( "dimensions: " + Util.printCoordinates( dimensions ) +
 							", blocksize: " + Util.printCoordinates(blockSize) );
+
+		/* create output dataset */
+		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+		n5Output.createDataset(datasetNameOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
 		final List<long[][]> grid = Grid.create(dimensions,
 												new int[] {
@@ -268,5 +273,7 @@ public class SparkTransformBrainS5 {
 
 		sparkContext.close();
 
+		n5Input.close();
+		n5Output.close();
 	}
 }
