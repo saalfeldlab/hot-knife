@@ -6,7 +6,6 @@ import java.util.List;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.FlattenAndUnwarp;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
@@ -151,17 +150,16 @@ public class SparkTransformBrainS5 {
 														   positionFieldGroup,
 														   imgBrain);
 
-		final RandomAccessibleInterval<UnsignedByteType> crop = fau.getCrop();
 		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
-		final RealRandomAccessible<DoubleType> absDisplacement =fau.getAbsDisplacement();
+		final RealRandomAccessible<DoubleType> absDisplacement = fau.getAbsDisplacement();
 
 		// --------------------------------------------------------------------
 		// show in BDV: crop, unwarped crop
 		// --------------------------------------------------------------------
-		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
+		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(imgBrain), "imgBrain", Bdv.options());
 		bdv.getBdvHandle().getViewerPanel().setDisplayMode(DisplayMode.SINGLE);
-		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, crop, "unwarped", Bdv.options().addTo(bdv));
-		final BdvSource absDisplacementSource = BdvFunctions.show(absDisplacement, crop, "absolute displacement", Bdv.options().addTo(bdv));
+		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, imgBrain, "unwarped", Bdv.options().addTo(bdv));
+		final BdvSource absDisplacementSource = BdvFunctions.show(absDisplacement, imgBrain, "absolute displacement", Bdv.options().addTo(bdv));
 		absDisplacementSource.setColor(new ARGBType(0xff00ff));
 		absDisplacementSource.setDisplayRangeBounds(0, 200);
 		absDisplacementSource.setDisplayRange(0, 100);
