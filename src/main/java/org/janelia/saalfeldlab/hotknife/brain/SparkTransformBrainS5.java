@@ -1,10 +1,13 @@
 package org.janelia.saalfeldlab.hotknife.brain;
 
 import java.io.IOException;
+import java.util.List;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.FlattenAndUnwarp;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -40,6 +43,7 @@ public class SparkTransformBrainS5 {
 	{
 		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s5";
 		final String imgGroup = ".";
+		final int n5Level = 5;
 
 		final String n5PathHeightfield = "/nrs/flyem/render/n5/Z0720_07m_VNC/heightfields_fix/brain-VNC/pass1_preibischs/min";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/";
 		final String heightfieldGroup = ".";
@@ -47,12 +51,13 @@ public class SparkTransformBrainS5 {
 		final String n5PathPositionField = "/nrs/flyem/render/n5/Z0720_07m_VNC/surface-align-VNC/06-37/run_20220908_121000/pass12_edit/";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield";
 		final String positionFieldGroup = "/flat.Sec37.bot.face";
 		
-		display(n5Path, imgGroup, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup );
+		display(n5Path, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup );
 	}
 
 	public static void display(
 			final String n5Path,
 			final String imgGroup,
+			final int n5Level,
 			final String n5PathHeightfield,
 			final String heightfieldGroup,
 			final String n5PathPositionField,
@@ -66,7 +71,6 @@ public class SparkTransformBrainS5 {
 		// --------------------------------------------------------------------
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final RandomAccessibleInterval<UnsignedByteType> imgBrain = N5Utils.openVolatile(n5, imgGroup);
-		final int n5Level = 5;
 
 		final long[] minIntervalS0 = {47204, 46557, 42756};
 		final long[] maxIntervalS0 = {55779, 59038, 53664};
@@ -120,5 +124,36 @@ public class SparkTransformBrainS5 {
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
+	}
+	
+	public static void saveSpark()
+	{
+		/*
+		final List<long[][]> grid = Grid.create(dimensions, new int[]{blockSize[0] * 8, blockSize[1] * 8, blockSize[2]}, blockSize);
+
+		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
+
+		pGrid.foreach(
+				gridBlock -> {
+					saveBlock(
+							n5PathInput,
+							n5PathOutput,
+							datasetNames,
+							group,
+							datasetNameOutput,
+							transformDatasetNames,
+							topOffsets,
+							botOffsets,
+							min,
+							max,
+							dimensions,
+							blockSize,
+							gridBlock,
+							normalizeContrast);
+				});
+
+		sc.close();
+		*/
+
 	}
 }
