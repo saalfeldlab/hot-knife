@@ -1,10 +1,17 @@
 package org.janelia.saalfeldlab.hotknife.brain;
 
 import java.util.Arrays;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealLocalizable;
+import net.imglib2.RealPoint;
+import net.imglib2.RealPositionable;
+import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
+import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.position.FunctionRandomAccessible;
 import net.imglib2.position.FunctionRealRandomAccessible;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
@@ -14,6 +21,7 @@ import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
 import net.imglib2.util.LinAlgHelpers;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.tobi.IdentityTransform;
@@ -169,9 +177,12 @@ public class FlattenAndUnwarp {
 		// --------------------------------------------------------------------
 		// fade position field to identity
 		// --------------------------------------------------------------------
+		final TransformedPositionField transformedPositionField = new TransformedPositionField(
+				positionField,
+				imgLevel, new long[] {0, 0});
 		final RealTransform transition =
 				new ClippedTransitionRealTransform(
-						positionField.getTransform(imgLevel),
+						transformedPositionField.getTransform(),
 						IdentityTransform.get(),
 						minZ,
 						maxZ);
@@ -324,6 +335,120 @@ public class FlattenAndUnwarp {
 
 		public double transformDistance(final Scale.System fromSystem, final Scale.System toSystem, final int d, final double distance) {
 			return distance * scaleFactor(fromSystem, toSystem, d);
+		}
+	}
+
+
+	/**
+	 * Transform positionfield that is relative to crop coordinates into
+	 * positionfield that is relative to full image.
+	 */
+	public static class TransformedPositionField {
+
+		private final double pfOffsetX;
+		private final double pfOffsetY;
+		private final double imgToPfScale;
+		private final double pfToImgScale;
+		private final double imgCropMinX;
+		private final double imgCropMinY;
+
+		// interpolated relative position field
+		private final RealRandomAccessible<DoubleType> irpf;
+
+		public double imgToPfX(final double imgX)
+		{
+			return (imgX - imgCropMinX) * imgToPfScale - pfOffsetX;
+		}
+
+		public double imgToPfY(final double imgY)
+		{
+			return (imgY - imgCropMinY) * imgToPfScale - pfOffsetY;
+		}
+
+		/**
+		 * Transform positionfield that is relative to crop coordinates into
+		 * positionfield that is relative to full image.
+		 *
+		 * @param positionField positionfield that is relative to crop coordinates
+		 * @param imgLevel resolution level of the image
+		 * @param imgCropMin
+		 * 		crop coordinates at image resolution (not
+		 * 		necessarily full resolution)
+		 */
+		public TransformedPositionField(
+				final PositionField positionField,
+				final int imgLevel,
+				final long[] imgCropMin) {
+			pfOffsetX = positionField.getOffset(0);
+			pfOffsetY = positionField.getOffset(1);
+			imgToPfScale = positionField.getScale() * (1 << imgLevel);
+			pfToImgScale = 1.0 / imgToPfScale;
+			imgCropMinX = imgCropMin[ 0 ];
+			imgCropMinY = imgCropMin[ 1 ];
+
+			final RandomAccessibleInterval<DoubleType> pf = positionField.getPositionFieldRAI();
+			RandomAccessibleInterval<DoubleType> rpf = Views.interval(
+					new FunctionRandomAccessible<>(
+							pf.numDimensions(),
+							() -> {
+								final RandomAccess<DoubleType> input = pf.randomAccess();
+								return (pos, value) -> {
+									if (Intervals.contains(pf, pos)) {
+										input.setPosition(pos);
+										final int d = pos.getIntPosition(pos.numDimensions() - 1);
+										value.set(input.get().get() - pos.getDoublePosition(d) - positionField.getOffset(d));
+									} else {
+										value.set(0);
+									}
+								};
+							},
+							DoubleType::new),
+					pf);
+			irpf = Views.interpolate(rpf, new NLinearInterpolatorFactory<>());
+		}
+
+		public RealTransform getTransform() {
+			return new PFTransform();
+		}
+
+		class PFTransform implements RealTransform {
+
+			private final double[] pf = new double[3];
+			private final RealRandomAccess<DoubleType> rpfa = irpf.realRandomAccess();
+
+			@Override
+			public int numSourceDimensions() {
+				return 2;
+			}
+
+			@Override
+			public int numTargetDimensions() {
+				return 2;
+			}
+
+			@Override
+			public void apply(final double[] source, final double[] target) {
+				apply(RealPoint.wrap(source), RealPoint.wrap(target));
+			}
+
+			@Override
+			public void apply(final RealLocalizable source, final RealPositionable target) {
+				final double imgX = source.getDoublePosition(0);
+				final double imgY = source.getDoublePosition(1);
+				pf[0] = imgToPfX(imgX);
+				pf[1] = imgToPfY(imgY);
+				rpfa.setPosition(pf);
+				final double pfDiffX = rpfa.get().get();
+				rpfa.setPosition(1, 2);
+				final double pfDiffY = rpfa.get().get();
+				target.setPosition(imgX + pfDiffX * pfToImgScale, 0);
+				target.setPosition(imgY + pfDiffY * pfToImgScale, 1);
+			}
+
+			@Override
+			public RealTransform copy() {
+				return new PFTransform();
+			}
 		}
 	}
 }
