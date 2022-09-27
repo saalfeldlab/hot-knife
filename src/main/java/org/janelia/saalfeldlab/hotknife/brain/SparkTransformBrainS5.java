@@ -66,6 +66,7 @@ public class SparkTransformBrainS5 {
 		final String n5PathOutput = "/nrs/flyem/render/n5/Z0720_07m_BR";
 		final String datasetNameOutput = args.length == 1 ? args[0] : "/trautmane_test/s5";
 
+		/*
 		final SparkConf conf = new SparkConf().setAppName( "SparkTransformBrainS5" );
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 
@@ -79,8 +80,8 @@ public class SparkTransformBrainS5 {
 				  positionFieldGroup,
 				  n5PathOutput,
 				  datasetNameOutput);
-
-//		display(n5PathInput, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup);
+		*/
+		display(n5PathInput, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup);
 	}
 
 	@NotNull
@@ -105,9 +106,10 @@ public class SparkTransformBrainS5 {
 		final double[] hfDownsamplingFactors = hf.downsamplingFactors();
 		final double avg = hf.avg();
 		final double[] plane = {2.004294094052206, -1.8362464688517335, 4243.432822291761};
-		final int fadeToPlaneDist = 1000;
-		final int fadeToAvgDist = 2000;
-		final double max = 500; // TODO: max should be <= 335 to match stuart's line
+		final int fadeToPlaneDist = 6000;
+		final int fadeToAvgDist = 12000;
+		final double minModifiedX = 45046;
+//		final double minModifiedX = maxIntervalS0[ 0 ] - (500 << n5Level);
 
 		// --------------------------------------------------------------------
 		// load position field
@@ -121,7 +123,7 @@ public class SparkTransformBrainS5 {
 		return new FlattenAndUnwarp(
 				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
 				heightfield, avg, plane, hfDownsamplingFactors,
-				fadeToPlaneDist, fadeToAvgDist, max, 1000,
+				fadeToPlaneDist, fadeToAvgDist, minModifiedX, 1000,
 				positionField);
 	}
 
