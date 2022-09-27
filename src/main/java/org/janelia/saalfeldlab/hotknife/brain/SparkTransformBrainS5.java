@@ -20,6 +20,7 @@ import bdv.util.BdvSource;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.DisplayMode;
 import bdv.viewer.ViewerPanel;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.type.numeric.ARGBType;
@@ -27,6 +28,8 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Util;
+import net.imglib2.view.RandomAccessibleOnRealRandomAccessible;
+import net.imglib2.view.Views;
 
 /**
  * Class to deform the brain using Spark and methods in ExtractStatic for the s5 downsampled brain
@@ -128,6 +131,19 @@ public class SparkTransformBrainS5 {
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
+	}
+
+	public static void saveBlock()
+	{
+		// ....
+		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = null;//fau.getUnwarpedCrop();
+
+		// raster it (onto the pixel grid)
+		final RandomAccessible<UnsignedByteType> rasteredUnwarpedCrop = Views.raster( unwarpedCrop );
+
+		// save it given the grid[][] location to the new n5
+		//N5Utils.saveNonEmptyBlock(
+		//		Views.interval( ...
 	}
 	
 	public static void saveSpark(
