@@ -13,6 +13,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.interpolation.randomaccess.ClampingNLinearInterpolatorFactory;
 import net.imglib2.position.FunctionRealRandomAccessible;
+import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRealRandomAccessible;
@@ -24,6 +25,7 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.LinAlgHelpers;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
+import org.janelia.saalfeldlab.hotknife.brain.Playground8PositionField.TransformedPositionField;
 import org.janelia.saalfeldlab.hotknife.tobi.IdentityTransform;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
@@ -31,9 +33,9 @@ import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
-import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.Scale.System.FULL_RESOLUTION;
-import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.Scale.System.HEIGHTFIELD;
-import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.Scale.System.IMAGE;
+import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.FlattenAndUnwarp.Scale.System.FULL_RESOLUTION;
+import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.FlattenAndUnwarp.Scale.System.HEIGHTFIELD;
+import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.FlattenAndUnwarp.Scale.System.IMAGE;
 
 public class ExtractStatic {
 
@@ -41,32 +43,31 @@ public class ExtractStatic {
 
 		private final Scale scale;
 
-		private final RandomAccessibleInterval<UnsignedByteType> imgBrain; // --> img
-		private final int n5Level; // --> imgLevel
+		private final RandomAccessibleInterval<UnsignedByteType> img;
+		private final int imgLevel;
 		private final Scale.Coordinate cropMin;
 		private final Scale.Coordinate cropMax;
 
 
 		private final RandomAccessibleInterval<FloatType> heightfield;
-		private final double heightfieldAvg; // --> heightfieldAvg
-		private final double[] heightfieldPlane; // --> heightfieldPlane
-		private final double[] hfDownsamplingFactors; // --> heightfieldDownsamplingFactors
+		private final double heightfieldAvg;
+		private final double[] heightfieldPlane;
+		private final double[] heightfieldDownsamplingFactors;
 
 		private final int fadeToPlaneDist;
 		private final int fadeToAvgDist;
 
 		private final double minModifiedX;
 
-		private double fadeFlattenToIdentityDist;
-		private PositionField positionField;
-
+		private final double fadeFlattenToIdentityDist;
+		private final PositionField positionField;
 
 		// permuted, translated input
-		private RandomAccessibleInterval<UnsignedByteType> crop;
+		private final RandomAccessibleInterval<UnsignedByteType> crop;
 
 		// outputs
-		private RealRandomAccessible<UnsignedByteType> unwarpedCrop;
-		private RealRandomAccessible<DoubleType> absDisplacement;
+		private final RealRandomAccessible<UnsignedByteType> unwarpedCrop;
+		private final RealRandomAccessible<DoubleType> absDisplacement;
 
 
 		/**
@@ -129,28 +130,26 @@ public class ExtractStatic {
 		)
 		{
 			this.scale = new Scale(imgLevel, heightfieldDownsamplingFactors);
-			this.imgBrain = img;
-			this.n5Level = imgLevel;
+			this.img = img;
+			this.imgLevel = imgLevel;
 			this.cropMin = scale.fullres(cropMin);
 			this.cropMax = scale.fullres(cropMax);
 			this.heightfield = heightfield;
 			this.heightfieldAvg = heightfieldAvg;
 			this.heightfieldPlane = heightfieldPlane;
-			this.hfDownsamplingFactors = heightfieldDownsamplingFactors;
+			this.heightfieldDownsamplingFactors = heightfieldDownsamplingFactors;
 			this.fadeToPlaneDist = fadeToPlaneDist;
 			this.fadeToAvgDist = fadeToAvgDist;
 			this.minModifiedX = minModifiedX;
 			this.fadeFlattenToIdentityDist = fadeFlattenToIdentityDist;
 			this.positionField = positionField;
 
-			unwarp();
-		}
 
-		private void unwarp() {
-			final long[] minInterval = round(cropMin.coordinate(IMAGE));
-			final long[] maxInterval = round(cropMax.coordinate(IMAGE));
 
-			final RandomAccessibleInterval<UnsignedByteType> crop1 = Views.rotate(imgBrain, 1, 0 );
+			final long[] minInterval = round(this.cropMin.coordinate(IMAGE));
+			final long[] maxInterval = round(this.cropMax.coordinate(IMAGE));
+
+			final RandomAccessibleInterval<UnsignedByteType> crop1 = Views.rotate(img, 1, 0 );
 			final RandomAccessibleInterval<UnsignedByteType> crop2 = Views.permute(crop1, 1, 2 );
 			// crop2 has transformed axes: {X, Y, Z} --> {-Z, X, Y}
 			//
@@ -175,12 +174,11 @@ public class ExtractStatic {
 			// --------------------------------------------------------------------
 			// flatten crop with expanded heightfield
 			// --------------------------------------------------------------------
-			final double[] n5DownsamplingFactors = scale.imgDownsamplingFactors();
 			final double[] hfRelativeScale = new double[3];
-			Arrays.setAll(hfRelativeScale, d -> hfDownsamplingFactors[d] / n5DownsamplingFactors[d]);
+			Arrays.setAll(hfRelativeScale, d -> scale.scaleFactor(HEIGHTFIELD, IMAGE, d));
 			final RealRandomAccessible<DoubleType> scaledHeightfield = Transform.scaleAndShiftHeightFieldAndValues(extendHeightfield, hfRelativeScale);
 			final double minZ = scale.transformCoordinate(HEIGHTFIELD, IMAGE, 2, heightfieldAvg);
-			final double maxZ = scale.transformCoordinate(FULL_RESOLUTION, IMAGE, 0, cropMax.coordinate(FULL_RESOLUTION, 0) - minModifiedX);
+			final double maxZ = scale.transformCoordinate(FULL_RESOLUTION, IMAGE, 0, this.cropMax.coordinate(FULL_RESOLUTION, 0) - minModifiedX);
 			final double fade = scale.transformDistance(FULL_RESOLUTION, IMAGE, 0, fadeFlattenToIdentityDist);
 			final RealTransform flatten = ExtendFlattenTransform.extendFlattenTransform(scaledHeightfield, minZ, maxZ, fade);
 
@@ -188,8 +186,9 @@ public class ExtractStatic {
 			// --------------------------------------------------------------------
 			// scale  position field transform and fade to identity
 			// --------------------------------------------------------------------
-			final long[] cropMin = {0, 0};
-			final Playground8PositionField.TransformedPositionField transformedPositionField = new Playground8PositionField.TransformedPositionField(positionField, n5Level, cropMin);
+			final TransformedPositionField transformedPositionField = new TransformedPositionField(
+					positionField,
+					imgLevel, new long[] {0, 0});
 			final RealTransform transition =
 					new ClippedTransitionRealTransform(
 							transformedPositionField.getTransform(),
@@ -199,15 +198,24 @@ public class ExtractStatic {
 
 
 			// --------------------------------------------------------------------
+			// transform back to original image coordinates
+			// --------------------------------------------------------------------
+			final AffineTransform3D uncrop = new AffineTransform3D();
+			uncrop.set(
+					0, 1, 0, translation[0],
+					0, 0, 1, translation[1],
+					-1, 0, 0, translation[2] );
+
+
+			// --------------------------------------------------------------------
 			// concatenate flattening and position field transform
 			// --------------------------------------------------------------------
 			final RealTransformSequence tfseq = new RealTransformSequence();
+			tfseq.add(uncrop);
 			tfseq.add(transition);
 			tfseq.add(flatten);
 
 
-			// TODO: unwarpedCrop is the first output we compute.
-			//       We still need to transform it back to img coordinates
 			unwarpedCrop = new RealTransformRealRandomAccessible<>(
 					Views.interpolate(
 							Views.extendValue(crop, new UnsignedByteType()),
@@ -215,8 +223,6 @@ public class ExtractStatic {
 					tfseq);
 
 
-			// TODO: absDisplacement is the second output we compute.
-			//       We still need to transform it back to img coordinates
 			absDisplacement = new FunctionRealRandomAccessible<>(
 					3,
 					() -> {
@@ -232,10 +238,6 @@ public class ExtractStatic {
 					DoubleType::new);
 		}
 
-		public RandomAccessibleInterval<UnsignedByteType> getCrop() {
-			return crop;
-		}
-
 		public RealRandomAccessible<DoubleType> getAbsDisplacement() {
 			return absDisplacement;
 		}
@@ -244,130 +246,101 @@ public class ExtractStatic {
 			return unwarpedCrop;
 		}
 
-		/**
-		 * Scale {@code pos} by {@code 2^level}.
-		 */
-		private static long[] lscale(long[] pos, int level) {
-			final long[] spos = new long[pos.length];
-			Arrays.setAll(spos, d -> pos[d] >> level);
-			return spos;
-		}
-
 		private static long[] round(double[] pos) {
 			final long[] spos = new long[pos.length];
 			Arrays.setAll(spos, d -> Math.round(pos[d]));
 			return spos;
 		}
-	}
 
+		public static class Scale {
+			private final double[] imgDownsamplingFactors;
+			private final double[] heightfieldDownsamplingFactors;
 
-
-
-
-
-
-
-
-	public static class Scale {
-		private final double[] imgDownsamplingFactors;
-		private final double[] hfDownsamplingFactors; // --> heightfieldDownsamplingFactors
-
-		public Scale(
-				final int imgLevel,
-				final double[] heightfieldDownsamplingFactors) {
-			this.imgDownsamplingFactors = new double[] {1 << imgLevel, 1 << imgLevel, 1 << imgLevel};
-			this.hfDownsamplingFactors = heightfieldDownsamplingFactors;
-
-			final double[] hfRelativeScale = new double[3];
-			Arrays.setAll(hfRelativeScale, d -> hfDownsamplingFactors[d] / imgDownsamplingFactors[d]);
-		}
-
-		public double[] imgDownsamplingFactors() {
-			return imgDownsamplingFactors;
-		}
-
-		public double[] heightfieldDownsamplingFactors() {
-			return hfDownsamplingFactors;
-		}
-
-		enum System {
-			FULL_RESOLUTION,
-			IMAGE,
-			HEIGHTFIELD
-		}
-
-		public Coordinate image(final double ... pos) {
-			return new Coordinate(IMAGE, pos);
-		}
-
-		public Coordinate heightfield(final double ... pos) {
-			return new Coordinate(HEIGHTFIELD, pos);
-		}
-
-		public Coordinate fullres(final double ... pos) {
-			return new Coordinate(FULL_RESOLUTION, pos);
-		}
-
-		public Coordinate fullres(final long ... pos) {
-			final double[] dpos = new double[pos.length];
-			Arrays.setAll(dpos, d -> pos[d]);
-			return new Coordinate(FULL_RESOLUTION, dpos);
-		}
-
-		public class Coordinate {
-			private final System system;
-			private final double[] pos;
-
-			public Coordinate(final System system, final double[] pos) {
-				this.system = system;
-				this.pos = pos;
+			public Scale(
+					final int imgLevel,
+					final double[] heightfieldDownsamplingFactors) {
+				this.imgDownsamplingFactors = new double[] {1 << imgLevel, 1 << imgLevel, 1 << imgLevel};
+				this.heightfieldDownsamplingFactors = heightfieldDownsamplingFactors;
 			}
 
-			public double coordinate(final System toSystem, final int d) {
-				return (pos[d] + 0.5) * scaleFactor(this.system, toSystem, d) - 0.5;
+			public enum System {
+				FULL_RESOLUTION,
+				IMAGE,
+				HEIGHTFIELD
 			}
 
-			public double[] coordinate(final System toSystem) {
-				final double[] coordinate = new double[pos.length];
-				Arrays.setAll(coordinate, d -> coordinate(toSystem, d));
-				return coordinate;
+			public Coordinate image(final double ... pos) {
+				return new Coordinate(IMAGE, pos);
 			}
 
-			public double distance(final System toSystem, final int d) {
-				return pos[d] * scaleFactor(this.system, toSystem, d);
+			public Coordinate heightfield(final double ... pos) {
+				return new Coordinate(HEIGHTFIELD, pos);
 			}
 
-			public double[] distance(final System toSystem) {
-				final double[] distance = new double[pos.length];
-				Arrays.setAll(distance, d -> distance(toSystem, d));
-				return distance;
+			public Coordinate fullres(final double ... pos) {
+				return new Coordinate(FULL_RESOLUTION, pos);
+			}
+
+			public Coordinate fullres(final long ... pos) {
+				final double[] dpos = new double[pos.length];
+				Arrays.setAll(dpos, d -> pos[d]);
+				return new Coordinate(FULL_RESOLUTION, dpos);
+			}
+
+			public class Coordinate {
+				private final System system;
+				private final double[] pos;
+
+				public Coordinate(final System system, final double[] pos) {
+					this.system = system;
+					this.pos = pos;
+				}
+
+				public double coordinate(final System toSystem, final int d) {
+					return (pos[d] + 0.5) * scaleFactor(this.system, toSystem, d) - 0.5;
+				}
+
+				public double[] coordinate(final System toSystem) {
+					final double[] coordinate = new double[pos.length];
+					Arrays.setAll(coordinate, d -> coordinate(toSystem, d));
+					return coordinate;
+				}
+
+				public double distance(final System toSystem, final int d) {
+					return pos[d] * scaleFactor(this.system, toSystem, d);
+				}
+
+				public double[] distance(final System toSystem) {
+					final double[] distance = new double[pos.length];
+					Arrays.setAll(distance, d -> distance(toSystem, d));
+					return distance;
+				}
+			}
+
+			private double toFullRes(final System system, final int d) {
+				switch (system) {
+				case IMAGE:
+					return imgDownsamplingFactors[d];
+				case HEIGHTFIELD:
+					return heightfieldDownsamplingFactors[d];
+				case FULL_RESOLUTION:
+				default:
+					return 1.0;
+				}
+			}
+
+			private double scaleFactor(final System fromSystem, final System toSystem, final int d) {
+				return toFullRes(fromSystem, d) / toFullRes(toSystem, d);
+			}
+
+			public double transformCoordinate(final System fromSystem, final System toSystem, final int d, final double pos) {
+				return (pos + 0.5) * scaleFactor(fromSystem, toSystem, d) - 0.5;
+			}
+
+			public double transformDistance(final System fromSystem, final System toSystem, final int d, final double distance) {
+				return distance * scaleFactor(fromSystem, toSystem, d);
 			}
 		}
-
-		private double toFullRes(final System system, final int d) {
-			switch (system) {
-			case IMAGE:
-				return imgDownsamplingFactors[d];
-			case HEIGHTFIELD:
-				return hfDownsamplingFactors[d];
-			case FULL_RESOLUTION:
-			default:
-				return 1.0;
-			}
-		}
-
-		private double scaleFactor(final System fromSystem, final System toSystem, final int d) {
-			return toFullRes(fromSystem, d) / toFullRes(toSystem, d);
-		}
-
-		public double transformCoordinate(final System fromSystem, final System toSystem, final int d, final double pos) {
-			return (pos + 0.5) * scaleFactor(fromSystem, toSystem, d) - 0.5;
-		}
-
-		public double transformDistance(final System fromSystem, final System toSystem, final int d, final double distance) {
-			return distance * scaleFactor(fromSystem, toSystem, d);
-		}
-
 	}
 
 
@@ -425,18 +398,18 @@ public class ExtractStatic {
 				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, minModifiedX, fadeFlattenToIdentityDist,
 				positionField);
 
-		final RandomAccessibleInterval<UnsignedByteType> crop = fau.getCrop();
+
 		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
-		final RealRandomAccessible<DoubleType> absDisplacement =fau.getAbsDisplacement();
+		final RealRandomAccessible<DoubleType> absDisplacement = fau.getAbsDisplacement();
 
 
 		// --------------------------------------------------------------------
 		// show in BDV: crop, unwarped crop
 		// --------------------------------------------------------------------
-		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(crop), "crop", Bdv.options());
+		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(imgBrain), "imgBrain", Bdv.options());
 		bdv.getBdvHandle().getViewerPanel().setDisplayMode(DisplayMode.SINGLE);
-		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, crop, "unwarped", Bdv.options().addTo(bdv));
-		final BdvSource absDisplacementSource = BdvFunctions.show(absDisplacement, crop, "absolute displacement", Bdv.options().addTo(bdv));
+		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, imgBrain, "unwarped", Bdv.options().addTo(bdv));
+		final BdvSource absDisplacementSource = BdvFunctions.show(absDisplacement, imgBrain, "absolute displacement", Bdv.options().addTo(bdv));
 		absDisplacementSource.setColor(new ARGBType(0xff00ff));
 		absDisplacementSource.setDisplayRangeBounds(0, 200);
 		absDisplacementSource.setDisplayRange(0, 100);
