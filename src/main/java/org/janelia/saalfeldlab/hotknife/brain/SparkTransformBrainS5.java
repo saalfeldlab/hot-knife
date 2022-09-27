@@ -64,9 +64,8 @@ public class SparkTransformBrainS5 {
 		final String positionFieldGroup = "/flat.Sec37.bot.face";
 
 		final String n5PathOutput = "/nrs/flyem/render/n5/Z0720_07m_BR";
-		final String datasetNameOutput = args.length == 1 ? args[0] : "/trautmane_test/s5";
+		final String datasetNameOutput = args.length == 1 ? args[0] : "/preibischs_test/s5";
 
-		/*
 		final SparkConf conf = new SparkConf().setAppName( "SparkTransformBrainS5" );
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 
@@ -80,7 +79,7 @@ public class SparkTransformBrainS5 {
 				  positionFieldGroup,
 				  n5PathOutput,
 				  datasetNameOutput);
-		*/
+
 		display(n5PathInput, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup);
 	}
 
