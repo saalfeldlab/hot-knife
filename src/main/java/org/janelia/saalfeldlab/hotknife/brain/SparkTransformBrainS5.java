@@ -10,9 +10,15 @@ import org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.FlattenAndUnwarp;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.jetbrains.annotations.NotNull;
 
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
@@ -20,6 +26,7 @@ import bdv.util.BdvSource;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.DisplayMode;
 import bdv.viewer.ViewerPanel;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
@@ -27,13 +34,13 @@ import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
-import net.imglib2.view.RandomAccessibleOnRealRandomAccessible;
 import net.imglib2.view.Views;
 
 /**
  * Class to deform the brain using Spark and methods in ExtractStatic for the s5 downsampled brain
- * 
+ * <br/>
  * Goal:
  * 0) Make Tobi's code run on our s5 downsampled brain and the correct transformation field and heighfield (so paths are right)
  * 1) save the transformed brain to a new N5
@@ -47,7 +54,7 @@ public class SparkTransformBrainS5 {
 
 	public static void main( String[] args ) throws IOException
 	{
-		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s5";
+		final String n5PathInput = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s5";
 		final String imgGroup = ".";
 		final int n5Level = 5;
 
@@ -56,9 +63,67 @@ public class SparkTransformBrainS5 {
 
 		final String n5PathPositionField = "/nrs/flyem/render/n5/Z0720_07m_VNC/surface-align-VNC/06-37/run_20220908_121000/pass12_edit/";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield";
 		final String positionFieldGroup = "/flat.Sec37.bot.face";
-		
-		saveSpark(n5Path, imgGroup);
-		//display(n5Path, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup );
+
+		final String n5PathOutput = "/nrs/flyem/render/n5/Z0720_07m_BR";
+		final String datasetNameOutput = args.length == 1 ? args[0] : "/trautmane_test/s5";
+
+		final SparkConf conf = new SparkConf().setAppName( "SparkTransformBrainS5" );
+		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
+
+		saveSpark(sparkContext,
+				  n5PathInput,
+				  imgGroup,
+				  n5Level,
+				  n5PathHeightfield,
+				  heightfieldGroup,
+				  n5PathPositionField,
+				  positionFieldGroup,
+				  n5PathOutput,
+				  datasetNameOutput);
+
+//		display(n5PathInput, imgGroup, n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup);
+	}
+
+	@NotNull
+	private static FlattenAndUnwarp buildFlattenAndUnwarp(final int n5Level,
+														  final String n5PathHeightfield,
+														  final String heightfieldGroup,
+														  final String n5PathPositionField,
+														  final String positionFieldGroup,
+														  final RandomAccessibleInterval<UnsignedByteType> imgBrain)
+			throws IOException {
+		final long[] minIntervalS0 = {47204, 46557, 42756};
+		final long[] maxIntervalS0 = {55779, 59038, 53664};
+
+		// --------------------------------------------------------------------
+		// load heightfield
+		// --------------------------------------------------------------------
+		final MyHeightField hf = new MyHeightField(n5PathHeightfield,
+												   heightfieldGroup,
+												   new double[] {6, 6, 1},
+												   4658.6666161072235);
+		final RandomAccessibleInterval<FloatType> heightfield = hf.heightfield();
+		final double[] hfDownsamplingFactors = hf.downsamplingFactors();
+		final double avg = hf.avg();
+		final double[] plane = {2.004294094052206, -1.8362464688517335, 4243.432822291761};
+		final int fadeToPlaneDist = 1000;
+		final int fadeToAvgDist = 2000;
+		final double max = 500; // TODO: max should be <= 335 to match stuart's line
+
+		// --------------------------------------------------------------------
+		// load position field
+		// --------------------------------------------------------------------
+		final N5Reader n5PositionField = new N5FSReader(n5PathPositionField);
+		final PositionField positionField = new PositionField(n5PositionField, positionFieldGroup);
+
+		// --------------------------------------------------------------------
+		// flatten and unwarp
+		// --------------------------------------------------------------------
+		return new FlattenAndUnwarp(
+				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
+				heightfield, avg, plane, hfDownsamplingFactors,
+				fadeToPlaneDist, fadeToAvgDist, max, 1000,
+				positionField);
 	}
 
 	public static void display(
@@ -79,42 +144,16 @@ public class SparkTransformBrainS5 {
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final RandomAccessibleInterval<UnsignedByteType> imgBrain = N5Utils.openVolatile(n5, imgGroup);
 
-		final long[] minIntervalS0 = {47204, 46557, 42756};
-		final long[] maxIntervalS0 = {55779, 59038, 53664};
-
-
-		// --------------------------------------------------------------------
-		// load heightfield
-		// --------------------------------------------------------------------
-		final MyHeightField hf = new MyHeightField(n5PathHeightfield, heightfieldGroup, new double[] {6, 6, 1}, 4658.6666161072235);
-		final RandomAccessibleInterval<FloatType> heightfield = hf.heightfield();
-		final double[] hfDownsamplingFactors = hf.downsamplingFactors();
-		final double avg = hf.avg();
-		final double[] plane = {2.004294094052206, -1.8362464688517335, 4243.432822291761};
-		final int fadeToPlaneDist = 1000;
-		final int fadeToAvgDist = 2000;
-		final double max = 500; // TODO: max should be <= 335 to match stuart's line
-
-
-		// --------------------------------------------------------------------
-		// load position field
-		// --------------------------------------------------------------------
-		final N5Reader n5PositionField = new N5FSReader(n5PathPositionField);
-		final PositionField positionField = new PositionField(n5PositionField, positionFieldGroup);
-
-
-		// --------------------------------------------------------------------
-		// flatten and unwarp
-		// --------------------------------------------------------------------
-		FlattenAndUnwarp fau = new FlattenAndUnwarp(
-				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
-				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, max, 1000,
-				positionField);
+		final FlattenAndUnwarp fau = buildFlattenAndUnwarp(n5Level,
+														   n5PathHeightfield,
+														   heightfieldGroup,
+														   n5PathPositionField,
+														   positionFieldGroup,
+														   imgBrain);
 
 		final RandomAccessibleInterval<UnsignedByteType> crop = fau.getCrop();
 		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
 		final RealRandomAccessible<DoubleType> absDisplacement =fau.getAbsDisplacement();
-
 
 		// --------------------------------------------------------------------
 		// show in BDV: crop, unwarped crop
@@ -127,66 +166,107 @@ public class SparkTransformBrainS5 {
 		absDisplacementSource.setDisplayRangeBounds(0, 200);
 		absDisplacementSource.setDisplayRange(0, 100);
 
-
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
 	}
 
-	public static void saveBlock()
-	{
-		// ....
-		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = null;//fau.getUnwarpedCrop();
+	public static void saveBlock(final String n5PathInput,
+								 final String imgGroup,
+								 final int n5Level,
+								 final String n5PathHeightfield,
+								 final String heightfieldGroup,
+								 final String n5PathPositionField,
+								 final String positionFieldGroup,
+								 final long[] dimensions,
+								 final int[] blockSize,
+								 final long[][] gridBlock,
+								 final String n5PathOutput,
+								 final String datasetNameOutput)
+			throws IOException {
+
+		final N5Reader n5Input = new N5FSReader(n5PathInput);
+		final RandomAccessibleInterval<UnsignedByteType> imgBrain = N5Utils.openVolatile(n5Input, imgGroup);
+		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+
+		final FlattenAndUnwarp fau = buildFlattenAndUnwarp(n5Level,
+														   n5PathHeightfield,
+														   heightfieldGroup,
+														   n5PathPositionField,
+														   positionFieldGroup,
+														   imgBrain);
+
+		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
 
 		// raster it (onto the pixel grid)
 		final RandomAccessible<UnsignedByteType> rasteredUnwarpedCrop = Views.raster( unwarpedCrop );
 
 		// save it given the grid[][] location to the new n5
-		//N5Utils.saveNonEmptyBlock(
-		//		Views.interval( ...
+		final FinalInterval gridBlockInterval = Intervals.createMinSize(
+				gridBlock[0][0],
+				gridBlock[0][1],
+				gridBlock[0][2],
+
+				gridBlock[1][0],
+				gridBlock[1][1],
+				gridBlock[1][2]);
+
+        N5Utils.saveNonEmptyBlock(
+                Views.interval(
+						rasteredUnwarpedCrop,
+                        gridBlockInterval),
+                n5Output,
+                datasetNameOutput,
+                new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+                gridBlock[2],
+                new UnsignedByteType());
 	}
 	
 	public static void saveSpark(
-			final String n5Path,
-			final String imgGroup ) throws IOException
+			final JavaSparkContext sparkContext,
+			final String n5PathInput,
+			final String imgGroup,
+			final int n5Level,
+			final String n5PathHeightfield,
+			final String heightfieldGroup,
+			final String n5PathPositionField,
+			final String positionFieldGroup,
+			final String n5PathOutput,
+			final String datasetNameOutput) throws IOException
 	{
-		final N5Reader n5 = new N5FSReader(n5Path);
-		final long[] dim = n5.getAttribute(imgGroup, "dimensions", long[].class );
+		final N5Reader n5 = new N5FSReader(n5PathInput);
+		final long[] dimensions = n5.getAttribute(imgGroup, "dimensions", long[].class );
 		final int[] blockSize = n5.getAttribute(imgGroup, "blockSize", int[].class );
-		System.out.println( "dimensions: " + Util.printCoordinates( dim ) + ", blocksize: " + Util.printCoordinates(blockSize) );
+		System.out.println( "dimensions: " + Util.printCoordinates( dimensions ) +
+							", blocksize: " + Util.printCoordinates(blockSize) );
 
-		final List<long[][]> grid = Grid.create(dim, new int[]{blockSize[0] * 4, blockSize[1] * 4, blockSize[2] * 4}, blockSize);
+		final List<long[][]> grid = Grid.create(dimensions,
+												new int[] {
+														blockSize[0] * 4,
+														blockSize[1] * 4,
+														blockSize[2] * 4
+												},
+												blockSize);
 
 		System.out.println( grid.size() + " jobs." );
 
-		//N5Utils.openVolatile(n5, imgGroup);
-
-		final SparkConf conf = new SparkConf().setAppName( "SparkTransformBrainS5" );
-		final JavaSparkContext sc = new JavaSparkContext(conf);
-
-		final JavaRDD<long[][]> pGrid = sc.parallelize(grid);
+		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 
 		pGrid.foreach(
-				gridBlock -> {
-					/*
-					saveBlock(
-							n5PathInput,
-							n5PathOutput,
-							datasetNames,
-							group,
-							datasetNameOutput,
-							transformDatasetNames,
-							topOffsets,
-							botOffsets,
-							min,
-							max,
-							dimensions,
-							blockSize,
-							gridBlock,
-							normalizeContrast);*/
-				});
+				gridBlock -> saveBlock(n5PathInput,
+									   imgGroup,
+									   n5Level,
+									   n5PathHeightfield,
+									   heightfieldGroup,
+									   n5PathPositionField,
+									   positionFieldGroup,
+									   dimensions,
+									   blockSize,
+									   gridBlock,
+									   n5PathOutput,
+									   datasetNameOutput));
 
-		sc.close();
+		sparkContext.close();
 
 	}
 }
