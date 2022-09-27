@@ -31,30 +31,32 @@ import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
-public class ExtractStatic {
+import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.Scale.System.FULL_RESOLUTION;
+import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.Scale.System.HEIGHTFIELD;
+import static org.janelia.saalfeldlab.hotknife.brain.ExtractStatic.Scale.System.IMAGE;
 
+public class ExtractStatic {
 
 	public static class FlattenAndUnwarp {
 
+		private final Scale scale;
+
 		private final RandomAccessibleInterval<UnsignedByteType> imgBrain; // --> img
 		private final int n5Level; // --> imgLevel
-		private final long[] minIntervalS0; // --> cropMin
-		private final long[] maxIntervalS0; // --> cropMax
+		private final Scale.Coordinate cropMin;
+		private final Scale.Coordinate cropMax;
 
 
 		private final RandomAccessibleInterval<FloatType> heightfield;
-		private final double avg; // --> heightfieldAvg
-		private final double[] plane; // --> heightfieldPlane
+		private final double heightfieldAvg; // --> heightfieldAvg
+		private final double[] heightfieldPlane; // --> heightfieldPlane
 		private final double[] hfDownsamplingFactors; // --> heightfieldDownsamplingFactors
 
-		private final int fadeToPlaneDist; // TODO: is in heightfield resolution, should be in full resolution
-		private final int fadeToAvgDist;  // TODO: is in heightfield resolution, should be in full resolution
+		private final int fadeToPlaneDist;
+		private final int fadeToAvgDist;
 
-		// TODO: is in img resolution, should be in full resolution.
-		//       is in crop-relative coordinates, should be full volume relative.
-		private final double max; // --> minModifiedX
-		// TODO: is in img resolution, should be in full resolution.
-		//       is in crop-relative coordinates, should be full volume relative.
+		private final double minModifiedX;
+
 		private double fadeFlattenToIdentityDist;
 		private PositionField positionField;
 
@@ -68,23 +70,43 @@ public class ExtractStatic {
 
 
 		/**
-		 * @param img image to flatten and unwarp
-		 * @param imgLevel resolution level of {@code img} (in power-of-two
-		 * 			downsampling pyramid), that is, length {@code l} in {@code img} is
-		 * 			length {@code l * 2^imgLevel} in full resolution.
-		 *
-		 * @param cropMin minimum of the crop region (in full resolution pixel coordinates).
-		 * @param cropMin maximum of the crop region (in full resolution pixel coordinates).
-		 *          The crop region is what the height field (for flattening) and position field (for unwarping) were computed on.
-		 *          We need to know the crop region to properly translate the fields to align with the full image.
-		 *
-		 * @param heightfield TODO
-		 * @param heightfieldAvg TODO
-		 * @param heightfieldPlane TODO
-		 * @param heightfieldDownsamplingFactors TODO
-		 *
-		 * @param fadeToPlaneDist TODO
-		 * @param fadeToAvgDist TODO
+		 * @param img
+		 * 		image to flatten and unwarp
+		 * @param imgLevel
+		 * 		resolution level of {@code img} (in power-of-two downsampling pyramid), that is,
+		 * 		length {@code l} in {@code img} is length {@code l * 2^imgLevel} in full
+		 * 		resolution.
+		 * @param cropMin
+		 * 		minimum of the crop region (in full resolution pixel coordinates).
+		 * @param cropMin
+		 * 		maximum of the crop region (in full resolution pixel coordinates). The crop
+		 * 		region is what the height field (for flattening) and position field (for
+		 * 		unwarping) were computed on. We need to know the crop region to properly
+		 * 		translate the fields to align with the full image.
+		 * @param heightfield
+		 * 		2D heightfield (value at coordinate xy is the z height). The heightfield
+		 * 		coordinates and value may are scaled by {@code heightfieldDownsamplingFactors}
+		 * 		wrt full resolution.
+		 * @param heightfieldAvg
+		 * 		average value of the heightfield (in heightfield scaled coordinates).
+		 * @param heightfieldPlane
+		 * 		average plane of the heightfield. {@code heightfieldPlane = {a,b,c} represents
+		 * 		the plane {@code z = ax + by + c}. (in heightfield scaled coordinates)
+		 * @param heightfieldDownsamplingFactors
+		 * 		downsampling factors wrt full resolution in X, Y (coordinates), and Z (values).
+		 * @param fadeToPlaneDist
+		 * 		The distance from the border of the heightfield (in full resolution pixel
+		 * 		coordinates), where the extended heightfield fades to {@code heightfieldPlane}.
+		 * @param fadeToAvgDist
+		 * 		The distance (in full resolution pixel coordinates) from the border of the
+		 * 		heightfield, where the extended heightfield fades to {@code heightfieldAvg}.
+		 * @param minModifiedX
+		 * 		nothing below this X coordinate (in full resolution pixel coordinates) must be
+		 * 		modified by the transformation
+		 * @param fadeFlattenToIdentityDist
+		 * 		distance (in X) from flattened surface where the heightfield transform fades
+		 * 		back to identity (in full resolution pixel coordinates)
+		 * @param positionField
 		 */
 		public FlattenAndUnwarp(
 				final RandomAccessibleInterval<UnsignedByteType> img, // imgBrain
@@ -98,30 +120,26 @@ public class ExtractStatic {
 				final double[] heightfieldPlane, // plane
 				final double[] heightfieldDownsamplingFactors, // hfDownsamplingFactors
 
-				final int fadeToPlaneDist, // TODO: is in heightfield resolution, should be in full resolution
-				final int fadeToAvgDist,  // TODO: is in heightfield resolution, should be in full resolution
-				// TODO: max should be <= 335 to match stuart's line
-				// TODO: is in img resolution, should be in full resolution.
-				//       is in crop-relative coordinates, should be full volume relative.
-				final double minModifiedX, // max
-				// TODO: is in img resolution, should be in full resolution.
-				//       is in crop-relative coordinates, should be full volume relative.
-				final double fadeFlattenToIdentityDist, // extendFlattenTransform(..., fadeDist) argument
+				final int fadeToPlaneDist,
+				final int fadeToAvgDist,
+				final double minModifiedX,
+				final double fadeFlattenToIdentityDist,
 
 				final PositionField positionField
 		)
 		{
+			this.scale = new Scale(imgLevel, heightfieldDownsamplingFactors);
 			this.imgBrain = img;
 			this.n5Level = imgLevel;
-			this.minIntervalS0 = cropMin;
-			this.maxIntervalS0 = cropMax;
+			this.cropMin = scale.fullres(cropMin);
+			this.cropMax = scale.fullres(cropMax);
 			this.heightfield = heightfield;
-			this.avg = heightfieldAvg;
-			this.plane = heightfieldPlane;
+			this.heightfieldAvg = heightfieldAvg;
+			this.heightfieldPlane = heightfieldPlane;
 			this.hfDownsamplingFactors = heightfieldDownsamplingFactors;
 			this.fadeToPlaneDist = fadeToPlaneDist;
 			this.fadeToAvgDist = fadeToAvgDist;
-			this.max = minModifiedX;
+			this.minModifiedX = minModifiedX;
 			this.fadeFlattenToIdentityDist = fadeFlattenToIdentityDist;
 			this.positionField = positionField;
 
@@ -129,9 +147,8 @@ public class ExtractStatic {
 		}
 
 		private void unwarp() {
-			final long[] minInterval = lscale(minIntervalS0, n5Level);
-			final long[] maxInterval = lscale(maxIntervalS0, n5Level);
-
+			final long[] minInterval = round(cropMin.coordinate(IMAGE));
+			final long[] maxInterval = round(cropMax.coordinate(IMAGE));
 
 			final RandomAccessibleInterval<UnsignedByteType> crop1 = Views.rotate(imgBrain, 1, 0 );
 			final RandomAccessibleInterval<UnsignedByteType> crop2 = Views.permute(crop1, 1, 2 );
@@ -147,18 +164,25 @@ public class ExtractStatic {
 			// --------------------------------------------------------------------
 			// expand heightfield
 			// --------------------------------------------------------------------
-			final RandomAccessible<FloatType> extendHeightfield = ExtendHeightField.extendHeightfield(heightfield, avg, plane, fadeToPlaneDist, fadeToAvgDist);
+			final RandomAccessible<FloatType> extendHeightfield = ExtendHeightField.extendHeightfield(
+					heightfield,
+					heightfieldAvg,
+					heightfieldPlane,
+					scale.transformDistance(FULL_RESOLUTION, HEIGHTFIELD, 0, fadeToPlaneDist),
+					scale.transformDistance(FULL_RESOLUTION, HEIGHTFIELD, 0, fadeToAvgDist));
 
 
 			// --------------------------------------------------------------------
 			// flatten crop with expanded heightfield
 			// --------------------------------------------------------------------
-			final double[] n5DownsamplingFactors = {1 << n5Level, 1 << n5Level, 1 << n5Level};
+			final double[] n5DownsamplingFactors = scale.imgDownsamplingFactors();
 			final double[] hfRelativeScale = new double[3];
 			Arrays.setAll(hfRelativeScale, d -> hfDownsamplingFactors[d] / n5DownsamplingFactors[d]);
 			final RealRandomAccessible<DoubleType> scaledHeightfield = Transform.scaleAndShiftHeightFieldAndValues(extendHeightfield, hfRelativeScale);
-			final double scaledAvg = (avg + 0.5) * hfRelativeScale[2] - 0.5;
-			final RealTransform flatten = ExtendFlattenTransform.extendFlattenTransform(scaledHeightfield, scaledAvg, max, fadeFlattenToIdentityDist);
+			final double minZ = scale.transformCoordinate(HEIGHTFIELD, IMAGE, 2, heightfieldAvg);
+			final double maxZ = scale.transformCoordinate(FULL_RESOLUTION, IMAGE, 0, cropMax.coordinate(FULL_RESOLUTION, 0) - minModifiedX);
+			final double fade = scale.transformDistance(FULL_RESOLUTION, IMAGE, 0, fadeFlattenToIdentityDist);
+			final RealTransform flatten = ExtendFlattenTransform.extendFlattenTransform(scaledHeightfield, minZ, maxZ, fade);
 
 
 			// --------------------------------------------------------------------
@@ -170,8 +194,8 @@ public class ExtractStatic {
 					new ClippedTransitionRealTransform(
 							transformedPositionField.getTransform(),
 							IdentityTransform.get(),
-							scaledAvg,
-							max);
+							minZ,
+							maxZ);
 
 
 			// --------------------------------------------------------------------
@@ -228,7 +252,125 @@ public class ExtractStatic {
 			Arrays.setAll(spos, d -> pos[d] >> level);
 			return spos;
 		}
+
+		private static long[] round(double[] pos) {
+			final long[] spos = new long[pos.length];
+			Arrays.setAll(spos, d -> Math.round(pos[d]));
+			return spos;
+		}
 	}
+
+
+
+
+
+
+
+
+
+	public static class Scale {
+		private final double[] imgDownsamplingFactors;
+		private final double[] hfDownsamplingFactors; // --> heightfieldDownsamplingFactors
+
+		public Scale(
+				final int imgLevel,
+				final double[] heightfieldDownsamplingFactors) {
+			this.imgDownsamplingFactors = new double[] {1 << imgLevel, 1 << imgLevel, 1 << imgLevel};
+			this.hfDownsamplingFactors = heightfieldDownsamplingFactors;
+
+			final double[] hfRelativeScale = new double[3];
+			Arrays.setAll(hfRelativeScale, d -> hfDownsamplingFactors[d] / imgDownsamplingFactors[d]);
+		}
+
+		public double[] imgDownsamplingFactors() {
+			return imgDownsamplingFactors;
+		}
+
+		public double[] heightfieldDownsamplingFactors() {
+			return hfDownsamplingFactors;
+		}
+
+		enum System {
+			FULL_RESOLUTION,
+			IMAGE,
+			HEIGHTFIELD
+		}
+
+		public Coordinate image(final double ... pos) {
+			return new Coordinate(IMAGE, pos);
+		}
+
+		public Coordinate heightfield(final double ... pos) {
+			return new Coordinate(HEIGHTFIELD, pos);
+		}
+
+		public Coordinate fullres(final double ... pos) {
+			return new Coordinate(FULL_RESOLUTION, pos);
+		}
+
+		public Coordinate fullres(final long ... pos) {
+			final double[] dpos = new double[pos.length];
+			Arrays.setAll(dpos, d -> pos[d]);
+			return new Coordinate(FULL_RESOLUTION, dpos);
+		}
+
+		public class Coordinate {
+			private final System system;
+			private final double[] pos;
+
+			public Coordinate(final System system, final double[] pos) {
+				this.system = system;
+				this.pos = pos;
+			}
+
+			public double coordinate(final System toSystem, final int d) {
+				return (pos[d] + 0.5) * scaleFactor(this.system, toSystem, d) - 0.5;
+			}
+
+			public double[] coordinate(final System toSystem) {
+				final double[] coordinate = new double[pos.length];
+				Arrays.setAll(coordinate, d -> coordinate(toSystem, d));
+				return coordinate;
+			}
+
+			public double distance(final System toSystem, final int d) {
+				return pos[d] * scaleFactor(this.system, toSystem, d);
+			}
+
+			public double[] distance(final System toSystem) {
+				final double[] distance = new double[pos.length];
+				Arrays.setAll(distance, d -> distance(toSystem, d));
+				return distance;
+			}
+		}
+
+		private double toFullRes(final System system, final int d) {
+			switch (system) {
+			case IMAGE:
+				return imgDownsamplingFactors[d];
+			case HEIGHTFIELD:
+				return hfDownsamplingFactors[d];
+			case FULL_RESOLUTION:
+			default:
+				return 1.0;
+			}
+		}
+
+		private double scaleFactor(final System fromSystem, final System toSystem, final int d) {
+			return toFullRes(fromSystem, d) / toFullRes(toSystem, d);
+		}
+
+		public double transformCoordinate(final System fromSystem, final System toSystem, final int d, final double pos) {
+			return (pos + 0.5) * scaleFactor(fromSystem, toSystem, d) - 0.5;
+		}
+
+		public double transformDistance(final System fromSystem, final System toSystem, final int d, final double distance) {
+			return distance * scaleFactor(fromSystem, toSystem, d);
+		}
+
+	}
+
+
 
 
 	// Apply heightfield transform to full volume (transformed to crop coordinates), then apply position field
@@ -259,9 +401,10 @@ public class ExtractStatic {
 		final double[] hfDownsamplingFactors = hf.downsamplingFactors();
 		final double avg = hf.avg();
 		final double[] plane = {2.004294094052206, -1.8362464688517335, 4243.432822291761};
-		final int fadeToPlaneDist = 1000;
-		final int fadeToAvgDist = 2000;
-		final double max = 500; // TODO: max should be <= 335 to match stuart's line
+		final int fadeToPlaneDist = 6000;
+		final int fadeToAvgDist = 12000;
+		final double minModifiedX = 45046;
+//		final double minModifiedX = maxIntervalS0[ 0 ] - (500 << n5Level);
 
 
 		// --------------------------------------------------------------------
@@ -276,9 +419,10 @@ public class ExtractStatic {
 		// --------------------------------------------------------------------
 		// flatten and unwarp
 		// --------------------------------------------------------------------
+		final int fadeFlattenToIdentityDist = 32000;
 		FlattenAndUnwarp fau = new FlattenAndUnwarp(
 				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
-				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, max, 1000,
+				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, minModifiedX, fadeFlattenToIdentityDist,
 				positionField);
 
 		final RandomAccessibleInterval<UnsignedByteType> crop = fau.getCrop();
