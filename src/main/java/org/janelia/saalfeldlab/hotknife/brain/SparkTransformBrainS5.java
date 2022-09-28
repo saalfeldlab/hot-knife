@@ -91,7 +91,7 @@ public class SparkTransformBrainS5 {
 														  final String positionFieldGroup,
 														  final RandomAccessibleInterval<UnsignedByteType> imgBrain)
 			throws IOException {
-		return buildFlattenAndUnwarp(n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup, imgBrain, false);
+		return buildFlattenAndUnwarp(n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup, imgBrain, true);
 	}
 
 		@NotNull
@@ -101,7 +101,7 @@ public class SparkTransformBrainS5 {
 														  final String n5PathPositionField,
 														  final String positionFieldGroup,
 														  final RandomAccessibleInterval<UnsignedByteType> imgBrain,
-														  final boolean dontShift)
+														  final boolean doShift)
 			throws IOException {
 		final long[] minIntervalS0 = {47204, 46557, 42756};
 		final long[] maxIntervalS0 = {55779, 59038, 53664};
@@ -138,7 +138,7 @@ public class SparkTransformBrainS5 {
 		return new FlattenAndUnwarp(
 				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
 				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, minModifiedX, fadeFlattenToIdentityDist,
-				positionField, dontShift ? 0 : yshift, yshiftFadeInPlane, yshiftFadeOrtho);
+				positionField, doShift ? yshift : 0, yshiftFadeInPlane, yshiftFadeOrtho);
 	}
 
 	public static void display(

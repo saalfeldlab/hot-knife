@@ -107,7 +107,7 @@ public class PlaygroundStitch3 {
 				"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield",
 				"/flat.Sec37.bot.face",
 				imgBrain,
-				true);
+				false);
 		final BdvSource unwarpedNoShiftSource = BdvFunctions.show(fauNoShift.getUnwarpedCrop(), imgBrain, "unwarped no shift", Bdv.options().addTo(bdv));
 
 		final RealRandomAccessible<DoubleType> absDisplacement = fau.getAbsDisplacement();
