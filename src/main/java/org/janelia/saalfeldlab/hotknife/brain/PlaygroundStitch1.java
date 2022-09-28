@@ -7,19 +7,22 @@ import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.DisplayMode;
 import bdv.viewer.ViewerPanel;
 import java.io.IOException;
+import java.util.Arrays;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.IntervalView;
+import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
-public class ExtractStatic {
+public class PlaygroundStitch1 {
 
 
 	// Apply heightfield transform to full volume (transformed to crop coordinates), then apply position field
@@ -69,14 +72,13 @@ public class ExtractStatic {
 		// flatten and unwarp
 		// --------------------------------------------------------------------
 		final int fadeFlattenToIdentityDist = 32000;
+		final int yshift = 960; // = 30 * 32
+		final int yshiftFadeInPlane = 6400; // = 200 * 32
+		final int yshiftFadeOrtho = 3200; // = 100 * 32
 		FlattenAndUnwarp fau = new FlattenAndUnwarp(
 				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
 				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, minModifiedX, fadeFlattenToIdentityDist,
-				positionField,0, 1, 1);
-
-
-		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
-		final RealRandomAccessible<DoubleType> absDisplacement = fau.getAbsDisplacement();
+				positionField, yshift, yshiftFadeInPlane, yshiftFadeOrtho);
 
 
 		// --------------------------------------------------------------------
@@ -84,11 +86,56 @@ public class ExtractStatic {
 		// --------------------------------------------------------------------
 		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(imgBrain), "imgBrain", Bdv.options());
 		bdv.getBdvHandle().getViewerPanel().setDisplayMode(DisplayMode.SINGLE);
+
+		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
 		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, imgBrain, "unwarped", Bdv.options().addTo(bdv));
+
+
+
+		FlattenAndUnwarp fauNoShift = new FlattenAndUnwarp(
+				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
+				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, minModifiedX, fadeFlattenToIdentityDist,
+				positionField, 0, yshiftFadeInPlane, yshiftFadeOrtho);
+		final BdvSource unwarpedNoShiftSource = BdvFunctions.show(fauNoShift.getUnwarpedCrop(), imgBrain, "unwarped no shift", Bdv.options().addTo(bdv));
+
+
+
+
+		// --------------------------------------------------------------------
+		// load and crop VNC image
+		// --------------------------------------------------------------------
+		final String VNCn5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/vnc.n5/";
+		final String VNCimgGroup = "setup0/timepoint0/s0/";
+
+		final N5Reader VNCn5 = new N5FSReader(VNCn5Path);
+		final RandomAccessibleInterval<UnsignedByteType> imgVNC = N5Utils.openVolatile(VNCn5, VNCimgGroup);
+
+		RandomAccessibleInterval<UnsignedByteType> viewVNC = Views.rotate(imgVNC, 2, 0);
+		viewVNC = Views.rotate(viewVNC, 1, 2);
+		viewVNC = Views.zeroMin(viewVNC);
+		viewVNC = Views.translate(viewVNC, fau.getVncTranslation());
+
+
+
+		final RealRandomAccessible<DoubleType> absDisplacement = fau.getAbsDisplacement();
 		final BdvSource absDisplacementSource = BdvFunctions.show(absDisplacement, imgBrain, "absolute displacement", Bdv.options().addTo(bdv));
 		absDisplacementSource.setColor(new ARGBType(0xff00ff));
 		absDisplacementSource.setDisplayRangeBounds(0, 200);
 		absDisplacementSource.setDisplayRange(0, 100);
+
+		final BdvSource imgVNCSource = BdvFunctions.show(VolatileViews.wrapAsVolatile(viewVNC), "imgVNC", Bdv.options().addTo(bdv));
+		imgVNCSource.setColor(new ARGBType(0x00ff00));
+
+
+//		// --------------------------------------------------------------------
+//		// transform back to original image coordinates
+//		// --------------------------------------------------------------------
+//		final AffineTransform3D uncrop = new AffineTransform3D();
+//		uncrop.set(
+//				0, 1, 0, translation[0],
+//				0, 0, 1, translation[1],
+//				-1, 0, 0, translation[2]);
+
 
 
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();

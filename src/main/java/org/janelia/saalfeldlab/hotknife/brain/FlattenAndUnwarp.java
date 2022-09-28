@@ -1,6 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.brain;
 
 import java.util.Arrays;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
@@ -61,6 +62,7 @@ public class FlattenAndUnwarp {
 	// outputs
 	private final RealRandomAccessible<UnsignedByteType> unwarpedCrop;
 	private final RealRandomAccessible<DoubleType> absDisplacement;
+	private final long[] vncTranslation;
 
 
 	/**
@@ -101,6 +103,12 @@ public class FlattenAndUnwarp {
 	 * 		distance (in X) from flattened surface where the heightfield transform fades
 	 * 		back to identity (in full resolution pixel coordinates)
 	 * @param positionField
+	 * @param yshift
+	 * 		TODO
+	 * @param yshiftFadeInPlane
+	 * 		TODO
+	 * @param yshiftFadeOrtho
+	 * 		TODO
 	 */
 	public FlattenAndUnwarp(
 			final RandomAccessibleInterval<UnsignedByteType> img, // imgBrain
@@ -119,7 +127,11 @@ public class FlattenAndUnwarp {
 			final double minModifiedX,
 			final double fadeFlattenToIdentityDist,
 
-			final PositionField positionField
+			final PositionField positionField,
+
+			final int yshift,
+			final int yshiftFadeInPlane,
+			final int yshiftFadeOrtho
 	) {
 		this.scale = new Scale(imgLevel, heightfieldDownsamplingFactors);
 		this.img = img;
@@ -135,7 +147,6 @@ public class FlattenAndUnwarp {
 		this.minModifiedX = minModifiedX;
 		this.fadeFlattenToIdentityDist = fadeFlattenToIdentityDist;
 		this.positionField = positionField;
-
 
 		final long[] minInterval = round(this.cropMin.coordinate(IMAGE));
 		final long[] maxInterval = round(this.cropMax.coordinate(IMAGE));
@@ -198,13 +209,38 @@ public class FlattenAndUnwarp {
 				-1, 0, 0, translation[2]);
 
 
+		final int iyshift = (int) scale.transformDistance(FULL_RESOLUTION, IMAGE, 0, yshift);
+		final int iyshiftFadeInPlane = (int) scale.transformDistance(FULL_RESOLUTION, IMAGE, 0, yshiftFadeInPlane);
+		final int iyshiftFadeOrtho = (int) scale.transformDistance(FULL_RESOLUTION, IMAGE, 0, yshiftFadeOrtho);
+		final FinalInterval interval = Intervals.createMinSize(
+				-iyshift, 0, (long) minZ,
+				maxInterval[1] - minInterval[1] + 1,
+				maxInterval[2] - minInterval[2] + 1,
+				1);
+		final double[] shift = {-iyshift, 0, 0};
+		final double[] weights = {iyshiftFadeInPlane, iyshiftFadeInPlane, iyshiftFadeOrtho};
+		final RealTransform intervalShift = new PlaneIntervalShift(2, interval, shift, weights);
+
+
+
+
+
+
+
+
 		// --------------------------------------------------------------------
 		// concatenate flattening and position field transform
 		// --------------------------------------------------------------------
 		final RealTransformSequence tfseq = new RealTransformSequence();
 		tfseq.add(uncrop);
+		if ( yshift != 0 )
+			tfseq.add(intervalShift);
 		tfseq.add(transition);
 		tfseq.add(flatten);
+
+		final RealTransformSequence tfseq2 = new RealTransformSequence();
+		tfseq2.add(tfseq);
+		tfseq2.add(uncrop.inverse());
 
 
 		unwarpedCrop = new RealTransformRealRandomAccessible<>(
@@ -219,7 +255,7 @@ public class FlattenAndUnwarp {
 				() -> {
 					final double[] p1 = new double[3];
 					final double[] p2 = new double[3];
-					final RealTransform transform = tfseq.copy();
+					final RealTransform transform = tfseq2.copy();
 					return (pos, t) -> {
 						pos.localize(p1);
 						transform.apply(p1, p2);
@@ -227,6 +263,23 @@ public class FlattenAndUnwarp {
 					};
 				},
 				DoubleType::new);
+
+//		final TransformedPositionField t2 = new TransformedPositionField(
+//				positionField,
+//				imgLevel, new long[] {minInterval[1], minInterval[2]});
+//		System.out.println("t2.pfToImgX(0)                       = " + t2.pfToImgX(0));
+//		System.out.println("transformedPositionField.pfToImgX(0) = " + transformedPositionField.pfToImgX(0));
+//		System.out.println("minInterval[1] = " + minInterval[1]);
+//		System.out.println("t2.pfToImgY(0)                       = " + t2.pfToImgY(0));
+//		System.out.println("transformedPositionField.pfToImgY(0) = " + transformedPositionField.pfToImgY(0));
+//		System.out.println("minInterval[2] = " + minInterval[2]);
+
+
+		vncTranslation = new long[] {
+				(long) (this.cropMax.coordinate(IMAGE, 0) - minZ + 1),
+				(long) (transformedPositionField.pfToImgX(0) + minInterval[1] - iyshift),
+				(long) (transformedPositionField.pfToImgY(0) + minInterval[2])
+		};
 	}
 
 	public RealRandomAccessible<DoubleType> getAbsDisplacement() {
@@ -237,13 +290,15 @@ public class FlattenAndUnwarp {
 		return unwarpedCrop;
 	}
 
+	public long[] getVncTranslation() {
+		return vncTranslation;
+	}
+
 	private static long[] round(double[] pos) {
 		final long[] spos = new long[pos.length];
 		Arrays.setAll(spos, d -> Math.round(pos[d]));
 		return spos;
 	}
-
-
 
 
 	public static class Scale {
@@ -354,6 +409,16 @@ public class FlattenAndUnwarp {
 
 		// interpolated relative position field
 		private final RealRandomAccessible<DoubleType> irpf;
+
+		public double pfToImgX(final double pfX)
+		{
+			return (pfX + pfOffsetX)  * pfToImgScale + imgCropMinX;
+		}
+
+		public double pfToImgY(final double pfY)
+		{
+			return (pfY + pfOffsetY)  * pfToImgScale + imgCropMinY;
+		}
 
 		public double imgToPfX(final double imgX)
 		{

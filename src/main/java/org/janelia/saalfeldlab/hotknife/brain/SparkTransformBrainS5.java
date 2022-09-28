@@ -123,7 +123,7 @@ public class SparkTransformBrainS5 {
 		return new FlattenAndUnwarp(
 				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
 				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, minModifiedX, fadeFlattenToIdentityDist,
-				positionField);
+				positionField, 0, 1, 1);
 	}
 
 	public static void display(
