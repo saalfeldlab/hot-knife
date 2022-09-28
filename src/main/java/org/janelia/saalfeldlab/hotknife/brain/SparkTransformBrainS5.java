@@ -84,12 +84,24 @@ public class SparkTransformBrainS5 {
 	}
 
 	@NotNull
-	private static FlattenAndUnwarp buildFlattenAndUnwarp(final int n5Level,
+	public static FlattenAndUnwarp buildFlattenAndUnwarp(final int n5Level,
 														  final String n5PathHeightfield,
 														  final String heightfieldGroup,
 														  final String n5PathPositionField,
 														  final String positionFieldGroup,
 														  final RandomAccessibleInterval<UnsignedByteType> imgBrain)
+			throws IOException {
+		return buildFlattenAndUnwarp(n5Level, n5PathHeightfield, heightfieldGroup, n5PathPositionField, positionFieldGroup, imgBrain, false);
+	}
+
+		@NotNull
+	public static FlattenAndUnwarp buildFlattenAndUnwarp(final int n5Level,
+														  final String n5PathHeightfield,
+														  final String heightfieldGroup,
+														  final String n5PathPositionField,
+														  final String positionFieldGroup,
+														  final RandomAccessibleInterval<UnsignedByteType> imgBrain,
+														  final boolean dontShift)
 			throws IOException {
 		final long[] minIntervalS0 = {47204, 46557, 42756};
 		final long[] maxIntervalS0 = {55779, 59038, 53664};
@@ -120,10 +132,13 @@ public class SparkTransformBrainS5 {
 		// flatten and unwarp
 		// --------------------------------------------------------------------
 		final int fadeFlattenToIdentityDist = 32000;
+		final int yshift = 960; // = 30 * 32
+		final int yshiftFadeInPlane = 3200; // = 100 * 32
+		final int yshiftFadeOrtho = 3200; // = 100 * 32
 		return new FlattenAndUnwarp(
 				imgBrain, n5Level, minIntervalS0, maxIntervalS0,
 				heightfield, avg, plane, hfDownsamplingFactors, fadeToPlaneDist, fadeToAvgDist, minModifiedX, fadeFlattenToIdentityDist,
-				positionField, 0, 1, 1);
+				positionField, dontShift ? 0 : yshift, yshiftFadeInPlane, yshiftFadeOrtho);
 	}
 
 	public static void display(
