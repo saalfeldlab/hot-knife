@@ -36,13 +36,17 @@ public class PlaygroundStitch3 {
 		// load and crop image
 		// (the crop region covers the full image in Y and Z)
 		// --------------------------------------------------------------------
-		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s5";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/s5/";
+
+		final int n5Level = 4;
+
+		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s"+n5Level;//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/s5/";
 		final String imgGroup = ".";
 		final String brainVNCsurface = "/nrs/flyem/render/n5/Z0720_07m_VNC/heightfields_fix/brain-VNC/pass1_preibischs/min"; //"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/heightfield/",
 		final String brainVNCsurfaceGroup = ".";
 		final String brainVNCdeformationField = "/nrs/flyem/render/n5/Z0720_07m_VNC/surface-align-VNC/06-37/run_20220908_121000/pass12_edit/"; //"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/positionfield",
 		final String brainVNCdeformationFieldGroup = "/flat.Sec37.bot.face";
-		final int n5Level = 5;
+		final String VNCn5Path = "/nrs/flyem/render/n5/Z0720_07m_VNC/";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/vnc.n5/";
+		final String VNCimgGroup = "final-align-VNC/20220922_120102/s"+n5Level;//"setup0/timepoint0/s0/";
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final RandomAccessibleInterval<UnsignedByteType> imgBrain = N5Utils.openVolatile(n5, imgGroup);
@@ -70,9 +74,6 @@ public class PlaygroundStitch3 {
 		// --------------------------------------------------------------------
 		// load and crop VNC image
 		// --------------------------------------------------------------------
-		final String VNCn5Path = "/nrs/flyem/render/n5/Z0720_07m_VNC/";//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/vnc.n5/";
-		final String VNCimgGroup = "final-align-VNC/20220922_120102/s5";//"setup0/timepoint0/s0/";
-
 		final N5Reader VNCn5 = new N5FSReader(VNCn5Path);
 		final RandomAccessibleInterval<UnsignedByteType> imgVNC = N5Utils.openVolatile(VNCn5, VNCimgGroup);
 
