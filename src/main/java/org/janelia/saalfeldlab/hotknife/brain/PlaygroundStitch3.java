@@ -6,11 +6,16 @@ import bdv.util.BdvSource;
 import bdv.util.volatiles.VolatileViews;
 import bdv.viewer.DisplayMode;
 import bdv.viewer.ViewerPanel;
+import ij.ImageJ;
+
 import java.io.IOException;
+import java.util.concurrent.Executors;
+
 import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.position.FunctionRandomAccessible;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -37,7 +42,7 @@ public class PlaygroundStitch3 {
 		// (the crop region covers the full image in Y and Z)
 		// --------------------------------------------------------------------
 
-		final int n5Level = 4;
+		final int n5Level = 0;
 
 		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s"+n5Level;//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/s5/";
 		final String imgGroup = ".";
@@ -65,11 +70,11 @@ public class PlaygroundStitch3 {
 		// --------------------------------------------------------------------
 		// show in BDV: crop, unwarped crop
 		// --------------------------------------------------------------------
-		final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(imgBrain), "imgBrain", Bdv.options());
-		bdv.getBdvHandle().getViewerPanel().setDisplayMode(DisplayMode.SINGLE);
+		//final BdvSource bdv = BdvFunctions.show(VolatileViews.wrapAsVolatile(imgBrain), "imgBrain", Bdv.options());
+		//bdv.getBdvHandle().getViewerPanel().setDisplayMode(DisplayMode.SINGLE);
 
 		final RealRandomAccessible<UnsignedByteType> unwarpedCrop = fau.getUnwarpedCrop();
-		final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, imgBrain, "unwarped", Bdv.options().addTo(bdv));
+		//final BdvSource unwarpedCropSource = BdvFunctions.show(unwarpedCrop, imgBrain, "unwarped", Bdv.options().addTo(bdv));
 
 		// --------------------------------------------------------------------
 		// load and crop VNC image
@@ -105,6 +110,7 @@ public class PlaygroundStitch3 {
 		// TODO ==> merged is what needs to be written out
 
 
+		/*
 		FlattenAndUnwarp fauNoShift = SparkTransformBrainS5.buildFlattenAndUnwarp(
 				n5Level,
 				brainVNCsurface,
@@ -114,7 +120,7 @@ public class PlaygroundStitch3 {
 				imgBrain,
 				false);
 		final BdvSource unwarpedNoShiftSource = BdvFunctions.show(fauNoShift.getUnwarpedCrop(), imgBrain, "unwarped no shift", Bdv.options().addTo(bdv));
-
+		
 		final RealRandomAccessible<DoubleType> absDisplacement = fau.getAbsDisplacement();
 		final BdvSource absDisplacementSource = BdvFunctions.show(absDisplacement, imgBrain, "absolute displacement", Bdv.options().addTo(bdv));
 		absDisplacementSource.setColor(new ARGBType(0xff00ff));
@@ -123,11 +129,14 @@ public class PlaygroundStitch3 {
 
 		final BdvSource imgVNCSource = BdvFunctions.show(VolatileViews.wrapAsVolatile(viewVNC), "imgVNC", Bdv.options().addTo(bdv));
 		imgVNCSource.setColor(new ARGBType(0x00ff00));
-
 		final BdvSource mergedSource = BdvFunctions.show(merged, "merged", Bdv.options().addTo(bdv));
 
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
+		*/
+		new ImageJ();
+		ImageJFunctions.show(Views.interval( merged, new long[] {1590*32,1616*32,1455*32},new long[] {1590*32+512,1616*32+4096,1455*32+4096}), Executors.newFixedThreadPool(16));
+		//final BdvSource mergedSource = BdvFunctions.show(Views.interval( merged, new long[] {1590*32,1616*32,1455*32},new long[] {1590*32+512,1616*32+4096,1455*32+4096}), "merged");
 	}
 }
