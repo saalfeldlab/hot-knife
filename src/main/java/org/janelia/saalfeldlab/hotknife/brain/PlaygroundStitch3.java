@@ -54,8 +54,7 @@ public class PlaygroundStitch3 {
 		// --------------------------------------------------------------------
 		// flatten and unwarp
 		// --------------------------------------------------------------------
-		// TODO: compose of original stack and unwarped, check interface
-		FlattenAndUnwarp fau = SparkTransformBrainS5.buildFlattenAndUnwarp(
+		final FlattenAndUnwarp fau = SparkTransformBrainS5.buildFlattenAndUnwarp(
 				n5Level,
 				brainVNCsurface,
 				brainVNCsurfaceGroup,
@@ -78,21 +77,26 @@ public class PlaygroundStitch3 {
 		final N5Reader VNCn5 = new N5FSReader(VNCn5Path);
 		final RandomAccessibleInterval<UnsignedByteType> imgVNC = N5Utils.openVolatile(VNCn5, VNCimgGroup);
 
+		final RandomAccessibleInterval<UnsignedByteType> viewVNC = orientVNC(fau, imgVNC);
+		/*
 		RandomAccessibleInterval<UnsignedByteType> viewVNC = Views.rotate(imgVNC, 2, 0);
 		viewVNC = Views.rotate(viewVNC, 1, 2);
 		viewVNC = Views.zeroMin(viewVNC);
 		viewVNC = Views.translate(viewVNC, fau.getVncTranslation());
+		*/
 
 		final Interval bbox = Intervals.union(imgBrain, viewVNC);
-		final RandomAccessibleInterval<UnsignedByteType> viewVNCf = viewVNC;
+
+		final RandomAccessibleInterval<UnsignedByteType> merged = merge(fau.getCompositeUnwarpedCrop(), viewVNC, bbox);
+		/*
 		final RandomAccessibleInterval<UnsignedByteType> merged = Views.interval(
 				new FunctionRandomAccessible<>(
 						3,
 						() -> {
 							final RandomAccess<UnsignedByteType> ba = fau.getCompositeUnwarpedCrop().randomAccess();///Views.raster(unwarpedCrop).randomAccess();
-							final RandomAccess<UnsignedByteType> va = viewVNCf.randomAccess();
+							final RandomAccess<UnsignedByteType> va = viewVNC.randomAccess();
 							return (pos, type) -> {
-								if (Intervals.contains(viewVNCf, pos)) {
+								if (Intervals.contains(viewVNC, pos)) {
 									va.setPosition(pos);
 									type.set(va.get());
 								} else {
@@ -104,7 +108,7 @@ public class PlaygroundStitch3 {
 						UnsignedByteType::new),
 				bbox);
 		// TODO ==> merged is what needs to be written out
-
+		*/
 
 		FlattenAndUnwarp fauNoShift = SparkTransformBrainS5.buildFlattenAndUnwarp(
 				n5Level,
@@ -130,5 +134,42 @@ public class PlaygroundStitch3 {
 		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
 		final CoordinatesAndValuesOverlay overlay = new CoordinatesAndValuesOverlay(viewerPanel);
 		viewerPanel.getDisplay().overlays().add(overlay);
+	}
+
+	public static RandomAccessibleInterval<UnsignedByteType> merge(
+			final RandomAccessibleInterval<UnsignedByteType> deformedBrain,
+			final RandomAccessibleInterval<UnsignedByteType> viewVNC,
+			final Interval bbox)
+	{
+		return Views.interval(
+				new FunctionRandomAccessible<>(
+						3,
+						() -> {
+							final RandomAccess<UnsignedByteType> ba = deformedBrain.randomAccess();///Views.raster(unwarpedCrop).randomAccess();
+							final RandomAccess<UnsignedByteType> va = viewVNC.randomAccess();
+							return (pos, type) -> {
+								if (Intervals.contains(viewVNC, pos)) {
+									va.setPosition(pos);
+									type.set(va.get());
+								} else {
+									ba.setPosition(pos);
+									type.set(ba.get());
+								}
+							};
+						},
+						UnsignedByteType::new),
+				bbox);
+	}
+
+	public static RandomAccessibleInterval<UnsignedByteType> orientVNC(
+			final FlattenAndUnwarp fau,
+			final RandomAccessibleInterval<UnsignedByteType> imgVNC )
+	{
+		RandomAccessibleInterval<UnsignedByteType> viewVNC = Views.rotate(imgVNC, 2, 0);
+		viewVNC = Views.rotate(viewVNC, 1, 2);
+		viewVNC = Views.zeroMin(viewVNC);
+		viewVNC = Views.translate(viewVNC, fau.getVncTranslation());
+
+		return viewVNC;
 	}
 }
