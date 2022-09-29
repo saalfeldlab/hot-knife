@@ -34,7 +34,8 @@ public class SparkExportBrainVNC {
 
 	public static void main( String[] args ) throws IOException
 	{
-		final int n5Level = args.length == 2 ? Integer.parseInt(args[1]) : 5;
+		final int n5Level = args.length > 1 ? Integer.parseInt(args[1]) : 5;
+		final String datasetNameOutput = args.length > 0 ? args[0] : "/fullcns_test/s" + n5Level;
 
 		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s"+n5Level;
 		final String imgGroup = ".";
@@ -46,7 +47,6 @@ public class SparkExportBrainVNC {
 		final String VNCimgGroup = "final-align-VNC/20220922_120102/s"+n5Level;
 
 		final String n5PathOutput = "/nrs/flyem/render/n5/Z0720_07m_CNS.n5";
-		final String datasetNameOutput = args.length == 1 ? args[0] : "/fullcns_test/s"+n5Level;
 
 		final SparkConf conf = new SparkConf().setAppName( "SparkExportBrainVNC" );
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
