@@ -48,7 +48,7 @@ public class SparkExportBrainVNC {
 		final String n5PathOutput = "/nrs/flyem/render/n5/Z0720_07m_CNS.n5";
 		final String datasetNameOutput = args.length == 1 ? args[0] : "/preibischs_test/s5";
 
-		final SparkConf conf = new SparkConf().setAppName( "SparkTransformBrainS5" );
+		final SparkConf conf = new SparkConf().setAppName( "SparkExportBrainVNC" );
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 
 		saveSpark(sparkContext,
