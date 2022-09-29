@@ -37,7 +37,7 @@ public class PlaygroundStitch3 {
 		// (the crop region covers the full image in Y and Z)
 		// --------------------------------------------------------------------
 
-		final int n5Level = 4;
+		final int n5Level = 5;
 
 		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final/s"+n5Level;//"/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/s5/";
 		final String imgGroup = ".";
