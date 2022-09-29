@@ -155,7 +155,7 @@ public class PlaygroundStitch3 {
 								if (Intervals.contains(viewVNC, pos)) {
 									va.setPosition(pos);
 									type.set(va.get());
-								} else {
+								} else if (Intervals.contains(deformedBrain, pos)) {
 									ba.setPosition(pos);
 									type.set(ba.get());
 								}
