@@ -100,8 +100,8 @@ public class PlaygroundStitch2 {
 		// --------------------------------------------------------------------
 		// load and crop VNC image
 		// --------------------------------------------------------------------
-		final String VNCn5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/vnc.n5/";
-		final String VNCimgGroup = "setup0/timepoint0/s0/";
+		final String VNCn5Path = "/Users/pietzsch/Desktop/data/janelia/Z0720_07m_VNC/vnc2/";
+		final String VNCimgGroup = "s5";
 
 		final N5Reader VNCn5 = new N5FSReader(VNCn5Path);
 		final RandomAccessibleInterval<UnsignedByteType> imgVNC = N5Utils.openVolatile(VNCn5, VNCimgGroup);

@@ -27,6 +27,7 @@ import net.imglib2.util.LinAlgHelpers;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.tobi.IdentityTransform;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 
 import static org.janelia.saalfeldlab.hotknife.brain.FlattenAndUnwarp.Scale.System.FULL_RESOLUTION;
@@ -274,11 +275,11 @@ public class FlattenAndUnwarp {
 //		System.out.println("transformedPositionField.pfToImgY(0) = " + transformedPositionField.pfToImgY(0));
 //		System.out.println("minInterval[2] = " + minInterval[2]);
 
-
+		final long[] offset0 = Grid.floorScaled(positionField.getBoundsMin(), 1.0);
 		vncTranslation = new long[] {
 				(long) (this.cropMax.coordinate(IMAGE, 0) - minZ + 1),
-				(long) (transformedPositionField.pfToImgX(0) + minInterval[1] - iyshift),
-				(long) (transformedPositionField.pfToImgY(0) + minInterval[2])
+				((cropMin[1] + offset0[0]) >> imgLevel) - iyshift,
+				((cropMin[2] + offset0[1]) >> imgLevel)
 		};
 	}
 
