@@ -17,6 +17,7 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.brain.Playground3.MyHeightField;
 import org.janelia.saalfeldlab.hotknife.tobi.PositionField;
@@ -86,6 +87,9 @@ public class PlaygroundStitch3 {
 		*/
 
 		final Interval bbox = Intervals.union(imgBrain, viewVNC);
+
+		System.out.println( "Brain interval at s" + n5Level + ": " + Util.printInterval(imgBrain));
+		System.out.println( "Brain+VNC interval at s" + n5Level + ": " + Util.printInterval(bbox));
 
 		final RandomAccessibleInterval<UnsignedByteType> merged = merge(fau.getCompositeUnwarpedCrop(), viewVNC, bbox);
 		/*
