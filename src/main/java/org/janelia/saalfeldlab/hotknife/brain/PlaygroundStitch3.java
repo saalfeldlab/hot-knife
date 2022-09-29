@@ -54,6 +54,7 @@ public class PlaygroundStitch3 {
 		// --------------------------------------------------------------------
 		// flatten and unwarp
 		// --------------------------------------------------------------------
+		// TODO: compose of original stack and unwarped, check interface
 		FlattenAndUnwarp fau = SparkTransformBrainS5.buildFlattenAndUnwarp(
 				n5Level,
 				brainVNCsurface,
@@ -88,7 +89,7 @@ public class PlaygroundStitch3 {
 				new FunctionRandomAccessible<>(
 						3,
 						() -> {
-							final RandomAccess<UnsignedByteType> ba = Views.raster(unwarpedCrop).randomAccess();
+							final RandomAccess<UnsignedByteType> ba = fau.getCompositeUnwarpedCrop().randomAccess();///Views.raster(unwarpedCrop).randomAccess();
 							final RandomAccess<UnsignedByteType> va = viewVNCf.randomAccess();
 							return (pos, type) -> {
 								if (Intervals.contains(viewVNCf, pos)) {
