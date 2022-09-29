@@ -136,7 +136,8 @@ public class PlaygroundStitch3 {
 		viewerPanel.getDisplay().overlays().add(overlay);
 		*/
 		new ImageJ();
-		ImageJFunctions.show(Views.interval( merged, new long[] {1590*32,1616*32,1455*32},new long[] {1590*32+512,1616*32+4096,1455*32+4096}), Executors.newFixedThreadPool(16));
+		//ImageJFunctions.show(Views.interval( merged, new long[] {1590*32+225,1616*32,1455*32},new long[] {1590*32+225+32,1616*32+1096,1455*32+1096}), Executors.newFixedThreadPool(72));
+		ImageJFunctions.show(Views.rotate(Views.interval( merged, new long[] {1590*32+225,1590*32,1400*32},new long[] {1590*32+225+32,1790*32,1600*32}),0,2), Executors.newFixedThreadPool(72));
 		//final BdvSource mergedSource = BdvFunctions.show(Views.interval( merged, new long[] {1590*32,1616*32,1455*32},new long[] {1590*32+512,1616*32+4096,1455*32+4096}), "merged");
 	}
 }
