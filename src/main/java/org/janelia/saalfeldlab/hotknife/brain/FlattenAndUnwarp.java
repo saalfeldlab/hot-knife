@@ -265,8 +265,8 @@ public class FlattenAndUnwarp {
 							return (pos, type) -> {
 								if ( pos.getDoublePosition( 0 ) < minModifiedXScaled ) {
 									ia.setPosition(pos);
-									type.set(ia.get());
-									//type.set(Math.max(0, ia.get().get() - 50));
+									//type.set(ia.get());
+									type.set(Math.max(0, ia.get().get() - 50));
 								} else {
 									ba.setPosition(pos);
 									type.set(ba.get());
