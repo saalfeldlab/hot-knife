@@ -61,6 +61,7 @@ public class FlattenAndUnwarp {
 	private final RandomAccessibleInterval<UnsignedByteType> crop;
 
 	// outputs
+	private final RandomAccessibleInterval<UnsignedByteType> compositeUnwarpedCrop;
 	private final RealRandomAccessible<UnsignedByteType> unwarpedCrop;
 	private final RealRandomAccessible<DoubleType> absDisplacement;
 	private final long[] vncTranslation;
@@ -250,6 +251,31 @@ public class FlattenAndUnwarp {
 						new ClampingNLinearInterpolatorFactory<>()),
 				tfseq);
 
+		// --------------------------------------------------------------------
+		// left of minModifiedX is the original data, right is the deformed one
+		// --------------------------------------------------------------------
+		final long minModifiedXScaled = Math.round(Math.floor( scale.transformCoordinate(FULL_RESOLUTION, IMAGE, 0, minModifiedX) ));
+
+		compositeUnwarpedCrop = Views.interval(
+				new FunctionRandomAccessible<>(
+						3,
+						() -> {
+							final RandomAccess<UnsignedByteType> ba = Views.raster(unwarpedCrop).randomAccess();
+							final RandomAccess<UnsignedByteType> ia = img.randomAccess();
+							return (pos, type) -> {
+								if ( pos.getDoublePosition( 0 ) < minModifiedXScaled ) {
+									ia.setPosition(pos);
+									type.set(ia.get());
+									//type.set(Math.max(0, ia.get().get() - 50));
+								} else {
+									ba.setPosition(pos);
+									type.set(ba.get());
+								}
+							};
+						},
+						UnsignedByteType::new),
+				new FinalInterval( img ) );
+
 
 		absDisplacement = new FunctionRealRandomAccessible<>(
 				3,
@@ -281,6 +307,10 @@ public class FlattenAndUnwarp {
 				((cropMin[1] + offset0[0]) >> imgLevel) - iyshift,
 				((cropMin[2] + offset0[1]) >> imgLevel)
 		};
+	}
+
+	public RandomAccessibleInterval<UnsignedByteType> getCompositeUnwarpedCrop(){
+		return compositeUnwarpedCrop;
 	}
 
 	public RealRandomAccessible<DoubleType> getAbsDisplacement() {
