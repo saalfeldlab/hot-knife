@@ -108,7 +108,7 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
     export ALIGN_STACK="v4_acquire_trimmed_align"
     export INTENSITY_CORRECTED_STACK="v4_acquire_trimmed_align_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec07/v4_acquire_trimmed_align___20220729_163950"
+    export N5_Z_CORR_DATASET="/z_corr/Sec07/v4_acquire_trimmed_align_ic___20220901_210457"
     export N5_Z_CORR_OFFSET="-9135,-1861,1"
   ;;
   "Sec08")
@@ -204,7 +204,7 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v6_acquire_trimmed"
     export ALIGN_STACK="v7_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v7_acquire_trimmed_align_straightened_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec19/v7_acquire_trimmed_align_straightened___20220729_141830"
+    export N5_Z_CORR_DATASET="/z_corr/Sec19/v7_acquire_trimmed_align_straightened_ic___20220901_223908"
     export N5_Z_CORR_OFFSET="-16903,-3082,1"
   ;;
   "Sec20")
@@ -321,6 +321,7 @@ case "${TAB}" in
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_straightened_sp_ic"
     export N5_Z_CORR_DATASET="/z_corr/Sec33/v2_acquire_trimmed_align_straightened_sp_ic___20220702_082229"
     export N5_Z_CORR_OFFSET="-988,-1822,1"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
   ;;
   "Sec34")
     export ACQUIRE_TRIMMED_STACK="v2_acquire_trimmed"
@@ -335,8 +336,9 @@ case "${TAB}" in
     export OLD_ACQUIRE_TRIMMED_STACK="v1_acquire_trimmed"
     export ALIGN_STACK="v2_acquire_trimmed_align_straightened"
     export INTENSITY_CORRECTED_STACK="v2_acquire_trimmed_align_straightened_ic"
-    export N5_Z_CORR_DATASET="/z_corr/Sec35/v2_acquire_trimmed_align_straightened_ic___20220210_101244"
+    export N5_Z_CORR_DATASET="/z_corr/Sec35/v3_acquire_plus_trimmed_align_straightened_ic___20220916_205718"
     export N5_Z_CORR_OFFSET="185,-2303,7"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/${RENDER_PROJECT}/pass2_preibischs"
   ;;
   "Sec36")
     export ACQUIRE_TRIMMED_STACK="v3_acquire_trimmed"
