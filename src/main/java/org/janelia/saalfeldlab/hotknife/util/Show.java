@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
+import org.janelia.saalfeldlab.hotknife.tools.RandomAccessibleIntervalMipmapSource2;
 import org.janelia.saalfeldlab.hotknife.util.Transform.TransformedSource;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -519,4 +520,53 @@ public class Show {
 				"transformed");
 
 	}
+
+	public static final <T extends NumericType<T> & NativeType<T>, V extends Volatile<T> & NumericType<V>> TransformedSource<V> createTransformedMipmapSliceSource(
+			final RealTransform transformToSource,
+			final RandomAccessibleInterval<T>[] rawMipmaps,
+			final double[][] scales,
+			final Translation3D[] offsetsAtOwnScale,
+			final VoxelDimensions voxelDimensions,
+			final String name,
+			final long offset,
+			final SharedQueue queue) {
+
+		final int numScales = rawMipmaps.length;
+
+		@SuppressWarnings("unchecked")
+		final RandomAccessibleInterval<V>[] mipmaps = new RandomAccessibleInterval[numScales];
+		//final Translation3D offset3D = new Translation3D(0, 0, -offset);
+
+		for (int s = 0; s < numScales; ++s) {
+			final int n = rawMipmaps[ s ].numDimensions();
+			final Interval interval = Intervals.expand( new FinalInterval( rawMipmaps[ s ] ), rawMipmaps[ s ].dimension( n - 1), n - 1 );
+
+			//System.out.println( "expanding interval for scale " + s + ": " + Util.printInterval( rawMipmaps[ s ] ) + ">>>" + Util.printInterval( interval ) );
+
+			mipmaps[s] = VolatileViews.wrapAsVolatile( rawMipmaps[s], queue);
+			mipmaps[s] = Views.interval( Views.extendZero( mipmaps[ s ] ), interval );
+		}
+
+		// TODO: in the future one can set doBoundingBoxCulling to false (https://github.com/bigdataviewer/bigdataviewer-vistools/pull/51/commits/058b1cc9c6373c52e05c121a9f0a8e3a5b8b35c5)
+		final RandomAccessibleIntervalMipmapSource<V> mipmapSource = new RandomAccessibleIntervalMipmapSource2<V>(
+				mipmaps,
+				Util.getTypeFromInterval(mipmaps[0]).createVariable(),
+				scales,
+				voxelDimensions,
+				new AffineTransform3D(),
+				offsetsAtOwnScale,
+				name);
+
+		final RealTransformSequence transformSequence = new RealTransformSequence();
+		final Translation3D shift = new Translation3D(0, 0, offset);
+		transformSequence.add(shift);
+		transformSequence.add(transformToSource);
+
+		return new TransformedSource<>(
+				mipmapSource,
+				transformSequence,
+				"transformed");
+
+	}
+
 }

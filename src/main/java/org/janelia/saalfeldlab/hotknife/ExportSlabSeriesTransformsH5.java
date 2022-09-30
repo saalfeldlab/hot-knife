@@ -169,8 +169,8 @@ public class ExportSlabSeriesTransformsH5 {
 
 		// TODO Bug in JHDF5, does not save the value most of the time when
 		// using the non-deprecated method
-		// writer.uint64().setAttr( object, attribute, value );
-		writer.setLongAttribute(object, attribute, value);
+		writer.uint64().setAttr( object, attribute, value );
+//		writer.setLongAttribute(object, attribute, value);
 		// writer.file().flush();
 	}
 
@@ -193,8 +193,8 @@ public class ExportSlabSeriesTransformsH5 {
 
 		// TODO Bug in JHDF5, does not save the value most of the time when
 		// using the non-deprecated method
-		// writer.float64().setAttr( object, attribute, value );
-		writer.setDoubleAttribute(object, attribute, value);
+		writer.float64().setAttr(object, attribute, value);
+//		writer.setDoubleAttribute(object, attribute, value);
 		// writer.file().flush();
 	}
 

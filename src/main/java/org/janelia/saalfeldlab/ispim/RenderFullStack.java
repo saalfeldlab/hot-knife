@@ -24,7 +24,6 @@ import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.io.InputTriggerDescription;
 import org.scijava.ui.behaviour.util.AbstractNamedAction;
 
-import com.adobe.xmp.impl.Utils;
 import com.google.gson.GsonBuilder;
 
 import bdv.util.BdvFunctions;

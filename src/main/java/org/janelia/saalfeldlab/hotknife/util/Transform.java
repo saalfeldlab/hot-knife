@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
+import net.imglib2.RandomAccessible;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -328,6 +329,8 @@ public class Transform {
 			final RandomAccessibleInterval<T> source,
 			final Interval targetInterval,
 			final RealTransform transformFromSource,
+			// TODO: why is this called transform__From__Source
+			//       (it is passed to RealTransformRealRandomAccessible as transform__To__Source)
 			final T background) {
 
 		return Views.interval(
@@ -874,6 +877,32 @@ public class Transform {
 										heightField,
 										scale[2],
 										0)),
+						new NLinearInterpolatorFactory<>()),
+				createTopLeftScaleShift(new double[] {scale[0], scale[1]}));
+	}
+
+
+	public static <T extends RealType<T>> RandomAccessible<DoubleType> scaleAndShiftHeightFieldValues(
+			final RandomAccessible<T> heightField,
+			final double scale,
+			final double offset) {
+
+		return Converters.convert(
+				heightField,
+				(a, b) -> b.setReal((a.getRealDouble() + offset + 0.5) * scale - 0.5),
+				new DoubleType());
+	}
+
+	public static <T extends RealType<T>> RealRandomAccessible<DoubleType> scaleAndShiftHeightFieldAndValues(
+			final RandomAccessible<T> heightField,
+			final double[] scale) {
+
+		return RealViews.affineReal(
+				Views.interpolate(
+						scaleAndShiftHeightFieldValues(
+								heightField,
+								scale[2],
+								0),
 						new NLinearInterpolatorFactory<>()),
 				createTopLeftScaleShift(new double[] {scale[0], scale[1]}));
 	}

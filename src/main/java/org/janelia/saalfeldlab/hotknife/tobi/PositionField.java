@@ -1,6 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.tobi;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -122,6 +123,18 @@ public class PositionField {
 
 	public double[] getBoundsMax() {
 		return boundsMax;
+	}
+
+	@Override
+	public String toString() {
+		return "PositionField{" +
+				"size=" + Arrays.toString(positionField.dimensionsAsLongArray()) +
+				", offset=" + Arrays.toString(offset) +
+				", scale=" + scale +
+				" (level " +getLevel() + ")" +
+				", boundsMin=" + Arrays.toString(boundsMin) +
+				", boundsMax=" + Arrays.toString(boundsMax) +
+				'}';
 	}
 
 	private static class CombinedTransform implements RealTransform {
