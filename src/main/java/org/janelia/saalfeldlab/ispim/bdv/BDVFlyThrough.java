@@ -46,6 +46,7 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 
 import bdv.cache.CacheControl;
+import bdv.viewer.BasicViewerState;
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.ViewerState;
 import bdv.viewer.overlay.MultiBoxOverlayRenderer;
@@ -170,7 +171,7 @@ public class BDVFlyThrough
 
 	public static void renderScreenshot( final ViewerPanel viewer )
 	{
-		final ViewerState renderState = viewer.state();
+		final ViewerState renderState = new BasicViewerState( viewer.state().snapshot() );
 		final int canvasW = viewer.getDisplay().getWidth();
 		final int canvasH = viewer.getDisplay().getHeight();
 
@@ -199,6 +200,7 @@ public class BDVFlyThrough
 
 		final AffineTransform3D affine = new AffineTransform3D();
 		renderState.getViewerTransform( affine );
+
 		affine.set( affine.get( 0, 3 ) - canvasW / 2, 0, 3 );
 		affine.set( affine.get( 1, 3 ) - canvasH / 2, 1, 3 );
 		affine.scale( ( double ) width / canvasW );
