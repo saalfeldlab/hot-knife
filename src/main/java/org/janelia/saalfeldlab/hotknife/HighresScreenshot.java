@@ -98,7 +98,7 @@ public class HighresScreenshot
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
-		final boolean useVolatile = true; // otherwise screenshots don't work
+		final boolean useVolatile = false; // otherwise screenshots don't work
 		final boolean normalizeContrast = true;
 
 		final Options options = new Options(args);
@@ -134,7 +134,7 @@ public class HighresScreenshot
 				final ImageJStackOp<UnsignedByteType> cllcn =
 						new ImageJStackOp<>(
 								Views.extendZero(sourceRaw),
-								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 2f, 3, 0.5f, true, true, true),
 								blockRadius,
 								0,
 								255);
