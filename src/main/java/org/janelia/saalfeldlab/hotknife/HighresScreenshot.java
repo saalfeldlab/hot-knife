@@ -34,6 +34,7 @@ import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
+import ij.ImageJ;
 import mpicbg.spim.data.sequence.DefaultVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.basictypeaccess.AccessFlags;
@@ -190,6 +191,8 @@ public class HighresScreenshot
 										new String[]{"not mapped"}, "drag rotate slow", "bdv")}));
 
 		final KeyStrokeAdder ksKeyStrokeAdder = config.keyStrokeAdder(ksInputMap, "persistence");
+
+		new ImageJ();
 
 		new AbstractNamedAction( "Record movie" )
 		{
