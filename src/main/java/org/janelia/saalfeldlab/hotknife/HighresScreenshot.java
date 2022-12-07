@@ -110,7 +110,7 @@ public class HighresScreenshot
 		final N5Reader n5 = new N5FSReader(options.getN5Path());
 		final String group = options.getDatasetName();
 
-		final SharedQueue queue = new SharedQueue(Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() / 2)));
+		final SharedQueue queue = new SharedQueue(/*Math.min(4, */Math.max(1, Runtime.getRuntime().availableProcessors())/*)*/);
 
 		final int numScales = n5.list(group).length;
 
@@ -168,7 +168,7 @@ public class HighresScreenshot
 						new AffineTransform3D(),
 						group);
 
-		final BdvOptions bdvOptions = Bdv.options()./*screenScales(new double[] {1, 0.5}).*/numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors() / 5));//.addTo( bdv );
+		final BdvOptions bdvOptions = Bdv.options()./*screenScales(new double[] {1, 0.5}).*/numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors()));//.addTo( bdv );
 		//final BdvOptions bdvOptions = Bdv.options().numRenderingThreads(Math.max(3, Runtime.getRuntime().availableProcessors() / 5));
 
 		final Source<?> volatileMipmapSource;
