@@ -402,7 +402,7 @@ public class SparkExportAlignedSlabSeries {
 					new UnsignedByteType());
 			break;
 		default:
-			final RandomAccessibleInterval<UnsignedByteType> composite = Converters.<UnsignedByteType, UnsignedByteType>composeReal(
+			final RandomAccessibleInterval<UnsignedByteType> composite = Converters.<UnsignedByteType, UnsignedByteType>composeReal2(
 					sources,
 					(c, target) -> {
 						target.set(0);

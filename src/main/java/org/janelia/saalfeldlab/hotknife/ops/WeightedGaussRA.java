@@ -278,15 +278,9 @@ public class WeightedGaussRA<T extends RealType<T> & NativeType<T>> implements C
 		}
 
 		@Override
-		public Sampler< T > copy()
+		public RandomAccess< T > copy()
 		{
-			return copyRandomAccess();
-		}
-
-		@Override
-		public RandomAccess< T > copyRandomAccess()
-		{
-			return new WeightedRandomAccess<>( source.copyRandomAccess(), weight.copyRandomAccess(), type.createVariable() );
+			return new WeightedRandomAccess<>( source.copy(), weight.copy(), type.createVariable() );
 		}
 	}
 }
