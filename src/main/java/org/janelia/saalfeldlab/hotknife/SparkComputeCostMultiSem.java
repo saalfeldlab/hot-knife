@@ -355,7 +355,7 @@ public class SparkComputeCostMultiSem {
 
 			// Now loop over blocks and write (for multisem, usually just one block in z)
 			for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / zcorrBlockSize[2]); zGrid++ ) {
-				long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid };
+				long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid }; //TODO: is this in original or cost steps?
 				RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
 						Views.extendZero( cost ),
 						new FinalInterval(
