@@ -221,11 +221,11 @@ public class SparkComputeCostMultiSem {
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
 		//new ImageJ();
-		//for (long x = 15; x < 16; x++) {
-		//	for (long y = 16; y < 17; y++) {
+		//for (long x = 16; x < 17; x++) {
+		//	for (long y = 18; y < 19; y++) {
 		for (long x = 0; x < gridXSize; x++) {
 			for (long y = 0; y < gridYSize; y++) {
-				//if ( x == 15 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
+				if ( x == 16 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
 				gridCoords.add(new Long[]{x, y});
 			}
 			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
@@ -341,11 +341,13 @@ public class SparkComputeCostMultiSem {
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				Views.zeroMin( processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService) );
+				processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService);
 
 		//ImageJFunctions.show( cost );
 		//SimpleMultiThreading.threadHaltUnClean();
 
+		System.out.println( "cost: " + Util.printInterval( cost ));
+		
 		System.out.println("Writing blocks");
 
 		try
@@ -354,13 +356,20 @@ public class SparkComputeCostMultiSem {
 			N5Writer n5w = new N5FSWriter(costN5Path);
 
 			// Now loop over blocks and write (for multisem, usually just one block in z)
-			for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / zcorrBlockSize[2]); zGrid++ ) {
-				long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid }; //TODO: is this in original or cost steps?
+			for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / zcorrBlockSize[2]); zGrid++ )
+			{
+				final long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid }; //TODO: is this in original or cost steps?
+
+				System.out.println( "gridOffset: " + Util.printCoordinates( gridOffset ));
+
 				RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
 						Views.extendZero( cost ),
 						new FinalInterval(
 								new long[]{0, 0, zGrid * zcorrBlockSize[2]},
 								new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * zcorrBlockSize[2] - 1 }));
+
+				System.out.println( "block: " + Util.printInterval( block ));
+
 				N5Utils.saveBlock(
 						block,
 						n5w,
@@ -369,6 +378,7 @@ public class SparkComputeCostMultiSem {
 			}
 		} catch (IOException e) { throw new RuntimeException( "processColumn write blocks failed: ", e ); }
 
+		//SimpleMultiThreading.threadHaltUnClean();
 	}
 
 	private static RandomAccessibleInterval<UnsignedByteType> mergeCosts(RandomAccessibleInterval<UnsignedByteType> topCost, RandomAccessibleInterval<UnsignedByteType> botCost) {
@@ -421,8 +431,13 @@ public class SparkComputeCostMultiSem {
 		// we set the outofbounds to 170, which is about the resin color in case the sample touches the image boundary
 		// TODO: the derivative is offset by 0.5 pixels on the bottom, and by 0.5 px on the top towards the other direction
 
-		final RandomAccessible<UnsignedByteType> zcorrEx = Views.extendValue( zcorr, 170 ); // TODO: variable
-		final RandomAccessibleInterval<UnsignedByteType> derivative = Views.translate( ArrayImgs.unsignedBytes( zcorr.dimensionsAsLongArray() ), zcorr.minAsLongArray() );
+		final RandomAccessible<UnsignedByteType> zcorrEx = Views.extendValue( Views.subsample( Views.zeroMin( zcorr ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ), 170 ); // TODO: variable 170
+
+		final long[] dim = zcorr.dimensionsAsLongArray();
+		for ( int d = 0; d < dim.length; ++d )
+			dim[ d ] /= costSteps[ d ];
+
+		final RandomAccessibleInterval<UnsignedByteType> derivative = ArrayImgs.unsignedBytes( dim );
 
 		final Cursor<UnsignedByteType> out = Views.iterable( derivative ).localizingCursor();
 		final RandomAccess<UnsignedByteType> in = zcorrEx.randomAccess();
