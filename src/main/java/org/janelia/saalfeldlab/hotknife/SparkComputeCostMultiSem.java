@@ -139,6 +139,9 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--surfaceMaxDistance", usage = "maximum distance between the both surfaces, e.g. 60")
 		private double surfaceMaxDistance = 60;
 
+		@Option(name = "--localSparkBindAddress", usage = "specify Spark bind address as localhost")
+		private boolean localSparkBindAddress = false;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -660,8 +663,10 @@ public class SparkComputeCostMultiSem {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final SparkConf conf = new SparkConf().setAppName("SparkComputeCost");
-		conf.set("spark.driver.bindAddress", "127.0.0.1");
+		final SparkConf conf = new SparkConf().setAppName("SparkComputeCostMultiSem");
+		if (options.localSparkBindAddress) {
+			conf.set("spark.driver.bindAddress", "127.0.0.1");
+		}
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		
 		//final JavaSparkContext sc = null;
