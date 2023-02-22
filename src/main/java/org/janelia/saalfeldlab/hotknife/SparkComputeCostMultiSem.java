@@ -42,6 +42,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import ij.ImageJ;
 import ij.process.ByteProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -55,6 +56,8 @@ import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
@@ -213,6 +216,7 @@ public class SparkComputeCostMultiSem {
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
+		new ImageJ();
 		for (long x = 15; x < 16; x++) {
 			for (long y = 16; y < 17; y++) {
 		//for (long x = 0; x < gridXSize; x++) {
@@ -224,8 +228,8 @@ public class SparkComputeCostMultiSem {
 		}
 
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridYSize);
-		System.exit(0);
-		
+		//System.exit(0);
+
 		// Grids are w.r.t cost blocks
 		final JavaRDD<Long[]> rddSlices = sparkContext.parallelize(gridCoords);
 
@@ -263,17 +267,7 @@ public class SparkComputeCostMultiSem {
 
 			gridCoordPartition.forEachRemaining(gridCoord -> {
 
-				try {
-					/*
-				    processColumn(
-						  n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, axisMode, gridCoord, executorService,
-						  options.bandSize, options.minGradient, options.slopeCorrXRange, options.slopeCorrBandFactor, options.maxSlope,
-						  options.minSlope, options.startThresh, options.kernelSize);
-					*/
-				} catch (Exception e) {
-				    e.printStackTrace(); // TODO: is there a reason we are swallowing exceptions?
-				}
-				
+					processColumn( n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService );
 			    });
 
 			executorService.shutdown();
@@ -333,53 +327,40 @@ public class SparkComputeCostMultiSem {
 			int[] zcorrBlockSize,
 			long[] zcorrSize,
 			int[] costSteps,
-			String axisMode,
 			Long[] gridCoord,
-			ExecutorService executorService,
-			int bandSize,
-			int minGradient,
-			int slopeCorrXRange,
-			float slopeCorrBandFactor,
-			float maxSlope,
-			float minSlope,
-			int startThresh,
-			int kernelSize) throws Exception {
-		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] + " costAxis: " + axisMode);
+			ExecutorService executorService )
+	{
+		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
-		RandomAccessibleInterval<UnsignedByteType> cost;
-		if (axisMode.equals("2")) {// This is the original mode
-			cost = processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-		} else if (axisMode.equals("0")) {// Compute along axis 0
-			cost = processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-		} else if (axisMode.equals("02")) {// Compute along both 0 and 2 then combine
-			RandomAccessibleInterval<UnsignedByteType> cost2 = processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-			RandomAccessibleInterval<UnsignedByteType> cost0 = processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 0, gridCoord, executorService, bandSize, minGradient, slopeCorrXRange, slopeCorrBandFactor, maxSlope, minSlope, startThresh, kernelSize);
-			cost = mergeCosts(cost0, cost2);
-		} else {
-			throw new IllegalArgumentException("axisMode unknown: " + axisMode);
-		}
+		RandomAccessibleInterval<UnsignedByteType> cost =
+				processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService);
 
-		//ImageJFunctions.show( cost );
-		//SimpleMultiThreading.threadHaltUnClean();
+		ImageJFunctions.show( cost );
+		SimpleMultiThreading.threadHaltUnClean();
 
 		System.out.println("Writing blocks");
 
-		final N5Writer n5w = new N5FSWriter(costN5Path);
+		try
+		{
+			// TODO: wrong dimensions
+			N5Writer n5w = new N5FSWriter(costN5Path);
 
-		// Now loop over blocks and write
-		for( int yGrid = 0; yGrid <= Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
-			long[] gridOffset = new long[]{gridCoord[0], yGrid, gridCoord[1]};
-			RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
-					Views.extendZero( cost ),
-					new FinalInterval(
-							new long[]{0, yGrid * zcorrBlockSize[1], 0},
-							new long[]{cost.dimension(0) - 1, (yGrid + 1) * zcorrBlockSize[1] - 1, cost.dimension(2) - 1}));
-			N5Utils.saveBlock(
-					block,
-					n5w,
-					costDataset,
-					gridOffset);
-		}
+			// Now loop over blocks and write
+			for( int yGrid = 0; yGrid <= Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
+				long[] gridOffset = new long[]{gridCoord[0], yGrid, gridCoord[1]};
+				RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
+						Views.extendZero( cost ),
+						new FinalInterval(
+								new long[]{0, yGrid * zcorrBlockSize[1], 0},
+								new long[]{cost.dimension(0) - 1, (yGrid + 1) * zcorrBlockSize[1] - 1, cost.dimension(2) - 1}));
+				N5Utils.saveBlock(
+						block,
+						n5w,
+						costDataset,
+						gridOffset);
+			}
+		} catch (IOException e) { throw new RuntimeException( "processColumn write blocks failed: ", e ); }
+
 	}
 
 	private static RandomAccessibleInterval<UnsignedByteType> mergeCosts(RandomAccessibleInterval<UnsignedByteType> topCost, RandomAccessibleInterval<UnsignedByteType> botCost) {
@@ -411,29 +392,28 @@ public class SparkComputeCostMultiSem {
 			int[] costSteps,
 			int costAxis,
 			Long[] gridCoord,
-			ExecutorService executorService,
-			int bandSize,
-			int minGradient,
-			int slopeCorrXRange,
-			float slopeCorrBandFactor,
-			float maxSlope,
-			float minSlope,
-			int startThresh,
-			int kernelSize) throws Exception {
+			ExecutorService executorService ) {
 
-		final N5Reader n5 = new N5FSReader(n5Path);
+		RandomAccessibleInterval<UnsignedByteType> zcorr = null;
+		try
+		{
+			zcorr = N5Utils.open(new N5FSReader(n5Path), zcorrDataset);
 
-		RandomAccessibleInterval<UnsignedByteType> zcorr = N5Utils.open(n5, zcorrDataset);
+		} catch (IOException e) { throw new RuntimeException( "Cannot load input zcorr data", e ); }
 
 		// The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
-		zcorr = Views.permute(zcorr, costAxis, 2);
+		// zcorr = Views.permute(zcorr, costAxis, 2);
 
-		RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendZero(zcorr);
-
-		Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
-
+		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendZero(zcorr);
+		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 		zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
+		ImageJFunctions.show( zcorr );
+		SimpleMultiThreading.threadHaltUnClean();
+
+		return null;
+		
+		/*
 		return processColumnAlongAxis(
 				zcorr,
 				zcorrInterval, 
@@ -453,7 +433,7 @@ public class SparkComputeCostMultiSem {
 				maxSlope,
 				minSlope,
 				startThresh,
-				kernelSize);
+				kernelSize);*/
 	}
 
 	public static RandomAccessibleInterval<UnsignedByteType> processColumnAlongAxis(
