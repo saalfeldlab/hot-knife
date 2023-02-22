@@ -108,7 +108,7 @@ public class SparkComputeCostMultiSem {
 				usage = "Step sizes for computing cost, e.g. 6,6,1. " +
 						"Specify multiple values for downsampling where each factor builds on the last.")
 		private String[] costStepsStrings = {
-				"6,6,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1" //, "1,4,1", "1,4,1", "1,4,1" -- no downsampling in Z ever, too small
+				"6,6,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1" //, "1,4,1", "1,4,1", "1,4,1" -- no downsampling in Z ever, too small
 		};
 		private int[][] costSteps;
 
@@ -217,12 +217,12 @@ public class SparkComputeCostMultiSem {
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
-		new ImageJ();
-		for (long x = 15; x < 16; x++) {
-			for (long y = 16; y < 17; y++) {
-		//for (long x = 0; x < gridXSize; x++) {
-		//	for (long y = 0; y < gridYSize; y++) {
-				if ( x == 15 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
+		//new ImageJ();
+		//for (long x = 15; x < 16; x++) {
+		//	for (long y = 16; y < 17; y++) {
+		for (long x = 0; x < gridXSize; x++) {
+			for (long y = 0; y < gridYSize; y++) {
+				//if ( x == 15 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
 				gridCoords.add(new Long[]{x, y});
 			}
 			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
@@ -274,6 +274,10 @@ public class SparkComputeCostMultiSem {
 			executorService.shutdown();
 
 		    });
+
+		// done with cost
+		if ( System.currentTimeMillis() > 0 )
+			return;
 
 		final N5PathSupplier n5PathSupplier = new N5PathSupplier(costN5Path);
 		for (int i = 1; i < options.costStepsStrings.length; i++) {
@@ -336,8 +340,8 @@ public class SparkComputeCostMultiSem {
 		RandomAccessibleInterval<UnsignedByteType> cost =
 				processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService);
 
-		ImageJFunctions.show( cost );
-		SimpleMultiThreading.threadHaltUnClean();
+		//ImageJFunctions.show( cost );
+		//SimpleMultiThreading.threadHaltUnClean();
 
 		System.out.println("Writing blocks");
 
@@ -346,14 +350,14 @@ public class SparkComputeCostMultiSem {
 			// TODO: wrong dimensions
 			N5Writer n5w = new N5FSWriter(costN5Path);
 
-			// Now loop over blocks and write
-			for( int yGrid = 0; yGrid <= Math.ceil(zcorrSize[1] / zcorrBlockSize[1]); yGrid++ ) {
-				long[] gridOffset = new long[]{gridCoord[0], yGrid, gridCoord[1]};
+			// Now loop over blocks and write (for multisem, usually just one block in z)
+			for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / zcorrBlockSize[2]); zGrid++ ) {
+				long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid };
 				RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
 						Views.extendZero( cost ),
 						new FinalInterval(
-								new long[]{0, yGrid * zcorrBlockSize[1], 0},
-								new long[]{cost.dimension(0) - 1, (yGrid + 1) * zcorrBlockSize[1] - 1, cost.dimension(2) - 1}));
+								new long[]{0, 0, zGrid * zcorrBlockSize[1]},
+								new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * zcorrBlockSize[2] - 1, }));
 				N5Utils.saveBlock(
 						block,
 						n5w,
@@ -409,7 +413,7 @@ public class SparkComputeCostMultiSem {
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 		zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
-		ImageJFunctions.show( zcorr );
+		//ImageJFunctions.show( zcorr );
 
 		// compute derivative in z and keep only negative values
 		// we set the outofbounds to 170, which is about the resin color in case the sample touches the image boundary
@@ -442,11 +446,10 @@ public class SparkComputeCostMultiSem {
 			}
 		}
 
-		ImageJFunctions.show( derivative );
+		//ImageJFunctions.show( derivative );
+		//SimpleMultiThreading.threadHaltUnClean();
 
-		SimpleMultiThreading.threadHaltUnClean();
-
-		return null;
+		return derivative;
 		
 		/*
 		return processColumnAlongAxis(
