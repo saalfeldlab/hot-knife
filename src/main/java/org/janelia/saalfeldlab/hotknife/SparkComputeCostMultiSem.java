@@ -62,6 +62,7 @@ import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
+import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 
@@ -409,6 +410,31 @@ public class SparkComputeCostMultiSem {
 		zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
 		ImageJFunctions.show( zcorr );
+
+		// compute derivative in z and keep only negative values
+		// we set the outofbounds to 170, which is about the resin color in case the sample touches the image boundary
+		// TODO: the derivate is offset by 0.5 pixels
+		final RandomAccessible<UnsignedByteType> zcorrEx = Views.extendValue( zcorr, 170 );
+		final RandomAccessibleInterval<UnsignedByteType> derivative = Views.translate( ArrayImgs.unsignedBytes( zcorr.dimensionsAsLongArray() ), zcorr.minAsLongArray() );
+
+		final Cursor<UnsignedByteType> out = Views.iterable( derivative ).localizingCursor();
+		final RandomAccess<UnsignedByteType> in = zcorrEx.randomAccess();
+
+		while ( out.hasNext() )
+		{
+			final UnsignedByteType d = out.next();
+
+			in.setPosition( out );
+
+			final int x1 = in.get().get();
+			in.bck( 2 );
+			final int x0 = in.get().get();
+
+			d.set( Math.max( 0, x1 - x0 ) ); // only keep negative derivatives
+		}
+
+		ImageJFunctions.show( derivative );
+
 		SimpleMultiThreading.threadHaltUnClean();
 
 		return null;
