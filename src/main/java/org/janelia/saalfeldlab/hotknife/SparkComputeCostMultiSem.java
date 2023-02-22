@@ -360,7 +360,7 @@ public class SparkComputeCostMultiSem {
 						Views.extendZero( cost ),
 						new FinalInterval(
 								new long[]{0, 0, zGrid * zcorrBlockSize[2]},
-								new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * zcorrBlockSize[2] - 1, }));
+								new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * zcorrBlockSize[2] - 1 }));
 				N5Utils.saveBlock(
 						block,
 						n5w,
