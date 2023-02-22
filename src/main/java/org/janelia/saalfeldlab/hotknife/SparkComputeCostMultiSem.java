@@ -413,8 +413,9 @@ public class SparkComputeCostMultiSem {
 
 		// compute derivative in z and keep only negative values
 		// we set the outofbounds to 170, which is about the resin color in case the sample touches the image boundary
-		// TODO: the derivate is offset by 0.5 pixels
-		final RandomAccessible<UnsignedByteType> zcorrEx = Views.extendValue( zcorr, 170 );
+		// TODO: the derivative is offset by 0.5 pixels on the bottom, and by 0.5 px on the top towards the other direction
+
+		final RandomAccessible<UnsignedByteType> zcorrEx = Views.extendValue( zcorr, 170 ); // TODO: variable
 		final RandomAccessibleInterval<UnsignedByteType> derivative = Views.translate( ArrayImgs.unsignedBytes( zcorr.dimensionsAsLongArray() ), zcorr.minAsLongArray() );
 
 		final Cursor<UnsignedByteType> out = Views.iterable( derivative ).localizingCursor();
@@ -424,13 +425,21 @@ public class SparkComputeCostMultiSem {
 		{
 			final UnsignedByteType d = out.next();
 
-			in.setPosition( out );
-
-			final int x1 = in.get().get();
-			in.bck( 2 );
-			final int x0 = in.get().get();
-
-			d.set( Math.max( 0, x1 - x0 ) ); // only keep negative derivatives
+			// the second surface on top we just fake for now (50 all)
+			if ( out.getIntPosition( 2 ) == 0 )
+			{
+				d.set( 50 ); // TODO: variable (average gradient from resin to sample)
+			}
+			else
+			{
+				in.setPosition( out );
+	
+				final int x1 = in.get().get();
+				in.bck( 2 );
+				final int x0 = in.get().get();
+	
+				d.set( Math.max( 0, x1 - x0 ) ); // only keep negative derivatives
+			}
 		}
 
 		ImageJFunctions.show( derivative );
