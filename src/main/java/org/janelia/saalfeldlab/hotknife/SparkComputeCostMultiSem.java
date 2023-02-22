@@ -341,7 +341,7 @@ public class SparkComputeCostMultiSem {
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService);
+				Views.zeroMin( processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, 2, gridCoord, executorService) );
 
 		//ImageJFunctions.show( cost );
 		//SimpleMultiThreading.threadHaltUnClean();
