@@ -131,16 +131,16 @@ public class SparkComputeCostMultiSem {
 		private int surfaceLastScale = 1;
 
 		@Option(name = "--surfaceMaxDeltaZ", usage = "maximum slope of the surface in original pixels, e.g. 0.25")
-		private double surfaceMaxDeltaZ = 0.25;
+		private double surfaceMaxDeltaZ = 0.2;
 
 		@Option(name = "--surfaceInitMaxDeltaZ", usage = "maximum slope of the surface in original pixels in the first scale level (initialization), e.g. 0.3")
-		private double surfaceInitMaxDeltaZ = .3;
+		private double surfaceInitMaxDeltaZ = .2;
 
-		@Option(name = "--surfaceMinDistance", usage = "minimum distance between the both surfaces, e.g. 30")
-		private double surfaceMinDistance = 30;
+		@Option(name = "--surfaceMinDistance", usage = "minimum distance between the both surfaces, e.g. 15")
+		private double surfaceMinDistance = 15;
 
-		@Option(name = "--surfaceMaxDistance", usage = "maximum distance between the both surfaces, e.g. 60")
-		private double surfaceMaxDistance = 60;
+		@Option(name = "--surfaceMaxDistance", usage = "maximum distance between the both surfaces, e.g. 30")
+		private double surfaceMaxDistance = 30;
 
 		@Option(name = "--localSparkBindAddress", usage = "specify Spark bind address as localhost")
 		private boolean localSparkBindAddress = false;
