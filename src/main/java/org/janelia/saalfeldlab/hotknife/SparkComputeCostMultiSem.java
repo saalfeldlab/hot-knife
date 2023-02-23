@@ -108,8 +108,9 @@ public class SparkComputeCostMultiSem {
 				usage = "Step sizes for computing cost, e.g. 6,6,1. " +
 						"Specify multiple values for downsampling where each factor builds on the last.")
 		private String[] costStepsStrings = {
-				"6,6,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1", "3,3,1" //, "1,4,1", "1,4,1", "1,4,1" -- no downsampling in Z ever, too small
+				"6,6,1", "2,2,1", "2,2,1", "2,2,1", "2,2,1", "2,2,1", "2,2,1", "2,2,1" //, "1,4,1", "1,4,1", "1,4,1" -- no downsampling in Z ever, too small
 		};
+
 		private int[][] costSteps;
 
 		@Option(name = "--normalizeImage", required = false, usage = "uses contrast normalization and median before cost computation")
@@ -279,8 +280,6 @@ public class SparkComputeCostMultiSem {
 		    });
 
 		// done with cost
-		if ( System.currentTimeMillis() > 0 )
-			return;
 
 		final N5PathSupplier n5PathSupplier = new N5PathSupplier(costN5Path);
 		for (int i = 1; i < options.costStepsStrings.length; i++) {
@@ -293,6 +292,9 @@ public class SparkComputeCostMultiSem {
 					costBlockSize
 			);
 		}
+
+		if ( System.currentTimeMillis() > 0 )
+			return;
 
 		if (options.surfaceN5Output != null) {
 			SparkSurfaceFit sparkSurfaceFit = new SparkSurfaceFit(options.outputN5Path,
