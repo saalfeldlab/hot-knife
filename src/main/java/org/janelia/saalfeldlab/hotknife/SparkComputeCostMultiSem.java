@@ -221,11 +221,11 @@ public class SparkComputeCostMultiSem {
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
 		//new ImageJ();
-		//for (long x = 16; x < 17; x++) {
-		//	for (long y = 18; y < 19; y++) {
+		//for (long x = 19; x <= 19; x++) {
+		//	for (long y = 19; y <= 19; y++) {
 		for (long x = 0; x < gridXSize; x++) {
 			for (long y = 0; y < gridYSize; y++) {
-				if ( x == 16 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
+				if ( x == 19 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
 				gridCoords.add(new Long[]{x, y});
 			}
 			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
@@ -455,14 +455,15 @@ public class SparkComputeCostMultiSem {
 			{
 				in.setPosition( out );
 	
-				final int x1 = in.get().get();
-				in.bck( 2 );
 				final int x0 = in.get().get();
+				in.fwd( 2 );
+				final int x1 = in.get().get();
 	
-				d.set( Math.max( 0, x1 - x0 ) ); // only keep negative derivatives
+				d.set( Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 			}
 		}
 
+		//ImageJFunctions.show( Views.subsample( Views.zeroMin( zcorr ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
 		//ImageJFunctions.show( derivative );
 		//SimpleMultiThreading.threadHaltUnClean();
 
