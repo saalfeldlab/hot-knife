@@ -332,6 +332,7 @@ public class SparkComputeCost {
 																  options.surfaceInitMaxDeltaZ,
 																  options.surfaceMinDistance,
 																  options.surfaceMaxDistance,
+																  false, // need to permute with FIB-SEM
 																  false);
 			sparkSurfaceFit.callWithSparkContext(sparkContext);
 		}

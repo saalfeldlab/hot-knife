@@ -310,6 +310,7 @@ public class SparkComputeCostMultiSem {
 																  options.surfaceInitMaxDeltaZ,
 																  options.surfaceMinDistance,
 																  options.surfaceMaxDistance,
+																  true, // no need to permute with multi-sem
 																  false);
 			sparkSurfaceFit.callWithSparkContext(sparkContext);
 		}

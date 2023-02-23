@@ -455,6 +455,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 					surfaceInitMaxDeltaZ,
 					surfaceMinDistance,
 					surfaceMaxDistance,
+					false, // need to permute with FIB-SEM
 					false);
 			sparkSurfaceFit.callWithSparkContext(sparkContext);
 		}

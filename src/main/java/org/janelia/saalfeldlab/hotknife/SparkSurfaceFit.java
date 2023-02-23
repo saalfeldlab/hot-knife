@@ -126,6 +126,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Option(names = {"--maxDistance"}, description = "maximum distance between the both surfaces, e.g. 3500")
 	private double maxDistance = Double.MAX_VALUE;
 
+	@Option(names = {"--skipPermute"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not")
+	private boolean skipPermute = false;
+
 	private boolean useVisualization = false;
 
 	/*
@@ -156,6 +159,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 						   final double initMaxDeltaZ,
 						   final double minDistance,
 						   final double maxDistance,
+						   final boolean skipPermute,
 						   final boolean useVisualization) {
 		this.n5Path = n5Path;
 		this.n5FieldPath = n5FieldPath;
@@ -168,6 +172,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		this.initMaxDeltaZ = initMaxDeltaZ;
 		this.minDistance = minDistance;
 		this.maxDistance = maxDistance;
+		this.skipPermute = skipPermute;
 		this.useVisualization = useVisualization;
 	}
 
@@ -927,7 +932,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -937,9 +942,18 @@ public class SparkSurfaceFit implements Callable<Void>{
 					mask);
 
 			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
-			downsamplingFactors[0] = downsamplingFactorsXZY[0];
-			downsamplingFactors[1] = downsamplingFactorsXZY[2];
-			downsamplingFactors[2] = downsamplingFactorsXZY[1];
+			if ( skipPermute )
+			{
+				downsamplingFactors[0] = downsamplingFactorsXZY[0];
+				downsamplingFactors[1] = downsamplingFactorsXZY[1];
+				downsamplingFactors[2] = downsamplingFactorsXZY[2];
+			}
+			else
+			{
+				downsamplingFactors[0] = downsamplingFactorsXZY[0];
+				downsamplingFactors[1] = downsamplingFactorsXZY[2];
+				downsamplingFactors[2] = downsamplingFactorsXZY[1];
+			}
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
 
 			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
@@ -1151,7 +1165,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -1161,9 +1175,18 @@ public class SparkSurfaceFit implements Callable<Void>{
 					mask);
 
 			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
-			downsamplingFactors[0] = downsamplingFactorsXZY[0];
-			downsamplingFactors[1] = downsamplingFactorsXZY[2];
-			downsamplingFactors[2] = downsamplingFactorsXZY[1];
+			if ( skipPermute )
+			{
+				downsamplingFactors[0] = downsamplingFactorsXZY[0];
+				downsamplingFactors[1] = downsamplingFactorsXZY[1];
+				downsamplingFactors[2] = downsamplingFactorsXZY[2];
+			}
+			else
+			{
+				downsamplingFactors[0] = downsamplingFactorsXZY[0];
+				downsamplingFactors[1] = downsamplingFactorsXZY[2];
+				downsamplingFactors[2] = downsamplingFactorsXZY[1];
+			}
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
 
 			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
@@ -1322,7 +1345,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -1332,9 +1355,18 @@ public class SparkSurfaceFit implements Callable<Void>{
 					mask);
 
 			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
-			downsamplingFactors[0] = downsamplingFactorsXZY[0];
-			downsamplingFactors[1] = downsamplingFactorsXZY[2];
-			downsamplingFactors[2] = downsamplingFactorsXZY[1];
+			if ( skipPermute )
+			{
+				downsamplingFactors[0] = downsamplingFactorsXZY[0];
+				downsamplingFactors[1] = downsamplingFactorsXZY[1];
+				downsamplingFactors[2] = downsamplingFactorsXZY[2];
+			}
+			else
+			{
+				downsamplingFactors[0] = downsamplingFactorsXZY[0];
+				downsamplingFactors[1] = downsamplingFactorsXZY[2];
+				downsamplingFactors[2] = downsamplingFactorsXZY[1];
+			}
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
 
 			System.out.println( "dzScale " + dzScale + ", downsampling of heightfield " + net.imglib2.util.Util.printCoordinates( downsamplingFactors ));
