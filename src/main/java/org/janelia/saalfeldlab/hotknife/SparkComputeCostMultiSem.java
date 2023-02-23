@@ -58,6 +58,8 @@ import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.type.numeric.IntegerType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
@@ -458,9 +460,17 @@ public class SparkComputeCostMultiSem {
 				in.setPosition( out );
 	
 				final int x0 = in.get().get();
+
+				// TODO: this is a hack, ideally we'd want a mask (on-the-fly or saved) to see where images end
+				if ( x0 == 0 && isAnyXYNeighboringPixelBlack( in ) )
+					continue;
+
 				in.fwd( 2 );
 				final int x1 = in.get().get();
-	
+
+				if ( x1 == 0 && isAnyXYNeighboringPixelBlack( in ) )
+					continue;
+
 				d.set( Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 			}
 		}
@@ -492,6 +502,23 @@ public class SparkComputeCostMultiSem {
 				minSlope,
 				startThresh,
 				kernelSize);*/
+	}
+
+	protected static < T extends IntegerType<T>> boolean isAnyXYNeighboringPixelBlack( final RandomAccess<T> in )
+	{
+		// is it outside image boundaries??
+		for ( int e = 0; e <=1; ++e )
+		{
+			in.bck( e );
+			if ( in.get().getInteger() == 0 )
+				return true;
+			in.fwd( e );
+			in.fwd( e );
+			if ( in.get().getInteger() == 0 )
+				return true;
+			in.bck( e );
+		}
+		return false;
 	}
 
 	public static RandomAccessibleInterval<UnsignedByteType> processColumnAlongAxis(
