@@ -450,10 +450,20 @@ public class SparkComputeCostMultiSem {
 		{
 			final UnsignedByteType d = out.next();
 
-			// the second surface on top we just fake for now (50 all)
 			if ( out.getIntPosition( 2 ) == 0 )
 			{
+				// the second surface on top we just fake for now (50 all)
 				d.set( 50 ); // TODO: variable (average gradient from resin to sample)
+			}
+			else if ( out.getIntPosition( 2 ) == derivative.max( 2 ) )
+			{
+				// on the last layer we do not check whether it is inside or outside the image
+				in.setPosition( out );
+				
+				final int x0 = in.get().get();
+				in.fwd( 2 );
+				final int x1 = in.get().get();
+				d.set( Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 			}
 			else
 			{
