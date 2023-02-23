@@ -456,7 +456,7 @@ public class SparkComputeCostMultiSem {
 			if ( out.getIntPosition( 2 ) == 0 )
 			{
 				// the second surface on top we just fake for now (50 all)
-				d.set( 50 ); // TODO: variable (average gradient from resin to sample)
+				d.set( 100 ); // TODO: variable (average gradient from resin to sample)
 			}
 			else if ( out.getIntPosition( 2 ) == derivative.max( 2 ) )
 			{
