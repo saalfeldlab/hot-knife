@@ -224,11 +224,11 @@ public class SparkComputeCostMultiSem {
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
 		//new ImageJ();
-		//for (long x = 19; x <= 19; x++) {
-		//	for (long y = 19; y <= 19; y++) {
+		//for (long x = 2; x <= 2; x++) {
+		//	for (long y = 8; y <= 8; y++) {
 		for (long x = 0; x < gridXSize; x++) {
 			for (long y = 0; y < gridYSize; y++) {
-				if ( x == 19 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
+				if ( x == 2 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
 				gridCoords.add(new Long[]{x, y});
 			}
 			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
@@ -430,6 +430,7 @@ public class SparkComputeCostMultiSem {
 		zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
 		//ImageJFunctions.show( zcorr );
+		//SimpleMultiThreading.threadHaltUnClean();
 
 		// compute derivative in z and keep only negative values
 		// we set the outofbounds to 170, which is about the resin color in case the sample touches the image boundary
@@ -446,6 +447,7 @@ public class SparkComputeCostMultiSem {
 		final Cursor<UnsignedByteType> out = Views.iterable( derivative ).localizingCursor();
 		final RandomAccess<UnsignedByteType> in = zcorrEx.randomAccess();
 
+		// TODO: inpaint OR cut out minimal bounding box during Render export
 		while ( out.hasNext() )
 		{
 			final UnsignedByteType d = out.next();
