@@ -455,8 +455,8 @@ public class SparkComputeCostMultiSem {
 
 			if ( out.getIntPosition( 2 ) == 0 )
 			{
-				// the second surface on top we just fake for now (50 all)
-				d.set( 100 ); // TODO: variable (average gradient from resin to sample)
+				// the second surface on top we just fake for now (170 all)
+				d.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
 			}
 			else if ( out.getIntPosition( 2 ) == derivative.max( 2 ) )
 			{
@@ -466,7 +466,7 @@ public class SparkComputeCostMultiSem {
 				final int x0 = in.get().get();
 				in.fwd( 2 );
 				final int x1 = in.get().get();
-				d.set( Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
+				d.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 			}
 			else
 			{
@@ -484,7 +484,7 @@ public class SparkComputeCostMultiSem {
 				if ( x1 == 0 && isAnyXYNeighboringPixelBlack( in ) )
 					continue;
 
-				d.set( Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
+				d.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 			}
 		}
 
