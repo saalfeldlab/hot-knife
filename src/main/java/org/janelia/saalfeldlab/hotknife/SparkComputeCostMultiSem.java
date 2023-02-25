@@ -476,13 +476,19 @@ public class SparkComputeCostMultiSem {
 
 				// TODO: this is a hack, ideally we'd want a mask (on-the-fly or saved) to see where images end
 				if ( x0 == 0 && isAnyXYNeighboringPixelBlack( in ) )
+				{
+					d.set( 255 );
 					continue;
+				}
 
 				in.fwd( 2 );
 				final int x1 = in.get().get();
 
 				if ( x1 == 0 && isAnyXYNeighboringPixelBlack( in ) )
+				{
+					d.set( 255 );
 					continue;
+				}
 
 				d.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 			}
