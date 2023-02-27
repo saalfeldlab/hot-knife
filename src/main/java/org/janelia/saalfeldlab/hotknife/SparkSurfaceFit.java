@@ -1352,8 +1352,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Override
 	public Void call() throws IOException {
 
-		callSingle();
-		SimpleMultiThreading.threadHaltUnClean();
+		//callSingle();
+		//SimpleMultiThreading.threadHaltUnClean();
 
 		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
 		final JavaSparkContext sc = new JavaSparkContext(conf);
