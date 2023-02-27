@@ -528,19 +528,19 @@ public class SparkComputeCostMultiSem {
 			// no data available in one of the z-layers
 			if ( m.get().get() == 0 )
 			{
-				if ( pos[ 2 ] == 0 || pos[ 2 ] == zcorrInterval.max( 2 ) )
+				if ( pos[ 2 ] == zcorrInterval.min( 2 ) || pos[ 2 ] == zcorrInterval.max( 2 ) )
 					v.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
 				else
 					v.set( 255 );
 			}
 			else
 			{
-				if ( pos[ 2 ] == 0 )
+				if ( pos[ 2 ] == zcorrInterval.min( 2 ) )
 				{
 					// the second surface on top we just fake for now (170 all)
 					v.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
 				}
-				else if ( pos[ 2 ] == zcorrInterval.max( 2 ) )
+				else //if ( pos[ 2 ] == zcorrInterval.max( 2 ) )
 				{
 					// on the last layer we do not check whether it is inside or outside the image
 					in.setPosition( pos );
@@ -550,7 +550,7 @@ public class SparkComputeCostMultiSem {
 					final int x1 = in.get().get();
 					v.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 				}
-				else
+				/*else
 				{
 					in.setPosition( pos );
 		
@@ -573,7 +573,7 @@ public class SparkComputeCostMultiSem {
 					}
 	
 					v.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
-				}
+				}*/
 			}
 		}
 
