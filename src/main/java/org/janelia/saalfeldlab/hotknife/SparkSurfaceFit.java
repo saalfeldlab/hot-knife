@@ -127,8 +127,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Option(names = {"--maxDistance"}, description = "maximum distance between the both surfaces, e.g. 3500")
 	private double maxDistance = Double.MAX_VALUE;
 
-	@Option(names = {"--skipPermute"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not")
-	private boolean skipPermute = false;
+	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
+	private boolean multiSem = false;
 
 	private boolean useVisualization = false;
 
@@ -160,7 +160,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 						   final double initMaxDeltaZ,
 						   final double minDistance,
 						   final double maxDistance,
-						   final boolean skipPermute,
+						   final boolean multiSem,
 						   final boolean useVisualization) {
 		this.n5Path = n5Path;
 		this.n5FieldPath = n5FieldPath;
@@ -173,7 +173,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		this.initMaxDeltaZ = initMaxDeltaZ;
 		this.minDistance = minDistance;
 		this.maxDistance = maxDistance;
-		this.skipPermute = skipPermute;
+		this.multiSem = multiSem;
 		this.useVisualization = useVisualization;
 	}
 
@@ -535,6 +535,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param maxAvg weighted average of maxField
 	 * @param scale scale factors transforming minFIeld and maxField to cost
 	 * @param padding range of the cost function around the prior min face
+	 * @param multiSem different outofbounds required for both types of em scope
 	 *
 	 * @return
 	 */
@@ -550,7 +551,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final double maxAvg,
 			final double[] scale,
 			final long padding,
-			final int maxStepSize) {
+			final int maxStepSize,
+			final boolean multiSem ) {
 
 		//System.out.println( "minAvg: " + minAvg );
 		//System.out.println( "maxAvg: " + maxAvg );
@@ -593,8 +595,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final RealTransformRandomAccessible<T, ? extends RealTransform> transformedCost = RealViews.transform(
 				Views.interpolate(
+						multiSem ? Views.extendValue(cost,255) : Views.extendBorder(cost),
 						//Views.extendBorder(cost), // TODO: this is a problem at the borders since the multi-sem cost function tends to be the same across all pixels in z=0
-						Views.extendValue(cost,255),
 						new NLinearInterpolatorFactory<>()),
 				flatteningTransform);
 
@@ -642,6 +644,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param blockPadding 2D padding of the output block for processing
 	 * @param padding padding in z around the previous surface
 	 * @param maxStepSize maximum z step size for surface update in output space
+	 * @param multiSem different parameters depending on the type of em scope
 	 *
 	 * @return value and weight sums of the updated height fields (can be all 0 if everything is masked)
 	 *
@@ -657,7 +660,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long[] blockSizeOut,
 			final long[] blockPadding,
 			final long padding,
-			final int maxStepSize) throws IOException {
+			final int maxStepSize,
+			final boolean multiSem ) throws IOException {
 
 		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5FSWriter(n5CostPath);
 		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
@@ -735,7 +739,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 				maxAvg,
 				scale,
 				padding,
-				maxStepSize);
+				maxStepSize,
+				multisem );
 
 		final FinalInterval cropInterval = new FinalInterval(
 				blockMinOut,
@@ -783,6 +788,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param heightFieldGroupOutput output height field group
 	 * @param blockSizeOut 2D size of the output block
 	 * @param blockPadding 2D padding of the output block for processing
+	 * @param multiSem different parameters depending on type of em scope
 	 *
 	 * @throws IOException if something goes wrong with the n5 containers
 	 */
@@ -796,7 +802,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long[] blockSizeOut,
 			final long[] blockPadding,
 			final double maxDeltaZ,
-			final int maxDeltaZTimes) throws IOException {
+			final int maxDeltaZTimes,
+			final boolean multiSem ) throws IOException {
 
 		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5FSReader(n5CostPath);
 		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
@@ -862,7 +869,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 							cell[1],
 							blockPadding,
 							padding,
-							maxStepSize));
+							maxStepSize,
+							multiSem));
 
 		final double[][] sumAvgs = avgs.reduce((a, b) -> {
 
@@ -955,7 +963,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = multiSem ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -967,20 +975,13 @@ public class SparkSurfaceFit implements Callable<Void>{
 			//ImageJFunctions.show( cost ).setTitle( "cost" );
 			//ImageJFunctions.show( mask ).setTitle( "mask" );
 			//ImageJFunctions.show( inpaintedCost ).setTitle( "inpainted cost" );
+			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
 
-			if ( skipPermute )
-			{
-				downsamplingFactors = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
-			}
-			else
-			{
-				final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
+			downsamplingFactors = new double[ 3 ];
+			downsamplingFactors[0] = downsamplingFactorsXZY[0];
+			downsamplingFactors[1] = downsamplingFactorsXZY[multiSem ? 1 : 2];
+			downsamplingFactors[2] = downsamplingFactorsXZY[multiSem ? 2 : 1];
 
-				downsamplingFactors = new double[ 3 ];
-				downsamplingFactors[0] = downsamplingFactorsXZY[0];
-				downsamplingFactors[1] = downsamplingFactorsXZY[2];
-				downsamplingFactors[2] = downsamplingFactorsXZY[1];
-			}
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
 
 			System.out.println( "dzScale: " + downsamplingFactors[0] + "/" + downsamplingFactors[2 ] + "=" + dzScale );
@@ -996,8 +997,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 			minAvg = weightedAverage(Views.iterable(heightFields[0]), Views.iterable(mask));
 			maxAvg = weightedAverage(Views.iterable(heightFields[1]), Views.iterable(mask));
 
-			ImageJFunctions.show( heightFields[ 0 ] ).setTitle( "heightFields[ 0 ]" );
-			ImageJFunctions.show( heightFields[ 1 ] ).setTitle( "heightFields[ 1 ]" );
+			ImageJFunctions.show( heightFields[ 0 ], "heightFields[ 0 ]" );
+			ImageJFunctions.show( heightFields[ 1 ], "heightFields[ 1 ]" );
+
 			if (minAvg > maxAvg) {
 				final double a = minAvg;
 				minAvg = maxAvg;
@@ -1028,7 +1030,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final String dataset = inGroup + "/s" + s;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = multiSem ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -1044,19 +1046,20 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final double[] newDownsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
 			final double[] scale = new double[] {
 					downsamplingFactors[0] / newDownsamplingFactorsXZY[0],
-					downsamplingFactors[1] / newDownsamplingFactorsXZY[ skipPermute ? 1 : 2],
-					downsamplingFactors[2] / newDownsamplingFactorsXZY[ skipPermute ? 2 : 1]};
+					downsamplingFactors[1] / newDownsamplingFactorsXZY[ multiSem ? 1 : 2],
+					downsamplingFactors[2] / newDownsamplingFactorsXZY[ multiSem ? 2 : 1]};
 			downsamplingFactors[0] = newDownsamplingFactorsXZY[0];
-			downsamplingFactors[1] = newDownsamplingFactorsXZY[skipPermute ? 1 : 2];
-			downsamplingFactors[2] = newDownsamplingFactorsXZY[skipPermute ? 2 : 1];
+			downsamplingFactors[1] = newDownsamplingFactorsXZY[multiSem ? 1 : 2];
+			downsamplingFactors[2] = newDownsamplingFactorsXZY[multiSem ? 2 : 1];
 
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
 
-			// FIB-SEM padding
-			//final int padding = 8 * (int)Math.round(scale[2]) * 2 + 1;
+			final int padding;
 
-			// MultiSEM padding
-			final int padding = 2 * (int)Math.round(scale[2]) * 2 + 1;
+			if ( multiSem )
+				padding = 2 * (int)Math.round(scale[2]) * 2 + 1;
+			else
+				padding = 8 * (int)Math.round(scale[2]) * 2 + 1;
 
 			System.out.println("dzScale: " + dzScale);
 			System.out.println("scale: " + Arrays.toString(scale));
@@ -1071,7 +1074,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 					maxAvg,
 					scale,
 					padding,
-					(int)Math.max(1, Math.round(dzScale * maxDeltaZ)));
+					(int)Math.max(1, Math.round(dzScale * maxDeltaZ)),
+					multiSem );
 //					(int)Math.round(scale[2]) * 2);
 
 			minField = updatedHeightFields.getA();
@@ -1208,7 +1212,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = multiSem ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -1218,7 +1222,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 					mask);
 
 			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
-			if ( skipPermute )
+			if ( multiSem )
 			{
 				downsamplingFactors[0] = downsamplingFactorsXZY[0];
 				downsamplingFactors[1] = downsamplingFactorsXZY[1];
@@ -1282,7 +1286,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 					blockSize,
 					blockPadding,
 					maxDeltaZ,
-					2);
+					2,
+					multiSem );
 
 
 			/* visualization again ... */
@@ -1391,7 +1396,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = multiSem ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -1401,7 +1406,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 					mask);
 
 			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
-			if ( skipPermute )
+			if ( multiSem )
 			{
 				downsamplingFactors[0] = downsamplingFactorsXZY[0];
 				downsamplingFactors[1] = downsamplingFactorsXZY[1];
@@ -1469,7 +1474,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 					blockSize,
 					blockPadding,
 					maxDeltaZ,
-					2);
+					2,
+					multiSem );
 		}
 	}
 
