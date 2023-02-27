@@ -66,6 +66,7 @@ import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealViews;
@@ -483,6 +484,11 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final int maxDistance,
 			final int numSurfaces) {
 
+		System.out.println( "initHeightFields" );
+		System.out.println( "maxStepSize: " + maxStepSize);
+		System.out.println( "minDistance:" + minDistance);
+		System.out.println( "maxDistance: " + maxDistance );
+		
 		final long min = (long)Math.floor(cost.min(2));
 
 		final RandomAccessibleInterval<IntType>[] intHeightFields = extractSurfaces(
@@ -860,11 +866,12 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@SuppressWarnings("unchecked")
 	public Void callSingle() throws IOException {
 
+		new ImageJ();
 		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
 
-		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
-		final JavaSparkContext sc = new JavaSparkContext(conf);
-		sc.setLogLevel("ERROR");
+		//final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
+		//final JavaSparkContext sc = new JavaSparkContext(conf);
+		//sc.setLogLevel("ERROR");
 
 
 		/* visualization */
@@ -923,7 +930,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		double minAvg;
 		double maxAvg;
 
-		final double[] downsamplingFactors = new double[3];
+		final double[] downsamplingFactors;
 
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
@@ -941,20 +948,26 @@ public class SparkSurfaceFit implements Callable<Void>{
 								new FloatType()),
 					mask);
 
-			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
+			ImageJFunctions.show( cost ).setTitle( "cost" );
+			ImageJFunctions.show( mask ).setTitle( "mask" );
+			ImageJFunctions.show( inpaintedCost ).setTitle( "inpainted cost" );
+
 			if ( skipPermute )
 			{
-				downsamplingFactors[0] = downsamplingFactorsXZY[0];
-				downsamplingFactors[1] = downsamplingFactorsXZY[1];
-				downsamplingFactors[2] = downsamplingFactorsXZY[2];
+				downsamplingFactors = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
 			}
 			else
 			{
+				final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
+
+				downsamplingFactors = new double[ 3 ];
 				downsamplingFactors[0] = downsamplingFactorsXZY[0];
 				downsamplingFactors[1] = downsamplingFactorsXZY[2];
 				downsamplingFactors[2] = downsamplingFactorsXZY[1];
 			}
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
+
+			System.out.println( "dzScale: " + downsamplingFactors[0] + "/" + downsamplingFactors[2 ] + "=" + dzScale );
 
 			final RandomAccessibleInterval<FloatType>[] heightFields = initHeightFields(
 					inpaintedCost,
@@ -967,6 +980,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			minAvg = weightedAverage(Views.iterable(heightFields[0]), Views.iterable(mask));
 			maxAvg = weightedAverage(Views.iterable(heightFields[1]), Views.iterable(mask));
 
+			ImageJFunctions.show( heightFields[ 0 ] ).setTitle( "heightFields[ 0 ]" );
+			ImageJFunctions.show( heightFields[ 1 ] ).setTitle( "heightFields[ 1 ]" );
 			if (minAvg > maxAvg) {
 				final double a = minAvg;
 				minAvg = maxAvg;
@@ -989,6 +1004,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final String maxDataset = groupName + "/max";
 			N5Utils.save(maxField, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
 			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
+			SimpleMultiThreading.threadHaltUnClean();
 		}
 
 		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
@@ -1077,7 +1093,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		}
 
 
-		sc.close();
+		//sc.close();
 
 		return null;
 	}
@@ -1290,6 +1306,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	//public Void callSpark() throws IOException {
 	@Override
 	public Void call() throws IOException {
+
+		callSingle();
+		SimpleMultiThreading.threadHaltUnClean();
 
 		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
 		final JavaSparkContext sc = new JavaSparkContext(conf);
