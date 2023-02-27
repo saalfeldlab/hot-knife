@@ -422,8 +422,9 @@ public class SparkComputeCostMultiSem {
 			Long[] gridCoord,
 			ExecutorService executorService ) {
 
-		RandomAccessibleInterval<UnsignedByteType> zcorrRaw = null;
-		RandomAccessibleInterval<UnsignedByteType> maskRaw = null;
+		final RandomAccessibleInterval<UnsignedByteType> zcorrRaw;
+		final RandomAccessibleInterval<UnsignedByteType> maskRaw;
+		final RandomAccessible<UnsignedByteType> maskExtended;
 
 		try
 		{
@@ -435,6 +436,13 @@ public class SparkComputeCostMultiSem {
 
 				if ( !Intervals.equals(zcorrRaw, maskRaw) )
 					throw new RuntimeException( "zCorrRaw interval [" + Util.printInterval(zcorrRaw) + "] and mask interval [" + Util.printInterval(maskRaw) + "] are not the same, quitting." );
+
+				maskExtended = Views.extendZero( maskRaw );
+			}
+			else
+			{
+				maskRaw = null;
+				maskExtended = null;
 			}
 
 		} catch (IOException e) { throw new RuntimeException( "Cannot load input zcorr data", e ); }
@@ -476,7 +484,7 @@ public class SparkComputeCostMultiSem {
 		if ( maskRaw != null )
 		{
 			final Cursor<UnsignedByteType> m = Views.iterable( mask2d ).localizingCursor();
-			final RandomAccess<UnsignedByteType> maskData = maskRaw.randomAccess();
+			final RandomAccess<UnsignedByteType> maskData = maskExtended.randomAccess();
 
 			while ( m.hasNext() )
 			{
