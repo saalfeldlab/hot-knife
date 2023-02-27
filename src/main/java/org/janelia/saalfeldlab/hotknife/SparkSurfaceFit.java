@@ -429,6 +429,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 				new long[] {mask.min(0), mask.min(1), min},
 				new long[] {mask.max(0), mask.max(1), min + padding * 2 - 1});
 
+		//ImageJFunctions.show( cropTransformCost, "cropTransformCost" );
+
 		final RandomAccessibleInterval<FloatType> inpaintedCropTransformCost = inpaintCost(
 				Converters.convert(
 						cropTransformCost,
@@ -436,10 +438,13 @@ public class SparkSurfaceFit implements Callable<Void>{
 						new FloatType()),
 				mask);
 
+		//ImageJFunctions.show( inpaintedCropTransformCost, "inpaintedCropTransformCost" );
+
 		final RandomAccessibleInterval<IntType> heightFieldUpdate = extractSurface(
 				inpaintedCropTransformCost,
 				maxStepSize);
 
+		//ImageJFunctions.show( heightFieldUpdate, "heightFieldUpdate" );
 		System.out.println("height field update " + net.imglib2.util.Util.printInterval(heightFieldUpdate));
 
 		final RandomAccessibleInterval<DoubleType> doubleFixedHeightField = Converters.convert(
@@ -457,6 +462,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			(a, b) -> b.set(a.get(0).getRealFloat() + a.get(1).getRealFloat()),
 			new FloatType());
 
+		//ImageJFunctions.show( updatedMinField, "updatedMinField" );
+		//SimpleMultiThreading.threadHaltUnClean();
 		return inpaintHeightField(
 				updatedMinField,
 				mask);
@@ -545,6 +552,12 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long padding,
 			final int maxStepSize) {
 
+		//System.out.println( "minAvg: " + minAvg );
+		//System.out.println( "maxAvg: " + maxAvg );
+		//System.out.println( "scale: " + net.imglib2.util.Util.printCoordinates( scale ) );
+		//System.out.println( "padding: " + padding );
+		//System.out.println( "maxStepSize: " + maxStepSize );
+
 		final RealRandomAccessible<DoubleType> minFieldScaled =
 				Transform.scaleAndShiftHeightField(
 						Transform.scaleAndShiftHeightFieldValues(
@@ -553,7 +566,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 								0),
 						Arrays.copyOf(scale, 2));
 
-//		ImageJFunctions.show(Views.interval(Views.raster(minFieldScaled), cost), "min field scaled");
+		//ImageJFunctions.show(Views.interval(Views.raster(minFieldScaled), cost), "min field scaled");
 
 		final RealRandomAccessible<DoubleType> maxFieldScaled =
 				Transform.scaleAndShiftHeightField(
@@ -563,10 +576,13 @@ public class SparkSurfaceFit implements Callable<Void>{
 								0),
 						Arrays.copyOf(scale, 2));
 
-//		ImageJFunctions.show(Views.interval(Views.raster(maxFieldScaled), cost), "max field scaled");
+		//ImageJFunctions.show(Views.interval(Views.raster(maxFieldScaled), cost), "max field scaled");
 
 		final double offsetZScaledMinAvg = (minAvg + 0.5) * scale[2] - 0.5;
 		final double offsetZScaledMaxAvg = (maxAvg + 0.5) * scale[2] - 0.5;
+
+		//System.out.println( "offsetZScaledMinAvg: " + offsetZScaledMinAvg );
+		//System.out.println( "offsetZScaledMaxAvg: " + offsetZScaledMaxAvg );
 
 		final FlattenTransform<DoubleType> flatteningTransform =
 				new FlattenTransform<>(
@@ -577,12 +593,12 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		final RealTransformRandomAccessible<T, ? extends RealTransform> transformedCost = RealViews.transform(
 				Views.interpolate(
-						Views.extendBorder(cost),
+						//Views.extendBorder(cost), // TODO: this is a problem at the borders since the multi-sem cost function tends to be the same across all pixels in z=0
+						Views.extendValue(cost,255),
 						new NLinearInterpolatorFactory<>()),
 				flatteningTransform);
 
-//		ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
-
+		//ImageJFunctions.show(Views.interval(Views.raster(transformedCost), cost), "transformed cost");
 
 		final RandomAccessibleInterval<FloatType> updatedMinField = calculateHeightField(
 				transformedCost,
@@ -948,9 +964,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 								new FloatType()),
 					mask);
 
-			ImageJFunctions.show( cost ).setTitle( "cost" );
-			ImageJFunctions.show( mask ).setTitle( "mask" );
-			ImageJFunctions.show( inpaintedCost ).setTitle( "inpainted cost" );
+			//ImageJFunctions.show( cost ).setTitle( "cost" );
+			//ImageJFunctions.show( mask ).setTitle( "mask" );
+			//ImageJFunctions.show( inpaintedCost ).setTitle( "inpainted cost" );
 
 			if ( skipPermute )
 			{
@@ -1004,14 +1020,15 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final String maxDataset = groupName + "/max";
 			N5Utils.save(maxField, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
 			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
-			SimpleMultiThreading.threadHaltUnClean();
 		}
+
+		//SimpleMultiThreading.threadHaltUnClean();
 
 		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
 
 			final String dataset = inGroup + "/s" + s;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
-			final RandomAccessibleInterval<UnsignedByteType> permutedCost = Views.permute(cost, 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> permutedCost = skipPermute ? cost : Views.permute(cost, 1, 2);
 			final RandomAccessibleInterval<UnsignedByteType> mask = costMask(permutedCost);
 			final RandomAccessibleInterval<FloatType> inpaintedCost = inpaintCost(
 					Converters.convert(
@@ -1020,21 +1037,30 @@ public class SparkSurfaceFit implements Callable<Void>{
 								new FloatType()),
 					mask);
 
+			ImageJFunctions.show( cost ).setTitle( "cost s/"+s );
+			ImageJFunctions.show( mask ).setTitle( "mask s/"+s );
+			ImageJFunctions.show( inpaintedCost ).setTitle( "inpainted cost s/"+s );
+
 			final double[] newDownsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
 			final double[] scale = new double[] {
 					downsamplingFactors[0] / newDownsamplingFactorsXZY[0],
-					downsamplingFactors[1] / newDownsamplingFactorsXZY[2],
-					downsamplingFactors[2] / newDownsamplingFactorsXZY[1]};
+					downsamplingFactors[1] / newDownsamplingFactorsXZY[ skipPermute ? 1 : 2],
+					downsamplingFactors[2] / newDownsamplingFactorsXZY[ skipPermute ? 2 : 1]};
 			downsamplingFactors[0] = newDownsamplingFactorsXZY[0];
-			downsamplingFactors[1] = newDownsamplingFactorsXZY[2];
-			downsamplingFactors[2] = newDownsamplingFactorsXZY[1];
+			downsamplingFactors[1] = newDownsamplingFactorsXZY[skipPermute ? 1 : 2];
+			downsamplingFactors[2] = newDownsamplingFactorsXZY[skipPermute ? 2 : 1];
 
 			final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
-			final int padding = 8 * (int)Math.round(scale[2]) * 2 + 1;
 
-			System.out.println(dzScale);
-			System.out.println(Arrays.toString(scale));
-			System.out.println(Arrays.toString(downsamplingFactors));
+			// FIB-SEM padding
+			//final int padding = 8 * (int)Math.round(scale[2]) * 2 + 1;
+
+			// MultiSEM padding
+			final int padding = 2 * (int)Math.round(scale[2]) * 2 + 1;
+
+			System.out.println("dzScale: " + dzScale);
+			System.out.println("scale: " + Arrays.toString(scale));
+			System.out.println("downsamplingFactors: " +Arrays.toString(downsamplingFactors));
 
 			final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updatedHeightFields = updateHeightFields(
 					inpaintedCost,
@@ -1063,6 +1089,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			System.out.println(minAvg + ", " + maxAvg);
 
+			SimpleMultiThreading.threadHaltUnClean();
 
 
 			/* visualization again ... */
