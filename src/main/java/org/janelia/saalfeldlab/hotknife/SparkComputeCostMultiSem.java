@@ -299,9 +299,6 @@ public class SparkComputeCostMultiSem {
 			);
 		}
 
-		if ( System.currentTimeMillis() > 0 )
-			return;
-
 		if (options.surfaceN5Output != null) {
 			SparkSurfaceFit sparkSurfaceFit = new SparkSurfaceFit(options.outputN5Path,
 																  options.outputN5Path,
