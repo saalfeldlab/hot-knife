@@ -569,9 +569,9 @@ public class SparkComputeCostMultiSem {
 			}
 		}
 
-		ImageJFunctions.show( Views.subsample( Views.zeroMin( Views.interval( zcorrExtended, zcorrInterval ) ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
-		ImageJFunctions.show( derivative );
-		SimpleMultiThreading.threadHaltUnClean();
+//		ImageJFunctions.show( Views.subsample( Views.zeroMin( Views.interval( zcorrExtended, zcorrInterval ) ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
+//		ImageJFunctions.show( derivative );
+//		SimpleMultiThreading.threadHaltUnClean();
 
 		return derivative;
 		
