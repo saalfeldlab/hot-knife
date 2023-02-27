@@ -705,8 +705,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final double[] downsamplingFactorsXZY = n5Cost.getAttribute(costDataset, "downsamplingFactors", double[].class);
 		final double[] downsamplingFactors = new double[]{
 				downsamplingFactorsXZY[0],
-				downsamplingFactorsXZY[2],
-				downsamplingFactorsXZY[1]};
+				downsamplingFactorsXZY[multisem ? 1 : 2],
+				downsamplingFactorsXZY[multisem ? 2 : 1]};
 
 		final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5Field, heightFieldGroup + "/min");
 		final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5Field, heightFieldGroup + "/max");
@@ -817,19 +817,32 @@ public class SparkSurfaceFit implements Callable<Void>{
 		}
 		final long[] dimensions = new long[] {
 				dimensionsXZY[0],
-				dimensionsXZY[2],
-				dimensionsXZY[1]};
+				dimensionsXZY[multiSem ? 1 : 2],
+				dimensionsXZY[multiSem ? 2 : 1]};
 		final double[] downsamplingFactorsXZY = n5Cost.getAttribute(costDataset, "downsamplingFactors", double[].class);
 		if (downsamplingFactorsXZY == null) {
 			throw new IllegalArgumentException("downsamplingFactors attribute missing from costDataset " + costDataset);
 		}
 		final double[] downsamplingFactors = new double[] {
 				downsamplingFactorsXZY[0],
-				downsamplingFactorsXZY[2],
-				downsamplingFactorsXZY[1]};
+				downsamplingFactorsXZY[multiSem ? 1 : 2],
+				downsamplingFactorsXZY[multiSem ? 2 : 1]};
 		final double dzScale = downsamplingFactors[0] / downsamplingFactors[2];
 		final int maxStepSize = (int)Math.max(1, Math.round(dzScale * maxDeltaZ));
-		final int padding = Math.max(15, maxStepSize * maxDeltaZTimes + 1);
+		final int padding;
+
+		/*
+		// from callSingle()
+		if ( multiSem )
+			padding = 2 * (int)Math.round(scale[2]) * 2 + 1;
+		else
+			padding = 8 * (int)Math.round(scale[2]) * 2 + 1;
+		*/
+
+		if ( multiSem )
+			padding = 5;//Math.max(15, maxStepSize * maxDeltaZTimes + 1);
+		else
+			padding = Math.max(15, maxStepSize * maxDeltaZTimes + 1);
 
 		System.out.println( "dzScale " + dzScale + ", downsampling of heightfield " + net.imglib2.util.Util.printCoordinates( downsamplingFactors ));
 		System.out.println("max step size " + maxStepSize + ", z-padding with " + padding + "px");
@@ -1040,8 +1053,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 					mask);
 
 			ImageJFunctions.show( cost ).setTitle( "cost s/"+s );
-			ImageJFunctions.show( mask ).setTitle( "mask s/"+s );
-			ImageJFunctions.show( inpaintedCost ).setTitle( "inpainted cost s/"+s );
+			//ImageJFunctions.show( mask ).setTitle( "mask s/"+s );
+			//ImageJFunctions.show( inpaintedCost ).setTitle( "inpainted cost s/"+s );
 
 			final double[] newDownsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
 			final double[] scale = new double[] {
@@ -1093,7 +1106,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			System.out.println(minAvg + ", " + maxAvg);
 
-			SimpleMultiThreading.threadHaltUnClean();
+			//SimpleMultiThreading.threadHaltUnClean();
 
 
 			/* visualization again ... */
