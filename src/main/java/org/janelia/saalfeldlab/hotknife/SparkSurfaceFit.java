@@ -667,11 +667,19 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
 
 		@SuppressWarnings("unchecked")
-		final RandomAccessibleInterval<UnsignedByteType> fullCost =
-		Views.permute(
-				(RandomAccessibleInterval<UnsignedByteType>)wrap( N5Utils.open(n5Cost, costDataset) ),
-				1,
-				2);
+		final RandomAccessibleInterval<UnsignedByteType> fullCost;
+
+		if ( multisem )
+		{
+			fullCost = (RandomAccessibleInterval<UnsignedByteType>)wrap( N5Utils.open(n5Cost, costDataset) );
+		}
+		else
+		{
+			fullCost = Views.permute(
+					(RandomAccessibleInterval<UnsignedByteType>)wrap( N5Utils.open(n5Cost, costDataset) ),
+					1,
+					2);
+		}
 
 		final long[] blockMin = new long[blockMinOut.length];
 		Arrays.setAll(
