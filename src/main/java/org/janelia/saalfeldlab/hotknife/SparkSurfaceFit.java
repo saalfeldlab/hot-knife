@@ -644,7 +644,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param blockPadding 2D padding of the output block for processing
 	 * @param padding padding in z around the previous surface
 	 * @param maxStepSize maximum z step size for surface update in output space
-	 * @param multiSem different parameters depending on the type of em scope
+	 * @param multisem different parameters depending on the type of em scope
 	 *
 	 * @return value and weight sums of the updated height fields (can be all 0 if everything is masked)
 	 *
@@ -661,7 +661,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long[] blockPadding,
 			final long padding,
 			final int maxStepSize,
-			final boolean multiSem ) throws IOException {
+			final boolean multisem ) throws IOException {
 
 		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5FSWriter(n5CostPath);
 		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
