@@ -97,6 +97,9 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--costN5Group", required = true, usage = "N5 dataset, e.g. /cost/Sec26")
 		private String costDatasetName = null;
 
+		@Option(name = "--maskN5Group", required = false, usage = "N5 dataset, e.g. /mask/Sec26")
+		private String maskDatasetName = null;
+
 		@Option(name = "--firstStepScaleNumber",
 				usage = "scale number for first cost step, e.g. 1 for s1")
 		private int firstStepScaleNumber = 1;
@@ -177,6 +180,7 @@ public class SparkComputeCostMultiSem {
 		String costN5Path = options.outputN5Path;
 		String zcorrDataset = options.inputDatasetName;
 		String costDataset = options.getCostDatasetName(0);
+		String maskDataset = options.maskDatasetName;
 		int[] costSteps = options.getCostSteps(0);
 
 		System.out.println("Computing cost on: " + n5Path + " " + zcorrDataset );
@@ -223,11 +227,11 @@ public class SparkComputeCostMultiSem {
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
-		//new ImageJ();
-		//for (long x = 2; x <= 2; x++) {
-		//	for (long y = 8; y <= 8; y++) {
-		for (long x = 0; x < gridXSize; x++) {
-			for (long y = 0; y < gridYSize; y++) {
+		new ImageJ();
+		for (long x = 2; x <= 2; x++) {
+			for (long y = 8; y <= 8; y++) {
+		//for (long x = 0; x < gridXSize; x++) {
+		//	for (long y = 0; y < gridYSize; y++) {
 				if ( x == 2 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
 				gridCoords.add(new Long[]{x, y});
 			}
@@ -274,7 +278,7 @@ public class SparkComputeCostMultiSem {
 
 			gridCoordPartition.forEachRemaining(gridCoord -> {
 
-					processColumn( n5Path, costN5Path, zcorrDataset, costDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService );
+					processColumn( n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService );
 			    });
 
 			executorService.shutdown();
@@ -334,6 +338,7 @@ public class SparkComputeCostMultiSem {
 			String costN5Path,
 			String zcorrDataset,
 			String costDataset,
+			String maskDataset,
 			final boolean filter,
 			final boolean gauss,
 			int[] costBlockSize,
@@ -346,7 +351,7 @@ public class SparkComputeCostMultiSem {
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				processColumnAlongAxis(n5Path, zcorrDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService);
+				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService);
 
 		//ImageJFunctions.show( cost );
 		//SimpleMultiThreading.threadHaltUnClean();
@@ -408,6 +413,7 @@ public class SparkComputeCostMultiSem {
 	public static RandomAccessibleInterval<UnsignedByteType> processColumnAlongAxis(
 			String n5Path,
 			String zcorrDataset,
+			String maskDataset,
 			final boolean filter,
 			final boolean gauss,
 			int[] zcorrBlockSize,
@@ -416,87 +422,156 @@ public class SparkComputeCostMultiSem {
 			Long[] gridCoord,
 			ExecutorService executorService ) {
 
-		RandomAccessibleInterval<UnsignedByteType> zcorr = null;
+		RandomAccessibleInterval<UnsignedByteType> zcorrRaw = null;
+		RandomAccessibleInterval<UnsignedByteType> maskRaw = null;
+
 		try
 		{
-			zcorr = N5Utils.open(new N5FSReader(n5Path), zcorrDataset);
+			zcorrRaw = N5Utils.open(new N5FSReader(n5Path), zcorrDataset);
+
+			if ( maskDataset != null )
+			{
+				maskRaw = N5Utils.open(new N5FSReader(n5Path), maskDataset);
+
+				if ( !Intervals.equals(zcorrRaw, maskRaw) )
+					throw new RuntimeException( "zCorrRaw interval [" + Util.printInterval(zcorrRaw) + "] and mask interval [" + Util.printInterval(maskRaw) + "] are not the same, quitting." );
+			}
 
 		} catch (IOException e) { throw new RuntimeException( "Cannot load input zcorr data", e ); }
 
 		// The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
 		// zcorr = Views.permute(zcorr, costAxis, 2);
 
-		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendZero(zcorr);
+		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue( zcorrRaw, 170 ); // TODO: variable 170
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
-		zcorr = Views.interval( zcorrExtended, zcorrInterval );
+		//final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
-		//ImageJFunctions.show( zcorr );
+		ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ) );
+		if ( maskRaw != null)
+			ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ) );
 		//SimpleMultiThreading.threadHaltUnClean();
 
 		// compute derivative in z and keep only negative values
-		// we set the outofbounds to 170, which is about the resin color in case the sample touches the image boundary
+		// we set the outofbounds to 170 above, which is about the resin color in case the sample touches the image boundary
 		// TODO: the derivative is offset by 0.5 pixels on the bottom, and by 0.5 px on the top towards the other direction
 
-		final RandomAccessible<UnsignedByteType> zcorrEx = Views.extendValue( Views.subsample( Views.zeroMin( zcorr ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ), 170 ); // TODO: variable 170
+		//final RandomAccessibleInterval<UnsignedByteType> zcorrSubsampled = Views.subsample( zcorr, costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] );
 
-		final long[] dim = zcorr.dimensionsAsLongArray();
+		final long[] dim = zcorrInterval.dimensionsAsLongArray();
 		for ( int d = 0; d < dim.length; ++d )
 			dim[ d ] /= costSteps[ d ];
 
 		final RandomAccessibleInterval<UnsignedByteType> derivative = ArrayImgs.unsignedBytes( dim );
 
+		// by default, there is data everywhere (mask set to 255)
+		final RandomAccessibleInterval<UnsignedByteType> mask2d =
+				Views.translate(
+						ArrayImgs.unsignedBytes(
+								new long[] { zcorrInterval.dimension( 0 ), zcorrInterval.dimension( 1 ) } ),
+								new long[] { zcorrInterval.min( 0 ), zcorrInterval.min( 1 ) } );
+
+		for ( final UnsignedByteType v : Views.iterable( mask2d ) )
+			v.set( 255 );
+
+		if ( maskRaw != null )
+		{
+			final Cursor<UnsignedByteType> m = Views.iterable( mask2d ).localizingCursor();
+			final RandomAccess<UnsignedByteType> maskData = maskRaw.randomAccess();
+
+			while ( m.hasNext() )
+			{
+				final UnsignedByteType v = m.next();
+				maskData.setPosition( m.getIntPosition( 0 ), 0 );
+				maskData.setPosition( m.getIntPosition( 1 ), 1 );
+
+				for ( long z = zcorrInterval.min( 2 ); z <= zcorrInterval.max( 2 ); ++z )
+				{
+					maskData.setPosition( z, 2 );
+					if ( maskData.get().get() < 255 )
+					{
+						v.set( 0 );
+						break;
+					}
+				}
+			}
+		}
+
+		ImageJFunctions.show( mask2d );
+
 		final Cursor<UnsignedByteType> out = Views.iterable( derivative ).localizingCursor();
-		final RandomAccess<UnsignedByteType> in = zcorrEx.randomAccess();
+		final RandomAccess<UnsignedByteType> in = zcorrExtended.randomAccess();
+		final RandomAccess<UnsignedByteType> m = mask2d.randomAccess();
+		final int n = out.numDimensions();
+		final long[] pos = new long[ n ];
 
 		// TODO: inpaint OR cut out minimal bounding box during Render export
 		while ( out.hasNext() )
 		{
-			final UnsignedByteType d = out.next();
+			final UnsignedByteType v = out.next();
+			out.localize( pos );
 
-			if ( out.getIntPosition( 2 ) == 0 )
+			// transform pos[] to original image coordinates
+			for ( int d = 0; d < n; ++d )
+				pos[ d ] = pos[ d ] * costSteps[ d ] + zcorrInterval.min( d );
+
+			m.setPosition( pos[ 0 ], 0 );
+			m.setPosition( pos[ 1 ], 1 );
+
+			// no data available in one of the z-layers
+			if ( m.get().get() == 0 )
 			{
-				// the second surface on top we just fake for now (170 all)
-				d.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
-			}
-			else if ( out.getIntPosition( 2 ) == derivative.max( 2 ) )
-			{
-				// on the last layer we do not check whether it is inside or outside the image
-				in.setPosition( out );
-				
-				final int x0 = in.get().get();
-				in.fwd( 2 );
-				final int x1 = in.get().get();
-				d.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
+				if ( pos[ 2 ] == 0 || pos[ 2 ] == zcorrInterval.max( 2 ) )
+					v.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
+				else
+					v.set( 255 );
 			}
 			else
 			{
-				in.setPosition( out );
+				if ( pos[ 2 ] == 0 )
+				{
+					// the second surface on top we just fake for now (170 all)
+					v.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
+				}
+				else if ( pos[ 2 ] == zcorrInterval.max( 2 ) )
+				{
+					// on the last layer we do not check whether it is inside or outside the image
+					in.setPosition( pos );
+					
+					final int x0 = in.get().get();
+					in.fwd( 2 );
+					final int x1 = in.get().get();
+					v.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
+				}
+				else
+				{
+					in.setPosition( pos );
+		
+					final int x0 = in.get().get();
 	
-				final int x0 = in.get().get();
-
-				// TODO: this is a hack, ideally we'd want a mask (on-the-fly or saved) to see where images end
-				if ( x0 == 0 && isAnyXYNeighboringPixelBlack( in ) )
-				{
-					d.set( 255 );
-					continue;
+					// TODO: this is a hack, ideally we'd want a mask (on-the-fly or saved) to see where images end
+					if ( x0 == 0 && isAnyXYNeighboringPixelBlack( in ) )
+					{
+						v.set( 255 );
+						continue;
+					}
+	
+					in.fwd( 2 );
+					final int x1 = in.get().get();
+	
+					if ( x1 == 0 && isAnyXYNeighboringPixelBlack( in ) )
+					{
+						v.set( 255 );
+						continue;
+					}
+	
+					v.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 				}
-
-				in.fwd( 2 );
-				final int x1 = in.get().get();
-
-				if ( x1 == 0 && isAnyXYNeighboringPixelBlack( in ) )
-				{
-					d.set( 255 );
-					continue;
-				}
-
-				d.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
 			}
 		}
 
-		//ImageJFunctions.show( Views.subsample( Views.zeroMin( zcorr ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
-		//ImageJFunctions.show( derivative );
-		//SimpleMultiThreading.threadHaltUnClean();
+		ImageJFunctions.show( Views.subsample( Views.zeroMin( Views.interval( zcorrExtended, zcorrInterval ) ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
+		ImageJFunctions.show( derivative );
+		SimpleMultiThreading.threadHaltUnClean();
 
 		return derivative;
 		
