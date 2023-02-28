@@ -482,7 +482,7 @@ public class Show {
 			final double[][] scales,
 			final VoxelDimensions voxelDimensions,
 			final String name,
-			final long offset,
+			final double offset,
 			final SharedQueue queue) {
 
 		final int numScales = rawMipmaps.length;

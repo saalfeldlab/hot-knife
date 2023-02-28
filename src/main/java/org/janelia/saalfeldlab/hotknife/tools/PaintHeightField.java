@@ -123,7 +123,7 @@ public class PaintHeightField implements Callable<Void>{
 	private int[] heightfieldOffset = null;
 
 	@Option(names = {"-o", "--offset"}, required = true, description = "offset from the target surface, this will be at z=0, e.g. 3")
-	private int offset = 0;
+	private double offset = 0;
 
 	@Option(names = {"--heightFieldMagnitude"}, required = false, description = "allows to adjust the magnitude (multiplicative factor) of heightfield change when moving it (default: 1.0)")
 	private double heightFieldMagnitude = 1.0;
