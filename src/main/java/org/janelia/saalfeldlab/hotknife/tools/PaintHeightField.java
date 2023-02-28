@@ -59,23 +59,19 @@ import bdv.ui.CardPanel;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
-import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Interpolation;
 import bdv.viewer.SynchronizedViewerState;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
-import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
@@ -84,17 +80,12 @@ import net.imglib2.img.basictypeaccess.FloatAccess;
 import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealViews;
-import net.imglib2.realtransform.Translation3D;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Intervals;
-import net.imglib2.util.Pair;
-import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -193,110 +184,7 @@ public class PaintHeightField implements Callable<Void>{
 	}
 
 
-	public static class FullBrain
-	{
-		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps;
-		final double[][] scales;
-		final Translation3D[] offsetsAtOwnScale;
 
-		public FullBrain( final RandomAccessibleInterval<UnsignedByteType>[] mipmaps, final double[][] scales, final Translation3D[] offsetsAtOwnScale )
-		{
-			this.mipmaps = mipmaps;
-			this.scales = scales;
-			this.offsetsAtOwnScale = offsetsAtOwnScale;
-		}
-	}
-
-	public static FullBrain loadCroppedFullBrain() throws IOException
-	{
-		/*
-		new ImageJ();
-		ImagePlus imp = new ImagePlus( "/Users/preibischs/Desktop/test.tif" );
-		imp.show();
-
-		Img<FloatType> img = ImageJFunctions.wrapFloat(imp);
-		
-		ImageJFunctions.show(Views.rotate( img, 1, 0 )); // 90 degree counter-clockwise
-		ImageJFunctions.show(Views.permute(Views.rotate( img, 1, 0 ),1,2)); // 90 degree counter-clockwise + make XZY
-		
-		SimpleMultiThreading.threadHaltUnClean();
-		*/
-		final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_BR";
-		final String n5Dataset = "/40-06-final";
-		final Interval crop = new FinalInterval( new long[] {47204, 46557, 42756}, new long[] {55779, 59038, 53664} );
-
-		final N5Reader n5 = new N5FSReader(n5Path);
-		final int numScales = n5.list(n5Dataset).length;
-		final double[][] scales = new double[numScales][];
-		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = new RandomAccessibleInterval[numScales];
-
-		final Translation3D[] offsetsAtOwnScale = new Translation3D[numScales];
-
-		for (int s = 0; s < numScales; ++s) {
-
-			final String mipmapName = n5Dataset + "/s" + s;
-			mipmaps[s] = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName);
-			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
-			scales[s] = (scale == null) ? new double[] {1, 1, 1} : scale;
-
-			System.out.println( "scale: "+ net.imglib2.util.Util.printCoordinates( scales[s] ) );
-			System.out.println( "dimensions: "+ net.imglib2.util.Util.printInterval( mipmaps[ s ]));
-
-			final AffineTransform3D mipmapTransform = new AffineTransform3D();
-			mipmapTransform.set(
-					scales[s][ 0 ], 0, 0, 0.5 * ( scales[s][ 0 ] - 1 ),
-					0, scales[s][ 1 ], 0, 0.5 * ( scales[s][ 1 ] - 1 ),
-					0, 0, scales[s][ 2 ], 0.5 * ( scales[s][ 2 ] - 1 ) );
-
-			double[] min = new double[] {crop.min(0), crop.min(1), crop.min(2)};
-			double[] max = new double[] {crop.max(0), crop.max(1), crop.max(2)};
-
-			mipmapTransform.applyInverse(min, min);
-			mipmapTransform.applyInverse(max, max);
-
-			System.out.println( "mipmap transform: "+ mipmapTransform );
-			System.out.println( "updated interval: "+ net.imglib2.util.Util.printCoordinates( min ) + " >>> " + net.imglib2.util.Util.printCoordinates( max ) );
-
-			final RealInterval realBB = new FinalRealInterval(min, max);
-			Interval intBB = Intervals.smallestContainingInterval( realBB );
-
-			// now let's compute how much each transform needs to be moved in local (downsampled) coordinates
-			// due to the fact that the cropping was done on subpixel locations
-
-			final double[] offset = new double[3];
-			for ( int d = 0; d < offset.length; ++d )
-				offset[ d ] = (intBB.realMin( d ) - realBB.realMin( d ));
-
-			System.out.println( "offset for s" + s +": " + net.imglib2.util.Util.printCoordinates( offset ));
-
-			mipmaps[ s ] =
-					Views.permute(
-							Views.zeroMin(
-									Views.rotate(
-											Views.interval( mipmaps[ s ], intBB ),
-									1,
-									0 )),
-							1, 2);
-
-			// 90 degree counter-clockwise
-			double tmp = offset[ 1 ];
-			offset[ 1 ] = offset[ 0 ];
-			offset[ 0 ] = tmp;
-
-			// permute YZ
-			tmp = offset[ 1 ];
-			offset[ 1 ] = offset[ 2 ];
-			offset[ 2 ] = tmp;
-
-			System.out.println( "transformed offset for s" + s +": " + net.imglib2.util.Util.printCoordinates( offset ));
-
-			offsetsAtOwnScale[ s ] = new Translation3D( offset );
-
-			System.out.println();
-		}
-
-		return new FullBrain(mipmaps, scales,offsetsAtOwnScale);
-	}
 
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -319,11 +207,6 @@ public class PaintHeightField implements Callable<Void>{
 		final int numProc = Runtime.getRuntime().availableProcessors();
 		final SharedQueue queue = new SharedQueue(Math.min(12, Math.max(1, numProc - 2)));
 
-		final FullBrain fb = loadCroppedFullBrain();
-		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = fb.mipmaps;
-		final double[][] scales = fb.scales;
-
-		/*
 		final int numScales = n5.list(rawGroup).length;
 		final double[][] scales = new double[numScales][];
 		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
@@ -337,7 +220,6 @@ public class PaintHeightField implements Callable<Void>{
 
 			scales[s] = scale;
 		}
-		*/
 
 		final BdvOptions options =
 				BdvOptions.options()
@@ -346,28 +228,6 @@ public class PaintHeightField implements Callable<Void>{
 
 		BdvStackSource<?> bdv = null;
 
-		/*
-		RandomAccessibleIntervalMipmapSource<UnsignedByteType> test = new RandomAccessibleIntervalMipmapSource<>(
-				rawMipmaps,
-				new UnsignedByteType(),
-				scales,
-				new FinalVoxelDimensions("px", 1.0, 1.0, 1.0),
-				new AffineTransform3D(),
-				rawGroup);
-
-		RandomAccessibleIntervalMipmapSource<UnsignedByteType> test2 = new RandomAccessibleIntervalMipmapSource2<>(
-				rawMipmaps,
-				new UnsignedByteType(),
-				scales,
-				new FinalVoxelDimensions("px", 1.0, 1.0, 1.0),
-				new AffineTransform3D(),
-				fb.offsetsAtOwnScale,
-				rawGroup);
-
-		bdv = Show.mipmapSource(test2.asVolatile(queue), null, options);
-
-		SimpleMultiThreading.threadHaltUnClean();
-		*/
 		/* raw */
 		if ( !new File( n5FieldPath, fieldGroup ).exists() )
 		{
@@ -417,7 +277,7 @@ public class PaintHeightField implements Callable<Void>{
 
 		//System.out.print("adding offset to heightfield.");
 		//for ( final FloatType t : heightField )
-		//	t.set( t.get() + 200f );
+		//	t.set( t.get() + 1f );
 
 		final double avg = n5Field.getAttribute(fieldGroup, "avg", double.class);
 		//final double min = (avg + 0.5) * downsamplingFactors[2] - 0.5;
@@ -436,7 +296,6 @@ public class PaintHeightField implements Callable<Void>{
 						heightFieldTransform.inverse(),
 						rawMipmaps,
 						scales,
-						fb.offsetsAtOwnScale,
 						voxelDimensions,
 						fieldGroup,
 						offset,
