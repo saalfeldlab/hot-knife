@@ -131,6 +131,9 @@ public class PaintHeightField implements Callable<Void>{
 	@Option(names = {"--locationsFile"}, description = "full path for review locations JSON file, e.g. /nrs/flyem/render/n5/Z0720_07m_BR/review/Sec38/v3_acquire_trimmed_sp1_adaptive_ic___20210424_155438_gauss/min/locations.trautmane.json")
 	private String locationsFilePath = null;
 
+	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
+	private boolean multiSem = false;
+
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
 
 	/*
@@ -213,7 +216,8 @@ public class PaintHeightField implements Callable<Void>{
 		for (int s = 0; s < numScales; ++s) {
 
 			final String mipmapName = rawGroup + "/s" + s;
-			rawMipmaps[s] =Views.permute((RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName), 1, 2);
+			final RandomAccessibleInterval<UnsignedByteType> raw = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName);
+			rawMipmaps[s] = multiSem ? raw : Views.permute(raw, 1, 2);
 			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
 			if (scale == null)
 				scale = new double[] {1, 1, 1};
