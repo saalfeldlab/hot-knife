@@ -139,7 +139,7 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--surfaceInitMaxDeltaZ", usage = "maximum slope of the surface in original pixels in the first scale level (initialization), e.g. 0.3")
 		private double surfaceInitMaxDeltaZ = .2;
 
-		@Option(name = "--finaMaxDeltaZ", usage = "maximum slope of the surface in original pixels in the last scale level (s1 usually), e.g. 0.25")
+		@Option(name = "--finalaxDeltaZ", usage = "maximum slope of the surface in original pixels in the last scale level (s1 usually), e.g. 0.25")
 		private double finalMaxDeltaZ = 0.25;
 
 		@Option(name = "--surfaceMinDistance", usage = "minimum distance between the both surfaces, e.g. 15")
