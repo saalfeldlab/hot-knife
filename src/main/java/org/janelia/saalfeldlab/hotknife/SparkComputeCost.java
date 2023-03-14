@@ -330,6 +330,7 @@ public class SparkComputeCost {
 																  options.surfaceLastScale,
 																  options.surfaceMaxDeltaZ,
 																  options.surfaceInitMaxDeltaZ,
+																  options.surfaceMaxDeltaZ, // finaldeltaZ
 																  options.surfaceMinDistance,
 																  options.surfaceMaxDistance,
 																  false, // need to permute with FIB-SEM

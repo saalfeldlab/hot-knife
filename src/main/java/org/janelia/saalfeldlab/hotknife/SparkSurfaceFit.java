@@ -121,6 +121,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Option(names = {"--initMaxDeltaZ"}, description = "maximum slope of the surface in original pixels in the first scale level (initialization), e.g. 0.25")
 	private double initMaxDeltaZ = 0.25;
 
+	@Option(names = {"--finaMaxDeltaZ"}, description = "maximum slope of the surface in original pixels in the last scale level (s1 usually), e.g. 0.25")
+	private double finalMaxDeltaZ = 0.25;
+
 	@Option(names = {"--minDistance"}, description = "minimum distance between the both surfaces, e.g. 1000")
 	private double minDistance = 1;
 
@@ -158,6 +161,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 						   final int lastScaleIndex,
 						   final double maxDeltaZ,
 						   final double initMaxDeltaZ,
+						   final double finalMaxDeltaZ,
 						   final double minDistance,
 						   final double maxDistance,
 						   final boolean multiSem,
@@ -171,6 +175,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		this.lastScaleIndex = lastScaleIndex;
 		this.maxDeltaZ = maxDeltaZ;
 		this.initMaxDeltaZ = initMaxDeltaZ;
+		this.finalMaxDeltaZ = finalMaxDeltaZ;
 		this.minDistance = minDistance;
 		this.maxDistance = maxDistance;
 		this.multiSem = multiSem;
@@ -1086,6 +1091,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			System.out.println("scale: " + Arrays.toString(scale));
 			System.out.println("downsamplingFactors: " +Arrays.toString(downsamplingFactors));
 
+			final double maxDeltaZ = (s == lastScaleIndex ) ? this.finalMaxDeltaZ : this.maxDeltaZ;
+
 			final ValuePair<RandomAccessibleInterval<FloatType>, RandomAccessibleInterval<FloatType>> updatedHeightFields = updateHeightFields(
 					inpaintedCost,
 					mask,
@@ -1297,6 +1304,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final long[] blockSize = new long[] {128, 128};
 			final long[] blockPadding = new long[] {32, 32};
 
+			final double maxDeltaZ = (s == lastScaleIndex ) ? this.finalMaxDeltaZ : this.maxDeltaZ;
+
 			updateHeightFields(
 					sc,
 					n5Path,
@@ -1484,6 +1493,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			final long[] blockSize = new long[] {128, 128};
 			final long[] blockPadding = new long[] {32, 32};
+
+			final double maxDeltaZ = (s == lastScaleIndex ) ? this.finalMaxDeltaZ : this.maxDeltaZ;
 
 			updateHeightFields(
 					sc,

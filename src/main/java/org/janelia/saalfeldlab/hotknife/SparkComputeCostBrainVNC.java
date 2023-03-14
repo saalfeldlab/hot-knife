@@ -453,6 +453,7 @@ public class SparkComputeCostBrainVNC  implements Callable<Void>
 					surfaceLastScale,
 					surfaceMaxDeltaZ,
 					surfaceInitMaxDeltaZ,
+					surfaceMaxDeltaZ, // finaldeltaZ
 					surfaceMinDistance,
 					surfaceMaxDistance,
 					false, // need to permute with FIB-SEM
