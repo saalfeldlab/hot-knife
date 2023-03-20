@@ -61,6 +61,7 @@ import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
@@ -451,7 +452,9 @@ public class SparkComputeCostMultiSem {
 		// The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
 		// zcorr = Views.permute(zcorr, costAxis, 2);
 
-		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue( zcorrRaw, 170 ); // TODO: variable 170
+		final int outsideValue = 150; // TODO: global variable 170
+
+		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue( zcorrRaw, outsideValue ); 
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 		//final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
@@ -461,16 +464,10 @@ public class SparkComputeCostMultiSem {
 		//SimpleMultiThreading.threadHaltUnClean();
 
 		// compute derivative in z and keep only negative values
-		// we set the outofbounds to 170 above, which is about the resin color in case the sample touches the image boundary
+		// we set the outofbounds to "outsideValue" above, which is about the resin color in case the sample touches the image boundary
 		// TODO: the derivative is offset by 0.5 pixels on the bottom, and by 0.5 px on the top towards the other direction
 
 		//final RandomAccessibleInterval<UnsignedByteType> zcorrSubsampled = Views.subsample( zcorr, costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] );
-
-		final long[] dim = zcorrInterval.dimensionsAsLongArray();
-		for ( int d = 0; d < dim.length; ++d )
-			dim[ d ] /= costSteps[ d ];
-
-		final RandomAccessibleInterval<UnsignedByteType> derivative = ArrayImgs.unsignedBytes( dim );
 
 		// by default, there is data everywhere (mask set to 255)
 		final RandomAccessibleInterval<UnsignedByteType> mask2d =
@@ -507,13 +504,20 @@ public class SparkComputeCostMultiSem {
 
 //		ImageJFunctions.show( mask2d );
 
+		final long[] dim = zcorrInterval.dimensionsAsLongArray();
+		for ( int d = 0; d < dim.length; ++d )
+			dim[ d ] /= costSteps[ d ];
+
+		final RandomAccessibleInterval<UnsignedByteType> derivative = ArrayImgs.unsignedBytes( dim );
 		final Cursor<UnsignedByteType> out = Views.iterable( derivative ).localizingCursor();
+
 		final RandomAccess<UnsignedByteType> in = zcorrExtended.randomAccess();
 		final RandomAccess<UnsignedByteType> m = mask2d.randomAccess();
 		final int n = out.numDimensions();
 		final long[] pos = new long[ n ];
 
-		// TODO: inpaint OR cut out minimal bounding box during Render export
+		// done TODO: inpaint OR cut out minimal bounding box during Render export --- we do the minimal bounding box using a mask
+		// TODO: smooth cost? - but keep in mind we need a bigger interval for that >> Lazy?
 		while ( out.hasNext() )
 		{
 			final UnsignedByteType v = out.next();
@@ -530,7 +534,7 @@ public class SparkComputeCostMultiSem {
 			if ( m.get().get() == 0 )
 			{
 				if ( pos[ 2 ] == zcorrInterval.min( 2 ) || pos[ 2 ] == zcorrInterval.max( 2 ) )
-					v.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
+					v.set( 255 - outsideValue ); // TODO: variable (average gradient from resin to sample)
 				else
 					v.set( 255 );
 			}
@@ -538,8 +542,8 @@ public class SparkComputeCostMultiSem {
 			{
 				if ( pos[ 2 ] == zcorrInterval.min( 2 ) )
 				{
-					// the second surface on top we just fake for now (170 all)
-					v.set( 255 - 170 ); // TODO: variable (average gradient from resin to sample)
+					// the second surface on top we just fake for now (outsideValue all)
+					v.set( 255 - outsideValue ); // TODO: variable (average gradient from resin to sample)
 				}
 				else //if ( pos[ 2 ] == zcorrInterval.max( 2 ) )
 				{
@@ -578,11 +582,24 @@ public class SparkComputeCostMultiSem {
 			}
 		}
 
-//		ImageJFunctions.show( Views.subsample( Views.zeroMin( Views.interval( zcorrExtended, zcorrInterval ) ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
-//		ImageJFunctions.show( derivative );
-//		SimpleMultiThreading.threadHaltUnClean();
+		//ImageJFunctions.show( Views.subsample( Views.zeroMin( Views.interval( zcorrExtended, zcorrInterval ) ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
+		//ImageJFunctions.show( derivative );
 
-		return derivative;
+		//return derivative;
+
+		// derivative typically between 105-255, scale it (2.5 brings it back to 105 after gauss of {0,0,1})
+		final RandomAccessibleInterval<DoubleType> derivativeConvert = Converters.convertRAI( derivative, (i,o) -> o.setReal(255.0-((255.0-i.getRealDouble())*4)), new DoubleType() );
+
+		final RandomAccessibleInterval<DoubleType> derivativeSmooth = ArrayImgs.doubles( dim );
+		Gauss3.gauss( new double[] {0,0,1 }, Views.extendValue( derivativeConvert, 255 ), derivativeSmooth );
+
+		final RandomAccessibleInterval<UnsignedByteType> derivativeSmoothConvert = Converters.convertRAI(derivativeSmooth, (i, o) -> o.set( (int)Math.round( Math.max(0, Math.min( 255.0, i.get()))) ), new UnsignedByteType() );
+
+		//ImageJFunctions.show( derivativeConvert );
+		//ImageJFunctions.show( derivativeSmoothConvert );
+		//SimpleMultiThreading.threadHaltUnClean();
+
+		return derivativeSmoothConvert;
 		
 		/*
 		return processColumnAlongAxis(
