@@ -121,7 +121,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	@Option(names = {"--initMaxDeltaZ"}, description = "maximum slope of the surface in original pixels in the first scale level (initialization), e.g. 0.25")
 	private double initMaxDeltaZ = 0.25;
 
-	@Option(names = {"--finaMaxDeltaZ"}, description = "maximum slope of the surface in original pixels in the last scale level (s1 usually), e.g. 0.25")
+	@Option(names = {"--finalMaxDeltaZ"}, description = "maximum slope of the surface in original pixels in the last scale level (s1 usually), e.g. 0.25")
 	private double finalMaxDeltaZ = 0.25;
 
 	@Option(names = {"--minDistance"}, description = "minimum distance between the both surfaces, e.g. 1000")
