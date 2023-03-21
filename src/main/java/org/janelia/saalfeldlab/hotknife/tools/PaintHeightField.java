@@ -270,9 +270,9 @@ public class PaintHeightField implements Callable<Void>{
 		//		t.set( 0 );
 		//heightField = fix07mBRSec28HeightField( heightField );
 
-		//System.out.print("SMOOTHING heightfield.");
-		//Gauss3.gauss( 2.0, Views.extendBorder( heightField ), heightField );
-		//System.out.println("done.");
+		System.out.print("SMOOTHING heightfield.");
+		Gauss3.gauss( 2.0, Views.extendBorder( heightField ), heightField );
+		System.out.println("done.");
 
 		//System.out.print("MEDIAN-FILTERING heightfield.");
 		//final FloatProcessor fp = new FloatProcessor( (int)heightField.dimension( 0 ), (int)heightField.dimension( 1 ), ((FloatArray)heightField.update( null )).getCurrentStorageArray() );
@@ -303,7 +303,8 @@ public class PaintHeightField implements Callable<Void>{
 						voxelDimensions,
 						fieldGroup,
 						offset,
-						queue);
+						queue,
+						multiSem );
 
 		bdv = Show.mipmapSource( mipmapSource, bdv, options.addTo(bdv) );
 
