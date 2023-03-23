@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.swing.JFrame;
@@ -258,8 +259,9 @@ public class PaintHeightField implements Callable<Void>{
 		ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
 
 		// multi-threaded copy
+		final ExecutorService service = Executors.newCachedThreadPool();
 		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
-		Util.copy(heightFieldSource, heightField, Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() ));
+		Util.copy(heightFieldSource, heightField, service );
 		System.out.println("done.");
 
 		//System.out.print("Loading MANUAL heightfield.");
@@ -303,8 +305,7 @@ public class PaintHeightField implements Callable<Void>{
 						voxelDimensions,
 						fieldGroup,
 						offset,
-						queue,
-						multiSem );
+						queue);
 
 		bdv = Show.mipmapSource( mipmapSource, bdv, options.addTo(bdv) );
 
@@ -320,8 +321,10 @@ public class PaintHeightField implements Callable<Void>{
 
 		System.out.println("Copying gradients ... ");
 		final ArrayImg<FloatType, ?> gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
-		Util.copy(gradient, gradientCopy);
+		Util.copy(gradient, gradientCopy, service);
+		service.shutdown();
 
+		/*
 		new ImageJ();
 		ImageJFunctions.show( heightField ).setTitle( "heighfield");
 		ImagePlus grad = ImageJFunctions.show( gradientCopy );
@@ -329,12 +332,13 @@ public class PaintHeightField implements Callable<Void>{
 		grad.setDisplayRange(0, 10);
 		grad.updateAndDraw();
 		//SimpleMultiThreading.threadHaltUnClean(); 
+		*/
 
 		final RealRandomAccessible< FloatType > gradientFull =
 				RealViews.affineReal(
 						Views.interpolate(
 								Views.extendZero(
-										gradient ),
+										gradient ), // TODO: the error comes from the gradient computation
 								new NLinearInterpolatorFactory<>()),
 						Transform.createTopLeftScaleShift(new double[] {downsamplingFactors[0], downsamplingFactors[1]}) );
 
@@ -399,7 +403,6 @@ public class PaintHeightField implements Callable<Void>{
 				bdvGradient,
 				gradientCache, // just for invalidation
 				config);
-
 
 		new HeightFieldKeyActions(
 				bdv.getBdvHandle().getViewerPanel(),

@@ -483,8 +483,7 @@ public class Show {
 			final VoxelDimensions voxelDimensions,
 			final String name,
 			final double offset,
-			final SharedQueue queue,
-			final boolean multiSem ) {
+			final SharedQueue queue) {
 
 		final int numScales = rawMipmaps.length;
 
@@ -494,7 +493,7 @@ public class Show {
 
 		for (int s = 0; s < numScales; ++s) {
 			final int n = rawMipmaps[ s ].numDimensions();
-			final Interval interval = Intervals.expand( new FinalInterval( rawMipmaps[ s ] ), multiSem ? 10 * rawMipmaps[ s ].dimension( n - 1 ) : rawMipmaps[ s ].dimension( n - 1 ), n - 1 );//n - 1 );
+			final Interval interval = Intervals.expand( new FinalInterval( rawMipmaps[ s ] ), rawMipmaps[ s ].dimension( n - 1 ), n - 1 );
 
 			//System.out.println( "expanding interval for scale " + s + ": " + Util.printInterval( rawMipmaps[ s ] ) + ">>>" + Util.printInterval( interval ) );
 
