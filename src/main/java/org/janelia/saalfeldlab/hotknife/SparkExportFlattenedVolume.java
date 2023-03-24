@@ -75,6 +75,9 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 	@Option(names = "--blockSize", split=",", description = "Size of output blocks, e.g. 128,128,128")
 	private int[] blockSize = new int[] {128, 128, 128};
 
+	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
+	private boolean multiSem = false;
+
 	@Override
 	public Void call() throws IOException {
 
@@ -127,11 +130,18 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 			rawBlockSize = attributes.getBlockSize();
 			final long[] rawDimensions = attributes.getDimensions();
 
-			dimensions = new long[] {
-					rawDimensions[0],
-					rawDimensions[2],
-					Math.round(max + padding) - Math.round(min - padding)
-			};
+			if ( multiSem )
+				dimensions = new long[] {
+						rawDimensions[0],
+						rawDimensions[1],
+						Math.round(max + padding) - Math.round(min - padding)
+				};
+			else
+				dimensions = new long[] {
+						rawDimensions[0],
+						rawDimensions[2],
+						Math.round(max + padding) - Math.round(min - padding)
+				};
 
 			final N5FSWriter n5Writer = new N5FSWriter(n5OutPath);
 			n5Writer.createDataset(
@@ -170,10 +180,13 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 					/* raw */
 					@SuppressWarnings("unchecked")
 					final RandomAccessibleInterval<UnsignedByteType> rawVolume =
-							Views.permute(
-									(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset),
-									1,
-									2);
+							multiSem ?
+									(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset)
+									:
+									Views.permute(
+											(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset),
+											1,
+											2);
 
 					final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5FieldReader, minFieldName);
 					final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, maxFieldName);
