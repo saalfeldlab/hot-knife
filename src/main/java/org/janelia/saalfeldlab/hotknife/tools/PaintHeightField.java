@@ -316,7 +316,7 @@ public class PaintHeightField implements Callable<Void>{
 				new AbsoluteGradientCenter<>(
 						Views.extendBorder( heightField ) /*,
 						new double[] { 0.5, 0.5 }*/);
-		final RandomAccessibleInterval<FloatType> gradient = Lazy.process(heightField, blockSize, new FloatType(), AccessFlags.setOf(), gradientOp);
+		final RandomAccessibleInterval<FloatType> gradient = Lazy.process( new FinalInterval( heightField ), blockSize, new FloatType(), AccessFlags.setOf(), gradientOp);
 		final Cache< ?, ? > gradientCache = ((CachedCellImg< ?, ? >)gradient).getCache();
 
 		System.out.println("Copying gradients ... ");
