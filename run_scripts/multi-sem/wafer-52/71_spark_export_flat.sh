@@ -3,13 +3,13 @@
 set -e
 
 if (( $# != 2 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 1)"
+  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 10)"
   exit 1
 fi
 
 CUT_AND_SLAB="${1}"
 
-# slab 045: 1 node (11 cores each) took 1 minute
+# slab 045: 10 nodes (11 cores each) took 20 minutes
 N_NODES="${2}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
@@ -40,6 +40,7 @@ ARGV="\
 --n5FieldGroup=${N5_HEIGHT_FIELDS_FIX_DATASET} \
 --n5OutDataset=${N5_FLAT_RAW_DATASET} \
 --padding=20 \
+--multiSem \
 --blockSize=256,256,32"
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportFlattenedVolume"
