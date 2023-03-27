@@ -3,13 +3,13 @@
 set -e
 
 if (( $# != 2 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 1)"
+  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 10)"
   exit 1
 fi
 
 CUT_AND_SLAB="${1}"
 
-# slab 045: 1 node (11 cores each) took 1 minute
+# slab 045: 10 nodes (11 cores each) took 20 minutes
 N_NODES="${2}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
