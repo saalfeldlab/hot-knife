@@ -322,7 +322,7 @@ public class SparkGenerateFaceScaleSpace {
 									(a, b) -> b.set(a.getRealFloat()),
 									new FloatType());
 
-					IntervalView<FloatType> roi = Views.offsetInterval(floatSource, absMin, absSize);
+					IntervalView<FloatType> roi = Views.offsetInterval(Views.extendZero( floatSource ), absMin, absSize);
 					for (int d = 0; d < roi.numDimensions(); ++d)
 						if (size[d] < 0)
 							roi = Views.invertAxis(roi, d);
