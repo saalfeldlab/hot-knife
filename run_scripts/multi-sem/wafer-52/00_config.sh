@@ -53,6 +53,36 @@ export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
 # Slab Customizations
 # --------------------------------------------------------------------
 case "${CUT_AND_SLAB}" in
+  "cut_030_slab_026")
+    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_026_all_align_t2_ic___20230328_105408"
+    export N5_Z_CORR_OFFSET="423,267,1050"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_026_all_align_t2_ic___20230328_105408"
+  ;;
+  "cut_031_slab_006")
+    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_006_all_align_t2_ic___20230328_105452"
+    export N5_Z_CORR_OFFSET="435,238,1085"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_006_all_align_t2_ic___20230328_105452"
+  ;;
+  "cut_032_slab_013")
+    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_013_all_align_t2_ic___20230328_105504"
+    export N5_Z_CORR_OFFSET="349,288,1120"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_013_all_align_t2_ic___20230328_105504"
+  ;;
+  "cut_033_slab_033")
+    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_033_all_align_t2_ic___20230328_105515"
+    export N5_Z_CORR_OFFSET="346,393,1155"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_033_all_align_t2_ic___20230328_105515"
+  ;;
+  "cut_034_slab_020")
+    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_020_all_align_t2_ic___20230328_105528"
+    export N5_Z_CORR_OFFSET="492,441,1190"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_020_all_align_t2_ic___20230328_105528"
+  ;;
+  "cut_035_slab_001")
+    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_001_all_align_t2_ic___20230321_134716"
+    export N5_Z_CORR_OFFSET="142,131,1225"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_001_all_align_t2_ic___20230321_134716"
+  ;;
   "cut_036_slab_045")
     export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_045_all_align_t2_ic___20230222_165908"
     export N5_Z_CORR_OFFSET="177,273,1260"
