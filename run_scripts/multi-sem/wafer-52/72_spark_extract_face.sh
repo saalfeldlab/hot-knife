@@ -35,11 +35,11 @@ fi
 case "${TOP_OR_BOTTOM}" in
   "top")
     MIN="0,0,${SURFACE_DEPTH}"
-    SIZE="0,0,512" # TODO: verify this makes sense for multi-sem
+    SIZE="0,0,0"
   ;;
   "bot")
     MIN="0,0,-${SURFACE_DEPTH}"
-    SIZE="0,0,-512" # TODO: verify this makes sense for multi-sem
+    SIZE="0,0,0"
   ;;
   *)
     echo "ERROR: 'location parameter ${TOP_OR_BOTTOM} must be 'top' or 'bot'"
@@ -53,6 +53,7 @@ ARGV="\
 --n5GroupOutput=${N5_FACE_DATASET} \
 --min=${MIN} \
 --size=${SIZE} \
+--multiSem \
 --blockSize=1024,1024" # TODO: verify this makes sense for multi-sem
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace"
