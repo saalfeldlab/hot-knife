@@ -360,11 +360,11 @@ public class SparkGenerateFaceScaleSpace {
 		final long[] size = options.getSize().clone();
 		String sourceDatasetName = options.getInputDatasetName();
 
-		// for multisem we only downsample to s1, extract the face, and then downsample the face itself (because the "cuts"/slabs are too thin)
+		// for multisem we only [downsample to s1,] extract the face, and then downsample the face itself (because the "cuts"/slabs are too thin)
 		// for FIB-SEM we go in deeper, downsample until s9 and then extract the face from each downsampling step independently
-		final int maxScalIndex = options.multiSem ? 1 : 9;
+		final int maxScaleIndex = options.multiSem ? 0 : 9;
 
-		for (int scaleIndex = 1; scaleIndex <= maxScalIndex; ++scaleIndex) {
+		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
 			downsample(
@@ -397,7 +397,7 @@ public class SparkGenerateFaceScaleSpace {
 				faceGroupName + "/s0",
 				options.getBlockSize());
 
-		for (int scaleIndex = 1; scaleIndex <= maxScalIndex; ++scaleIndex) {
+		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
 			final DatasetAttributes scaleSpaceAttributes = n5.getDatasetAttributes(scaleSpaceDataSetName);
@@ -417,10 +417,13 @@ public class SparkGenerateFaceScaleSpace {
 			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
 			final int[] downsamplingFactors = new int[] { 2, 2 };
 
-			// manually set the downsampling factors, the rest will "fall in place"
-			n5.setAttribute(faceGroupName + "/s1", "downsamplingFactors", downsamplingFactors);
+			if ( maxScaleIndex == 1 )
+			{
+				// manually set the downsampling factors, the rest will "fall in place"
+				n5.setAttribute(faceGroupName + "/s1", "downsamplingFactors", downsamplingFactors);
+			}
 
-			for (int scaleIndex = 2; scaleIndex <= 9; ++scaleIndex) {
+			for (int scaleIndex = maxScalIndex+1; scaleIndex <= 9; ++scaleIndex) {
 				N5DownsamplerSpark.downsample(
 						sc,
 						n5Supplier,
