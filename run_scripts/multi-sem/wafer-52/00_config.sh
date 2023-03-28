@@ -48,6 +48,7 @@ export N5_SAMPLE_PATH="/nrs/hess/render/export/${RENDER_OWNER}.n5"
 export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="2,2,1"
 export N5_FLAT_DATASET_ROOT="/flat/${CUT_AND_SLAB}"
 export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
+export N5_SURFACE_ROOT="/surface-align/run_${RUN_TIMESTAMP}"
 
 # --------------------------------------------------------------------
 # Slab Customizations
