@@ -35,6 +35,9 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrWriter;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -78,6 +81,9 @@ public class SparkGenerateFaceScaleSpace {
 		@Option(name = "--size", required = false, usage = "Size of the output volume, e.g. 10000,20000,30000, a number == 0 for any dimensions indicates default input_dataset_size - min")
 		private final String sizeString = null;
 		private final long[] size;
+
+		@Option(name = "--multiSem", usage = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
+		private boolean multiSem = false;
 
 		public Options(final String[] args) {
 
@@ -353,7 +359,12 @@ public class SparkGenerateFaceScaleSpace {
 		final long[] min = options.getMin().clone();
 		final long[] size = options.getSize().clone();
 		String sourceDatasetName = options.getInputDatasetName();
-		for (int scaleIndex = 1; scaleIndex < 10; ++scaleIndex) {
+
+		// for multisem we only downsample to s1, extract the face, and then downsample the face itself (because the "cuts"/slabs are too thin)
+		// for FIB-SEM we go in deeper, downsample until s9 and then extract the face from each downsampling step independently
+		final int maxScalIndex = options.multiSem ? 1 : 9;
+
+		for (int scaleIndex = 1; scaleIndex <= maxScalIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
 			downsample(
@@ -386,7 +397,7 @@ public class SparkGenerateFaceScaleSpace {
 				faceGroupName + "/s0",
 				options.getBlockSize());
 
-		for (int scaleIndex = 1; scaleIndex < 10; ++scaleIndex) {
+		for (int scaleIndex = 1; scaleIndex <= maxScalIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
 			final DatasetAttributes scaleSpaceAttributes = n5.getDatasetAttributes(scaleSpaceDataSetName);
@@ -399,6 +410,25 @@ public class SparkGenerateFaceScaleSpace {
 					faceGroupName + "/s" + scaleIndex,
 					options.getBlockSize());
 		}
+
+		// downsample the s1 face
+		if ( options.multiSem )
+		{
+			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
+			final int[] downsamplingFactors = new int[] { 2, 2 };
+
+			for (int scaleIndex = 2; scaleIndex <= maxScalIndex; ++scaleIndex) {
+				N5DownsamplerSpark.downsample(
+						sc,
+						n5Supplier,
+						faceGroupName + "/s" + (scaleIndex - 1),
+						faceGroupName + "/s" + scaleIndex,
+						downsamplingFactors,
+						options.getBlockSize()
+					);
+			}
+		}
+
 		sc.close();
 	}
 }
