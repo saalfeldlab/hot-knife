@@ -39,7 +39,6 @@ import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.cache.img.CellLoader;
 import net.imglib2.cache.img.LoadedCellCacheLoader;
-import net.imglib2.cache.ref.SoftRefLoaderCache;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.basictypeaccess.ArrayDataAccessFactory;
 import net.imglib2.img.cell.Cell;
@@ -55,6 +54,8 @@ import net.imglib2.util.Intervals;
 
 /**
  * Convenience methods to create lazy evaluated cached cell images with ops or consumers.
+ * 
+ * This is a re-implementation that fixes concurrency issues when calling invalidateAll() while BDV is drawing
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
@@ -120,7 +121,7 @@ public class Lazy {
 
 		@SuppressWarnings({"unchecked", "rawtypes"})
 		final Cache<Long, Cell<?>> cache =
-				new SoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, accessFlags));
+				new RobustSoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, accessFlags));
 
 		return createImg(grid, cache, type, accessFlags);
 	}
