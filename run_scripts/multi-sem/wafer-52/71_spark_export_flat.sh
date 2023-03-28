@@ -8,9 +8,7 @@ if (( $# != 2 )); then
 fi
 
 CUT_AND_SLAB="${1}"
-
-# slab 045: 10 nodes (11 cores each) took 20 minutes
-N_NODES="${2}"
+N_NODES="${2}" # wafer 52 cut_034_slab_020 took 20 minutes with 10 nodes
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")

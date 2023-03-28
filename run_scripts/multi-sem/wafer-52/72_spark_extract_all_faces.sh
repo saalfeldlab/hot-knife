@@ -3,12 +3,13 @@
 set -e
 
 if (( $# < 2 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 10)"
+  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 5)"
   exit 1
 fi
 
 CUT_AND_SLAB="${1}"
-N_NODES="${2}"
+N_NODES="${2}" # wafer 52 cut_035_slab_001 top 20 took 2 minutes with 15 nodes
+               # wafer 52 cut_035_slab_001 bot 21 took 2 minutes with 15 nodes
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
