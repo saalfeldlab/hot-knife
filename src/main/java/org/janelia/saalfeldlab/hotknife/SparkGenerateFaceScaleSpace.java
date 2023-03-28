@@ -417,7 +417,7 @@ public class SparkGenerateFaceScaleSpace {
 			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
 			final int[] downsamplingFactors = new int[] { 2, 2 };
 
-			for (int scaleIndex = 2; scaleIndex <= maxScalIndex; ++scaleIndex) {
+			for (int scaleIndex = 2; scaleIndex <= 9; ++scaleIndex) {
 				N5DownsamplerSpark.downsample(
 						sc,
 						n5Supplier,
