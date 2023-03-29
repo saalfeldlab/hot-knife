@@ -3,12 +3,12 @@
 set -e
 
 if (( $# < 3 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> <top|bot> [abs depth] (e.g. cut_036_slab_045 1 bot or cut_036_slab_045 1 bot 13)"
+  echo "USAGE $0 <cut and slab> <number of nodes> <top|bot> [abs depth] (e.g. cut_036_slab_045 5 top 20)"
   exit 1
 fi
 
 CUT_AND_SLAB="${1}"
-N_NODES="${2}"
+N_NODES="${2}" # wafer 52 cut_035_slab_001 top 20 took 2 minutes with 15 nodes
 TOP_OR_BOTTOM="${3}"
 SURFACE_DEPTH="${4:-23}"
 

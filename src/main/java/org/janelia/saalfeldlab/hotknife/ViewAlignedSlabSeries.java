@@ -19,6 +19,7 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -35,6 +36,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import bdv.TransformEventHandler3D;
 import bdv.tools.transformation.TransformedSource;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
@@ -42,6 +44,9 @@ import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
+
+import bdv.viewer.SynchronizedViewerState;
+import bdv.viewer.ViewerPanel;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
@@ -86,6 +91,9 @@ public class ViewAlignedSlabSeries {
 
 		@Option(name = "--invert", required = false, usage = "invert intensities")
 		private boolean invert;
+
+		@Option(name = "--zoom", usage = "optionally zoom starting view in or out")
+		private int zoom = 0;
 
 		public Options(final String[] args) {
 
@@ -170,6 +178,7 @@ public class ViewAlignedSlabSeries {
 				new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
 				options.normalizeContrast(),
 				options.invert(),
+				options.zoom,
 				true);
 	}
 
@@ -182,11 +191,21 @@ public class ViewAlignedSlabSeries {
 			final VoxelDimensions voxelDimensions,
 			final boolean normalizeContrast,
 			final boolean invert,
+			final int zoom,
 			final boolean useVolatile) throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
 		final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);
+
+		final int expectedNumberOfTransforms = datasetNames.size() * 2;
+		if (transformDatasetNames.length != expectedNumberOfTransforms) {
+			throw new IOException("Read " + transformDatasetNames.length + " transforms from " + n5Path + group +
+								  "/attributes.json, but expected to find " + expectedNumberOfTransforms +
+								  " transforms because " + datasetNames.size() + " datasets were specified.  " +
+								  "Dataset names are: " + datasetNames + ".  " +
+								  "Transform names are: " + Arrays.toString(transformDatasetNames));
+		}
 
 		final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
@@ -310,6 +329,31 @@ public class ViewAlignedSlabSeries {
 			zOffset += botOffset - topOffsets.get(i) + 1;
 		}
 
+		if (zoom != 0) {
+			zoomViewer(bdv, zoom);
+		}
+
 		return bdv;
+	}
+
+	private static void zoomViewer(final BdvStackSource<?> bdv,
+								  final int zoom) {
+		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
+		final SynchronizedViewerState state = viewerPanel.state();
+		final AffineTransform3D viewerTransform = state.getViewerTransform();
+		// center shift
+		final double cX = 0.5 * viewerPanel.getWidth();
+		final double cY = 0.5 * viewerPanel.getHeight();
+		viewerTransform.set(viewerTransform.get( 0, 3 ) - cX, 0, 3);
+		viewerTransform.set(viewerTransform.get( 1, 3 ) - cY, 1, 3);
+		// scale ( see https://github.com/bigdataviewer/bigdataviewer-core/blob/master/src/main/java/bdv/TransformEventHandler3D.java#L263 )
+		final double speed = 1.0;
+		final double dscale = 1.0 + 0.1 * speed;
+		final double scaleFactor = (zoom * 2) * dscale; // don't understand why I need to multiply by 2 here
+		viewerTransform.scale(scaleFactor);
+		// center un-shift
+		viewerTransform.set(viewerTransform.get( 0, 3 ) + cX, 0, 3);
+		viewerTransform.set(viewerTransform.get( 1, 3 ) + cY, 1, 3);
+		state.setViewerTransform(viewerTransform);
 	}
 }

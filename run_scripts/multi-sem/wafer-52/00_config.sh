@@ -48,6 +48,7 @@ export N5_SAMPLE_PATH="/nrs/hess/render/export/${RENDER_OWNER}.n5"
 export N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS="2,2,1"
 export N5_FLAT_DATASET_ROOT="/flat/${CUT_AND_SLAB}"
 export N5_FLAT_RAW_DATASET="${N5_FLAT_DATASET_ROOT}/raw/s0"
+export N5_SURFACE_ROOT="/surface-align/run_${RUN_TIMESTAMP}"
 
 # --------------------------------------------------------------------
 # Slab Customizations
@@ -59,9 +60,9 @@ case "${CUT_AND_SLAB}" in
     export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_026_all_align_t2_ic___20230328_105408"
   ;;
   "cut_031_slab_006")
-    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_006_all_align_t2_ic___20230328_105452"
+    export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_006_all_align_t2_ic___20230328_141751"
     export N5_Z_CORR_OFFSET="435,238,1085"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_006_all_align_t2_ic___20230328_105452"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/wafer_52_cut_00030_to_00039/slab_006_all_align_t2_ic___20230328_141751"
   ;;
   "cut_032_slab_013")
     export N5_Z_CORR_DATASET="/render/wafer_52_cut_00030_to_00039/slab_013_all_align_t2_ic___20230328_105504"
