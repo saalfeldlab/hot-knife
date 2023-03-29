@@ -39,19 +39,20 @@ JAR="${FLYEM_DATA_ROOT}/render/lib/hot-knife.latest-fat.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.ViewAlignedSlabSeries"
 
 N5_PATH="/nrs/hess/render/export/hess.n5"
-TRANSFORM_GROUP="/surface-align/run_20230328_165841/pass03" # TODO: update this to latest pass12
+TRANSFORM_GROUP="/surface-align/run_20230329_104500/pass09" # TODO: update this to latest pass12
 
 
 ARGV="\
 --n5Path ${N5_PATH} \
 -j ${TRANSFORM_GROUP} \
--i /flat/cut_030_slab_026/raw -t 20 -b -20 \
--i /flat/cut_031_slab_006/raw -t 20 -b -20 \
--i /flat/cut_032_slab_013/raw -t 20 -b -20 \
--i /flat/cut_033_slab_033/raw -t 20 -b -20 \
--i /flat/cut_034_slab_020/raw -t 20 -b -20 \
--i /flat/cut_035_slab_001/raw -t 20 -b -20 \
--i /flat/cut_036_slab_045/raw -t 20 -b -20"
+-i /flat/cut_030_slab_026/raw -t 20 -b -21 \
+-i /flat/cut_031_slab_006/raw -t 20 -b -21 \
+-i /flat/cut_032_slab_013/raw -t 20 -b -21 \
+-i /flat/cut_033_slab_033/raw -t 20 -b -21 \
+-i /flat/cut_034_slab_020/raw -t 20 -b -21 \
+-i /flat/cut_035_slab_001/raw -t 20 -b -21 \
+-i /flat/cut_036_slab_045/raw -t 20 -b -21 \
+--zoom 50"
 
 CMD="${JAVA} -Xmx${MAX_MEMORY}m -cp ${JAR} ${CLASS} ${ARGV}"
 
