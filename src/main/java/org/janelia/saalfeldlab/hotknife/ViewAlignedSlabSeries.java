@@ -19,6 +19,7 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -174,6 +175,15 @@ public class ViewAlignedSlabSeries {
 		final N5Reader n5 = new N5FSReader(n5Path);
 
 		final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);
+
+		final int expectedNumberOfTransforms = datasetNames.size() * 2;
+		if (transformDatasetNames.length != expectedNumberOfTransforms) {
+			throw new IOException("Read " + transformDatasetNames.length + " transforms from " + n5Path + group +
+								  "/attributes.json, but expected to find " + expectedNumberOfTransforms +
+								  " transforms because " + datasetNames.size() + " datasets were specified.  " +
+								  "Dataset names are: " + datasetNames + ".  " +
+								  "Transform names are: " + Arrays.toString(transformDatasetNames));
+		}
 
 		final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
 		final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
