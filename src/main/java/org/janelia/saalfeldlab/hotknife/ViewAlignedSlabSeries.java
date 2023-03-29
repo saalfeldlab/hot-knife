@@ -36,6 +36,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import bdv.TransformEventHandler3D;
 import bdv.tools.transformation.TransformedSource;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
@@ -43,6 +44,9 @@ import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
+
+import bdv.viewer.SynchronizedViewerState;
+import bdv.viewer.ViewerPanel;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.basictypeaccess.AccessFlags;
@@ -83,6 +87,9 @@ public class ViewAlignedSlabSeries {
 
 		@Option(name = "-n", aliases = {"--normalizeContrast"}, required = false, usage = "optionally normalize contrast")
 		private boolean normalizeContrast;
+
+		@Option(name = "--zoom", usage = "optionally zoom starting view in or out")
+		private int zoom = 0;
 
 		public Options(final String[] args) {
 
@@ -159,6 +166,7 @@ public class ViewAlignedSlabSeries {
 				options.getBotOffsets(),
 				new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
 				options.normalizeContrast(),
+				options.zoom,
 				true);
 	}
 
@@ -170,6 +178,7 @@ public class ViewAlignedSlabSeries {
 			final List<Long> botOffsets,
 			final VoxelDimensions voxelDimensions,
 			final boolean normalizeContrast,
+			final int zoom,
 			final boolean useVolatile) throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
@@ -303,6 +312,31 @@ public class ViewAlignedSlabSeries {
 			zOffset += botOffset - topOffsets.get(i) + 1;
 		}
 
+		if (zoom != 0) {
+			zoomViewer(bdv, zoom);
+		}
+
 		return bdv;
+	}
+
+	private static void zoomViewer(final BdvStackSource<?> bdv,
+								  final int zoom) {
+		final ViewerPanel viewerPanel = bdv.getBdvHandle().getViewerPanel();
+		final SynchronizedViewerState state = viewerPanel.state();
+		final AffineTransform3D viewerTransform = state.getViewerTransform();
+		// center shift
+		final double cX = 0.5 * viewerPanel.getWidth();
+		final double cY = 0.5 * viewerPanel.getHeight();
+		viewerTransform.set(viewerTransform.get( 0, 3 ) - cX, 0, 3);
+		viewerTransform.set(viewerTransform.get( 1, 3 ) - cY, 1, 3);
+		// scale ( see https://github.com/bigdataviewer/bigdataviewer-core/blob/master/src/main/java/bdv/TransformEventHandler3D.java#L263 )
+		final double speed = 1.0;
+		final double dscale = 1.0 + 0.1 * speed;
+		final double scaleFactor = (zoom * 2) * dscale; // don't understand why I need to multiply by 2 here
+		viewerTransform.scale(scaleFactor);
+		// center un-shift
+		viewerTransform.set(viewerTransform.get( 0, 3 ) + cX, 0, 3);
+		viewerTransform.set(viewerTransform.get( 1, 3 ) + cY, 1, 3);
+		state.setViewerTransform(viewerTransform);
 	}
 }
