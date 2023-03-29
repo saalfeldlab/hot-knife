@@ -96,6 +96,12 @@ public class SparkAlignAffineGlobal {
 		@Option(name = "--scaleIndex", required = true, usage = "scale index, e.g. 4 (means scale = 1.0 / 2^4)")
 		private int scaleIndex = 0;
 
+		@Option(name = "--iterations", required = false, usage = "RANSAC iterations (default: 10000)")
+		private int iterations = 0;
+
+		@Option(name = "--maxError", required = false, usage = "RANSAC maxError (default: 200.0)")
+		private double maxError = 0;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -166,6 +172,21 @@ public class SparkAlignAffineGlobal {
 		public String getOutGroup() {
 			return outGroup;
 		}
+
+		/**
+		 * @return the outGroup
+		 */
+		public int getNumIterations() {
+			return iterations;
+		}
+
+		/**
+		 * @return the outGroup
+		 */
+		public double getMaxError() {
+			return maxError;
+		}
+
 	}
 
 
@@ -396,8 +417,8 @@ public class SparkAlignAffineGlobal {
 				new Transform.InterpolatedAffineModel2DSupplier<>(
 						(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
 						(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
-				10000,
-				200,
+				options.getNumIterations(),// 10000, 100000 for MultiSem
+				options.getMaxError(),// 200, 400 for MultiSem
 				0,
 				7);
 

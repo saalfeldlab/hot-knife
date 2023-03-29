@@ -49,6 +49,7 @@ import bdv.viewer.SynchronizedViewerState;
 import bdv.viewer.ViewerPanel;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
@@ -87,6 +88,9 @@ public class ViewAlignedSlabSeries {
 
 		@Option(name = "-n", aliases = {"--normalizeContrast"}, required = false, usage = "optionally normalize contrast")
 		private boolean normalizeContrast;
+
+		@Option(name = "--invert", required = false, usage = "invert intensities")
+		private boolean invert;
 
 		@Option(name = "--zoom", usage = "optionally zoom starting view in or out")
 		private int zoom = 0;
@@ -149,7 +153,14 @@ public class ViewAlignedSlabSeries {
 		public boolean normalizeContrast() {
 			return normalizeContrast;
 		}
-	}
+
+		/**
+		 * @return whether to invert intensities
+		 */
+		public boolean invert() {
+			return invert;
+		}
+}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
@@ -166,6 +177,7 @@ public class ViewAlignedSlabSeries {
 				options.getBotOffsets(),
 				new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
 				options.normalizeContrast(),
+				options.invert(),
 				options.zoom,
 				true);
 	}
@@ -178,6 +190,7 @@ public class ViewAlignedSlabSeries {
 			final List<Long> botOffsets,
 			final VoxelDimensions voxelDimensions,
 			final boolean normalizeContrast,
+			final boolean invert,
 			final int zoom,
 			final boolean useVolatile) throws IOException {
 
@@ -241,12 +254,16 @@ public class ViewAlignedSlabSeries {
 				final int scale = 1 << s;
 				final double inverseScale = 1.0 / scale;
 
+				RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
 				final RandomAccessibleInterval<UnsignedByteType> source;
+
+				if ( invert )
+				{
+					sourceRaw = Converters.convertRAI(sourceRaw, (in,out) -> out.set( 255 - in.get() ), new UnsignedByteType() );
+				}
 
 				if ( normalizeContrast )
 				{
-					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
-	
 					final int blockRadius = (int)Math.round(511 * inverseScale); //1023
 	
 					final ImageJStackOp<UnsignedByteType> cllcn =
@@ -266,7 +283,7 @@ public class ViewAlignedSlabSeries {
 				}
 				else
 				{
-					source = N5Utils.open(n5, datasetName + "/s" + s);
+					source = sourceRaw;
 				}
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
