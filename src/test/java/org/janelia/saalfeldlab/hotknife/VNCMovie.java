@@ -278,7 +278,6 @@ public class VNCMovie implements Callable<Void> {
 
 			if ( normalizeContrast )
 			{
-				// TODO
 				final int blockRadius = (int)Math.round(511 * inverseScale);
 	
 				final ImageJStackOp<UnsignedByteType> cllcn =
@@ -298,9 +297,10 @@ public class VNCMovie implements Callable<Void> {
 			}
 			else
 			{
-				mipmaps[scaleIndex] = img;//cllcned;
+				mipmaps[scaleIndex] = img;
 			}
 
+			// TODO: read the downsamplings rather than assuming stuff
 			scales[scaleIndex] = new double[]{scale, scale, mSem ? 1 : scale};
 		}
 
