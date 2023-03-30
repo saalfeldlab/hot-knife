@@ -351,7 +351,7 @@ public class SparkGenerateFaceScaleSpace {
 
 						source = Lazy.process(
 								sourceRaw,
-								new int[] {128, 128, 16},
+								new int[] {512, 512, 1},
 								new UnsignedByteType(),
 								AccessFlags.setOf(AccessFlags.VOLATILE),
 								cllcn);
