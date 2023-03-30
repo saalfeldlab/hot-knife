@@ -53,10 +53,10 @@ fi
 
 # setup pass specific run class
 case "${PASS}" in
-  1|2|3)        N_NODES=${4:-5}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-  4|5|6|7)      N_NODES=${4:-10}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-  8|9|10|11)    N_NODES=${4:-10}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
-  12)           N_NODES=${4:-20}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
+  1|2|3)        N_NODES=${4:-10}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  4|5|6|7)      N_NODES=${4:-30}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  8|9|10)       N_NODES=${4:-30}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
+  11|12)        N_NODES=${4:-40}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
   *)
     echo "ERROR: 'pass parameter ${PASS} must be between 1 and 12'"
     exit 1

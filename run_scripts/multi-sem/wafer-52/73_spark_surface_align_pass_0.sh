@@ -6,7 +6,7 @@ ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
 
-# This runs quickly!  A 1 node job for Sec26 - Sec39 took < 4 minutes to finish.
+# This runs quickly!  A 1 node job for 7 slabs in wafer 52 took 4 minutes to finish.
 N_NODES=1
 
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
@@ -14,13 +14,15 @@ N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 # Face dataset order is important.
 unset FACE_DATASET_ARGS
 for CUT in cut_030_slab_026 cut_031_slab_006 cut_032_slab_013 cut_033_slab_033 cut_034_slab_020 cut_035_slab_001 cut_036_slab_045 ; do
-  FACE_DATASET_ARGS="${FACE_DATASET_ARGS} -d /flat/${CUT}/top20/face -d /flat/${CUT}/bot21/face"
+  FACE_DATASET_ARGS="${FACE_DATASET_ARGS} -d /flat/${CUT}/top22/face -d /flat/${CUT}/bot22/face"
 done
 
 ARGV="
 --n5Path=${N5_SAMPLE_PATH} \
 --n5GroupOutput=${N5_GROUP_OUTPUT} \
 --scaleIndex=4 \
+--iterations 100000 \
+--maxError 400 \
 ${FACE_DATASET_ARGS}"
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkAlignAffineGlobal"
