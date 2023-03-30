@@ -52,6 +52,7 @@ import bdv.viewer.render.awt.BufferedImageRenderResult;
 import ij.process.ColorProcessor;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -246,7 +247,17 @@ public class VNCMovie implements Callable<Void> {
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
 			final String n5Path,
-			final String n5Group ) throws IOException {
+			final String n5Group ) throws IOException
+	{
+		return createMipmapSource(n5Path, n5Group, false, false, false );
+	}
+
+	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
+			final String n5Path,
+			final String n5Group,
+			final boolean normalizeContrast,
+			final boolean invert,
+			final boolean mSem ) throws IOException {
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 
@@ -258,28 +269,39 @@ public class VNCMovie implements Callable<Void> {
 
 			final int scale = 1 << scaleIndex;
 			final double inverseScale = 1.0 / scale;
-			final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
+			RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
 
-			/*
-			// TODO
-			final int blockRadius = (int)Math.round(511 * inverseScale);
+			if ( invert )
+			{
+				img = Converters.convertRAI( img, (in,out) -> { if (in.get() == 0) { out.set( 0 ); } else { out.set( 255 - in.get() );} }, new UnsignedByteType() );
+			}
 
-			final ImageJStackOp<UnsignedByteType> cllcn =
-					new ImageJStackOp<>(
-							Views.extendZero(img),
-							(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
-							blockRadius,
-							0,
-							255);
-			final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
-					img,
-					new int[] {128, 128, 16},
-					new UnsignedByteType(),
-					AccessFlags.setOf(AccessFlags.VOLATILE),
-					cllcn);
-			*/
-			mipmaps[scaleIndex] = img;//cllcned;
-			scales[scaleIndex] = new double[]{scale, scale, scale};
+			if ( normalizeContrast )
+			{
+				// TODO
+				final int blockRadius = (int)Math.round(511 * inverseScale);
+	
+				final ImageJStackOp<UnsignedByteType> cllcn =
+						new ImageJStackOp<>(
+								Views.extendZero(img),
+								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+								blockRadius,
+								0,
+								255);
+				final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
+						img,
+						new int[] {128, 128, 16},
+						new UnsignedByteType(),
+						AccessFlags.setOf(AccessFlags.VOLATILE),
+						cllcn);
+				mipmaps[scaleIndex] = cllcned;
+			}
+			else
+			{
+				mipmaps[scaleIndex] = img;//cllcned;
+			}
+
+			scales[scaleIndex] = new double[]{scale, scale, mSem ? 1 : scale};
 		}
 
 		final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
