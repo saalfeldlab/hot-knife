@@ -14,8 +14,8 @@ N_NODES="${2}" # wafer 52 cut_035_slab_001 top 20 took 2 minutes with 15 nodes
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 
-TOP_SURFACE_DEPTH=20
-BOT_SURFACE_DEPTH=21
+TOP_SURFACE_DEPTH=22
+BOT_SURFACE_DEPTH=22
 
 ${SCRIPT_DIR}/72_spark_extract_face.sh ${CUT_AND_SLAB} ${N_NODES} top ${TOP_SURFACE_DEPTH}
 sleep 5

@@ -24,6 +24,8 @@ import java.util.concurrent.ExecutionException;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
+import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.ops.SimpleGaussRA;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
@@ -46,6 +48,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;
@@ -280,7 +283,9 @@ public class SparkGenerateFaceScaleSpace {
 			final long[] min,
 			final long[] size,
 			final String outDatasetName,
-			final int[] outBlockSize) throws IOException {
+			final int[] outBlockSize,
+			final boolean invert,
+			final boolean normalizeContrast ) throws IOException {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
@@ -320,7 +325,42 @@ public class SparkGenerateFaceScaleSpace {
 					System.out.println(Arrays.deepToString(gridBlock));
 					final N5Writer n5Writer = new N5FSWriter(n5Path);
 					@SuppressWarnings("unchecked")
-					final RandomAccessibleInterval<RealType<?>> source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
+					RandomAccessibleInterval<UnsignedByteType> sourceRaw = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
+					final RandomAccessibleInterval<UnsignedByteType> source;
+
+					if ( invert )
+					{
+						sourceRaw = Converters.convertRAI(sourceRaw, (in,out) -> out.set( 255 - in.get() ), new UnsignedByteType() );
+					}
+
+					if ( normalizeContrast )
+					{
+						//final int scale = 1 << s;
+						//final double inverseScale = 1.0 / scale;
+						final double inverseScale = 1.0;
+
+						final int blockRadius = (int)Math.round(511 * inverseScale); //1023
+
+						final ImageJStackOp<UnsignedByteType> cllcn =
+								new ImageJStackOp<>(
+										Views.extendZero(sourceRaw),
+										(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+										blockRadius,
+										0,
+										255);
+
+						source = Lazy.process(
+								sourceRaw,
+								new int[] {512, 512, 1},
+								new UnsignedByteType(),
+								AccessFlags.setOf(AccessFlags.VOLATILE),
+								cllcn);
+					}
+					else
+					{
+						source = sourceRaw;
+					}
+
 					@SuppressWarnings({ "rawtypes", "unchecked" })
 					final RandomAccessibleInterval<FloatType> floatSource =
 							inType == DataType.FLOAT32 ? (RandomAccessibleInterval)source : Converters.convert(
@@ -395,7 +435,9 @@ public class SparkGenerateFaceScaleSpace {
 				options.getMin(),
 				options.getSize(),
 				faceGroupName + "/s0",
-				options.getBlockSize());
+				options.getBlockSize(),
+				options.multiSem,
+				options.multiSem );
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
@@ -408,7 +450,9 @@ public class SparkGenerateFaceScaleSpace {
 					new long[]{0, 0, 0},
 					scaleSpaceAttributes.getDimensions(),
 					faceGroupName + "/s" + scaleIndex,
-					options.getBlockSize());
+					options.getBlockSize(),
+					options.multiSem,
+					options.multiSem);
 		}
 
 		// downsample the s1 face
