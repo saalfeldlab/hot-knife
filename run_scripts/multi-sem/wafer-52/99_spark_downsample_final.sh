@@ -15,7 +15,7 @@ source "${SCRIPT_DIR}/00_config.sh" "ALL"
 
 #export RUNTIME="3:59"
 
-INPUT_DATASET_ROOT="/wafer-52-align/run_20230330_092301/pass03"
+INPUT_DATASET_ROOT="/wafer-52-align/run_20230330_092301/pass12"
 
 OUTPUT_DATASET_PATHS="${INPUT_DATASET_ROOT}/s1"
 FACTORS="2,2,1"
