@@ -299,7 +299,7 @@ public class ViewAlignedSlabSeries {
 								new UnsignedByteType(0));
 
 				final SubsampleIntervalView<UnsignedByteType> subsampledTransformedSource = Views.subsample(transformedSource, scale);
-				final RandomAccessibleInterval<UnsignedByteType> cachedSource = Show.wrapAsVolatileCachedCellImg(subsampledTransformedSource, new int[]{64, 64, 64});
+				final RandomAccessibleInterval<UnsignedByteType> cachedSource = Show.wrapAsVolatileCachedCellImg(subsampledTransformedSource, new int[]{128, 128, 16});
 
 				mipmaps[s] = cachedSource;
 				scales[s] = new double[]{scale, scale, scale};
