@@ -206,7 +206,9 @@ public class SparkGenerateFaceScaleSpace {
 			final long[] size,
 			final int scaleIndex,
 			final String outDatasetName,
-			final int[] outBlockSize) throws IOException {
+			final int[] outBlockSize,
+			final boolean invert,
+			final boolean normalizeContrast ) throws IOException {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
@@ -237,7 +239,22 @@ public class SparkGenerateFaceScaleSpace {
 					System.out.println(Arrays.deepToString(gridBlock));
 					final N5Writer n5Writer = new N5FSWriter(n5Path);
 					@SuppressWarnings("unchecked")
-					final RandomAccessibleInterval<RealType<?>> source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
+					final RandomAccessibleInterval<RealType<?>> source;
+
+					// only s0 is UnsignedByteType, the rest is FloatType and already inverted and normalized (if asked for)
+					if ( invert || normalizeContrast )
+					{
+						source = (RandomAccessibleInterval<RealType<?>>)(Object) filter(
+								(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5Writer, inDatasetName),
+								invert,
+								normalizeContrast,
+								0 ); // here scaleIndex is the result of the downsampling, not the input
+					}
+					else
+					{
+						source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
+					}
+
 					@SuppressWarnings({ "rawtypes", "unchecked" })
 					final RandomAccessibleInterval<FloatType> floatSource =
 							inType == DataType.FLOAT32 ? (RandomAccessibleInterval)source : Converters.convert(
@@ -282,6 +299,43 @@ public class SparkGenerateFaceScaleSpace {
 				});
 	}
 
+	protected static RandomAccessibleInterval<UnsignedByteType> filter(
+			RandomAccessibleInterval<UnsignedByteType> sourceRaw,
+			final boolean invert,
+			final boolean normalizeContrast,
+			final int scaleIndex )
+	{
+		if ( invert )
+			sourceRaw = Converters.convertRAI(sourceRaw, (in,out) -> out.set( 255 - in.get() ), new UnsignedByteType() );
+
+		if ( normalizeContrast )
+		{
+			final int scale = 1 << scaleIndex;
+			final double inverseScale = 1.0 / scale;
+
+			final int blockRadius = (int)Math.round(511 * inverseScale); //1023
+
+			final ImageJStackOp<UnsignedByteType> cllcn =
+					new ImageJStackOp<>(
+							Views.extendZero(sourceRaw),
+							(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+							blockRadius,
+							0,
+							255);
+
+			return Lazy.process(
+					sourceRaw,
+					new int[] {512, 512, 1},
+					new UnsignedByteType(),
+					AccessFlags.setOf(AccessFlags.VOLATILE),
+					cllcn);
+		}
+		else
+		{
+			return sourceRaw;
+		}
+	}
+
 	public static final void extractFace(
 			final JavaSparkContext sc,
 			final String n5Path,
@@ -292,7 +346,7 @@ public class SparkGenerateFaceScaleSpace {
 			final int[] outBlockSize,
 			final boolean invert,
 			final boolean normalizeContrast,
-			final int scale ) throws IOException {
+			final int scaleIndex ) throws IOException {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
@@ -331,40 +385,21 @@ public class SparkGenerateFaceScaleSpace {
 				gridBlock -> {
 					System.out.println(Arrays.deepToString(gridBlock));
 					final N5Writer n5Writer = new N5FSWriter(n5Path);
-					@SuppressWarnings("unchecked")
-					RandomAccessibleInterval<UnsignedByteType> sourceRaw = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
-					final RandomAccessibleInterval<UnsignedByteType> source;
+					
+					final RandomAccessibleInterval<RealType<?>> source;
 
-					if ( invert )
+					// only s0 is UnsignedByteType, the rest is FloatType and already inverted and normalized (if asked for)
+					if ( invert || normalizeContrast )
 					{
-						sourceRaw = Converters.convertRAI(sourceRaw, (in,out) -> out.set( 255 - in.get() ), new UnsignedByteType() );
-					}
-
-					if ( normalizeContrast )
-					{
-						//final int scale = 1 << s;
-						final double inverseScale = 1.0 / scale;
-
-						final int blockRadius = (int)Math.round(511 * inverseScale); //1023
-
-						final ImageJStackOp<UnsignedByteType> cllcn =
-								new ImageJStackOp<>(
-										Views.extendZero(sourceRaw),
-										(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
-										blockRadius,
-										0,
-										255);
-
-						source = Lazy.process(
-								sourceRaw,
-								new int[] {512, 512, 1},
-								new UnsignedByteType(),
-								AccessFlags.setOf(AccessFlags.VOLATILE),
-								cllcn);
+						source = (RandomAccessibleInterval<RealType<?>>)(Object) filter(
+								(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5Writer, inDatasetName),
+								invert,
+								normalizeContrast,
+								scaleIndex );
 					}
 					else
 					{
-						source = sourceRaw;
+						source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
 					}
 
 					@SuppressWarnings({ "rawtypes", "unchecked" })
@@ -421,7 +456,9 @@ public class SparkGenerateFaceScaleSpace {
 					size,
 					1,
 					scaleSpaceDataSetName,
-					attributes.getBlockSize());
+					attributes.getBlockSize(),
+					scaleIndex == 1 ? options.invert : false, // only when downsampling to s1 we need filtering
+					scaleIndex == 1 ? options.normalizeContrast : false ); // only when downsampling to s1 we need filtering
 
 			sourceDatasetName = scaleSpaceDataSetName;
 			Arrays.fill(min, 0);
@@ -442,9 +479,9 @@ public class SparkGenerateFaceScaleSpace {
 				options.getSize(),
 				faceGroupName + "/s0",
 				options.getBlockSize(),
-				options.invert,
-				options.normalizeContrast,
-				1 );
+				options.invert, // only face 0 needs filtering
+				options.normalizeContrast, // only face 0 needs filtering
+				0 );
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
@@ -458,9 +495,9 @@ public class SparkGenerateFaceScaleSpace {
 					scaleSpaceAttributes.getDimensions(),
 					faceGroupName + "/s" + scaleIndex,
 					options.getBlockSize(),
-					options.invert,
-					options.normalizeContrast,
-					1 << scaleIndex );
+					false,
+					false,
+					scaleIndex );
 		}
 
 		// downsample the s1 face
