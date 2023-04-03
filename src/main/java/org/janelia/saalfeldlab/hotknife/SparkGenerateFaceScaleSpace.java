@@ -85,8 +85,14 @@ public class SparkGenerateFaceScaleSpace {
 		private final String sizeString = null;
 		private final long[] size;
 
-		@Option(name = "--multiSem", usage = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
-		private boolean multiSem = false;
+		@Option(name = "--maxDownsamplingLevel", usage = "MultiSem datasets can be thin, so we might not be able to downsample till s9")
+		private int maxDownsamplingLevel = 9;
+
+		@Option(name = "--invert", usage = "MultiSem datasets might be inverted")
+		private boolean invert = false;
+
+		@Option(name = "--normalizeContrast", usage = "Perform contast normalization on the input data")
+		private boolean normalizeContrast = false;
 
 		public Options(final String[] args) {
 
@@ -285,7 +291,8 @@ public class SparkGenerateFaceScaleSpace {
 			final String outDatasetName,
 			final int[] outBlockSize,
 			final boolean invert,
-			final boolean normalizeContrast ) throws IOException {
+			final boolean normalizeContrast,
+			final int scale ) throws IOException {
 
 		final N5Writer n5 = new N5FSWriter(n5Path);
 
@@ -336,8 +343,7 @@ public class SparkGenerateFaceScaleSpace {
 					if ( normalizeContrast )
 					{
 						//final int scale = 1 << s;
-						//final double inverseScale = 1.0 / scale;
-						final double inverseScale = 1.0;
+						final double inverseScale = 1.0 / scale;
 
 						final int blockRadius = (int)Math.round(511 * inverseScale); //1023
 
@@ -402,7 +408,7 @@ public class SparkGenerateFaceScaleSpace {
 
 		// for multisem we only [downsample to s1,] extract the face, and then downsample the face itself (because the "cuts"/slabs are too thin)
 		// for FIB-SEM we go in deeper, downsample until s9 and then extract the face from each downsampling step independently
-		final int maxScaleIndex = options.multiSem ? 0 : 9;
+		final int maxScaleIndex = options.maxDownsamplingLevel; //options.multiSem ? 0 : 9;
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
@@ -436,8 +442,9 @@ public class SparkGenerateFaceScaleSpace {
 				options.getSize(),
 				faceGroupName + "/s0",
 				options.getBlockSize(),
-				options.multiSem,
-				options.multiSem );
+				options.invert,
+				options.normalizeContrast,
+				1 );
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
@@ -451,26 +458,28 @@ public class SparkGenerateFaceScaleSpace {
 					scaleSpaceAttributes.getDimensions(),
 					faceGroupName + "/s" + scaleIndex,
 					options.getBlockSize(),
-					options.multiSem,
-					options.multiSem);
+					options.invert,
+					options.normalizeContrast,
+					1 << scaleIndex );
 		}
 
 		// downsample the s1 face
-		if ( options.multiSem )
+		if ( options.maxDownsamplingLevel < 9 )
 		{
 			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
-			final int[] downsamplingFactors = new int[] { 2, 2 };
+			final int[] downsamplingFactorDelta = new int[] { 2, 2 };
+			final int[] ds = new int[] { 1, 1 };
 
-			if ( maxScaleIndex == 0 )
-			{
-				// manually set the downsampling factors, the rest will "fall in place"
-				n5.setAttribute(faceGroupName + "/s0", "downsamplingFactors", new int[] { 1, 1 });
-			}
+			// manually set the downsampling factors, the rest will "fall in place"
+			n5.setAttribute(faceGroupName + "/s0", "downsamplingFactors", ds );
 
-			if ( maxScaleIndex == 1 )
+			for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex)
 			{
+				ds[ 0 ] *= downsamplingFactorDelta[ 0 ];
+				ds[ 1 ] *= downsamplingFactorDelta[ 1 ];
+
 				// manually set the downsampling factors, the rest will "fall in place"
-				n5.setAttribute(faceGroupName + "/s1", "downsamplingFactors", downsamplingFactors);
+				n5.setAttribute(faceGroupName + "/s" + scaleIndex, "downsamplingFactors", ds);
 			}
 
 			for (int scaleIndex = maxScaleIndex+1; scaleIndex <= 9; ++scaleIndex) {
@@ -479,7 +488,7 @@ public class SparkGenerateFaceScaleSpace {
 						n5Supplier,
 						faceGroupName + "/s" + (scaleIndex - 1),
 						faceGroupName + "/s" + scaleIndex,
-						downsamplingFactors,
+						downsamplingFactorDelta,
 						options.getBlockSize()
 					);
 			}
