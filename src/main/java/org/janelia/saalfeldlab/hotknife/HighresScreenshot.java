@@ -138,7 +138,8 @@ public class HighresScreenshot
 								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 2f, 3, 0.5f, true, true, true),
 								blockRadius,
 								0,
-								255);
+								255,
+								true );
 
 				source = Lazy.process(
 						sourceRaw,

@@ -37,6 +37,7 @@ import org.janelia.saalfeldlab.hotknife.util.Util;
 
 import ij.ImagePlus;
 import ij.process.FloatProcessor;
+import net.imglib2.Cursor;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
@@ -61,32 +62,37 @@ public class ImageJStackOp<T extends RealType<T> & NativeType<T>> implements Con
 	final Consumer<FloatProcessor> sliceFilter;
 	final double minIntensity, maxIntensity;
 	final int padding;
+	final boolean doNothingIfAllBlack;
 
 	public ImageJStackOp(
 			final RandomAccessible<T> input,
 			final Consumer<FloatProcessor> sliceFilter,
 			final int padding,
 			final double minIntensity,
-			final double maxIntensity) {
+			final double maxIntensity,
+			final boolean doNothingIfAllBlack ) {
 
 		this.input = input;
 		this.sliceFilter = sliceFilter;
 		this.minIntensity = minIntensity;
 		this.maxIntensity = maxIntensity;
 		this.padding = padding;
+		this.doNothingIfAllBlack = doNothingIfAllBlack;
 	}
 
 	public ImageJStackOp(
 			final RandomAccessible<T> input,
 			final Consumer<FloatProcessor> sliceFilter,
-			final int padding) {
+			final int padding,
+			final boolean doNothingIfAllBlack ) {
 
 		this(
 				input,
 				sliceFilter,
 				padding,
 				-Float.MAX_VALUE,
-				Float.MAX_VALUE);
+				Float.MAX_VALUE,
+				doNothingIfAllBlack );
 	}
 
 	@Override
@@ -111,6 +117,30 @@ public class ImageJStackOp<T extends RealType<T> & NativeType<T>> implements Con
 						new FloatType()),
 				min,
 				max);
+
+
+		if ( doNothingIfAllBlack )
+		{
+			final Cursor< FloatType > cursor = inputInterval.cursor();
+			boolean allZero = true;
+
+			while ( cursor.hasNext() )
+			{
+				if ( cursor.next().get() != 0.0 )
+				{
+					allZero = false;
+					break;
+				}
+			}
+
+			if ( allZero )
+			{
+				for ( final T t : Views.iterable( output ) )
+					t.setZero();
+
+				return;
+			}
+		}
 
 		RandomAccessibleInterval<FloatType> inputSlice = inputInterval;
 		RandomAccessibleInterval<T> outputSlice = output;

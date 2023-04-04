@@ -272,7 +272,8 @@ public class ViewAlignedSlabSeries {
 									(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
 									blockRadius,
 									0,
-									255);
+									255,
+									true );
 	
 					source = Lazy.process(
 							sourceRaw,

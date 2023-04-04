@@ -72,7 +72,8 @@ public class CLAHEBehavior implements Callable<Void> {
 						(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 2.5f, null, false),
 						blockRadius,
 						0,
-						255);
+						255,
+						true );
 		final RandomAccessibleInterval<UnsignedByteType> clahed = Lazy.process(
 				img,
 				new int[] {256, 256, 32},
@@ -86,7 +87,8 @@ public class CLAHEBehavior implements Callable<Void> {
 						(fp) -> NormalizeLocalContrast.run(fp, blockRadius, blockRadius, 3f, true, true),
 						blockRadius,
 						0,
-						255);
+						255,
+						true );
 		final RandomAccessibleInterval<UnsignedByteType> lcned = Lazy.process(
 				img,
 				new int[] {512, 512, 32},
@@ -101,7 +103,8 @@ public class CLAHEBehavior implements Callable<Void> {
 						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
 						blockRadius,
 						0,
-						255);
+						255,
+						true );
 		final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
 				img,
 				new int[] {512, 512, 32},

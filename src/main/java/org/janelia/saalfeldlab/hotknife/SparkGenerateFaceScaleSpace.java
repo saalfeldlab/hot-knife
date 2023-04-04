@@ -323,11 +323,12 @@ public class SparkGenerateFaceScaleSpace {
 							(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
 							blockRadius,
 							0,
-							255);
+							255,
+							true ); // do nothing if all black
 
 			return Lazy.process(
 					sourceRaw,
-					new int[] {512, 512, 1},
+					new int[] {1024, 1024, 1},
 					new UnsignedByteType(),
 					AccessFlags.setOf(AccessFlags.VOLATILE),
 					cllcn);

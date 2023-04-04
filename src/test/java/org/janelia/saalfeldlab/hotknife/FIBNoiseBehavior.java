@@ -73,7 +73,8 @@ public class FIBNoiseBehavior implements Callable<Void> {
 						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 4f, 10, 0.5f, true, true, true),
 						blockRadius,
 						0,
-						255);
+						255,
+						true );
 		final RandomAccessibleInterval<UnsignedByteType> cllcned2 = Lazy.process(
 				img2,
 				new int[] {256, 256, 32},
