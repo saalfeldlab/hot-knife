@@ -85,8 +85,8 @@ public class SparkGenerateFaceScaleSpace {
 		private final String sizeString = null;
 		private final long[] size;
 
-		@Option(name = "--maxDownsamplingLevel", usage = "MultiSem datasets can be thin, so we might not be able to downsample till s9")
-		private int maxDownsamplingLevel = 9;
+		//@Option(name = "--maxDownsamplingLevel", usage = "MultiSem datasets can be thin, so we might not be able to downsample till s9")
+		//private int maxDownsamplingLevel = 9;
 
 		@Option(name = "--invert", usage = "MultiSem datasets might be inverted")
 		private boolean invert = false;
@@ -198,7 +198,7 @@ public class SparkGenerateFaceScaleSpace {
 		return Math.sqrt(v);
 	}
 
-	static public void downsample(
+	static public long[] downsample(
 			final JavaSparkContext sc,
 			final String n5Path,
 			final String inDatasetName,
@@ -297,6 +297,8 @@ public class SparkGenerateFaceScaleSpace {
 					final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(subsampled, gridBlock[0], gridBlock[1]);
 					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
 				});
+
+		return outDimensions;
 	}
 
 	protected static RandomAccessibleInterval<UnsignedByteType> filter(
@@ -443,12 +445,12 @@ public class SparkGenerateFaceScaleSpace {
 
 		// for multisem we only [downsample to s1,] extract the face, and then downsample the face itself (because the "cuts"/slabs are too thin)
 		// for FIB-SEM we go in deeper, downsample until s9 and then extract the face from each downsampling step independently
-		final int maxScaleIndex = options.maxDownsamplingLevel; //options.multiSem ? 0 : 9;
+		int maxScaleIndex = 9;//options.maxDownsamplingLevel; //options.multiSem ? 0 : 9;
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
-			downsample(
+			final long[] outDimensions = downsample(
 					sc,
 					options.getN5Path(),
 					sourceDatasetName,
@@ -464,6 +466,10 @@ public class SparkGenerateFaceScaleSpace {
 			Arrays.fill(min, 0);
 			System.arraycopy(
 					n5.getDatasetAttributes(scaleSpaceDataSetName).getDimensions(), 0, size, 0, size.length);
+
+			// if we downsampled to a z-size of 1, we need to stop
+			if ( outDimensions[ 2 ] == 1 )
+				maxScaleIndex = scaleIndex;
 		}
 
 		/* save faces */
@@ -501,7 +507,7 @@ public class SparkGenerateFaceScaleSpace {
 		}
 
 		// downsample the s1 face
-		if ( options.maxDownsamplingLevel < 9 )
+		if ( maxScaleIndex < 9 )
 		{
 			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
 			final int[] downsamplingFactorDelta = new int[] { 2, 2 };
