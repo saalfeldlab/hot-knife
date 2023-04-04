@@ -49,8 +49,10 @@ ARGV="\
 --n5GroupOutput=${N5_FACE_DATASET} \
 --min=${MIN} \
 --size=${SIZE} \
---multiSem \
---blockSize=1024,1024" # TODO: verify this makes sense for multi-sem
+--invert \
+--normalizeContrast \
+--maxDownsamplingLevel 5
+--blockSize=1024,1024"
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace"
 
