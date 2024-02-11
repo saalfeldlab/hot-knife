@@ -5,10 +5,7 @@ import net.imglib2.Localizable;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
-import net.imglib2.Sampler;
 import net.imglib2.type.Type;
-import net.imglib2.type.numeric.RealType;
-import net.imglib2.util.Util;
 import net.preibisch.mvrecon.process.fusion.transformed.nonrigid.grid.NumericAffineModel3D;
 
 public class NonRigidRealRandomAccess<T> implements RealRandomAccess<T>
@@ -189,5 +186,5 @@ public class NonRigidRealRandomAccess<T> implements RealRandomAccess<T>
 	public void setPosition( final long position, final int d ) { l[ d ] = position; }
 
 	@Override
-	public Sampler<T> copy() { return copyRealRandomAccess(); }
+	public RealRandomAccess<T> copy() { return copyRealRandomAccess(); }
 }

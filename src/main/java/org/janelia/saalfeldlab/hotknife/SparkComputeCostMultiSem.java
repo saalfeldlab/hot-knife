@@ -362,35 +362,32 @@ public class SparkComputeCostMultiSem {
 		
 		System.out.println("Writing blocks");
 
-		try
-		{
-			// TODO: wrong dimensions
-			N5Writer n5w = new N5FSWriter(costN5Path);
+        // TODO: wrong dimensions
+        N5Writer n5w = new N5FSWriter(costN5Path);
 
-			// Now loop over blocks and write (for multisem, usually just one block in z)
-			for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / zcorrBlockSize[2]); zGrid++ )
-			{
-				final long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid }; //TODO: is this in original or cost steps?
+        // Now loop over blocks and write (for multisem, usually just one block in z)
+        for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / zcorrBlockSize[2]); zGrid++ )
+        {
+            final long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid }; //TODO: is this in original or cost steps?
 
-				System.out.println( "gridOffset: " + Util.printCoordinates( gridOffset ));
+            System.out.println( "gridOffset: " + Util.printCoordinates( gridOffset ));
 
-				RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
-						Views.extendZero( cost ),
-						new FinalInterval(
-								new long[]{0, 0, zGrid * zcorrBlockSize[2]},
-								new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * zcorrBlockSize[2] - 1 }));
+            RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
+                    Views.extendZero( cost ),
+                    new FinalInterval(
+                            new long[]{0, 0, zGrid * zcorrBlockSize[2]},
+                            new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * zcorrBlockSize[2] - 1 }));
 
-				System.out.println( "block: " + Util.printInterval( block ));
+            System.out.println( "block: " + Util.printInterval( block ));
 
-				N5Utils.saveBlock(
-						block,
-						n5w,
-						costDataset,
-						gridOffset);
-			}
-		} catch (IOException e) { throw new RuntimeException( "processColumn write blocks failed: ", e ); }
+            N5Utils.saveBlock(
+                    block,
+                    n5w,
+                    costDataset,
+                    gridOffset);
+        }
 
-		//SimpleMultiThreading.threadHaltUnClean();
+        //SimpleMultiThreading.threadHaltUnClean();
 	}
 
 	private static RandomAccessibleInterval<UnsignedByteType> mergeCosts(RandomAccessibleInterval<UnsignedByteType> topCost, RandomAccessibleInterval<UnsignedByteType> botCost) {
@@ -428,28 +425,24 @@ public class SparkComputeCostMultiSem {
 		final RandomAccessibleInterval<UnsignedByteType> maskRaw;
 		final RandomAccessible<UnsignedByteType> maskExtended;
 
-		try
-		{
-			zcorrRaw = N5Utils.open(new N5FSReader(n5Path), zcorrDataset);
+        zcorrRaw = N5Utils.open(new N5FSReader(n5Path), zcorrDataset);
 
-			if ( maskDataset != null )
-			{
-				maskRaw = N5Utils.open(new N5FSReader(n5Path), maskDataset);
+        if ( maskDataset != null )
+        {
+            maskRaw = N5Utils.open(new N5FSReader(n5Path), maskDataset);
 
-				if ( !Intervals.equals(zcorrRaw, maskRaw) )
-					throw new RuntimeException( "zCorrRaw interval [" + Util.printInterval(zcorrRaw) + "] and mask interval [" + Util.printInterval(maskRaw) + "] are not the same, quitting." );
+            if ( !Intervals.equals(zcorrRaw, maskRaw) )
+                throw new RuntimeException( "zCorrRaw interval [" + Util.printInterval(zcorrRaw) + "] and mask interval [" + Util.printInterval(maskRaw) + "] are not the same, quitting." );
 
-				maskExtended = Views.extendZero( maskRaw );
-			}
-			else
-			{
-				maskRaw = null;
-				maskExtended = null;
-			}
+            maskExtended = Views.extendZero( maskRaw );
+        }
+        else
+        {
+            maskRaw = null;
+            maskExtended = null;
+        }
 
-		} catch (IOException e) { throw new RuntimeException( "Cannot load input zcorr data", e ); }
-
-		// The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
+        // The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
 		// zcorr = Views.permute(zcorr, costAxis, 2);
 
 		final int outsideValue = 150; // TODO: global variable 170

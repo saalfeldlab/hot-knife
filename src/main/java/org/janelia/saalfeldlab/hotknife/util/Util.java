@@ -204,15 +204,10 @@ public class Util {
 											  final String key,
 											  final Class<T> clazz) throws IOException {
 		T value;
-		try {
-			value = n5Reader.getAttribute(groupName, key, clazz);
-		} catch (IOException e) {
-			throw new IOException("failed to read from " + getAttributesJsonPath(n5Reader.getBasePath(), groupName),
-								  e);
-		}
-		if (value == null) {
+        value = n5Reader.getAttribute(groupName, key, clazz);
+        if (value == null) {
 			throw new IOException("required " + key + " attribute is missing from " +
-								  getAttributesJsonPath(n5Reader.getBasePath(), groupName));
+								  getAttributesJsonPath(n5Reader.getURI().getPath(), groupName));
 		}
 		return value;
 	}

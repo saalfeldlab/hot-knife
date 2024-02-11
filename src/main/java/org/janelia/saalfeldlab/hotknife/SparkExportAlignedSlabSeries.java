@@ -410,7 +410,7 @@ public class SparkExportAlignedSlabSeries {
 						for (int i = 0; i < sources.size(); ++i)
 							target.add(c.get(i));
 					},
-					UnsignedByteType::new);
+					new UnsignedByteType());
 			N5Utils.saveNonEmptyBlock(
 					Views.interval(
 							composite,

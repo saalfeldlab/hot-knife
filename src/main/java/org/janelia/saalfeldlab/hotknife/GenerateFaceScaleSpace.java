@@ -144,12 +144,8 @@ public class GenerateFaceScaleSpace {
 								System.out.println(Arrays.toString(gridPosition));
 
 								final RandomAccessibleInterval<FloatType> sourceBlock = Views.offsetInterval(subsampled, fOffset, croppedBlockSize);
-								try {
-									N5Utils.saveBlock(sourceBlock, n5, dataset, attributes, gridPosition);
-								} catch (final IOException e) {
-									e.printStackTrace();
-								}
-							}));
+                                N5Utils.saveBlock(sourceBlock, n5, dataset, attributes, gridPosition);
+                            }));
 
 			for (d = 0; d < n; ++d) {
 				offset[d] += blockSize[d];
