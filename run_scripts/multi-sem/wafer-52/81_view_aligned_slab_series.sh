@@ -39,7 +39,7 @@ JAR="${FLYEM_DATA_ROOT}/render/lib/hot-knife.latest-fat.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.ViewAlignedSlabSeries"
 
 N5_PATH="/nrs/hess/render/export/hess.n5"
-TRANSFORM_GROUP="/surface-align/run_20230330_092301/pass12"
+TRANSFORM_GROUP="/surface-align/run_20230404_105038/pass12"
 
 
 ARGV="\

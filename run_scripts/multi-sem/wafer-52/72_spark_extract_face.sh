@@ -51,7 +51,6 @@ ARGV="\
 --size=${SIZE} \
 --invert \
 --normalizeContrast \
---maxDownsamplingLevel 5
 --blockSize=1024,1024"
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace"

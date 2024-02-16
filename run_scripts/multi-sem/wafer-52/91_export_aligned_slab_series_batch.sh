@@ -30,8 +30,8 @@ export RUNTIME=${3:-4320} # default is minutes in 3 days
 # setup export parameters
 
 N5_PATH="/nrs/hess/render/export/hess.n5"
-TRANSFORM_GROUP="/surface-align/run_20230330_092301/pass12"
-DATA_SET_OUTPUT="/wafer-52-align/run_20230330_092301/pass12/s0"
+TRANSFORM_GROUP="/surface-align/run_20230404_105038/pass12"
+DATA_SET_OUTPUT="/wafer-52-align/run_20230404_105038/pass12/s0"
 
 ARGV="\
 --n5PathInput ${N5_PATH} \
