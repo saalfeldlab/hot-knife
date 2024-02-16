@@ -470,6 +470,7 @@ public class SparkComputeCostMultiSem {
 		//final RandomAccessibleInterval<UnsignedByteType> zcorrSubsampled = Views.subsample( zcorr, costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] );
 
 		// by default, there is data everywhere (mask set to 255)
+		// we create a projected mask, if at any pixel in z there is no data, the mask will say there is no data
 		final RandomAccessibleInterval<UnsignedByteType> mask2d =
 				Views.translate(
 						ArrayImgs.unsignedBytes(
@@ -530,7 +531,7 @@ public class SparkComputeCostMultiSem {
 			m.setPosition( pos[ 0 ], 0 );
 			m.setPosition( pos[ 1 ], 1 );
 
-			// no data available in one of the z-layers
+			// no data available in at least one of the z-layers (or all)
 			if ( m.get().get() == 0 )
 			{
 				if ( pos[ 2 ] == zcorrInterval.min( 2 ) || pos[ 2 ] == zcorrInterval.max( 2 ) )
@@ -553,7 +554,7 @@ public class SparkComputeCostMultiSem {
 					final int x0 = in.get().get();
 					in.fwd( 2 );
 					final int x1 = in.get().get();
-					v.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives
+					v.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives (only bright-to-dark)
 				}
 				/*else
 				{
