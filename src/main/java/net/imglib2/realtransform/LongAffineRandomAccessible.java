@@ -92,7 +92,7 @@ public class LongAffineRandomAccessible< T > extends AbstractEuclideanSpace impl
 		{
 			super( transformToSource.numSourceDimensions() );
 			access.localize( position );
-			sourceAccess = access.sourceAccess.copyRandomAccess();
+			sourceAccess = access.sourceAccess.copy();
 			transformCopy = transformToSource.copy();
 		}
 
@@ -207,12 +207,6 @@ public class LongAffineRandomAccessible< T > extends AbstractEuclideanSpace impl
 		public LongAffineRandomAccess copy()
 		{
 			return new LongAffineRandomAccess( this );
-		}
-
-		@Override
-		public LongAffineRandomAccess copyRandomAccess()
-		{
-			return copy();
 		}
 	}
 

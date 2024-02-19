@@ -8,14 +8,18 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>32.0.0</version>
+		<version>33.2.0</version>
 	</parent>
 	<properties>
 		<enforcer.skip>true</enforcer.skip>
 		<package-name>org.janelia.saalfeldlab.hotknife</package-name>
 		<jackson-databind.version>2.6.7</jackson-databind.version>
 
-		<n5-imglib2.version>3.5.1</n5-imglib2.version>
+		<imglib2.version>6.1.0-SNAPSHOT</imglib2.version>
+		<imglib2-cache.version>1.0.0-beta-17-SNAPSHOT</imglib2-cache.version>
+		<bigdataviewer-core.version>10.4.6-SNAPSHOT</bigdataviewer-core.version>
+		<bigdataviewer-vistools.version>1.0.0-beta-32-SNAPSHOT</bigdataviewer-vistools.version>
+		<n5-imglib2.version>4.4.1-SNAPSHOT</n5-imglib2.version>
 		<n5-hdf5.version>1.2.0</n5-hdf5.version>
 		<n5-aws-s3.version>3.2.0</n5-aws-s3.version>
 		<!-- <n5-blosc.version>1.1.0</n5-blosc.version> -->
