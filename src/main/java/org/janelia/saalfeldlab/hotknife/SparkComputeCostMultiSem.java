@@ -29,6 +29,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
 import org.janelia.saalfeldlab.hotknife.cost.PreFilter;
+import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -319,19 +320,6 @@ public class SparkComputeCostMultiSem {
 																  true, // no need to permute with multi-sem
 																  false);
 			sparkSurfaceFit.callWithSparkContext(sparkContext);
-		}
-	}
-
-	// serializable downsample supplier for spark
-	public static class N5PathSupplier implements N5WriterSupplier {
-		private final String path;
-		public N5PathSupplier(final String path) {
-			this.path = path;
-		}
-		@Override
-		public N5Writer get()
-				throws IOException {
-			return new N5FSWriter(path);
 		}
 	}
 
