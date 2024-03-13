@@ -121,6 +121,11 @@ public class SparkNormalizeN5 {
 		final String outputDataset = options.n5DatasetInput + "_normalized" + invertedName;
 		final String fullScaleOutputDataset = outputDataset + "/s0";
 
+		if (n5Output.exists(fullScaleOutputDataset)) {
+			final String fullPath = options.n5PathInput + fullScaleOutputDataset;
+			throw new IllegalArgumentException("Normalized data set exists: " + fullPath);
+		}
+
 		n5Output.createDataset(fullScaleOutputDataset, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
