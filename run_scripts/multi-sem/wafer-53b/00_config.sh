@@ -55,55 +55,35 @@ export N5_SURFACE_ROOT="/surface-align/run_${RUN_TIMESTAMP}"
 # Slab Customizations
 # --------------------------------------------------------------------
 case "${CUT_AND_SLAB}" in
-  "s030_m016")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s030_m016_align_ic___20240209_105555"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s030_m016_align_ic___20240209_105555"
+  "s070_m104")
+    export RENDER_PROJECT="slab_070_to_079"
+    export N5_Z_CORR_DATASET="/render/slab_070_to_079/s070_m104_align_big_block_ic___20240308_071650"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields/slab_070_to_079/s070_m104_align_big_block_ic___20240308_071650__20240308_112254"
   ;;
-  "s031_m105")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s031_m105_align_ic___20240209_110122"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s031_m105_align_ic___20240209_110122"
+  "s071_m331")
+    export RENDER_PROJECT="slab_070_to_079"
+    export N5_Z_CORR_DATASET="/render/slab_070_to_079/s071_m331_align_big_block_ic___20240308_071902"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields/slab_070_to_079/?"
   ;;
-  "s032_m133")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s032_m133_align_ic___20240209_110206"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s032_m133_align_ic___20240209_110206"
+  "s072_m150")
+    export RENDER_PROJECT="slab_070_to_079"
+    export N5_Z_CORR_DATASET="/render/slab_070_to_079/s072_m150_align_big_block_ic___20240308_071933"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields/slab_070_to_079/?"
   ;;
-  "s033_m039")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s033_m039_align_ic___20240209_110254"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s033_m039_align_ic___20240209_110254"
+  "s073_m079")
+    export RENDER_PROJECT="slab_070_to_079"
+    export N5_Z_CORR_DATASET="/render/slab_070_to_079/s073_m079_align_big_block_ic___20240308_072004"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields/slab_070_to_079/?"
   ;;
-  "s034_m081")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s034_m081_align_ic___20240209_110424"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s034_m081_align_ic___20240209_110424"
+  "s074_m265")
+    export RENDER_PROJECT="slab_070_to_079"
+    export N5_Z_CORR_DATASET="/render/slab_070_to_079/s074_m265_align_big_block_ic___20240308_072035"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields/slab_070_to_079/?"
   ;;
-  "s035_m387")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s035_m387_align_ic___20240209_110445"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s035_m387_align_ic___20240209_110445"
-  ;;
-  "s036_m252")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s036_m252_align_ic___20240209_111340"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s036_m252_align_ic___20240209_111340"
-  ;;
-  "s037_m381")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s037_m381_align_ic___20240209_111354"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s037_m381_align_ic___20240209_111354"
-  ;;
-  "s038_m139")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s038_m139_align_ic___20240209_111419"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s038_m139_align_ic___20240209_111419"
-  ;;
-  "s039_m295")
-    export RENDER_PROJECT="slab_030_to_039"
-    export N5_Z_CORR_DATASET="/render/slab_030_to_039/s039_m295_align_ic___20240209_111518"
-    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields_fix/slab_030_to_039/s039_m295_align_ic___20240209_111518"
+  "s075_m119")
+    export RENDER_PROJECT="slab_070_to_079"
+    export N5_Z_CORR_DATASET="/render/slab_070_to_079/s075_m119_align_big_block_ic___20240308_072106"
+    export N5_HEIGHT_FIELDS_FIX_DATASET="/heightfields/slab_070_to_079/?"
   ;;
 esac
 
