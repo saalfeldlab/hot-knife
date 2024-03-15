@@ -83,6 +83,15 @@ ARGV="\
 NORMALIZED_DATASET="${Z_CORR_DATASET}_normalized"
 #NORMALIZED_DATASET="${Z_CORR_DATASET}_normalized_inverted"
 
+NORMALIZED_DATASET_DIR="${N5_PATH}${NORMALIZED_DATASET}"
+if [[ ! -d ${NORMALIZED_DATASET_DIR} ]]; then
+  mkdir -p "${NORMALIZED_DATASET_DIR}"
+  if [[ -f ${Z_CORR_PATH}/attributes.json ]]; then
+    cp "${Z_CORR_PATH}"/attributes.json "${NORMALIZED_DATASET_DIR}"
+    echo "copied ${Z_CORR_PATH}/attributes.json to ${N5_PATH}${NORMALIZED_DATASET}"
+  fi
+fi
+
 LOG_DIR="logs"
 LOG_FILE="${LOG_DIR}/normalize.${RUN_TIME}.out"
 
