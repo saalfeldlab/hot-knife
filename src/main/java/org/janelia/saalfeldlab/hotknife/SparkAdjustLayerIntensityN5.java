@@ -1,11 +1,14 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import bdv.util.BdvFunctions;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.loops.LoopBuilder;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import org.apache.commons.lang.math.IntRange;
@@ -129,11 +132,10 @@ public class SparkAdjustLayerIntensityN5 {
 		final List<Double> shifts = computeShifts(downScaledImg);
 
 		final Img<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, fullScaleInputDataset);
-		final Img<UnsignedByteType> copy = ArrayImgs.unsignedBytes(sourceRaw.dimensionsAsLongArray());
 
-		applyShifts(shifts, sourceRaw, copy);
+		RandomAccessibleInterval<UnsignedByteType> transformed = applyShifts(shifts, sourceRaw);
 
-		BdvFunctions.show(copy, "converted");
+		BdvFunctions.show(transformed, "converted");
 
 //		final N5Writer n5Output = new N5FSWriter(options.n5PathInput);
 //		final String invertedName = options.invert ? "_inverted" : "";
@@ -223,23 +225,27 @@ public class SparkAdjustLayerIntensityN5 {
 		return contentAverages.stream().map(a -> a - fixedPoint).collect(Collectors.toList());
 	}
 
-	private static void applyShifts(
+	private static RandomAccessibleInterval<UnsignedByteType> applyShifts(
 			final List<Double> shifts,
-			final RandomAccessibleInterval<UnsignedByteType> source,
-			final RandomAccessibleInterval<UnsignedByteType> target) {
+			final RandomAccessibleInterval<UnsignedByteType> source) {
 
 		final List<IntervalView<UnsignedByteType>> sourceStack = asZStack(source);
-		final List<IntervalView<UnsignedByteType>> targetStack = asZStack(target);
 
+		final List<RandomAccessibleInterval<UnsignedByteType>> convertedLayers = new ArrayList<>(sourceStack.size());
 		for (int z = 0; z < sourceStack.size(); ++z) {
-			final double shift = shifts.get(z);
-			LoopBuilder.setImages(sourceStack.get(z), targetStack.get(z))
-					.forEachPixel((s, t) -> {
-						// only apply in the foreground
-						if (s.get() > 0) {
-							t.set((int) Math.round(s.get() - shift));
-						}
-					});
+			final byte shift = (byte) Math.round(shifts.get(z));
+			final RandomAccessibleInterval<UnsignedByteType> layer = sourceStack.get(z);
+			RandomAccessibleInterval<UnsignedByteType> convertedLayer = Converters.convert(layer, (s, t) -> {
+				// only shift foreground
+				if (s.get() > 0) {
+					t.set(s.get() - shift);
+				} else {
+					t.set(0);
+				}
+			}, new UnsignedByteType());
+			convertedLayers.add(convertedLayer);
 		}
+
+		return Views.stack(convertedLayers);
 	}
 }
