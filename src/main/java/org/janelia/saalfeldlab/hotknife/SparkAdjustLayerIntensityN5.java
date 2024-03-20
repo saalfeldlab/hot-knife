@@ -28,6 +28,10 @@ import java.util.stream.Collectors;
 
 public class SparkAdjustLayerIntensityN5 {
 
+	public static final int LOWER_THRESHOLD = 20;
+	public static final int UPPER_THRESHOLD = 120;
+	public static final int DOWNSCALE_LEVEL = 5;
+
 	@SuppressWarnings({"FieldMayBeFinal", "unused"})
 	public static class Options extends AbstractOptions implements Serializable {
 
@@ -119,18 +123,15 @@ public class SparkAdjustLayerIntensityN5 {
 		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
-		final String downScaledDataset = options.n5DatasetInput + "/s5";
+		final String downScaledDataset = options.n5DatasetInput + "/s" + DOWNSCALE_LEVEL;
 		final Img<UnsignedByteType> downScaledImg = N5Utils.open(n5Input, downScaledDataset);
-		final List<IntervalView<UnsignedByteType>> downScaledStack = asZStack(downScaledImg);
 
-		final List<Double> shifts = computeShifts(downScaledStack);
+		final List<Double> shifts = computeShifts(downScaledImg);
 
 		final Img<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, fullScaleInputDataset);
 		final Img<UnsignedByteType> copy = ArrayImgs.unsignedBytes(sourceRaw.dimensionsAsLongArray());
-		final List<IntervalView<UnsignedByteType>> sourceStack = asZStack(sourceRaw);
-		final List<IntervalView<UnsignedByteType>> targetStack = asZStack(copy);
 
-		applyShifts(shifts, sourceStack, targetStack);
+		applyShifts(shifts, sourceRaw, copy);
 
 		BdvFunctions.show(copy, "converted");
 
@@ -179,11 +180,10 @@ public class SparkAdjustLayerIntensityN5 {
 		return stack;
 	}
 
-	private static List<Double> computeShifts(List<IntervalView<UnsignedByteType>> downScaledStack) {
+	private static List<Double> computeShifts(RandomAccessibleInterval<UnsignedByteType> rai) {
 
-		// match (only pixels that have "content" and not just resin)
-		final int lowerThreshold = 20;
-		final int upperThreshold = 120;
+		// create mask from pixels that have "content" throughout the stack
+		final List<IntervalView<UnsignedByteType>> downScaledStack = asZStack(rai);
 		final Img<UnsignedByteType> contentMask = ArrayImgs.unsignedBytes(downScaledStack.get(0).dimensionsAsLongArray());
 		for (final UnsignedByteType pixel : contentMask) {
 			pixel.set(1);
@@ -192,13 +192,11 @@ public class SparkAdjustLayerIntensityN5 {
 		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
 			LoopBuilder.setImages(layer, contentMask)
 					.forEachPixel((a, b) -> {
-						if (a.get() < lowerThreshold || a.get() > upperThreshold) {
+						if (a.get() < LOWER_THRESHOLD || a.get() > UPPER_THRESHOLD) {
 							b.set(0);
 						}
 					});
 		}
-
-		BdvFunctions.show(contentMask, "mask");
 
 		final AtomicLong maskSize = new AtomicLong(0);
 		for (final UnsignedByteType pixel : contentMask) {
@@ -206,8 +204,8 @@ public class SparkAdjustLayerIntensityN5 {
 				maskSize.incrementAndGet();
 			}
 		}
-		System.out.println("maskSize = " + maskSize);
 
+		// compute average intensity of content pixels in each layer
 		final List<Double> contentAverages = new ArrayList<>(downScaledStack.size());
 		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
 			final AtomicLong sum = new AtomicLong(0);
@@ -220,21 +218,18 @@ public class SparkAdjustLayerIntensityN5 {
 			contentAverages.add((double) sum.get() / maskSize.get());
 		}
 
-		// optimize
+		// compute shifts for adjusting intensities relative to the first layer
 		final double fixedPoint = contentAverages.get(0);
-		final List<Double> shifts = contentAverages.stream().map(a -> a - fixedPoint).collect(Collectors.toList());
-
-		//TODO remove
-		for (int z = 0; z < downScaledStack.size(); ++z) {
-			System.out.println("shifts[" + z + "] = " + shifts.get(z));
-		}
-		return shifts;
+		return contentAverages.stream().map(a -> a - fixedPoint).collect(Collectors.toList());
 	}
 
 	private static void applyShifts(
 			final List<Double> shifts,
-			final List<IntervalView<UnsignedByteType>> sourceStack,
-			final List<IntervalView<UnsignedByteType>> targetStack) {
+			final RandomAccessibleInterval<UnsignedByteType> source,
+			final RandomAccessibleInterval<UnsignedByteType> target) {
+
+		final List<IntervalView<UnsignedByteType>> sourceStack = asZStack(source);
+		final List<IntervalView<UnsignedByteType>> targetStack = asZStack(target);
 
 		for (int z = 0; z < sourceStack.size(); ++z) {
 			final double shift = shifts.get(z);
