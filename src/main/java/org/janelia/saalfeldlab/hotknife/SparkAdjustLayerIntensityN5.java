@@ -115,7 +115,7 @@ public class SparkAdjustLayerIntensityN5 {
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
+		final SparkConf conf = new SparkConf().setAppName("SparkAdjustLayerIntensityN5");
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
