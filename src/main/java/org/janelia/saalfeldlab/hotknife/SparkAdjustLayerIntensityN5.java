@@ -121,7 +121,7 @@ public class SparkAdjustLayerIntensityN5 {
 
 		final N5Reader n5Input = new N5FSReader(options.n5PathInput);
 
-		final String fullScaleInputDataset = options.n5DatasetInput + "/s5";
+		final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
 		final int[] blockSize = n5Input.getAttribute(fullScaleInputDataset, "blockSize", int[].class);
 		final long[] dimensions = n5Input.getAttribute(fullScaleInputDataset, "dimensions", long[].class);
 
