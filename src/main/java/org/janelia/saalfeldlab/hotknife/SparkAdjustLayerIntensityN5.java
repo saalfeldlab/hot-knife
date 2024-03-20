@@ -1,14 +1,6 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import bdv.util.BdvFunctions;
-import mpicbg.models.ErrorStatistic;
-import mpicbg.models.IllDefinedDataPointsException;
-import mpicbg.models.NotEnoughDataPointsException;
-import mpicbg.models.Point;
-import mpicbg.models.PointMatch;
-import mpicbg.models.Tile;
-import mpicbg.models.TileConfiguration;
-import mpicbg.models.TranslationModel1D;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
@@ -29,9 +21,9 @@ import org.kohsuke.args4j.Option;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 public class SparkAdjustLayerIntensityN5 {
@@ -120,25 +112,25 @@ public class SparkAdjustLayerIntensityN5 {
 
 		final N5Reader n5Input = new N5FSReader(options.n5PathInput);
 
-		final String fullScaleInputDataset = options.n5DatasetInput + "/s6";
+		final String fullScaleInputDataset = options.n5DatasetInput + "/s5";
 		final int[] blockSize = n5Input.getAttribute(fullScaleInputDataset, "blockSize", int[].class);
 		final long[] dimensions = n5Input.getAttribute(fullScaleInputDataset, "dimensions", long[].class);
 
 		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
-		final String downScaledDataset = options.n5DatasetInput + "/s10";
+		final String downScaledDataset = options.n5DatasetInput + "/s5";
 		final Img<UnsignedByteType> downScaledImg = N5Utils.open(n5Input, downScaledDataset);
 		final List<IntervalView<UnsignedByteType>> downScaledStack = asZStack(downScaledImg);
 
-		final List<TranslationModel1D> models = fitModels(downScaledStack);
+		final List<Double> shifts = computeShifts(downScaledStack);
 
 		final Img<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, fullScaleInputDataset);
 		final Img<UnsignedByteType> copy = ArrayImgs.unsignedBytes(sourceRaw.dimensionsAsLongArray());
 		final List<IntervalView<UnsignedByteType>> sourceStack = asZStack(sourceRaw);
 		final List<IntervalView<UnsignedByteType>> targetStack = asZStack(copy);
 
-		applyModels(models, sourceStack, targetStack);
+		applyShifts(shifts, sourceStack, targetStack);
 
 		BdvFunctions.show(copy, "converted");
 
@@ -180,102 +172,78 @@ public class SparkAdjustLayerIntensityN5 {
 	}
 
 	private static List<IntervalView<UnsignedByteType>> asZStack(final RandomAccessibleInterval<UnsignedByteType> rai) {
-		final List<IntervalView<UnsignedByteType>> stack = new ArrayList<>();
+		final List<IntervalView<UnsignedByteType>> stack = new ArrayList<>((int) rai.dimension(2));
 		for (int z = 0; z < rai.dimension(2); ++z) {
 			stack.add(Views.hyperSlice(rai, 2, z));
 		}
 		return stack;
 	}
 
-	private static List<TranslationModel1D> fitModels(List<IntervalView<UnsignedByteType>> downScaledStack) {
-
-		// initialize
-		final List<Tile<TranslationModel1D>> tiles = new ArrayList<>();
-		for (int z = 0; z < downScaledStack.size(); ++z) {
-			final TranslationModel1D model = new TranslationModel1D();
-			tiles.add(new Tile<>(model));
-		}
-
+	private static List<Double> computeShifts(List<IntervalView<UnsignedByteType>> downScaledStack) {
 
 		// match (only pixels that have "content" and not just resin)
-		final IntRange contentRange = new IntRange(1, 100);
+		final int lowerThreshold = 20;
+		final int upperThreshold = 120;
+		final Img<UnsignedByteType> contentMask = ArrayImgs.unsignedBytes(downScaledStack.get(0).dimensionsAsLongArray());
+		for (final UnsignedByteType pixel : contentMask) {
+			pixel.set(1);
+		}
 
-		for (int z = 0; z < downScaledStack.size() - 1; ++z) {
-			final IntervalView<UnsignedByteType> layerA = downScaledStack.get(z);
-			final IntervalView<UnsignedByteType> layerB = downScaledStack.get(z + 1);
-
-			final List<PointMatch> matches = new ArrayList<>();
-			LoopBuilder.setImages(layerA, layerB)
+		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
+			LoopBuilder.setImages(layer, contentMask)
 					.forEachPixel((a, b) -> {
-						if (contentRange.containsInteger(a.get()) && contentRange.containsInteger(b.get())) {
-							final Point pointA = new Point(new double[]{a.get()});
-							final Point pointB = new Point(new double[]{b.get()});
-							final PointMatch match = new PointMatch(pointA, pointB, 1);
-							matches.add(match);
+						if (a.get() < lowerThreshold || a.get() > upperThreshold) {
+							b.set(0);
 						}
 					});
+		}
 
-			final TranslationModel1D model = new TranslationModel1D();
-			final List<PointMatch> inliers = new ArrayList<>();
-			try {
-				model.filterRansac(matches, inliers, 1000, 0.01f, 0.01f);
-			} catch (NotEnoughDataPointsException e) {
-				throw new RuntimeException(e);
+		BdvFunctions.show(contentMask, "mask");
+
+		final AtomicLong maskSize = new AtomicLong(0);
+		for (final UnsignedByteType pixel : contentMask) {
+			if (pixel.get() == 1) {
+				maskSize.incrementAndGet();
 			}
+		}
+		System.out.println("maskSize = " + maskSize);
 
-			System.out.printf("inlier ratio for z=%d: %d / %d\n", z, inliers.size(), matches.size());
-			for (final PointMatch inlier : inliers) {
-				System.out.printf("inlier: %f -> %f\n", inlier.getP1().getL()[0], inlier.getP2().getL()[0]);
-			}
-
-			final Tile<TranslationModel1D> tileA = tiles.get(z);
-			final Tile<TranslationModel1D> tileB = tiles.get(z + 1);
-			tileA.connect(tileB, inliers);
+		final List<Double> contentAverages = new ArrayList<>(downScaledStack.size());
+		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
+			final AtomicLong sum = new AtomicLong(0);
+			LoopBuilder.setImages(layer, contentMask)
+					.forEachPixel((a, b) -> {
+						if (b.get() == 1) {
+							sum.addAndGet(a.get());
+						}
+					});
+			contentAverages.add((double) sum.get() / maskSize.get());
 		}
 
 		// optimize
-		final TileConfiguration tc = new TileConfiguration();
-		tc.addTiles(tiles);
-		tc.fixTile(tiles.get(0));
-
-		final int nIt = 1000;
-		try {
-			tc.optimize(new ErrorStatistic(nIt + 1), 0.01f, nIt, nIt, 0.75f);
-		} catch (NotEnoughDataPointsException | IllDefinedDataPointsException e) {
-			throw new RuntimeException(e);
-		}
+		final double fixedPoint = contentAverages.get(0);
+		final List<Double> shifts = contentAverages.stream().map(a -> a - fixedPoint).collect(Collectors.toList());
 
 		//TODO remove
-		for (int z = 0; z < downScaledStack.size() - 1; ++z) {
-			final double[] matrix = new double[2];
-			tiles.get(z).getModel().toArray(matrix);
-			System.out.printf("z=%d: %s\n", z, Arrays.toString(matrix));
+		for (int z = 0; z < downScaledStack.size(); ++z) {
+			System.out.println("shifts[" + z + "] = " + shifts.get(z));
 		}
-		return tiles.stream().map(Tile::getModel).collect(Collectors.toList());
+		return shifts;
 	}
 
-	private static void applyModels(
-			final List<TranslationModel1D> models,
+	private static void applyShifts(
+			final List<Double> shifts,
 			final List<IntervalView<UnsignedByteType>> sourceStack,
 			final List<IntervalView<UnsignedByteType>> targetStack) {
 
-		final double[] container = new double[1];
-		final IntRange contentRange = new IntRange(1, 100);
-
 		for (int z = 0; z < sourceStack.size(); ++z) {
-			final TranslationModel1D model = models.get(z);
+			final double shift = shifts.get(z);
 			LoopBuilder.setImages(sourceStack.get(z), targetStack.get(z))
 					.forEachPixel((s, t) -> {
 						// only apply in the foreground
 						if (s.get() > 0) {
-//						if (contentRange.containsInteger(s.get())) {
-							container[0] = s.get();
-							model.applyInPlace(container);
-							t.set((int) Math.round(container[0]));
+							t.set((int) Math.round(s.get() - shift));
 						}
-//						else {
-//							t.set(0);
-//						}
 					});
 		}
 	}
