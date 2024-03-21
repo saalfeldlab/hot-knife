@@ -231,15 +231,15 @@ public class SparkComputeCostMultiSem {
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
-//		new ImageJ();
-//		for (long x = 2; x <= 2; x++) {
-//			for (long y = 8; y <= 8; y++) {
-		for (long x = 0; x < gridXSize; x++) {
-			for (long y = 0; y < gridYSize; y++) {
-				if ( x == 2 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
+		new ImageJ();
+		for (long x = 24; x <= 24; x++) {
+			for (long y = 14; y <= 14; y++) {
+//		for (long x = 0; x < gridXSize; x++) {
+			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
+//			for (long y = 0; y < gridYSize; y++) {
+				if ( x == 24 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
 				gridCoords.add(new Long[]{x, y});
 			}
-			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
 		}
 
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridYSize);
@@ -355,8 +355,8 @@ public class SparkComputeCostMultiSem {
 		RandomAccessibleInterval<UnsignedByteType> cost =
 				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService);
 
-		//ImageJFunctions.show( cost );
-		//SimpleMultiThreading.threadHaltUnClean();
+		ImageJFunctions.show( cost );
+		SimpleMultiThreading.threadHaltUnClean();
 
 		System.out.println( "cost: " + Util.printInterval( cost ));
 		
@@ -458,9 +458,9 @@ public class SparkComputeCostMultiSem {
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 		//final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
-//		ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ) );
-//		if ( maskRaw != null)
-//			ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ) );
+		ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ) );
+		if ( maskRaw != null)
+			ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ) );
 		//SimpleMultiThreading.threadHaltUnClean();
 
 		// compute derivative in z and keep only negative values
