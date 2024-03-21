@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 
 import ij.process.FloatProcessor;
 
+import org.janelia.saalfeldlab.n5.N5Exception;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 
 import net.imglib2.Cursor;
@@ -206,13 +207,13 @@ public class Util {
 		T value;
 		try {
 			value = n5Reader.getAttribute(groupName, key, clazz);
-		} catch (IOException e) {
-			throw new IOException("failed to read from " + getAttributesJsonPath(n5Reader.getBasePath(), groupName),
+		} catch (N5Exception e) {
+			throw new IOException("failed to read from " + getAttributesJsonPath(n5Reader.getURI().toString(), groupName),
 								  e);
 		}
 		if (value == null) {
 			throw new IOException("required " + key + " attribute is missing from " +
-								  getAttributesJsonPath(n5Reader.getBasePath(), groupName));
+								  getAttributesJsonPath(n5Reader.getURI().toString(), groupName));
 		}
 		return value;
 	}

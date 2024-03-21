@@ -138,6 +138,28 @@ public class PaintHeightField implements Callable<Void>{
 	FinalVoxelDimensions voxelDimensions = new FinalVoxelDimensions("px", new double[]{1, 1, 1});
 
 	/*
+	/try3/heightfields/slab_070_to_079/s070_m104_align_big_block_ic2d___20240314_111757_zAdjusted/s5/max
+	/render/slab_070_to_079/s070_m104_align_big_block_ic2d___20240314_111757_zAdjusted
+
+	--n5Path=/nrs/hess/data/hess_wafer_53/export/hess_wafer_53b.n5
+	--n5FieldPath=/nrs/hess/data/hess_wafer_53/export/hess_wafer_53b.n5
+	--n5Raw=/render/slab_070_to_079/s070_m104_align_big_block_ic2d___20240314_111757_zAdjusted
+	--n5Field=/try3/heightfields/slab_070_to_079/s070_m104_align_big_block_ic2d___20240314_111757_zAdjusted/s1/max
+	--n5FieldOutput=/render/slab_070_to_079/s070_m104_align_big_block_ic2d___20240314_111757_zAdjusted
+	--scale=2,2,1
+	--offset=0
+	--multiSem
+
+
+	--n5Path=/nrs/hess/render/export/hess.n5
+	--n5FieldPath=/nrs/hess/render/export/hess.n5
+	--n5Raw=/render/wafer_52_cut_00030_to_00039/slab_013_all_align_t2_ic___20230328_105504
+	--n5Field=/heightfields/wafer_52_cut_00030_to_00039/slab_013_all_align_t2_ic___20230328_105504/s1/min
+	--n5FieldOutput=/heightfields_fix/wafer_52_cut_00030_to_00039/slab_013_all_align_t2_ic___20230328_105504/min
+	--scale=2,2,1
+	--offset=0
+	--multiSem
+
 	--n5Path=/nrs/flyem/render/n5/Z0720_07m_BR
 	--n5FieldPath=/nrs/flyem/render/n5/Z0720_07m_BR
 	--n5Raw=/z_corr/Sec25/v5_acquire_trimmed_align_ic___20210709_144057
