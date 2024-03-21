@@ -2,9 +2,17 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
+import net.imglib2.converter.Converters;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.loops.LoopBuilder;
+import net.imglib2.view.IntervalView;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -32,6 +40,17 @@ import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePy
 
 public class SparkNormalizeN5 {
 
+	public enum NormalizationMethod {
+		/**
+		 * Contrast Limited Local Contrast Normalization
+		 */
+		LOCAL_CONTRAST,
+		/**
+		 * Adjust layer intensities by making the content-aware average the same in all layers
+		 */
+		LAYER_INTENSITY,
+	}
+
 	@SuppressWarnings({"FieldMayBeFinal", "unused"})
 	public static class Options extends AbstractOptions implements Serializable {
 
@@ -53,6 +72,9 @@ public class SparkNormalizeN5 {
 		@Option(name = "--invert", usage = "Invert before saving to N5, e.g. for MultiSEM")
 		private boolean invert = false;
 
+		@Option(name = "--normalizeMethod", usage = "Normalization method, e.g. LOCAL_CONTRAST, LAYER_INTENSITY")
+		private NormalizationMethod normalizeMethod = null;
+
 		public Options(final String[] args) {
 			final CmdLineParser parser = new CmdLineParser(this);
 			try {
@@ -69,20 +91,26 @@ public class SparkNormalizeN5 {
 										   final String n5PathOutput,
 										   final String datasetName, // should be s0
 										   final String datasetNameOutput,
+										   final List<Double> shifts,
 										   final long[] dimensions,
 										   final int[] blockSize,
 										   final long[][] gridBlock,
+										   final NormalizationMethod normalizeMethod,
 										   final boolean invert) {
 
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
 		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
 
 		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
-		final RandomAccessibleInterval<UnsignedByteType> filteredSource =
-				SparkGenerateFaceScaleSpace.filter(sourceRaw,
-												   invert,
-												   true,
-												   0);
+
+		final RandomAccessibleInterval<UnsignedByteType> filteredSource;
+		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST) {
+			 filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, 0);
+		} else if (normalizeMethod == NormalizationMethod.LAYER_INTENSITY) {
+			filteredSource = applyShifts(sourceRaw, shifts, invert);
+		} else {
+			throw new IllegalArgumentException("Unknown normalization method: " + normalizeMethod);
+		}
 
 		final FinalInterval gridBlockInterval =
 				Intervals.createMinSize(gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
@@ -121,6 +149,15 @@ public class SparkNormalizeN5 {
 		final String outputDataset = options.n5DatasetInput + "_normalized" + invertedName;
 		final String fullScaleOutputDataset = outputDataset + "/s0";
 
+		final List<Double> shifts;
+		if (options.normalizeMethod == NormalizationMethod.LAYER_INTENSITY) {
+			final String downScaledDataset = options.n5DatasetInput + "/s5";
+			final Img<UnsignedByteType> downScaledImg = N5Utils.open(n5Input, downScaledDataset);
+			shifts = computeShifts(downScaledImg);
+		} else {
+			shifts = null;
+		}
+
 		if (n5Output.exists(fullScaleOutputDataset)) {
 			final String fullPath = options.n5PathInput + fullScaleOutputDataset;
 			throw new IllegalArgumentException("Normalized data set exists: " + fullPath);
@@ -134,9 +171,11 @@ public class SparkNormalizeN5 {
 												options.n5PathInput,
 												fullScaleInputDataset,
 												fullScaleOutputDataset,
+												shifts,
 												dimensions,
 												blockSize,
 												gridBlock,
+												options.normalizeMethod,
 												options.invert));
 		n5Output.close();
 		n5Input.close();
@@ -151,5 +190,91 @@ public class SparkNormalizeN5 {
 		}
 
 		sparkContext.close();
+	}
+
+	private static List<Double> computeShifts(RandomAccessibleInterval<UnsignedByteType> rai) {
+
+		// create mask from pixels that have "content" throughout the stack
+		final List<IntervalView<UnsignedByteType>> downScaledStack = asZStack(rai);
+		final Img<UnsignedByteType> contentMask = ArrayImgs.unsignedBytes(downScaledStack.get(0).dimensionsAsLongArray());
+		for (final UnsignedByteType pixel : contentMask) {
+			pixel.set(1);
+		}
+
+		final int lowerThreshold = 20;
+		final int upperThreshold = 120;
+		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
+			LoopBuilder.setImages(layer, contentMask)
+					.forEachPixel((a, b) -> {
+						if (a.get() < lowerThreshold || a.get() > upperThreshold) {
+							b.set(0);
+						}
+					});
+		}
+
+		final AtomicLong maskSize = new AtomicLong(0);
+		for (final UnsignedByteType pixel : contentMask) {
+			if (pixel.get() == 1) {
+				maskSize.incrementAndGet();
+			}
+		}
+
+		// compute average intensity of content pixels in each layer
+		final List<Double> contentAverages = new ArrayList<>(downScaledStack.size());
+		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
+			final AtomicLong sum = new AtomicLong(0);
+			LoopBuilder.setImages(layer, contentMask)
+					.forEachPixel((a, b) -> {
+						if (b.get() == 1) {
+							sum.addAndGet(a.get());
+						}
+					});
+			contentAverages.add((double) sum.get() / maskSize.get());
+		}
+
+		// compute shifts for adjusting intensities relative to the first layer
+		final double fixedPoint = contentAverages.get(0);
+		return contentAverages.stream().map(a -> a - fixedPoint).collect(Collectors.toList());
+	}
+
+	private static RandomAccessibleInterval<UnsignedByteType> applyShifts(
+			final RandomAccessibleInterval<UnsignedByteType> sourceRaw,
+			final List<Double> shifts,
+			final boolean invert) {
+
+		final List<IntervalView<UnsignedByteType>> sourceStack = asZStack(sourceRaw);
+		final List<RandomAccessibleInterval<UnsignedByteType>> convertedLayers = new ArrayList<>(sourceStack.size());
+
+		for (int z = 0; z < sourceStack.size(); ++z) {
+			final byte shift = (byte) Math.round(shifts.get(z));
+			final RandomAccessibleInterval<UnsignedByteType> layer = sourceStack.get(z);
+
+			RandomAccessibleInterval<UnsignedByteType> convertedLayer = Converters.convert(layer, (s, t) -> {
+				// only shift foreground
+				if (s.get() > 0) {
+					t.set(s.get() - shift);
+				} else {
+					t.set(0);
+				}
+			}, new UnsignedByteType());
+
+			convertedLayers.add(convertedLayer);
+		}
+
+		RandomAccessibleInterval<UnsignedByteType> target = Views.stack(convertedLayers);
+
+		if (invert) {
+			target = Converters.convertRAI(target, (in, out) -> out.set(255 - in.get()), new UnsignedByteType());
+		}
+
+		return target;
+	}
+
+	private static List<IntervalView<UnsignedByteType>> asZStack(final RandomAccessibleInterval<UnsignedByteType> rai) {
+		final List<IntervalView<UnsignedByteType>> stack = new ArrayList<>((int) rai.dimension(2));
+		for (int z = 0; z < rai.dimension(2); ++z) {
+			stack.add(Views.hyperSlice(rai, 2, z));
+		}
+		return stack;
 	}
 }
