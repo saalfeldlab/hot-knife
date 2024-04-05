@@ -44,6 +44,7 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import ij.ImageJ;
+import ij.ImagePlus;
 import ij.process.ByteProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -120,11 +121,11 @@ public class SparkComputeCostMultiSem {
 
 		private int[][] costSteps;
 
-		@Option(name = "--normalizeImage", required = false, usage = "uses contrast normalization and median before cost computation")
-		private boolean normalizeImage = false;
+		@Option(name = "--median", required = false, usage = "uses median (r=3 in z) before cost computation")
+		private boolean median = false;
 
-		@Option(name = "--downsampleCostX", required = false, usage = "properly downsamples cost according to the cost step size (e.g. 6)")
-		private boolean downsampleCostX = false;
+		@Option(name = "--smoothCost", required = false, usage = "smoothes cost in z (s=1.0)")
+		private boolean smoothCost = false;
 
 		@Option(name = "--surfaceN5Output", usage = "N5 output group for surface heighfields, e.g. /heightfields/Sec39/v1_acquire_trimmed_sp1, omit to skip surface fit")
 		private String surfaceN5Output = null;
@@ -191,8 +192,8 @@ public class SparkComputeCostMultiSem {
 		System.out.println("Computing cost on: " + n5Path + " " + zcorrDataset );
 		System.out.println("Cost output: " + costN5Path + " " + costDataset );
 		System.out.println("Cost steps: " + costSteps[0] + ", " + costSteps[1] + ", " + costSteps[2] );
-		System.out.println("Normalize image: " + options.normalizeImage );
-		System.out.println("downsampleCostX: " + options.downsampleCostX );
+		System.out.println("median Z: " + options.median );
+		System.out.println("smooth cost Z: " + options.smoothCost );
 
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5Writer n5w = new N5FSWriter(costN5Path);
@@ -232,15 +233,16 @@ public class SparkComputeCostMultiSem {
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
-//		new ImageJ();
-//		for (long x = 2; x <= 2; x++) {
-//			for (long y = 8; y <= 8; y++) {
+		//new ImageJ();
+		//for (long x = 53; x <= 53; x++) {
+		//	for (long y = 34; y <= 34; y++) {
+
 		for (long x = 0; x < gridXSize; x++) {
+			//System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
 			for (long y = 0; y < gridYSize; y++) {
-				if ( x == 2 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
+				//if ( x == 53 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
 				gridCoords.add(new Long[]{x, y});
 			}
-			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
 		}
 
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridYSize);
@@ -271,8 +273,8 @@ public class SparkComputeCostMultiSem {
 		// 	executorService.shutdown();
 		// });
 
-		final boolean filter = options.normalizeImage;
-		final boolean gauss = options.downsampleCostX;
+		final boolean filter = options.median;
+		final boolean gauss = options.smoothCost;
 
 		rddSlices.foreachPartition( gridCoordPartition -> {
 			//gridCoords.forEach(gridCoord -> {
@@ -439,9 +441,9 @@ public class SparkComputeCostMultiSem {
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 		//final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
-//		ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ) );
-//		if ( maskRaw != null)
-//			ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ) );
+		//ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ) ).setTitle( "input" );
+		//if ( maskRaw != null)
+		//	ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ) ).setTitle( "mask" );
 		//SimpleMultiThreading.threadHaltUnClean();
 
 		// compute derivative in z and keep only negative values
@@ -498,6 +500,10 @@ public class SparkComputeCostMultiSem {
 		final int n = out.numDimensions();
 		final long[] pos = new long[ n ];
 
+		//System.out.println( zcorrInterval.min( 2 ) + ", " + zcorrInterval.max( 2 ) );
+
+		final double[] medianTmp = new double[ 3 ];
+
 		// done TODO: inpaint OR cut out minimal bounding box during Render export --- we do the minimal bounding box using a mask
 		// TODO: smooth cost? - but keep in mind we need a bigger interval for that >> Lazy?
 		while ( out.hasNext() )
@@ -527,11 +533,20 @@ public class SparkComputeCostMultiSem {
 					// the second surface on top we just fake for now (outsideValue all)
 					v.set( 255 - outsideValue ); // TODO: variable (average gradient from resin to sample)
 				}
+				else if ( filter )
+				{
+					in.setPosition( pos );
+
+					final int x0 = (int)Math.round( medianZ3(in, medianTmp) );
+					in.fwd( 2 );
+					final int x1 = (int)Math.round( medianZ3(in, medianTmp) );
+					v.set( 255 - Math.max( 0, x1 - x0 ) ); // only keep "negative" derivatives (only bright-to-dark)
+				}
 				else //if ( pos[ 2 ] == zcorrInterval.max( 2 ) )
 				{
 					// on the last layer we do not check whether it is inside or outside the image
 					in.setPosition( pos );
-					
+
 					final int x0 = in.get().get();
 					in.fwd( 2 );
 					final int x1 = in.get().get();
@@ -565,24 +580,33 @@ public class SparkComputeCostMultiSem {
 		}
 
 		//ImageJFunctions.show( Views.subsample( Views.zeroMin( Views.interval( zcorrExtended, zcorrInterval ) ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
-		//ImageJFunctions.show( derivative );
+		//ImageJFunctions.show( derivative ).setTitle( "derivative");
 
 		//return derivative;
 
 		// derivative typically between 105-255, scale it (2.5 brings it back to 105 after gauss of {0,0,1})
 		final RandomAccessibleInterval<DoubleType> derivativeConvert = Converters.convertRAI( derivative, (i,o) -> o.setReal(255.0-((255.0-i.getRealDouble())*4)), new DoubleType() );
 
-		final RandomAccessibleInterval<DoubleType> derivativeSmooth = ArrayImgs.doubles( dim );
-		Gauss3.gauss( new double[] {0,0,1 }, Views.extendValue( derivativeConvert, 255 ), derivativeSmooth );
-
-		final RandomAccessibleInterval<UnsignedByteType> derivativeSmoothConvert = Converters.convertRAI(derivativeSmooth, (i, o) -> o.set( (int)Math.round( Math.max(0, Math.min( 255.0, i.get()))) ), new UnsignedByteType() );
-
-		//ImageJFunctions.show( derivativeConvert );
-		//ImageJFunctions.show( derivativeSmoothConvert );
+		//ImagePlus imp = ImageJFunctions.show( derivativeConvert );
+		//imp.setDisplayRange( 0, 255 );
+		//imp.setTitle( "derivativeConvert" );
 		//SimpleMultiThreading.threadHaltUnClean();
 
-		return derivativeSmoothConvert;
-		
+		if ( gauss )
+		{
+			final RandomAccessibleInterval<DoubleType> derivativeSmooth = ArrayImgs.doubles( dim );
+			Gauss3.gauss( new double[] {0,0,1 }, Views.extendValue( derivativeConvert, 255 ), derivativeSmooth );
+	
+			final RandomAccessibleInterval<UnsignedByteType> derivativeSmoothConvert = Converters.convertRAI(derivativeSmooth, (i, o) -> o.set( (int)Math.round( Math.max(0, Math.min( 255.0, i.get()))) ), new UnsignedByteType() );
+	
+			return derivativeSmoothConvert;
+		}
+		else
+		{
+			final RandomAccessibleInterval<UnsignedByteType> derivativeConvert8Bit = Converters.convertRAI(derivativeConvert, (i, o) -> o.set( (int)Math.round( Math.max(0, Math.min( 255.0, i.get()))) ), new UnsignedByteType() );
+			return derivativeConvert8Bit;
+		}
+
 		/*
 		return processColumnAlongAxis(
 				zcorr,
@@ -604,6 +628,19 @@ public class SparkComputeCostMultiSem {
 				minSlope,
 				startThresh,
 				kernelSize);*/
+	}
+
+	private static final double medianZ3( final RandomAccess<? extends RealType<?>> in, final double[] medianTmp )
+	{
+		medianTmp[ 0 ] = in.get().getRealDouble();
+		in.fwd( 2 );
+		medianTmp[ 1 ] = in.get().getRealDouble();
+		in.bck( 2 );
+		in.bck( 2 );
+		medianTmp[ 2 ] = in.get().getRealDouble();
+		in.fwd( 2 );
+
+		return Util.median( medianTmp );
 	}
 
 	protected static < T extends IntegerType<T>> boolean isAnyXYNeighboringPixelBlack( final RandomAccess<T> in )
