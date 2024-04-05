@@ -151,6 +151,13 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--surfaceMaxDistance", usage = "maximum distance between the both surfaces, e.g. 30")
 		private double surfaceMaxDistance = 30;
 
+		@Option(name = "--surfaceBlockSize", usage = "surface block size in pixels, e.g. 128,128")
+		private String surfaceBlockSizeString = "128,128";
+
+		private long[] getSurfaceBlockSize() {
+			return parseCSLongArray(surfaceBlockSizeString);
+		}
+
 		@Option(name = "--localSparkBindAddress", usage = "specify Spark bind address as localhost")
 		private boolean localSparkBindAddress = false;
 
@@ -195,6 +202,9 @@ public class SparkComputeCostMultiSem {
 		System.out.println("median Z: " + options.median );
 		System.out.println("smooth cost Z: " + options.smoothCost );
 
+		final long[] surfaceBlockSize = options.getSurfaceBlockSize();
+		System.out.println("surfaceBlockSize: " + Util.printCoordinates(surfaceBlockSize) );
+		
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5Writer n5w = new N5FSWriter(costN5Path);
 
@@ -321,7 +331,8 @@ public class SparkComputeCostMultiSem {
 																  options.surfaceMaxDistance,
 																  true, // no need to permute with multi-sem
 																  false);
-			sparkSurfaceFit.callWithSparkContext(sparkContext);
+			sparkSurfaceFit.callWithSparkContext(sparkContext,
+												 options.getSurfaceBlockSize());
 		}
 	}
 

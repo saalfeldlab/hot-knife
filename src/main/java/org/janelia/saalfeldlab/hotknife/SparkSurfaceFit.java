@@ -16,6 +16,8 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import com.beust.jcommander.Parameter;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -1408,6 +1410,12 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 	public void callWithSparkContext(final JavaSparkContext sc)
 			throws IOException {
+		callWithSparkContext(sc, new long[] {128, 128});
+	}
+
+	public void callWithSparkContext(final JavaSparkContext sc,
+									 final long[] blockSize)
+			throws IOException {
 
 		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
 
@@ -1491,7 +1499,6 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			System.out.println( "Processing scale: " + s );
 
-			final long[] blockSize = new long[] {128, 128};
 			final long[] blockPadding = new long[] {32, 32};
 
 			final double maxDeltaZ = (s == lastScaleIndex ) ? this.finalMaxDeltaZ : this.maxDeltaZ;
