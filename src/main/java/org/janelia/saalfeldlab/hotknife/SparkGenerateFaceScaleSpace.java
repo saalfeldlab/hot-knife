@@ -136,7 +136,7 @@ public class SparkGenerateFaceScaleSpace {
 
 				parsedSuccessfully = true;
 
-			} catch (final CmdLineException | IOException e) {
+			} catch (final CmdLineException e) {
 				System.err.println(e.getMessage());
 				parser.printUsage(System.err);
 			}

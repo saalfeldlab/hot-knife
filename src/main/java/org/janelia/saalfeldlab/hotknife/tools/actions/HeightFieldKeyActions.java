@@ -285,18 +285,14 @@ public class HeightFieldKeyActions {
 			synchronized (viewer) {
 
 				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-				try {
-					final N5FSReader n5 = new N5FSReader(n5Path);
-					if (n5.datasetExists(heightFieldDataset)) {
-						final long[] dimensions = n5.getAttribute(heightFieldDataset, "dimensions", long[].class);
-						if (dimensions[0] == heightField.dimension(0) && dimensions[1] == heightField.dimension(1)) {
-							Util.copy(N5Utils.open(n5, heightFieldDataset), heightField);
-						}
-					}
-				} catch (final IOException e) {
-					e.printStackTrace();
-				}
-				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+                final N5FSReader n5 = new N5FSReader(n5Path);
+                if (n5.datasetExists(heightFieldDataset)) {
+                    final long[] dimensions = n5.getAttribute(heightFieldDataset, "dimensions", long[].class);
+                    if (dimensions[0] == heightField.dimension(0) && dimensions[1] == heightField.dimension(1)) {
+                        Util.copy(N5Utils.open(n5, heightFieldDataset), heightField);
+                    }
+                }
+                viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
 				viewer.requestRepaint();
 			}
 		}
