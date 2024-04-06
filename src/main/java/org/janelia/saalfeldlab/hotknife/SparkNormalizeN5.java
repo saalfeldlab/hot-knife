@@ -44,11 +44,17 @@ public class SparkNormalizeN5 {
 		/**
 		 * Contrast Limited Local Contrast Normalization
 		 */
-		LOCAL_CONTRAST,
+		LOCAL_CONTRAST("_norm-local"),
 		/**
 		 * Adjust layer intensities by making the content-aware average the same in all layers
 		 */
-		LAYER_INTENSITY,
+		LAYER_INTENSITY("_norm-layer"),
+		;
+
+		private final String fileNameSuffix;
+		NormalizationMethod(final String fileNameSuffix) {
+			this.fileNameSuffix = fileNameSuffix;
+		}
 	}
 
 	@SuppressWarnings({"FieldMayBeFinal", "unused"})
@@ -146,7 +152,7 @@ public class SparkNormalizeN5 {
 
 		final N5Writer n5Output = new N5FSWriter(options.n5PathInput);
 		final String invertedName = options.invert ? "_inverted" : "";
-		final String outputDataset = options.n5DatasetInput + "_normalized" + invertedName;
+		final String outputDataset = options.n5DatasetInput + options.normalizeMethod.fileNameSuffix + invertedName;
 		final String fullScaleOutputDataset = outputDataset + "/s0";
 
 		final List<Double> shifts;
