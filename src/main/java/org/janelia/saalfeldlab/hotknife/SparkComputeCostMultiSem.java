@@ -488,7 +488,7 @@ public class SparkComputeCostMultiSem {
 				for ( long z = zcorrInterval.min( 2 ); z <= zcorrInterval.max( 2 ); ++z )
 				{
 					maskData.setPosition( z, 2 );
-					if ( maskData.get().get() < 255 )
+					if ( maskData.get().get() < 1 )
 					{
 						v.set( 0 );
 						break;
