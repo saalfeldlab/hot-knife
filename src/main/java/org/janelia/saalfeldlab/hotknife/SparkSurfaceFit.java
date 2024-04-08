@@ -89,6 +89,8 @@ import net.imglib2.view.composite.GenericComposite;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
 
+import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSLongArray;
+
 /**
  *
  *
@@ -134,6 +136,13 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
 	private boolean multiSem = false;
+
+	@Option(names = "--blockSize", description = "surface block size in pixels, e.g. 128,128")
+	private String blockSizeString = "128,128";
+
+	private long[] getBlockSize() {
+		return parseCSLongArray(blockSizeString);
+	}
 
 	private boolean useVisualization = false;
 
@@ -1378,7 +1387,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
-		callWithSparkContext(sc);
+		callWithSparkContext(sc,
+							 getBlockSize());
 
 		sc.close();
 
