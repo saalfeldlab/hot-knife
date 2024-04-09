@@ -36,7 +36,7 @@ export N_CORES_DRIVER=1
 # NOTE: must consolidate logs when changing run parent dir
 export SPARK_JANELIA_ARGS="--consolidate_logs --run_parent_dir /groups/hess/hesslab/render/spark_output/${USER}"
 export LSF_PROJECT="${BILL_TO}"
-export RUNTIME="3:59"
+export RUNTIME="233:59"
 
 export HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.5-SNAPSHOT.jar"
 export FLINTSTONE="/groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh"
