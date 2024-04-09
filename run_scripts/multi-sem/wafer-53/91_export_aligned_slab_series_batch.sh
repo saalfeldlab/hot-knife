@@ -12,12 +12,13 @@ if (( $# < 2 )); then
 USAGE $0 <zBatch> <number of nodes> [hard runtime minutes]
 
 Example:
-  $0 1:40 70 239
+  $0 1:40 120
 
 Notes:
-  wafer 52 rate is roughly ? blocks per node per hour
-  1:40 w/70 nodes takes ? hours
-  hard runtime of < 240 minutes allows use of GPU nodes (and theoretically burst nodes)
+  wafer 53 rate is roughly ? blocks per node per hour
+  1:40 w/140 nodes takes ? hours
+  hard runtime of < 60 minutes allows use of as many slots as are available,
+  otherwise there is a 3000-slot limit
 """
   exit 1
 fi
