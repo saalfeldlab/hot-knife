@@ -3,13 +3,13 @@
 set -e
 
 if (( $# < 2 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 5)"
+  echo "USAGE $0 <raw slab> <top nodes> <bottom nodes> (e.g. s071_m331 67 30)"
   exit 1
 fi
 
-CUT_AND_SLAB="${1}"
-N_NODES="${2}" # wafer 52 cut_035_slab_001 top 20 took 2 minutes with 15 nodes
-               # wafer 52 cut_035_slab_001 bot 21 took 2 minutes with 15 nodes
+RAW_SLAB="${1}"
+TOP_NODES="${2}" # /flat/s071_m331/top22_icn3 took 152 minutes with 50 nodes
+BOT_NODES="${3}" # /flat/s071_m331/bot22_icn3 took 64 minutes with 50 nodes
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
@@ -17,6 +17,6 @@ SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 TOP_SURFACE_DEPTH=22
 BOT_SURFACE_DEPTH=22
 
-${SCRIPT_DIR}/72_spark_extract_face.sh ${CUT_AND_SLAB} ${N_NODES} top ${TOP_SURFACE_DEPTH}
+${SCRIPT_DIR}/72_spark_extract_face.sh ${RAW_SLAB} ${TOP_NODES} top ${TOP_SURFACE_DEPTH}
 sleep 5
-${SCRIPT_DIR}/72_spark_extract_face.sh ${CUT_AND_SLAB} ${N_NODES} bot ${BOT_SURFACE_DEPTH}
+${SCRIPT_DIR}/72_spark_extract_face.sh ${RAW_SLAB} ${BOT_NODES} bot ${BOT_SURFACE_DEPTH}

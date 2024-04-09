@@ -3,16 +3,16 @@
 set -e
 
 if (( $# != 2 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 5)"
+  echo "USAGE $0 <slab> <number of nodes> (e.g. s071_m331 10)"
   exit 1
 fi
 
-CUT_AND_SLAB="${1}"
-N_NODES="${2}" # wafer 52 cut_031_slab_006 took 4 minutes with 5 nodes
+SLAB="${1}"
+N_NODES="${2}" # wafer 53 s079_m214 took 10 minutes with 10 nodes
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
-source "${SCRIPT_DIR}/00_config.sh" "${CUT_AND_SLAB}"
+source "${SCRIPT_DIR}/00_config.sh" "${SLAB}"
 
 validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_FLAT_RAW_DATASET}"
 N5_FLAT_RAW_DATASET_PARENT=$(dirname "${N5_FLAT_RAW_DATASET}")
@@ -32,7 +32,7 @@ ARGV="\
 
 CLASS="org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark"
 
-LOG_FILE=$(setupRunLog "downsample-flat-${CUT_AND_SLAB}")
+LOG_FILE=$(setupRunLog "downsample-flat-${SLAB}")
 
 # use shell group to tee all output to log file
 {
