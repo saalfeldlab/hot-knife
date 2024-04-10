@@ -71,6 +71,33 @@ public class ViewAlignedSlabSeries {
 	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
 
+		/*
+		--n5Path '/nrs/hess/render/export/hess.n5/'
+		-j '/surface-align/run_20230329_100000/pass00'
+		-i '/flat/cut_030_slab_026/raw'
+		--invert
+		-t 20
+		-b -21
+		-i '/flat/cut_031_slab_006/raw'
+		-t 20
+		-b -21
+		-i '/flat/cut_032_slab_013/raw'
+		-t 20
+		-b -21
+		-i '/flat/cut_033_slab_033/raw'
+		-t 20
+		-b -21
+		-i '/flat/cut_034_slab_020/raw'
+		-t 20
+		-b -21
+		-i '/flat/cut_035_slab_001/raw'
+		-t 20
+		-b -21
+		-i '/flat/cut_036_slab_045/raw'
+		-t 20
+		-b -21
+		*/
+
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 		private String n5Path = null;
 
@@ -94,6 +121,9 @@ public class ViewAlignedSlabSeries {
 
 		@Option(name = "--zoom", usage = "optionally zoom starting view in or out")
 		private int zoom = 0;
+
+		@Option(name = "--multiSem", usage = "MultiSem datasets have a different scaling in z than xy")
+		private boolean multiSem = false;
 
 		public Options(final String[] args) {
 
@@ -160,7 +190,11 @@ public class ViewAlignedSlabSeries {
 		public boolean invert() {
 			return invert;
 		}
-}
+
+		public boolean multiSem() {
+			return multiSem;
+		}
+	}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
@@ -178,6 +212,7 @@ public class ViewAlignedSlabSeries {
 				new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
 				options.normalizeContrast(),
 				options.invert(),
+				options.multiSem(),
 				options.zoom,
 				true);
 	}
@@ -191,6 +226,7 @@ public class ViewAlignedSlabSeries {
 			final VoxelDimensions voxelDimensions,
 			final boolean normalizeContrast,
 			final boolean invert,
+			final boolean multiSem,
 			final int zoom,
 			final boolean useVolatile) throws IOException {
 
@@ -252,7 +288,10 @@ public class ViewAlignedSlabSeries {
 			for (int s = 0; s < numScales; ++s) {
 
 				final int scale = 1 << s;
+				final int scaleZ = multiSem ? 1 : scale;
+
 				final double inverseScale = 1.0 / scale;
+				final double inverseScaleZ = 1.0 / scaleZ;
 
 				RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
 				final RandomAccessibleInterval<UnsignedByteType> source;
@@ -277,7 +316,7 @@ public class ViewAlignedSlabSeries {
 	
 					source = Lazy.process(
 							sourceRaw,
-							new int[] {128, 128, 16},
+							new int[] {256, 256, 40},
 							new UnsignedByteType(),
 							AccessFlags.setOf(AccessFlags.VOLATILE),
 							cllcn);
@@ -288,7 +327,7 @@ public class ViewAlignedSlabSeries {
 				}
 
 				final RealTransformSequence transformSequence = new RealTransformSequence();
-				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
+				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScaleZ);
 
 				transformSequence.add(transition);
 				transformSequence.add(scale3D);
@@ -299,11 +338,11 @@ public class ViewAlignedSlabSeries {
 								transformSequence,
 								new UnsignedByteType(0));
 
-				final SubsampleIntervalView<UnsignedByteType> subsampledTransformedSource = Views.subsample(transformedSource, scale);
-				final RandomAccessibleInterval<UnsignedByteType> cachedSource = Show.wrapAsVolatileCachedCellImg(subsampledTransformedSource, new int[]{128, 128, 16});
+				final SubsampleIntervalView<UnsignedByteType> subsampledTransformedSource = Views.subsample(transformedSource, scale, scale, scaleZ);
+				final RandomAccessibleInterval<UnsignedByteType> cachedSource = Show.wrapAsVolatileCachedCellImg(subsampledTransformedSource, new int[]{256, 256, 40});
 
 				mipmaps[s] = cachedSource;
-				scales[s] = new double[]{scale, scale, scale};
+				scales[s] = new double[]{scale, scale, scaleZ};
 			}
 
 			final RandomAccessibleIntervalMipmapSource<?> mipmapSource =
