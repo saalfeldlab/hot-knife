@@ -307,6 +307,16 @@ public class SparkGenerateFaceScaleSpace {
 			final boolean normalizeContrast,
 			final int scaleIndex )
 	{
+		return filter(sourceRaw, invert, normalizeContrast, scaleIndex, new int[] {1024, 1024, 1} );
+	}
+
+	protected static RandomAccessibleInterval<UnsignedByteType> filter(
+			RandomAccessibleInterval<UnsignedByteType> sourceRaw,
+			final boolean invert,
+			final boolean normalizeContrast,
+			final int scaleIndex,
+			final int[] blocksize )
+	{
 		if ( invert )
 			sourceRaw = Converters.convertRAI(sourceRaw, (in,out) -> out.set( 255 - in.get() ), new UnsignedByteType() );
 
@@ -328,7 +338,7 @@ public class SparkGenerateFaceScaleSpace {
 
 			return Lazy.process(
 					sourceRaw,
-					new int[] {1024, 1024, 1},
+					blocksize,
 					new UnsignedByteType(),
 					AccessFlags.setOf(AccessFlags.VOLATILE),
 					cllcn);

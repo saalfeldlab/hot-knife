@@ -111,7 +111,7 @@ public class SparkNormalizeN5 {
 
 		final RandomAccessibleInterval<UnsignedByteType> filteredSource;
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST) {
-			 filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, 0);
+			 filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, 0, blockSize );
 		} else if (normalizeMethod == NormalizationMethod.LAYER_INTENSITY) {
 			filteredSource = applyShifts(sourceRaw, shifts, invert);
 		} else {
