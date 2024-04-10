@@ -31,6 +31,9 @@ export RUNTIME=${3:-240:59} # default is 10+ days
 # setup export parameters
 
 N5_PATH="/nrs/hess/data/hess_wafer_53/export/hess_wafer_53d.n5"
+#TRANSFORM_GROUP="/surface-align/run_20240409_135204/pass05"
+#DATA_SET_OUTPUT="/wafer-53-align/run_20240409_135204/pass05/s0"
+
 TRANSFORM_GROUP="/surface-align/run_20240409_135204/pass12"
 DATA_SET_OUTPUT="/wafer-53-align/run_20240409_135204/pass12/s0"
 
