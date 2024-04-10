@@ -25,7 +25,7 @@ fi
 
 Z_BATCH="${1}"
 N_NODES="${2}"
-export RUNTIME=${3:-4320} # default is minutes in 3 days
+export RUNTIME=${3:-240:59} # default is 10+ days
 
 # --------------------------------------------------------------------
 # setup export parameters
