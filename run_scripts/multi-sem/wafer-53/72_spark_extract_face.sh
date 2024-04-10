@@ -3,24 +3,24 @@
 set -e
 
 if (( $# < 3 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> <top|bot> [abs depth] (e.g. cut_036_slab_045 5 top 20)"
+  echo "USAGE $0 <raw slab> <number of nodes> <top|bot> [abs depth] (e.g. cut_036_slab_045 5 top 20)"
   exit 1
 fi
 
-CUT_AND_SLAB="${1}"
+RAW_SLAB="${1}"
 N_NODES="${2}" # wafer 52 cut_035_slab_001 top 20 took 2 minutes with 15 nodes
 TOP_OR_BOTTOM="${3}"
 SURFACE_DEPTH="${4:-23}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
-source "${SCRIPT_DIR}/00_config.sh" "${CUT_AND_SLAB}"
+source "${SCRIPT_DIR}/00_config.sh" "${RAW_SLAB}"
 
 validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_FLAT_RAW_DATASET}"
 
 FACE_BASE_NAME="${TOP_OR_BOTTOM}${SURFACE_DEPTH}"
 
-N5_FACE_DATASET="${N5_FLAT_DATASET_ROOT}/${FACE_BASE_NAME}"
+N5_FACE_DATASET="${N5_FLAT_DATASET_ROOT}/${FACE_BASE_NAME}_icn3"
 
 FULL_FACE_DATASET_PATH="${N5_SAMPLE_PATH}${N5_FACE_DATASET}"
 if [[ -d ${FULL_FACE_DATASET_PATH} ]]; then

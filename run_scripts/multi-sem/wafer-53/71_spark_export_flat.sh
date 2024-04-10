@@ -3,16 +3,16 @@
 set -e
 
 if (( $# != 2 )); then
-  echo "USAGE $0 <cut and slab> <number of nodes> (e.g. cut_036_slab_045 10)"
+  echo "USAGE $0 <raw slab> <number of nodes> (e.g. s070_m104 10)"
   exit 1
 fi
 
-CUT_AND_SLAB="${1}"
-N_NODES="${2}" # wafer 52 cut_034_slab_020 (7 MFOVs) took 20 minutes with 10 nodes
+RAW_SLAB="${1}"
+N_NODES="${2}" # wafer 53, s070 took 17 minutes with 30 nodes
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
-source "${SCRIPT_DIR}/00_config.sh" "${CUT_AND_SLAB}"
+source "${SCRIPT_DIR}/00_config.sh" "${RAW_SLAB}"
 
 validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_Z_CORR_DATASET}/s0" "${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET}"
 
@@ -27,8 +27,8 @@ For runs after new height field fixes, move the existing data to be deleted like
   exit 1
 fi
 
-"${SCRIPT_DIR}"/add_heightfields_factors.sh "${CUT_AND_SLAB}" min "${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}"
-"${SCRIPT_DIR}"/add_heightfields_factors.sh "${CUT_AND_SLAB}" max "${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}"
+"${SCRIPT_DIR}"/add_heightfields_factors.sh "${RAW_SLAB}" min "${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}"
+"${SCRIPT_DIR}"/add_heightfields_factors.sh "${RAW_SLAB}" max "${N5_HEIGHT_FIELDS_DOWNSAMPLING_FACTORS}"
 
 ARGV="\
 --n5RawPath=${N5_SAMPLE_PATH} \

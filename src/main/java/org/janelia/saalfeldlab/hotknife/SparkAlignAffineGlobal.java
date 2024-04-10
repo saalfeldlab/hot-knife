@@ -202,7 +202,12 @@ public class SparkAlignAffineGlobal {
 				rdd.mapToPair(inDatasetName -> {
 
 					final N5Reader n5Reader = new N5FSReader(n5Path);
-					final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Reader, inDatasetName + "/s" + scaleIndex);
+					final RandomAccessibleInterval<FloatType> source;
+					try {
+						source = N5Utils.open(n5Reader, inDatasetName + "/s" + scaleIndex);
+					} catch (Exception e) {
+						throw new RuntimeException("failed to open " + inDatasetName + "/s" + scaleIndex, e);
+					}
 
 					System.out.println(inDatasetName + " : " + Arrays.toString(Intervals.dimensionsAsLongArray(source)) + " extracting features...");
 

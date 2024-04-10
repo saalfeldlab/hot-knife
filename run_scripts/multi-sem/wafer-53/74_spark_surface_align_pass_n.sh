@@ -2,24 +2,8 @@
 
 set -e
 
-# Run times for wafer 52 cuts 030 - 036 (7 datasets):
-#
-#   with 5 nodes:
-#     pass01:  6 min, pass02:  6 min, pass03: 11 min
-#   with 10 nodes:
-#     pass04: 23 min, pass05: 33 min, pass06: 32 min, pass07: 34 min,
-#     pass08: 17 min, pass09: 20 min, pass10: 42 min, pass11: 75 min
-#   with 20 nodes:
-#     pass12: 108 min
-#
-# --------------
-#   with 20 nodes:
-#     pass01:  5 min, pass02:  5 min, pass03: 6 min
-#   with 50 nodes:
-#     pass04: 10 min, pass05: 18 min, pass06: 20 min, pass07: 18 min,
-#     pass08: 14 min, pass09: 14 min, pass10: 22 min
-#   with 70 nodes:
-#     pass11: 22 min, pass12: 47 min
+# Run times for wafer 53 slabs:
+# TBD
 
 # NOTE: key is to get pass12 run under 4 hours
 
@@ -63,10 +47,10 @@ fi
 
 # setup pass specific run class
 case "${PASS}" in
-  1|2|3)        N_NODES=${4:-10}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-  4|5|6)        N_NODES=${4:-20}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-  7|8|9|10)     N_NODES=${4:-30}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
-  11|12)        N_NODES=${4:-50}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
+  1|2|3)        N_NODES=${4:-60}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;    # wafer 52: 20 node default
+  4|5|6|7)      N_NODES=${4:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;   # wafer 52: 50 node default
+  8|9|10)       N_NODES=${4:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 50 node default
+  11|12)        N_NODES=${4:-210}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 70 node default
   *)
     echo "ERROR: 'pass parameter ${PASS} must be between 1 and 12'"
     exit 1
