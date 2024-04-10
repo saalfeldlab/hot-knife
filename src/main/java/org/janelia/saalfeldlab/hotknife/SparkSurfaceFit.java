@@ -1410,7 +1410,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 	public void callWithSparkContext(final JavaSparkContext sc)
 			throws IOException {
-		callWithSparkContext(sc, new long[] {128, 128});
+		callWithSparkContext(sc, new long[] {1024, 1024});
 	}
 
 	public void callWithSparkContext(final JavaSparkContext sc,
