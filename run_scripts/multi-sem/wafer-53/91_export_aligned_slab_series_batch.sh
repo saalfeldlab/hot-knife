@@ -12,11 +12,12 @@ if (( $# < 2 )); then
 USAGE $0 <zBatch> <number of nodes> [hard runtime minutes]
 
 Example:
-  $0 1:40 120
+  $0 1:1 272
 
 Notes:
-  wafer 53 rate is roughly ? blocks per node per hour
-  1:40 w/140 nodes takes ? hours
+  export of 10 wafer 53 slabs using max 272 11-slot worker nodes took 26 minutes
+  export of 20 wafer 53 slabs using max 272 11-slot worker nodes took 46 minutes
+
   hard runtime of < 60 minutes allows use of as many slots as are available,
   otherwise there is a 3000-slot limit
 """
@@ -25,14 +26,21 @@ fi
 
 Z_BATCH="${1}"
 N_NODES="${2}"
-export RUNTIME=${3:-4320} # default is minutes in 3 days
+export RUNTIME=${3:-240:59} # default is 10+ days
 
 # --------------------------------------------------------------------
 # setup export parameters
 
 N5_PATH="/nrs/hess/data/hess_wafer_53/export/hess_wafer_53d.n5"
-TRANSFORM_GROUP="/surface-align/run_20240409_135204/pass12"
-DATA_SET_OUTPUT="/wafer-53-align/run_20240409_135204/pass12/s0"
+
+#TRANSFORM_GROUP="/surface-align/run_20240409_135204/pass05"
+#DATA_SET_OUTPUT="/wafer-53-align/run_20240409_135204/pass05/s0"
+
+#TRANSFORM_GROUP="/surface-align/run_20240409_135204/pass12"
+#DATA_SET_OUTPUT="/wafer-53-align/run_20240409_135204/pass12/s0"
+
+TRANSFORM_GROUP="/surface-align/run_20240410_173647/pass06"
+DATA_SET_OUTPUT="/wafer-53-align/run_20240410_173647/pass06/s0"
 
 ARGV="\
 --n5PathInput ${N5_PATH} \
@@ -46,6 +54,16 @@ ARGV="\
 -i /flat/s077_m286/raw -t 20 -b -21 \
 -i /flat/s078_m279/raw -t 20 -b -21 \
 -i /flat/s079_m214/raw -t 20 -b -21 \
+-i /flat/s080_m174/raw -t 20 -b -21 \
+-i /flat/s081_m049/raw -t 20 -b -21 \
+-i /flat/s082_m190/raw -t 20 -b -21 \
+-i /flat/s083_m029/raw -t 20 -b -21 \
+-i /flat/s084_m069/raw -t 20 -b -21 \
+-i /flat/s085_m031/raw -t 20 -b -21 \
+-i /flat/s086_m181/raw -t 20 -b -21 \
+-i /flat/s087_m155/raw -t 20 -b -21 \
+-i /flat/s088_m291/raw -t 20 -b -21 \
+-i /flat/s089_m045/raw -t 20 -b -21 \
 --n5TransformGroup ${TRANSFORM_GROUP} \
 --n5PathOutput ${N5_PATH} \
 --n5DatasetOutput ${DATA_SET_OUTPUT} \

@@ -2,10 +2,22 @@
 
 set -e
 
-# Run times for wafer 53 slabs:
-# TBD
+# Run times for ten wafer 53 slabs (s070 - s079):
+#  1|2|3)        N_NODES=60
+#    pass01:  7 minutes, pass02:  6 minutes, pass03: 12 minutes
+#  4|5|6|7)      N_NODES=150
+#    pass04: 20 minutes, pass05: 49 minutes, pass06: 42 minutes, pass07: 45 minutes
+#  8|9|10)       N_NODES=150
+#    pass08: 36 minutes, pass09: 42 minutes, pass10: 48 minutes
+#  11|12)        N_NODES=210
+#    pass11: 47 minutes (many h6 nodes), pass12: 83 minutes (many h6 nodes)
 
-# NOTE: key is to get pass12 run under 4 hours
+# Run times for twenty wafer 53 slabs (s070 - s089):
+#  1|2|3)        N_NODES=60
+#    pass01: 12 minutes, pass02: 10 minutes, pass03: 19 minutes
+#  4|5|6)        N_NODES=150
+#    pass04: 38 minutes, pass05: 59 minutes, pass06: 58 minutes
+
 
 if (( $# < 1 )); then
   echo "USAGE $0 <pass (1-12)> [number of nodes (overrides default)]"
@@ -47,10 +59,10 @@ fi
 
 # setup pass specific run class
 case "${PASS}" in
-  1|2|3)        N_NODES=${4:-60}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;    # wafer 52: 20 node default
-  4|5|6|7)      N_NODES=${4:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;   # wafer 52: 50 node default
-  8|9|10)       N_NODES=${4:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 50 node default
-  11|12)        N_NODES=${4:-210}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 70 node default
+  1|2|3)        N_NODES=${2:-60}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;    # wafer 52: 20 node default
+  4|5|6|7)      N_NODES=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;   # wafer 52: 50 node default
+  8|9|10)       N_NODES=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 50 node default
+  11|12)        N_NODES=${2:-210}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 70 node default
   *)
     echo "ERROR: 'pass parameter ${PASS} must be between 1 and 12'"
     exit 1
