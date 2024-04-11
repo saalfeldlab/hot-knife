@@ -15,19 +15,17 @@ USAGE: $0 <number of nodes>
   exit 1
 fi
 
-N_NODES="${1}"           # 30 11-slot workers takes 4 minutes
+N_NODES="${1}" # normalizing a 10-slab volume with 180 11-slot workers took 2 hours and 15 minutes
 NORMALIZE_METHOD="LOCAL_CONTRAST"
 
-SOURCE_DATASET="/wafer-53-align/run_20240409_135204/pass12"
+SOURCE_DATASET="/wafer-53-align/run_20240410_173647/pass06"
 
 #-----------------------------------------------------------
 NORMALIZED_LAYER_SUFFIX="_norm-layer"
 NORMALIZED_LOCAL_SUFFIX="_norm-local"
 if [[ "${NORMALIZE_METHOD}" == "LAYER_INTENSITY" ]]; then
-  SOURCE_SUFFIX=""
   NORMALIZED_SUFFIX="${NORMALIZED_LAYER_SUFFIX}"
 elif [[ "${NORMALIZE_METHOD}" == "LOCAL_CONTRAST" ]]; then
-  SOURCE_SUFFIX="${NORMALIZED_LAYER_SUFFIX}"
   NORMALIZED_SUFFIX="${NORMALIZED_LOCAL_SUFFIX}"
 else
   echo "ERROR: unknown NORMALIZE_METHOD of ${NORMALIZE_METHOD}"
@@ -87,13 +85,13 @@ mkdir -p ${LOG_DIR}
 # use shell group to tee all output to log file
 {
 
-  echo """Running with arguments:
+  echo "Running with arguments:
 ${ARGV}
-"""
+"
   /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $JAR $CLASS $ARGV
 
-  echo """normalized n5 volume is:
+  echo "normalized n5 volume is:
   -i ${N5_SAMPLE_PATH} -d ${NORMALIZED_DATASET}
-"""
+"
 } 2>&1 | tee -a ${LOG_FILE}
 
