@@ -39,7 +39,6 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
-import org.janelia.saalfeldlab.n5.zarr.N5ZarrWriter;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -50,6 +49,7 @@ import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
@@ -237,6 +237,7 @@ public class SparkGenerateFaceScaleSpace {
 		rdd.foreach(
 				gridBlock -> {
 					System.out.println(Arrays.deepToString(gridBlock));
+
 					final N5Writer n5Writer = new N5FSWriter(n5Path);
 					@SuppressWarnings("unchecked")
 					final RandomAccessibleInterval<RealType<?>> source;
@@ -244,11 +245,16 @@ public class SparkGenerateFaceScaleSpace {
 					// only s0 is UnsignedByteType, the rest is FloatType and already inverted and normalized (if asked for)
 					if ( invert || normalizeContrast )
 					{
+						// we choose a non-power-of-2 blocksize on purpose since the grids do not align here typically
+						// a size of 1 in z makes sense since it is a 2d filter and we do not want to do cllcn and not need it
+						final int[] blockSize_cllcn = new int[] { (int)gridBlock[1][0] + 1, (int)gridBlock[1][1] + 1, 1 };
+
 						source = (RandomAccessibleInterval<RealType<?>>)(Object) filter(
 								(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5Writer, inDatasetName),
 								invert,
 								normalizeContrast,
-								0 ); // here scaleIndex is the result of the downsampling, not the input
+								0, // here scaleIndex is the result of the downsampling, not the input
+								blockSize_cllcn );
 					}
 					else
 					{
@@ -275,7 +281,7 @@ public class SparkGenerateFaceScaleSpace {
 						}
 					}
 
-//					System.out.println("abs min: " + Arrays.toString(absMin) + " size " + Arrays.toString(absSize));
+					//System.out.println("abs min: " + Arrays.toString(absMin) + " size " + Arrays.toString(absSize));
 
 					IntervalView<FloatType> roi = Views.offsetInterval(floatSource, absMin, absSize);
 					for (int d = 0; d < roi.numDimensions(); ++d)
@@ -288,13 +294,14 @@ public class SparkGenerateFaceScaleSpace {
 					final RandomAccessibleInterval<FloatType> filtered = Lazy.process(
 							Views.extendMirrorSingle(zeroMin),
 							zeroMin,
-							outBlockSize,
+							new int[] { 33, 33, 7 }, // small blocksize to make sure we do not compute things for nothing, specifically if normalize constrast is on
 							new FloatType(),
 							AccessFlags.setOf(),
 							gauss);
 					final SubsampleIntervalView<FloatType> subsampled = Views.subsample(filtered, sampleStepSize);
 
 					final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(subsampled, gridBlock[0], gridBlock[1]);
+
 					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
 				});
 
@@ -460,7 +467,11 @@ public class SparkGenerateFaceScaleSpace {
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
+			System.out.println("min " + Util.printCoordinates( min ));
+			System.out.println("size " + Util.printCoordinates( size ));
+
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
+
 			final long[] outDimensions = downsample(
 					sc,
 					options.getN5Path(),
