@@ -245,14 +245,14 @@ public class SparkComputeCost {
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridZSize = (int)Math.ceil(costSize[2] / (float)costBlockSize[2]);
 
-		for (long x = 25; x < 26; x++) {
-			for (long z = 23; z < 24; z++) {
-		//for (long x = 0; x < gridXSize; x++) {
-		//	for (long z = 0; z < gridZSize; z++) {
-				if ( x == 35 ) System.out.println( "z: " + z + ": " + getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
+		//for (long x = 25; x < 26; x++) {
+		//	for (long z = 23; z < 24; z++) {
+		for (long x = 0; x < gridXSize; x++) {
+			for (long z = 0; z < gridZSize; z++) {
+				//if ( x == 35 ) System.out.println( "z: " + z + ": " + getZcorrInterval(x, z, zcorrSize, zcorrBlockSize, costSteps).min( 2 ));
 				gridCoords.add(new Long[]{x, z});
 			}
-			System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
+			//System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
 		}
 		//System.exit( 0 );
 		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridZSize);
