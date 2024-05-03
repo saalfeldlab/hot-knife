@@ -258,7 +258,7 @@ public class SparkNormalizeN5 {
 			RandomAccessibleInterval<UnsignedByteType> convertedLayer = Converters.convert(layer, (s, t) -> {
 				// only shift foreground
 				if (s.get() > 0) {
-					t.set(s.get() - shift);
+					t.set( Math.max(0, Math.min( 255, s.get() - shift)));
 				} else {
 					t.set(0);
 				}
