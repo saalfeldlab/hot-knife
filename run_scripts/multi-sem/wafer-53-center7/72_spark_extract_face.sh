@@ -3,7 +3,7 @@
 set -e
 
 if (( $# < 3 )); then
-  echo "USAGE $0 <raw slab> <number of nodes> <top|bot> [abs depth] (e.g. cut_036_slab_045 5 top 20)"
+  echo "USAGE $0 <raw slab> <number of nodes> <top|bot> [abs depth] (e.g. s071_m331 5 top 20)"
   exit 1
 fi
 
@@ -20,7 +20,7 @@ validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_FLAT_RAW_DATASET}"
 
 FACE_BASE_NAME="${TOP_OR_BOTTOM}${SURFACE_DEPTH}"
 
-N5_FACE_DATASET="${N5_FLAT_DATASET_ROOT}/${FACE_BASE_NAME}_icn3"
+N5_FACE_DATASET="${N5_FLAT_DATASET_ROOT}/${FACE_BASE_NAME}"
 
 FULL_FACE_DATASET_PATH="${N5_SAMPLE_PATH}${N5_FACE_DATASET}"
 if [[ -d ${FULL_FACE_DATASET_PATH} ]]; then

@@ -15,10 +15,11 @@ USAGE: $0 <number of nodes>
   exit 1
 fi
 
-N_NODES="${1}" # normalizing a 10-slab volume with 180 11-slot workers took 2 hours and 15 minutes
+N_NODES="${1}" # normalizing a 10-slab 19 mFOV volume with 180 11-slot workers took 2 hours and 15 minutes
 NORMALIZE_METHOD="LOCAL_CONTRAST"
 
-SOURCE_DATASET="/wafer-53-align/run_20240410_173647/pass06"
+# TODO: change this to the correct path
+SOURCE_DATASET="/wafer-53-align/run_2024MMdd_hhmmss/passNN"
 
 #-----------------------------------------------------------
 NORMALIZED_LAYER_SUFFIX="_norm-layer"
@@ -54,10 +55,7 @@ export N_CORES_DRIVER=1
 
 #-----------------------------------------------------------
 RUN_TIME=`date +"%Y%m%d_%H%M%S"`
-JAR="/groups/flyem/data/render/lib/hot-knife-0.0.5-SNAPSHOT.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.SparkNormalizeN5"
-
-# /nrs/hess/render/export/hess.n5/render/wafer_52_cut_00030_to_00039/slab_045_all_align_t2_ic___20230123_162917
 
 ARGV="\
 --n5PathInput=${N5_SAMPLE_PATH} \
@@ -88,7 +86,7 @@ mkdir -p ${LOG_DIR}
   echo "Running with arguments:
 ${ARGV}
 "
-  /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $JAR $CLASS $ARGV
+  /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $HOT_KNIFE_JAR $CLASS $ARGV
 
   echo "normalized n5 volume is:
   -i ${N5_SAMPLE_PATH} -d ${NORMALIZED_DATASET}

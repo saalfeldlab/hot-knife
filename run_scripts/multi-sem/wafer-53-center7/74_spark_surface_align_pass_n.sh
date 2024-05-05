@@ -2,7 +2,7 @@
 
 set -e
 
-# Run times for ten wafer 53 slabs (s070 - s079):
+# Run times for ten wafer 53d slabs with 19 mFOVs (s070 - s079):
 #  1|2|3)        N_NODES=60
 #    pass01:  7 minutes, pass02:  6 minutes, pass03: 12 minutes
 #  4|5|6|7)      N_NODES=150
@@ -12,12 +12,11 @@ set -e
 #  11|12)        N_NODES=210
 #    pass11: 47 minutes (many h6 nodes), pass12: 83 minutes (many h6 nodes)
 
-# Run times for twenty wafer 53 slabs (s070 - s089):
+# Run times for twenty wafer 53d slabs with 19 mFOVs (s070 - s089):
 #  1|2|3)        N_NODES=60
 #    pass01: 12 minutes, pass02: 10 minutes, pass03: 19 minutes
 #  4|5|6)        N_NODES=150
 #    pass04: 38 minutes, pass05: 59 minutes, pass06: 58 minutes
-
 
 if (( $# < 1 )); then
   echo "USAGE $0 <pass (1-12)> [number of nodes (overrides default)]"

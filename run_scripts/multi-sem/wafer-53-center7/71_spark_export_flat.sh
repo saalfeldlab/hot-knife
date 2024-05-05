@@ -14,7 +14,7 @@ ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "${RAW_SLAB}"
 
-validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_Z_CORR_DATASET}/s0" "${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET}"
+validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_ALIGNED_SLAB_DATASET}/s0" "${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET}"
 
 FULL_FLAT_DATASET_PATH="${N5_SAMPLE_PATH}${N5_FLAT_RAW_DATASET}"
 if [[ -d ${FULL_FLAT_DATASET_PATH} ]]; then
@@ -34,7 +34,7 @@ ARGV="\
 --n5RawPath=${N5_SAMPLE_PATH} \
 --n5FieldPath=${N5_SAMPLE_PATH} \
 --n5OutputPath=${N5_SAMPLE_PATH} \
---n5RawDataset=${N5_Z_CORR_DATASET}/s0 \
+--n5RawDataset=${N5_ALIGNED_SLAB_DATASET}/s0 \
 --n5FieldGroup=${N5_HEIGHT_FIELDS_FIX_DATASET} \
 --n5OutDataset=${N5_FLAT_RAW_DATASET} \
 --padding=20 \

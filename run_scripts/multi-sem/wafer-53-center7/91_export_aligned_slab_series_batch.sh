@@ -7,6 +7,9 @@ ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "NA"
 
+# TODO: update export times in notes for wafer-53-center7 (times here are for seminar wafer-53d)
+# TODO: test zBatch distribution (only used 1:1 for seminar wafer-53d because we only had 20 slabs)
+
 if (( $# < 2 )); then
   echo """
 USAGE $0 <zBatch> <number of nodes> [hard runtime minutes]
@@ -31,46 +34,22 @@ export RUNTIME=${3:-240:59} # default is 10+ days
 # --------------------------------------------------------------------
 # setup export parameters
 
-N5_PATH="/nrs/hess/data/hess_wafer_53/export/hess_wafer_53d.n5"
+RUN_AND_PASS="202405dd_hhmmss/passNN"                # TODO: update this with desired run and pass
+TRANSFORM_GROUP="/surface-align/${RUN_AND_PASS}"
+DATA_SET_OUTPUT="/wafer-53-align/${RUN_AND_PASS}/s0"
 
-#TRANSFORM_GROUP="/surface-align/run_20240409_135204/pass05"
-#DATA_SET_OUTPUT="/wafer-53-align/run_20240409_135204/pass05/s0"
-
-#TRANSFORM_GROUP="/surface-align/run_20240409_135204/pass12"
-#DATA_SET_OUTPUT="/wafer-53-align/run_20240409_135204/pass12/s0"
-
-TRANSFORM_GROUP="/surface-align/run_20240410_173647/pass06"
-DATA_SET_OUTPUT="/wafer-53-align/run_20240410_173647/pass06/s0"
-
-ARGV="\
---n5PathInput ${N5_PATH} \
--i /flat/s070_m104/raw -t 20 -b -21 \
--i /flat/s071_m331/raw -t 20 -b -21 \
--i /flat/s072_m150/raw -t 20 -b -21 \
--i /flat/s073_m079/raw -t 20 -b -21 \
--i /flat/s074_m265/raw -t 20 -b -21 \
--i /flat/s075_m119/raw -t 20 -b -21 \
--i /flat/s076_m033/raw -t 20 -b -21 \
--i /flat/s077_m286/raw -t 20 -b -21 \
--i /flat/s078_m279/raw -t 20 -b -21 \
--i /flat/s079_m214/raw -t 20 -b -21 \
--i /flat/s080_m174/raw -t 20 -b -21 \
--i /flat/s081_m049/raw -t 20 -b -21 \
--i /flat/s082_m190/raw -t 20 -b -21 \
--i /flat/s083_m029/raw -t 20 -b -21 \
--i /flat/s084_m069/raw -t 20 -b -21 \
--i /flat/s085_m031/raw -t 20 -b -21 \
--i /flat/s086_m181/raw -t 20 -b -21 \
--i /flat/s087_m155/raw -t 20 -b -21 \
--i /flat/s088_m291/raw -t 20 -b -21 \
--i /flat/s089_m045/raw -t 20 -b -21 \
+ARGV="--n5PathInput ${N5_SAMPLE_PATH} \
 --n5TransformGroup ${TRANSFORM_GROUP} \
---n5PathOutput ${N5_PATH} \
+--n5PathOutput ${N5_SAMPLE_PATH} \
 --n5DatasetOutput ${DATA_SET_OUTPUT} \
 --zBatch ${Z_BATCH} \
 --blockSize=256,256,32"
 # --normalizeContrast
 # --explainPlan        # use --explainPlan option to output debug info without running export
+
+for SLAB in ${ALL_SLABS}; do
+  ARGV="${ARGV} -i /flat/${SLAB}/raw -t 20 -b -21"
+done
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportAlignedSlabSeries"
 

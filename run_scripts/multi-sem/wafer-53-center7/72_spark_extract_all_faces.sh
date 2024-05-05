@@ -8,8 +8,8 @@ if (( $# < 2 )); then
 fi
 
 RAW_SLAB="${1}"
-TOP_NODES="${2}" # /flat/s071_m331/top22_icn3 took 152 minutes with 50 nodes
-BOT_NODES="${3}" # /flat/s071_m331/bot22_icn3 took 64 minutes with 50 nodes
+TOP_NODES="${2}" # with 19 mFOVs, /flat/s071_m331/top22... took 152 minutes with 50 nodes
+BOT_NODES="${3}" # with 19 mFOVs, /flat/s071_m331/bot22.. took 64 minutes with 50 nodes
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
