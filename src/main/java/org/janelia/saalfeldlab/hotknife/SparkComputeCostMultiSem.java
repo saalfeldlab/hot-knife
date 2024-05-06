@@ -18,6 +18,9 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
@@ -214,10 +217,23 @@ public class SparkComputeCostMultiSem {
 
 		final int outOfBoundsValue;
 		if (options.outOfBoundsValue == null) {
-			final String downsampledDataset = n5.groupPath(options.inputDatasetName, "s5");
-			final IterableInterval<UnsignedByteType> lastLayer = getLastLayer(n5, downsampledDataset);
-			outOfBoundsValue = median(lastLayer);
-			System.out.println("Out of bounds value automatically computed to be " + outOfBoundsValue);
+
+			final String s5DatasetName;
+			if (options.inputDatasetName.endsWith("s0")) {
+				s5DatasetName = options.inputDatasetName.replaceFirst("s0$", "s5");
+			} else {
+				s5DatasetName = options.inputDatasetName + "/s5";
+			}
+
+			final Path s5Path = Paths.get(options.n5Path, s5DatasetName);
+			if (Files.exists(s5Path)) {
+				final IterableInterval<UnsignedByteType> lastLayer = getLastLayer(n5, s5DatasetName);
+				outOfBoundsValue = median(lastLayer);
+				System.out.println("Out of bounds value automatically computed to be " + outOfBoundsValue);
+			} else {
+				throw new RuntimeException("Cannot compute out of bounds value automatically because " + s5Path + " does not exist.");
+			}
+
 		} else {
 			outOfBoundsValue = options.outOfBoundsValue;
 		}
