@@ -2,9 +2,9 @@
 
 set -e
 
-ABSOLUTE_SCRIPT=`readlink -m $0`
-SCRIPT_DIR=`dirname ${ABSOLUTE_SCRIPT}`
-source ${SCRIPT_DIR}/00_config.sh
+ABSOLUTE_SCRIPT=$(readlink -m "${0}")
+SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
+source "${SCRIPT_DIR}"/00_config.sh
 
 umask 0002
 
@@ -43,20 +43,21 @@ else
 fi
 
 # /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___20240504_084349_norm-layer
-SOURCE_PATH=$(ls -d ${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___202?????_??????${NORMALIZED_SUFFIX})
+SOURCE_PATH=$(ls -d "${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___202?????_??????${NORMALIZED_SUFFIX}")
 if [[ ! -d ${SOURCE_PATH} ]]; then
   echo "ERROR: source path ${SOURCE_PATH} not found"
   exit 1
 fi
 
 # /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
-MASK_PATH=$(ls -d ${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___mask_202?????_??????)
+MASK_PATH=$(ls -d "${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___mask_202?????_??????")
 if [[ ! -d ${MASK_PATH} ]]; then
   echo "ERROR: mask path ${MASK_PATH} not found"
   exit 1
 fi
 
-MASK_N5_PARENT=$(echo "${MASK_PATH}" | sed 's@.*\(/render/.*\)@\1@')
+# /render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_223344
+MASK_N5_PARENT=${MASK_PATH/*\/render/\/render}
 MASK_N5_GROUP="${MASK_N5_PARENT}/s0"
 
 #-----------------------------------------------------------
@@ -76,19 +77,22 @@ export N_OVERHEAD_CORES_PER_WORKER=1
 export N_CORES_DRIVER=1
 
 #-----------------------------------------------------------
-RUN_TIME=`date +"%Y%m%d_%H%M%S"`
+RUN_TIME=$(date +"%Y%m%d_%H%M%S")
 CLASS="org.janelia.saalfeldlab.hotknife.SparkComputeCostMultiSem"
 
-# /render/slab_070_to_079/s070_m104_align_ic2d_masked___20240406_081814_norm-layer
-SOURCE_DATASET=$(echo "${SOURCE_PATH}" | sed 's@.*\(/render/.*\)@\1@')
-COST_DATASET="$(echo "${SOURCE_DATASET}" | sed 's@/render/@/cost_new/@')"
+# /render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
+SOURCE_DATASET=${SOURCE_PATH/*\/render/\/render}
+
+# /cost_new/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
+COST_DATASET=${SOURCE_DATASET/\/render\//\/cost_new\/}
 
 if [[ -d ${N5_SAMPLE_PATH}${COST_DATASET} ]]; then
   echo "ERROR: ${N5_SAMPLE_PATH}${COST_DATASET} already exists"
   exit 1
 fi
 
-HEIGHT_FIELDS_DATASET=$(echo "${COST_DATASET}" | sed 's@/cost_new/@/heightfields/@')
+# /heightfields/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
+HEIGHT_FIELDS_DATASET=${SOURCE_DATASET/\/render\//\/heightfields\/}
 
 ARGV="\
 --inputN5Path=${N5_SAMPLE_PATH} \
@@ -119,8 +123,8 @@ ARGV="\
 --smoothCost"
 
 COST_DIR="${N5_SAMPLE_PATH}${COST_DATASET}"
-mkdir -p ${COST_DIR}
-echo "${ARGV}" > ${COST_DIR}/args.txt
+mkdir -p "${COST_DIR}"
+echo "${ARGV}" > "${COST_DIR}"/args.txt
 
 LOG_DIR="logs"
 LOG_FILE="${LOG_DIR}/cost.${RUN_TIME}.out"
@@ -132,13 +136,14 @@ mkdir -p ${LOG_DIR}
 # use shell group to tee all output to log file
 {
 
-  echo """Running with arguments:
+  echo "Running with arguments:
 ${ARGV}
-"""
+"
+  # shellcheck disable=SC2086
   /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $HOT_KNIFE_JAR $CLASS $ARGV
 
-  echo """Cost n5 volume is:
+  echo "Cost n5 volume is:
   -i ${N5_SAMPLE_PATH} -d ${COST_DATASET}
-"""
-} 2>&1 | tee -a ${LOG_FILE}
+"
+} 2>&1 | tee -a "${LOG_FILE}"
 
