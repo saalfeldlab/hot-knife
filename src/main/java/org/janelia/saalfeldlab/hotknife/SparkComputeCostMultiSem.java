@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import net.imglib2.IterableInterval;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -121,6 +122,9 @@ public class SparkComputeCostMultiSem {
 
 		private int[][] costSteps;
 
+		@Option(name = "--outOfBoundsValue", usage = "value to use for out-of-bounds pixels (if not given, estimate from data)")
+		private Integer outOfBoundsValue = null;
+
 		@Option(name = "--median", required = false, usage = "uses median (r=3 in z) before cost computation")
 		private boolean median = false;
 
@@ -208,6 +212,16 @@ public class SparkComputeCostMultiSem {
 		final N5Reader n5 = new N5FSReader(n5Path);
 		final N5Writer n5w = new N5FSWriter(costN5Path);
 
+		final int outOfBoundsValue;
+		if (options.outOfBoundsValue == null) {
+			final String downsampledDataset = n5.groupPath(options.inputDatasetName, "s5");
+			final IterableInterval<UnsignedByteType> lastLayer = getLastLayer(n5, downsampledDataset);
+			outOfBoundsValue = median(lastLayer);
+			System.out.println("Out of bounds value automatically computed to be " + outOfBoundsValue);
+		} else {
+			outOfBoundsValue = options.outOfBoundsValue;
+		}
+
 		int[] zcorrBlockSize = n5.getAttribute(zcorrDataset, "blockSize", int[].class);
 		long[] zcorrSize = n5.getAttribute(zcorrDataset, "dimensions", long[].class);
 
@@ -293,10 +307,7 @@ public class SparkComputeCostMultiSem {
 			ExecutorService executorService =  Executors.newFixedThreadPool(1 );
 			//ExecutorService executorService =  Executors.newCachedThreadPool();
 
-			gridCoordPartition.forEachRemaining(gridCoord -> {
-
-					processColumn( n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService );
-			    });
+			gridCoordPartition.forEachRemaining(gridCoord -> processColumn(n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService));
 
 			executorService.shutdown();
 
@@ -336,6 +347,35 @@ public class SparkComputeCostMultiSem {
 		}
 	}
 
+	private static IterableInterval<UnsignedByteType> getLastLayer(final N5Reader n5Reader, final String dataset) {
+		final Img<UnsignedByteType> data = N5Utils.open(n5Reader, dataset);
+		final long lastLayerIndex = data.dimension(2) - 1;
+		return Views.iterable(Views.hyperSlice(data, 2, lastLayerIndex));
+	}
+
+	public static int median(final IterableInterval<UnsignedByteType> pixels2D) {
+		int[] intensities = new int[(int) pixels2D.dimension(0) * (int) pixels2D.dimension(1)];
+		int count = 0;
+		for (final UnsignedByteType pixel : pixels2D) {
+			final int value = pixel.get();
+			if (value > 0) {
+				// threshold to avoid background pixels
+				intensities[count++] = value;
+			}
+		}
+
+		intensities = Arrays.copyOf(intensities, count);
+		Arrays.sort(intensities);
+		final int median;
+		if (count % 2 == 1) {
+			median = intensities[count / 2];
+		} else {
+			median = (intensities[count / 2] + intensities[count / 2 - 1]) / 2;
+		}
+
+		return median;
+	}
+
 	public static void processColumn(
 			String n5Path,
 			String costN5Path,
@@ -349,12 +389,13 @@ public class SparkComputeCostMultiSem {
 			long[] zcorrSize,
 			int[] costSteps,
 			Long[] gridCoord,
+			int outOfBoundsValue,
 			ExecutorService executorService )
 	{
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, executorService);
+				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService);
 
 		//ImageJFunctions.show( cost );
 		//SimpleMultiThreading.threadHaltUnClean();
@@ -420,6 +461,7 @@ public class SparkComputeCostMultiSem {
 			long[] zcorrSize,
 			int[] costSteps,
 			Long[] gridCoord,
+			int outOfBoundsValue,
 			ExecutorService executorService ) {
 
 		final RandomAccessibleInterval<UnsignedByteType> zcorrRaw;
@@ -446,9 +488,7 @@ public class SparkComputeCostMultiSem {
         // The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
 		// zcorr = Views.permute(zcorr, costAxis, 2);
 
-		final int outsideValue = 155; // TODO: global variable 170
-
-		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue( zcorrRaw, outsideValue ); 
+		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue(zcorrRaw, outOfBoundsValue);
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 		//final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
@@ -533,7 +573,7 @@ public class SparkComputeCostMultiSem {
 			if ( m.get().get() == 0 )
 			{
 				if ( pos[ 2 ] == zcorrInterval.min( 2 ) || pos[ 2 ] == zcorrInterval.max( 2 ) )
-					v.set( 255 - outsideValue ); // TODO: variable (average gradient from resin to sample)
+					v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
 				else
 					v.set( 255 );
 			}
@@ -542,7 +582,7 @@ public class SparkComputeCostMultiSem {
 				if ( pos[ 2 ] == zcorrInterval.min( 2 ) )
 				{
 					// the second surface on top we just fake for now (outsideValue all)
-					v.set( 255 - outsideValue ); // TODO: variable (average gradient from resin to sample)
+					v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
 				}
 				else if ( filter )
 				{
