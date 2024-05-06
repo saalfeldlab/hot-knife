@@ -446,7 +446,7 @@ public class SparkComputeCostMultiSem {
         // The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
 		// zcorr = Views.permute(zcorr, costAxis, 2);
 
-		final int outsideValue = 150; // TODO: global variable 170
+		final int outsideValue = 155; // TODO: global variable 170
 
 		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue( zcorrRaw, outsideValue ); 
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
