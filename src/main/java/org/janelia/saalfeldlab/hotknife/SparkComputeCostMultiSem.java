@@ -125,10 +125,10 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--outOfBoundsValue", usage = "value to use for out-of-bounds pixels (if not given, estimate from data)")
 		private Integer outOfBoundsValue = null;
 
-		@Option(name = "--median", required = false, usage = "uses median (r=3 in z) before cost computation")
+		@Option(name = "--median", usage = "uses median (r=3 in z) before cost computation")
 		private boolean median = false;
 
-		@Option(name = "--smoothCost", required = false, usage = "smoothes cost in z (s=1.0)")
+		@Option(name = "--smoothCost", usage = "smoothes cost in z (s=1.0)")
 		private boolean smoothCost = false;
 
 		@Option(name = "--surfaceN5Output", usage = "N5 output group for surface heighfields, e.g. /heightfields/Sec39/v1_acquire_trimmed_sp1, omit to skip surface fit")
@@ -408,7 +408,7 @@ public class SparkComputeCostMultiSem {
         N5Writer n5w = new N5FSWriter(costN5Path);
 
         // Now loop over blocks and write (for multisem, usually just one block in z)
-        for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / zcorrBlockSize[2]); zGrid++ )
+        for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / (double) zcorrBlockSize[2]); zGrid++ )
         {
             final long[] gridOffset = new long[]{gridCoord[0], gridCoord[1], zGrid }; //TODO: is this in original or cost steps?
 
@@ -417,8 +417,8 @@ public class SparkComputeCostMultiSem {
             RandomAccessibleInterval<UnsignedByteType> block = Views.interval(
                     Views.extendZero( cost ),
                     new FinalInterval(
-                            new long[]{0, 0, zGrid * zcorrBlockSize[2]},
-                            new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * zcorrBlockSize[2] - 1 }));
+                            new long[]{0, 0, zGrid * (long) zcorrBlockSize[2]},
+                            new long[]{cost.dimension(0) - 1, cost.dimension(1) - 1,(zGrid + 1) * (long) zcorrBlockSize[2] - 1 }));
 
             System.out.println( "block: " + Util.printInterval( block ));
 
@@ -508,8 +508,8 @@ public class SparkComputeCostMultiSem {
 		final RandomAccessibleInterval<UnsignedByteType> mask2d =
 				Views.translate(
 						ArrayImgs.unsignedBytes(
-								new long[] { zcorrInterval.dimension( 0 ), zcorrInterval.dimension( 1 ) } ),
-								new long[] { zcorrInterval.min( 0 ), zcorrInterval.min( 1 ) } );
+								zcorrInterval.dimension( 0 ), zcorrInterval.dimension(1 )),
+						zcorrInterval.min( 0 ), zcorrInterval.min(1 ));
 
 		for ( final UnsignedByteType v : Views.iterable( mask2d ) )
 			v.set( 255 );
@@ -647,15 +647,12 @@ public class SparkComputeCostMultiSem {
 		{
 			final RandomAccessibleInterval<DoubleType> derivativeSmooth = ArrayImgs.doubles( dim );
 			Gauss3.gauss( new double[] {0,0,1 }, Views.extendValue( derivativeConvert, 255 ), derivativeSmooth );
-	
-			final RandomAccessibleInterval<UnsignedByteType> derivativeSmoothConvert = Converters.convertRAI(derivativeSmooth, (i, o) -> o.set( (int)Math.round( Math.max(0, Math.min( 255.0, i.get()))) ), new UnsignedByteType() );
-	
-			return derivativeSmoothConvert;
+
+			return Converters.convertRAI(derivativeSmooth, (i, o) -> o.set((int) Math.round(Math.max(0, Math.min(255.0, i.get())))), new UnsignedByteType());
 		}
 		else
 		{
-			final RandomAccessibleInterval<UnsignedByteType> derivativeConvert8Bit = Converters.convertRAI(derivativeConvert, (i, o) -> o.set( (int)Math.round( Math.max(0, Math.min( 255.0, i.get()))) ), new UnsignedByteType() );
-			return derivativeConvert8Bit;
+			return Converters.convertRAI(derivativeConvert, (i, o) -> o.set((int) Math.round(Math.max(0, Math.min(255.0, i.get())))), new UnsignedByteType());
 		}
 
 		/*
@@ -681,7 +678,7 @@ public class SparkComputeCostMultiSem {
 				kernelSize);*/
 	}
 
-	private static final double medianZ3( final RandomAccess<? extends RealType<?>> in, final double[] medianTmp )
+	private static double medianZ3(final RandomAccess<? extends RealType<?>> in, final double[] medianTmp)
 	{
 		medianTmp[ 0 ] = in.get().getRealDouble();
 		in.fwd( 2 );
@@ -842,7 +839,7 @@ public class SparkComputeCostMultiSem {
 				costSliceFullRes = 
 						Converters.convertRAI(
 								sliceCopy,
-								(i0, o) -> { o.set( 255 ); },
+								(i0, o) -> o.set(255),
 								new FloatType() );
 			}
 
@@ -890,7 +887,7 @@ public class SparkComputeCostMultiSem {
 				new long[]{stopX, stopY, stopZ});
 	}
 
-	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final Options options = new Options(args);
 
