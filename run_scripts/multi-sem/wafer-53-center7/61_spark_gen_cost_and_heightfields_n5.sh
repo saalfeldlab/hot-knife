@@ -4,11 +4,10 @@ set -e
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
-source "${SCRIPT_DIR}"/00_config.sh
 
 umask 0002
 
-if (( $# < 4 )); then
+if (( $# < 3 )); then
   echo """
 USAGE: $0 <number of nodes> <render project> <raw stack>
 
@@ -21,6 +20,11 @@ fi
 N_NODES="${1}"           # 30 11-slot workers takes 4 minutes
 RENDER_PROJECT="${2}"
 RAW_STACK="${3}"
+
+source "${SCRIPT_DIR}"/00_config.sh "${RAW_STACK}"
+
+# appended to the cost and heightfields dataset names (e.g. cost_v3)
+CH_RUN_VERSION="v2"
 
 # values we ultimately used for wafer_53d in cost_v3:
 NORMALIZE_METHOD="LAYER_INTENSITY" # other options: LOCAL_CONTRAST
@@ -43,14 +47,14 @@ else
 fi
 
 # /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___20240504_084349_norm-layer
-SOURCE_PATH=$(ls -d "${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___202?????_??????${NORMALIZED_SUFFIX}")
+SOURCE_PATH=$(ls -d "${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}"*_avgshd_ic___202?????_??????"${NORMALIZED_SUFFIX}")
 if [[ ! -d ${SOURCE_PATH} ]]; then
   echo "ERROR: source path ${SOURCE_PATH} not found"
   exit 1
 fi
 
 # /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
-MASK_PATH=$(ls -d "${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___mask_202?????_??????")
+MASK_PATH=$(ls -d "${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}"*_avgshd_ic___mask_202?????_??????)
 if [[ ! -d ${MASK_PATH} ]]; then
   echo "ERROR: mask path ${MASK_PATH} not found"
   exit 1
@@ -84,7 +88,7 @@ CLASS="org.janelia.saalfeldlab.hotknife.SparkComputeCostMultiSem"
 SOURCE_DATASET=${SOURCE_PATH/*\/render/\/render}
 
 # /cost_new/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
-COST_DATASET=${SOURCE_DATASET/\/render\//\/cost_new\/}
+COST_DATASET=${SOURCE_DATASET/\/render\//\/cost_${CH_RUN_VERSION}\/}
 
 if [[ -d ${N5_SAMPLE_PATH}${COST_DATASET} ]]; then
   echo "ERROR: ${N5_SAMPLE_PATH}${COST_DATASET} already exists"
@@ -92,7 +96,7 @@ if [[ -d ${N5_SAMPLE_PATH}${COST_DATASET} ]]; then
 fi
 
 # /heightfields/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
-HEIGHT_FIELDS_DATASET=${SOURCE_DATASET/\/render\//\/heightfields\/}
+HEIGHT_FIELDS_DATASET=${SOURCE_DATASET/\/render\//\/heightfields_${CH_RUN_VERSION}\/}
 
 ARGV="\
 --inputN5Path=${N5_SAMPLE_PATH} \
