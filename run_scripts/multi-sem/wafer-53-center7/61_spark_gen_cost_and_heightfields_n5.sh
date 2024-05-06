@@ -43,14 +43,14 @@ else
 fi
 
 # /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___20240504_084349_norm-layer
-SOURCE_PATH=$(ls -d ${N5_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___202?????_??????${NORMALIZED_SUFFIX})
+SOURCE_PATH=$(ls -d ${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___202?????_??????${NORMALIZED_SUFFIX})
 if [[ ! -d ${SOURCE_PATH} ]]; then
   echo "ERROR: source path ${SOURCE_PATH} not found"
   exit 1
 fi
 
 # /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/render/slab_000_to_009/s001_m239_align_no35_horiz_avgshd_ic___mask_20240504_144211
-MASK_PATH=$(ls -d ${N5_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___mask_202?????_??????)
+MASK_PATH=$(ls -d ${N5_SAMPLE_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}*_avgshd_ic___mask_202?????_??????)
 if [[ ! -d ${MASK_PATH} ]]; then
   echo "ERROR: mask path ${MASK_PATH} not found"
   exit 1
@@ -83,17 +83,17 @@ CLASS="org.janelia.saalfeldlab.hotknife.SparkComputeCostMultiSem"
 SOURCE_DATASET=$(echo "${SOURCE_PATH}" | sed 's@.*\(/render/.*\)@\1@')
 COST_DATASET="$(echo "${SOURCE_DATASET}" | sed 's@/render/@/cost_new/@')"
 
-if [[ -d ${N5_PATH}${COST_DATASET} ]]; then
-  echo "ERROR: ${N5_PATH}${COST_DATASET} already exists"
+if [[ -d ${N5_SAMPLE_PATH}${COST_DATASET} ]]; then
+  echo "ERROR: ${N5_SAMPLE_PATH}${COST_DATASET} already exists"
   exit 1
 fi
 
 HEIGHT_FIELDS_DATASET=$(echo "${COST_DATASET}" | sed 's@/cost_new/@/heightfields/@')
 
 ARGV="\
---inputN5Path=${N5_PATH} \
+--inputN5Path=${N5_SAMPLE_PATH} \
 --inputN5Group=${SOURCE_DATASET}/s0 \
---outputN5Path=${N5_PATH} \
+--outputN5Path=${N5_SAMPLE_PATH} \
 --costN5Group=${COST_DATASET} \
 --maskN5Group=${MASK_N5_GROUP} \
 --firstStepScaleNumber=1 \
@@ -118,7 +118,7 @@ ARGV="\
 --median \
 --smoothCost"
 
-COST_DIR="${N5_PATH}${COST_DATASET}"
+COST_DIR="${N5_SAMPLE_PATH}${COST_DATASET}"
 mkdir -p ${COST_DIR}
 echo "${ARGV}" > ${COST_DIR}/args.txt
 
@@ -138,7 +138,7 @@ ${ARGV}
   /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $HOT_KNIFE_JAR $CLASS $ARGV
 
   echo """Cost n5 volume is:
-  -i ${N5_PATH} -d ${COST_DATASET}
+  -i ${N5_SAMPLE_PATH} -d ${COST_DATASET}
 """
 } 2>&1 | tee -a ${LOG_FILE}
 
