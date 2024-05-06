@@ -653,7 +653,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param n5CostPath n5 container for cost, input only
 	 * @param n5FieldPath n5 container for height fields, both in put and output
 	 * @param costDataset
-	 * @param heightFieldGroup input height field group
+	 * @param heightFieldGrdoupInput input height field group
 	 * @param heightFieldGroupOutput output height field group
 	 * @param blockMinOut 2D min coordinates of the out put block
 	 * @param blockSizeOut 2D size of the output block
@@ -670,7 +670,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final String n5CostPath,
 			final String n5FieldPath,
 			final String costDataset,
-			final String heightFieldGroup,
+			final String heightFieldGrdoupInput,
 			final String heightFieldGroupOutput,
 			final long[] blockMinOut,
 			final long[] blockSizeOut,
@@ -732,12 +732,12 @@ public class SparkSurfaceFit implements Callable<Void>{
 				downsamplingFactorsXZY[multisem ? 1 : 2],
 				downsamplingFactorsXZY[multisem ? 2 : 1]};
 
-		final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5Field, heightFieldGroup + "/min");
-		final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5Field, heightFieldGroup + "/max");
-		final double minAvg = n5Field.getAttribute(heightFieldGroup + "/min", "avg", double.class);
-		final double maxAvg = n5Field.getAttribute(heightFieldGroup + "/max", "avg", double.class);
+		final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5Field, heightFieldGrdoupInput + "/min");
+		final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5Field, heightFieldGrdoupInput + "/max");
+		final double minAvg = n5Field.getAttribute(heightFieldGrdoupInput + "/min", "avg", double.class);
+		final double maxAvg = n5Field.getAttribute(heightFieldGrdoupInput + "/max", "avg", double.class);
 
-		final double[] downsamplingHeightField = n5Field.getAttribute(heightFieldGroup, "downsamplingFactors", double[].class);
+		final double[] downsamplingHeightField = n5Field.getAttribute(heightFieldGrdoupInput, "downsamplingFactors", double[].class);
 		final double[] scale = new double[] {
 				downsamplingHeightField[0] / downsamplingFactors[0],
 				downsamplingHeightField[1] / downsamplingFactors[1],
@@ -808,7 +808,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param n5CostPath n5 container for cost, input only
 	 * @param n5FieldPath n5 container for height fields, both in put and output
 	 * @param costDataset
-	 * @param heightFieldGroup input height field group
+	 * @param heightFieldGrdoupInput input height field group
 	 * @param heightFieldGroupOutput output height field group
 	 * @param blockSizeOut 2D size of the output block
 	 * @param blockPadding 2D padding of the output block for processing
@@ -821,7 +821,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final String n5CostPath,
 			final String n5FieldPath,
 			final String costDataset,
-			final String heightFieldGroup,
+			final String heightFieldGrdoupInput,
 			final String heightFieldGroupOutput,
 			final long[] blockSizeOut,
 			final long[] blockPadding,
@@ -900,7 +900,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 							n5CostPath,
 							n5FieldPath,
 							costDataset,
-							heightFieldGroup,
+							heightFieldGrdoupInput,
 							heightFieldGroupOutput,
 							cell[0],
 							cell[1],
@@ -1453,6 +1453,11 @@ public class SparkSurfaceFit implements Callable<Void>{
 								new FloatType()),
 					mask);
 
+			//new ImageJ();
+			//ImageJFunctions.show( mask ).setTitle("mask");
+			//ImageJFunctions.show( permutedCost ).setTitle("permutedCost");
+			//ImageJFunctions.show( inpaintedCost ).setTitle("inpaintedCost");
+
 			final double[] downsamplingFactorsXZY = n5.getAttribute(dataset, "downsamplingFactors", double[].class);
 			if ( multiSem )
 			{
@@ -1494,6 +1499,20 @@ public class SparkSurfaceFit implements Callable<Void>{
 				maxField = heightFields[1];
 			}
 
+			// simply set min and max surface to 0.0 and maxavg as a starting
+			// point for s1
+			if ( multiSem )
+			{
+				final float max = (float)maxAvg;
+				Views.iterable( heightFields[ 0 ] ).forEach( t -> t.set( 0 ) );
+				Views.iterable( heightFields[ 1 ] ).forEach( t -> t.set( max ) );
+			}
+
+			//new ImageJ();
+			//ImageJFunctions.show( heightFields[ 0 ] ).setTitle("heightFields[ 0 ]");
+			//ImageJFunctions.show( heightFields[ 1 ] ).setTitle("heightFields[ 1 ]");
+			//SimpleMultiThreading.threadHaltUnClean();
+
 			final String groupName = outGroup + "/s" + firstScaleIndex;
 			n5Writer.createGroup(groupName);
 			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
@@ -1504,6 +1523,10 @@ public class SparkSurfaceFit implements Callable<Void>{
 			N5Utils.save(maxField, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
 			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
 		}
+
+		// do s1 directly
+		if ( multiSem )
+			firstScaleIndex = lastScaleIndex - 1;
 
 		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
 
@@ -1517,9 +1540,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 					sc,
 					n5Path, // TODO
 					n5FieldPath, // TODO
-					inGroup + "/s" + s,
-					outGroup + "/s" + (s + 1),
-					outGroup + "/s" + s,
+					inGroup + "/s" + s, // cost
+					outGroup + "/s" + (s + 1), // heightfield in
+					outGroup + "/s" + s, // heightfield out
 					blockSize,
 					blockPadding,
 					maxDeltaZ,
