@@ -82,8 +82,8 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		final String minHeightField = fieldGroup + "/min";
 		final String minHeightFieldOut = fieldGroupOut + "/min";
 
-		checkIfGroupExists(sourceN5, minHeightField);
-		checkIfGroupDoesntExist(sourceN5, minHeightFieldOut);
+		confirmGroupExists(sourceN5, minHeightField);
+		confirmGroupDoesntExist(sourceN5, minHeightFieldOut);
 
 		System.out.println("LOADING height field " + n5Path + minHeightField);
 		RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(sourceN5, minHeightField);
@@ -103,8 +103,8 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		final String maxHeightField = fieldGroup + "/max";
 		final String maxHeightFieldOut = fieldGroupOut + "/max";
 
-		checkIfGroupExists(sourceN5, maxHeightField);
-		checkIfGroupDoesntExist(sourceN5, maxHeightFieldOut);
+		confirmGroupExists(sourceN5, maxHeightField);
+		confirmGroupDoesntExist(sourceN5, maxHeightFieldOut);
 
 		System.out.println("LOADING height field " + n5Path + maxHeightField);
 		heightFieldSource = N5Utils.open(sourceN5, maxHeightField);
@@ -142,17 +142,17 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		return null;
 	}
 
-	private static void checkIfGroupExists(final N5Reader n5, final String dataset) {
+	private static void confirmGroupExists(final N5Reader n5, final String dataset)
+			throws IllegalArgumentException {
 		if (!n5.exists(dataset)) {
-			System.out.println("heightfield dataset does not exist: " + n5 + dataset);
-			System.exit(0);
+			throw new IllegalArgumentException("heightfield dataset does not exist: " + n5 + dataset);
 		}
 	}
 
-	private static void checkIfGroupDoesntExist(final N5Reader n5, final String dataset) {
+	private static void confirmGroupDoesntExist(final N5Reader n5, final String dataset)
+			throws IllegalArgumentException {
 		if (n5.exists(dataset)) {
-			System.out.println("heightfield dataset already exists: " + n5 + dataset);
-			System.exit(0);
+			throw new IllegalArgumentException("heightfield dataset already exists: " + n5 + dataset);
 		}
 	}
 }
