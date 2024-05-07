@@ -1526,7 +1526,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 		// do s1 directly
 		if ( multiSem )
-			firstScaleIndex = lastScaleIndex - 1;
+			firstScaleIndex = lastScaleIndex + 1;
 
 		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
 
