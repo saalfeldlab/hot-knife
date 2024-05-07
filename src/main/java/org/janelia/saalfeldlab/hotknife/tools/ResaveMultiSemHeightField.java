@@ -24,7 +24,6 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -117,27 +116,16 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		System.out.println("SMOOTHING heightfield");
 		Gauss3.gauss(SIGMA, Views.extendBorder(heightField), heightField);
 
-		//final ExecutorService exec = Executors.newFixedThreadPool(4);
-
 		System.out.println("SAVING height field " + n5OutputPath + maxHeightFieldOut);
 		final double avg = sourceN5.getAttribute(maxHeightField, "avg", double.class);
 		attributes = sourceN5.getDatasetAttributes(maxHeightField);
 
-		//N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
-
-		N5Utils
-				.save(
-						heightField,
-						targetN5,
-						maxHeightFieldOut,
-						attributes.getBlockSize(),
-						attributes.getCompression() );
+		N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
 
 		System.out.println( "Setting attributes avg=" + avg + ", downsamplingFactors=" + Arrays.toString( downsamplingFactors ));
 		targetN5.setAttribute(maxHeightFieldOut, "avg", avg);
 		targetN5.setAttribute(maxHeightFieldOut, "downsamplingFactors", downsamplingFactors);
 
-		//exec.shutdown();
 		service.shutdown();
 		sourceN5.close();
 		targetN5.close();
