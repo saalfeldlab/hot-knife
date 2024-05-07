@@ -81,7 +81,7 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		checkIfGroupExists(sourceN5, minHeightField);
 		checkIfGroupDoesntExist(sourceN5, minHeightFieldOut);
 
-		System.out.println("LOADING height field " + n5Path + ":/" + minHeightField);
+		System.out.println("LOADING height field " + n5Path + minHeightField);
 		RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(sourceN5, minHeightField);
 
 		for (final FloatType t : Views.iterable(heightFieldSource)) {
@@ -91,7 +91,7 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 			}
 		}
 
-		System.out.println("SAVING height field " + n5OutputPath + ":/" + minHeightFieldOut);
+		System.out.println("SAVING height field " + n5OutputPath + minHeightFieldOut);
 		DatasetAttributes attributes = sourceN5.getDatasetAttributes(minHeightField);
 		N5Utils.save(heightFieldSource, targetN5, minHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
 
@@ -102,7 +102,7 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		checkIfGroupExists(sourceN5, maxHeightField);
 		checkIfGroupDoesntExist(sourceN5, maxHeightFieldOut);
 
-		System.out.println("LOADING height field " + n5Path + ":/" + maxHeightField);
+		System.out.println("LOADING height field " + n5Path + maxHeightField);
 		heightFieldSource = N5Utils.open(sourceN5, maxHeightField);
 
 		final ExecutorService service = Executors.newCachedThreadPool();
@@ -112,7 +112,7 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		System.out.println("SMOOTHING heightfield");
 		Gauss3.gauss(SIGMA, Views.extendBorder(heightField), heightField);
 
-		System.out.println("SAVING height field " + n5OutputPath + ":/" + minHeightFieldOut);
+		System.out.println("SAVING height field " + n5OutputPath + minHeightFieldOut);
 		attributes = sourceN5.getDatasetAttributes(maxHeightField);
 		N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
 
@@ -123,14 +123,14 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 
 	private static void checkIfGroupExists(final N5Reader n5, final String dataset) {
 		if (!n5.exists(dataset)) {
-			System.out.println("heightfield dataset does not exist: " + n5 + "/" + dataset);
+			System.out.println("heightfield dataset does not exist: " + n5 + dataset);
 			System.exit(0);
 		}
 	}
 
 	private static void checkIfGroupDoesntExist(final N5Reader n5, final String dataset) {
 		if (n5.exists(dataset)) {
-			System.out.println("heightfield dataset already exists: " + n5 + "/" + dataset);
+			System.out.println("heightfield dataset already exists: " + n5 + dataset);
 			System.exit(0);
 		}
 	}
