@@ -24,7 +24,7 @@ RAW_STACK="${3}"
 source "${SCRIPT_DIR}"/00_config.sh "${RAW_STACK}"
 
 # appended to the cost and heightfields dataset names (e.g. cost_v3)
-CH_RUN_VERSION="v2"
+CH_RUN_VERSION="v4"
 
 # values we ultimately used for wafer_53d in cost_v3:
 NORMALIZE_METHOD="LAYER_INTENSITY" # other options: LOCAL_CONTRAST
