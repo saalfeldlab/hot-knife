@@ -1504,8 +1504,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			if ( multiSem )
 			{
 				final float max = (float)maxAvg;
-				Views.iterable( heightFields[ 0 ] ).forEach( t -> t.set( 0 ) );
-				Views.iterable( heightFields[ 1 ] ).forEach( t -> t.set( max ) );
+				Views.iterable( minField ).forEach( t -> t.set( 0 ) );
+				Views.iterable( maxField ).forEach( t -> t.set( max ) );
 			}
 
 			//new ImageJ();
