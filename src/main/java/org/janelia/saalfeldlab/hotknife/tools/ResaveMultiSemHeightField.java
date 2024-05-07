@@ -143,16 +143,16 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 	}
 
 	private static void confirmGroupExists(final N5Reader n5, final String dataset)
-			throws IllegalArgumentException {
+			throws IOException {
 		if (!n5.exists(dataset)) {
-			throw new IllegalArgumentException("heightfield dataset does not exist: " + n5 + dataset);
+			throw new IOException("heightfield dataset does not exist: " + n5 + dataset);
 		}
 	}
 
 	private static void confirmGroupDoesntExist(final N5Reader n5, final String dataset)
-			throws IllegalArgumentException {
+			throws IOException {
 		if (n5.exists(dataset)) {
-			throw new IllegalArgumentException("heightfield dataset already exists: " + n5 + dataset);
+			throw new IOException("heightfield dataset already exists: " + n5 + dataset);
 		}
 	}
 }
