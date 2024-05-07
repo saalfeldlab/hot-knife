@@ -24,6 +24,7 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -60,6 +61,9 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 
 	@Option(names = {"-g", "--fieldGroupOut"}, required = true, description = "N5 group to save, overrides if the same as input, e.g. /surface/s1")
 	private String fieldGroupOut = null;
+
+	@Option(names = {"-s", "--scale"}, required = true,  split=",", description = "downsampling factors, e.g. 6,6,1")
+	private int[] downsamplingFactors = null;
 
 	private static final double SIGMA = 2.0;
 
@@ -112,10 +116,27 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		System.out.println("SMOOTHING heightfield");
 		Gauss3.gauss(SIGMA, Views.extendBorder(heightField), heightField);
 
-		System.out.println("SAVING height field " + n5OutputPath + ":/" + minHeightFieldOut);
-		attributes = sourceN5.getDatasetAttributes(maxHeightField);
-		N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
+		final ExecutorService exec = Executors.newFixedThreadPool(4);
 
+		System.out.println("SAVING height field " + n5OutputPath + ":/" + maxHeightFieldOut);
+		final double avg = sourceN5.getAttribute(maxHeightField, "avg", double.class);
+		attributes = sourceN5.getDatasetAttributes(maxHeightField);
+
+		//N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression(), exec);
+
+		N5Utils
+				.save(
+						heightField,
+						targetN5,
+						maxHeightFieldOut,
+						new int[]{1024, 1024},
+						new GzipCompression(),
+						exec);
+
+		targetN5.setAttribute(maxHeightFieldOut, "avg", avg);
+		targetN5.setAttribute(maxHeightFieldOut, "downsamplingFactors", downsamplingFactors);
+
+		exec.shutdown();
 		service.shutdown();
 		sourceN5.close();
 		return null;
