@@ -31,9 +31,6 @@ NORMALIZE_METHOD="LAYER_INTENSITY" # other options: LOCAL_CONTRAST
 SURFACE_INIT_MAX_DELTA="0.01"      # other options: 0.2
 SURFACE_MAX_DELTA_Z="0.02"         # other options: 0.2
 
-# (re)declare here so this script can also be used with alignment config file
-HOT_KNIFE_JAR="/groups/flyem/data/render/lib/hot-knife-0.0.5-SNAPSHOT.jar"
-
 #-----------------------------------------------------------
 NORMALIZED_LAYER_SUFFIX="_norm-layer"
 NORMALIZED_LOCAL_SUFFIX="_norm-local"
