@@ -98,6 +98,10 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		System.out.println("SAVING height field " + n5OutputPath + minHeightFieldOut);
 		DatasetAttributes attributes = sourceN5.getDatasetAttributes(minHeightField);
 		N5Utils.save(heightFieldSource, targetN5, minHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
+		final double avg = sourceN5.getAttribute(minHeightField, "avg", double.class);
+		System.out.println( "Setting attributes avg=" + avg + ", downsamplingFactors=" + Arrays.toString( downsamplingFactors ));
+		targetN5.setAttribute(minHeightFieldOut, "avg", avg);
+		targetN5.setAttribute(minHeightFieldOut, "downsamplingFactors", downsamplingFactors);
 
 		// load the max height field, smooth, and resave
 		final String maxHeightField = fieldGroup + "/max";
