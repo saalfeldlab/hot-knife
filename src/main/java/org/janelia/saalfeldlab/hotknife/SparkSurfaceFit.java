@@ -1528,7 +1528,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		final int start;
 
 		if ( multiSem )
-			start = lastScaleIndex + 1;
+			start = lastScaleIndex;
 		else
 			start = firstScaleIndex - 1;
 
@@ -1536,6 +1536,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			System.out.println( "Processing scale: " + s );
 
+			//System.exit( 0 );
 			final long[] blockPadding = new long[] {32, 32};
 
 			final double maxDeltaZ = (s == lastScaleIndex ) ? this.finalMaxDeltaZ : this.maxDeltaZ;
