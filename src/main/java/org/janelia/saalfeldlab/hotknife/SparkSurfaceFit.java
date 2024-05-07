@@ -1525,10 +1525,14 @@ public class SparkSurfaceFit implements Callable<Void>{
 		}
 
 		// do s1 directly
-		if ( multiSem )
-			firstScaleIndex = lastScaleIndex + 1;
+		final int start;
 
-		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
+		if ( multiSem )
+			start = lastScaleIndex + 1;
+		else
+			start = firstScaleIndex - 1;
+
+		for (int s = start; s >= lastScaleIndex; --s) {
 
 			System.out.println( "Processing scale: " + s );
 
@@ -1541,7 +1545,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 					n5Path, // TODO
 					n5FieldPath, // TODO
 					inGroup + "/s" + s, // cost
-					outGroup + "/s" + (s + 1), // heightfield in
+					multiSem ? outGroup + "/s" + firstScaleIndex : outGroup + "/s" + (s + 1), // heightfield in
 					outGroup + "/s" + s, // heightfield out
 					blockSize,
 					blockPadding,
