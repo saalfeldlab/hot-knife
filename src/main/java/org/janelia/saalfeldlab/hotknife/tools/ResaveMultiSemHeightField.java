@@ -35,6 +35,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -116,29 +117,31 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		System.out.println("SMOOTHING heightfield");
 		Gauss3.gauss(SIGMA, Views.extendBorder(heightField), heightField);
 
-		final ExecutorService exec = Executors.newFixedThreadPool(4);
+		//final ExecutorService exec = Executors.newFixedThreadPool(4);
 
 		System.out.println("SAVING height field " + n5OutputPath + ":/" + maxHeightFieldOut);
 		final double avg = sourceN5.getAttribute(maxHeightField, "avg", double.class);
 		attributes = sourceN5.getDatasetAttributes(maxHeightField);
 
-		//N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression(), exec);
+		//N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
 
 		N5Utils
 				.save(
 						heightField,
 						targetN5,
 						maxHeightFieldOut,
-						new int[]{1024, 1024},
-						new GzipCompression(),
-						exec);
+						attributes.getBlockSize(),
+						attributes.getCompression() );
 
+		System.out.println( "Setting attributes avg=" + avg + ", downsamplingFactors=" + Arrays.toString( downsamplingFactors ));
 		targetN5.setAttribute(maxHeightFieldOut, "avg", avg);
 		targetN5.setAttribute(maxHeightFieldOut, "downsamplingFactors", downsamplingFactors);
 
-		exec.shutdown();
+		//exec.shutdown();
 		service.shutdown();
 		sourceN5.close();
+		targetN5.close();
+
 		return null;
 	}
 
