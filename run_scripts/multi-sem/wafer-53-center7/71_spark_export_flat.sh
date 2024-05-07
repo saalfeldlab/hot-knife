@@ -37,9 +37,9 @@ ARGV="\
 --n5RawDataset=${N5_ALIGNED_SLAB_DATASET}/s0 \
 --n5FieldGroup=${N5_HEIGHT_FIELDS_FIX_DATASET} \
 --n5OutDataset=${N5_FLAT_RAW_DATASET} \
---padding=20 \
+--padding=3 \
 --multiSem \
---blockSize=256,256,32"
+--blockSize=128,128,64"
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportFlattenedVolume"
 
