@@ -16,12 +16,14 @@
  */
 package org.janelia.saalfeldlab.hotknife.tools;
 
-import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.algorithm.gauss3.Gauss3;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgFactory;
-import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.view.Views;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Arrays;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -29,16 +31,16 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Re-save the height field to a new location for use in the wafer_53 multi-SEM pipeline.
@@ -48,7 +50,7 @@ import java.util.concurrent.Executors;
  * @author Michael Innerberger
  */
 @Command(name = "resave-heightfield")
-public class ResaveMultiSemHeightField implements Callable<Void>{
+public class ResaveMultiSemHeightField implements Callable<Void>, Serializable {
 
 	@Option(names = {"-i", "--n5"}, required = true, description = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 	private String n5Path = null;
@@ -65,10 +67,25 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 	@Option(names = {"-s", "--scale"}, required = true,  split=",", description = "downsampling factors, e.g. 6,6,1")
 	private int[] downsamplingFactors = null;
 
+	public ResaveMultiSemHeightField() {
+	}
+
+	public ResaveMultiSemHeightField(final String n5Path,
+									 final String n5Out,
+									 final String fieldGroup,
+									 final String fieldGroupOut,
+									 final int[] downsamplingFactors) {
+		this.n5Path = n5Path;
+		this.n5Out = n5Out;
+		this.fieldGroup = fieldGroup;
+		this.fieldGroupOut = fieldGroupOut;
+		this.downsamplingFactors = downsamplingFactors;
+	}
+
 	private static final double SIGMA = 2.0;
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
-		CommandLine.call(new ResaveMultiSemHeightField(), args);
+		new CommandLine(new ResaveMultiSemHeightField()).execute(args);
 	}
 
 	@Override
@@ -80,7 +97,8 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 	}
 
 	public static void saveSmoothedHeightField(final ResaveMultiSemHeightField parameters,
-											   final ExecutorService optionalCopyService) throws IOException {
+											   final ExecutorService optionalExecService)
+			throws IOException, ExecutionException, InterruptedException {
 
 		final N5Reader sourceN5 = new N5FSReader(parameters.n5Path);
 		final String n5OutputPath = (parameters.n5Out == null) ? parameters.n5Path : parameters.n5Out;
@@ -93,7 +111,7 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		confirmGroupExists(sourceN5, minHeightField);
 		confirmGroupDoesntExist(sourceN5, minHeightFieldOut);
 
-		System.out.println("LOADING height field " + parameters.n5Path + minHeightField);
+		System.out.println("LOADING height field " + buildN5Path(parameters.n5Path, minHeightField));
 		RandomAccessibleInterval<FloatType> heightFieldSource = N5Utils.open(sourceN5, minHeightField);
 
 		for (final FloatType t : Views.iterable(heightFieldSource)) {
@@ -103,9 +121,14 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 			}
 		}
 
-		System.out.println("SAVING height field " + n5OutputPath + minHeightFieldOut);
+		System.out.println("SAVING height field " + buildN5Path(n5OutputPath, minHeightFieldOut));
 		DatasetAttributes attributes = sourceN5.getDatasetAttributes(minHeightField);
-		N5Utils.save(heightFieldSource, targetN5, minHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
+		if (optionalExecService == null) {
+			N5Utils.save(heightFieldSource, targetN5, minHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
+		} else {
+			N5Utils.save(heightFieldSource, targetN5, minHeightFieldOut, attributes.getBlockSize(), attributes.getCompression(), optionalExecService);
+		}
+
 		final double minAvg = sourceN5.getAttribute(minHeightField, "avg", double.class);
 		System.out.println("Setting min attributes avg=" + minAvg + ", downsamplingFactors=" + Arrays.toString(parameters.downsamplingFactors));
 		targetN5.setAttribute(minHeightFieldOut, "avg", minAvg);
@@ -118,24 +141,28 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		confirmGroupExists(sourceN5, maxHeightField);
 		confirmGroupDoesntExist(sourceN5, maxHeightFieldOut);
 
-		System.out.println("LOADING height field " + parameters.n5Path + maxHeightField);
+		System.out.println("LOADING height field " + buildN5Path(parameters.n5Path, maxHeightField));
 		heightFieldSource = N5Utils.open(sourceN5, maxHeightField);
 
 		final Img<FloatType> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
-		if (optionalCopyService == null) {
+		if (optionalExecService == null) {
 			Util.copy(heightFieldSource, heightField);
 		} else {
-			Util.copy(heightFieldSource, heightField, optionalCopyService);
+			Util.copy(heightFieldSource, heightField, optionalExecService);
 		}
 
 		System.out.println("SMOOTHING heightfield");
 		Gauss3.gauss(SIGMA, Views.extendBorder(heightField), heightField);
 
-		System.out.println("SAVING height field " + n5OutputPath + maxHeightFieldOut);
+		System.out.println("SAVING height field " + buildN5Path(n5OutputPath, maxHeightFieldOut));
 		final double maxAvg = sourceN5.getAttribute(maxHeightField, "avg", double.class);
 		attributes = sourceN5.getDatasetAttributes(maxHeightField);
 
-		N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
+		if (optionalExecService == null) {
+			N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
+		} else {
+			N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression(), optionalExecService);
+		}
 
 		System.out.println( "Setting max attributes avg=" + maxAvg + ", downsamplingFactors=" + Arrays.toString(parameters.downsamplingFactors));
 		targetN5.setAttribute(maxHeightFieldOut, "avg", maxAvg);
@@ -148,14 +175,19 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 	private static void confirmGroupExists(final N5Reader n5, final String dataset)
 			throws IOException {
 		if (!n5.exists(dataset)) {
-			throw new IOException("heightfield dataset does not exist: " + n5 + dataset);
+			throw new IOException("heightfield dataset does not exist: " + buildN5Path(n5.getURI().getPath(), dataset));
 		}
 	}
 
 	private static void confirmGroupDoesntExist(final N5Reader n5, final String dataset)
 			throws IOException {
 		if (n5.exists(dataset)) {
-			throw new IOException("heightfield dataset already exists: " + n5 + dataset);
+			throw new IOException("heightfield dataset already exists: " + buildN5Path(n5.getURI().getPath(), dataset));
 		}
+	}
+
+	private static String buildN5Path(final String n5Path,
+									  final String group) {
+		return n5Path + (group.startsWith("/") ? "" : "/") + group;
 	}
 }
