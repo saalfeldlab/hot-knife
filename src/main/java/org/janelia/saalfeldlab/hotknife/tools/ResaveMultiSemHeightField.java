@@ -80,7 +80,7 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 	}
 
 	public static void saveSmoothedHeightField(final ResaveMultiSemHeightField parameters,
-											   final ExecutorService optionalCopyService) throws IOException {
+											   final ExecutorService optionalCopyService) throws IOException, InterruptedException, ExecutionException {
 
 		final N5Reader sourceN5 = new N5FSReader(parameters.n5Path);
 		final String n5OutputPath = (parameters.n5Out == null) ? parameters.n5Path : parameters.n5Out;
@@ -135,7 +135,9 @@ public class ResaveMultiSemHeightField implements Callable<Void>{
 		final double maxAvg = sourceN5.getAttribute(maxHeightField, "avg", double.class);
 		attributes = sourceN5.getDatasetAttributes(maxHeightField);
 
-		N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());
+		//final ExecutorService exec = Executors.newFixedThreadPool(8);
+		N5Utils.save(heightField, targetN5, maxHeightFieldOut, attributes.getBlockSize(), attributes.getCompression());//, exec);
+		//exec.shutdown();
 
 		System.out.println( "Setting max attributes avg=" + maxAvg + ", downsamplingFactors=" + Arrays.toString(parameters.downsamplingFactors));
 		targetN5.setAttribute(maxHeightFieldOut, "avg", maxAvg);

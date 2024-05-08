@@ -85,8 +85,8 @@ public class SparkGenerateFaceScaleSpace {
 		private final String sizeString = null;
 		private final long[] size;
 
-		//@Option(name = "--maxDownsamplingLevel", usage = "MultiSem datasets can be thin, so we might not be able to downsample till s9")
-		//private int maxDownsamplingLevel = 9;
+		@Option(name = "--maxDownsamplingLevel", usage = "MultiSem datasets can be thin, so we might not be able to downsample till s9")
+		private int maxDownsamplingLevel = 9;
 
 		@Option(name = "--invert", usage = "MultiSem datasets might be inverted")
 		private boolean invert = false;
@@ -461,9 +461,9 @@ public class SparkGenerateFaceScaleSpace {
 		final long[] size = options.getSize().clone();
 		String sourceDatasetName = options.getInputDatasetName();
 
-		// for multisem we only [downsample to s1,] extract the face, and then downsample the face itself (because the "cuts"/slabs are too thin)
+		// for multisem we only [downsample to s4 or s5] extract the face, and then downsample the face itself (because the "cuts"/slabs are too thin)
 		// for FIB-SEM we go in deeper, downsample until s9 and then extract the face from each downsampling step independently
-		int maxScaleIndex = 9;//options.maxDownsamplingLevel; //options.multiSem ? 0 : 9;
+		int maxScaleIndex = options.maxDownsamplingLevel; //options.multiSem ? 0 : 9;
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
 			System.out.println("Scale level " + scaleIndex);
