@@ -4,18 +4,18 @@ set -e
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
-source "${SCRIPT_DIR}"/00_config.sh "na"
 
 # shellcheck disable=SC2034
-SLABS_TODO="  s001_m239 s002_m395 s003_m348 s004_m107 s005_m316 s006_m167 s007_m285 s008_m281 s009_m172
+SLABS_TODO="
+          s001_m239 s002_m395 s003_m348 s004_m107 s005_m316 s006_m167 s007_m285 s008_m281 s009_m172
 s010_m231 s011_m151 s012_m097 s013_m333 s014_m178 s015_m278 s016_m099 s017_m330 s018_m300 s019_m073
 s020_m302 s021_m253 s022_m367 s023_m241 s024_m362 s025_m277 s026_m372 s027_m275 s028_m173 s029_m349
 s030_m016 s031_m105 s032_m133 s033_m039 s034_m081 s035_m387 s036_m252 s037_m381 s038_m139 s039_m295
 s040_m022 s041_m003 s042_m070 s043_m379 s044_m292 s045_m296 s046_m259 s047_m307 s048_m044 s049_m025
 s050_m268 s051_m287 s052_m008 s053_m188 s054_m326 s055_m089 s056_m131 s057_m055 s058_m102 s059_m355
 s060_m162 s061_m235 s062_m122 s063_m054 s064_m212 s065_m057 s066_m210 s067_m037 s068_m118 s069_m390
-s070_m104 s071_m331 s072_m150 s073_m079 s074_m265 s075_m119 s076_m033 s077_m286 s078_m279 s079_m214
 s080_m174 s081_m049 s082_m190 s083_m029 s084_m069 s085_m031 s086_m181 s087_m155 s088_m291 s089_m045
+s070_m104 s071_m331 s072_m150 s073_m079 s074_m265 s075_m119 s076_m033 s077_m286 s078_m279 s079_m214
 s090_m114 s091_m246 s092_m189 s093_m228 s094_m059 s095_m221 s096_m132 s097_m149 s098_m154 s099_m233
 s100_m164 s101_m313 s102_m240 s103_m236 s104_m323 s105_m397 s106_m180 s107_m192 s108_m157 s109_m351
 s110_m141 s111_m117 s112_m213 s113_m293 s114_m094 s115_m242 s116_m341 s117_m023 s118_m092 s119_m169
@@ -50,8 +50,9 @@ s390_m273 s391_m393 s392_m168 s393_m138 s394_m360 s395_m113 s396_m153 s397_m148 
 s400_m152 s401_m353 s402_m399
 "
 
-# change based upon cluster usage
-WORKERS_PER_SLAB=10
+# change based upon cluster usage (note that with just 1 worker, spark cannot recover like it can with multiple workers)
+#WORKERS_PER_SLAB=10  # with 11-core workers, 10 workers per slab uses 112 total cores per slab (26 slab jobs = 2912 cores, run time ~20 minutes)
+WORKERS_PER_SLAB=3    # with 11-core workers,  3 workers per slab uses  35 total cores per slab (85 slab jobs = 2975 cores, run time ~50 minutes)
 
 # cut/paste slab(s) from SLABS_TODO here, run script, then move to SLABS_DONE
 SLABS="
@@ -62,7 +63,6 @@ SLABS_DONE="
 "
 
 for SLAB in ${SLABS}; do
-  PROJECT=$(getSlabProject "${SLAB}")
-  "${SCRIPT_DIR}"/61_spark_gen_cost_and_heightfields_n5.sh ${WORKERS_PER_SLAB} "${PROJECT}" "${SLAB}"
+  "${SCRIPT_DIR}"/71_spark_export_flat.sh "${SLAB}" ${WORKERS_PER_SLAB} 
   sleep 2
 done
