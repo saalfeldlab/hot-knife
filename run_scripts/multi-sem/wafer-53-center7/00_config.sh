@@ -1729,3 +1729,14 @@ setupRunLog () {
   mkdir -p "${LOG_DIR}"
   echo "${LOG_DIR}/${PREFIX}.${RUN_TIMESTAMP}.log"
 }
+
+getSlabProjectName () {
+  SLAB="$1"
+  Z_PREFIX=$(echo "${SLAB}" | cut -c2-3)  # 00 to 40
+  FIRST_Z="${Z_PREFIX}0"
+  LAST_Z="${Z_PREFIX}9"
+  if [[ "${Z_PREFIX}" == "40" ]]; then
+    LAST_Z="402"
+  fi
+  echo "slab_${FIRST_Z}_to_${LAST_Z}"
+}

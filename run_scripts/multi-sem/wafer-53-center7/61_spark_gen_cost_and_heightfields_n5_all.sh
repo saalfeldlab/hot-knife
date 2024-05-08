@@ -4,6 +4,7 @@ set -e
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
+source "${SCRIPT_DIR}"/00_config.sh "na"
 
 # shellcheck disable=SC2034
 SLABS_TODO="  s001_m239 s002_m395 s003_m348 s004_m107 s005_m316 s006_m167 s007_m285 s008_m281 s009_m172
@@ -61,13 +62,7 @@ SLABS_DONE="
 "
 
 for SLAB in ${SLABS}; do
-  Z_PREFIX=$(echo "${SLAB}" | cut -c2-3)  # 00 to 40
-  FIRST_Z="${Z_PREFIX}0"
-  LAST_Z="${Z_PREFIX}9"
-  if [[ "${Z_PREFIX}" == "40" ]]; then
-    LAST_Z="${Z_PREFIX}2"
-  fi
-  PROJECT="slab_${FIRST_Z}_to_${LAST_Z}"
+  PROJECT=$(getSlabProject "${SLAB}")
   "${SCRIPT_DIR}"/61_spark_gen_cost_and_heightfields_n5.sh ${WORKERS_PER_SLAB} "${PROJECT}" "${SLAB}"
   sleep 2
 done
