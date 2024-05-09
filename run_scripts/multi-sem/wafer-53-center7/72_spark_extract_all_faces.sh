@@ -9,11 +9,12 @@ fi
 
 RAW_SLAB="${1}"
 
-# 60 fast h06 sapphire rapids 11-core worker nodes: /flat/s071_m331/top4... (7 mFOVs) invert+normalize took  32 min
-# 60 11-core worker nodes:                          /flat/s071_m331/bot4... (7 mFOVs) invert+normalize took  58 min
-# 50 11-core worker nodes:                          /flat/s070_m104/top4... (7 mFOVs) invert+normalize took 102 min
-# 50 11-core worker nodes:                          /flat/s070_m104/top4... (7 mFOVs) invert           took   5 min
-# 35 11-core worker nodes:                          /flat/s071_m331/top4... (7 mFOVs) invert           took   6 min
+# 100 all slow 11-core worker nodes:                     /flat/s070_m104/bot5... (7 mFOVs) invert+normalize took  69 min
+#  60 all fast h06 sapphire rapids 11-core worker nodes: /flat/s071_m331/top4... (7 mFOVs) invert+normalize took  32 min
+#  60 mostly/all slow 11-core worker nodes:              /flat/s071_m331/bot4... (7 mFOVs) invert+normalize took  58 min
+#  50 mostly/all slow 11-core worker nodes:              /flat/s070_m104/top4... (7 mFOVs) invert+normalize took 102 min
+#  50 mostly/all slow 11-core worker nodes:              /flat/s070_m104/top4... (7 mFOVs) invert           took   5 min
+#  35 mostly/all slow 11-core worker nodes:              /flat/s071_m331/top4... (7 mFOVs) invert           took   6 min
 N_NODES="${2}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
