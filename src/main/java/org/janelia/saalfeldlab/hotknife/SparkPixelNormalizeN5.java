@@ -2,6 +2,7 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -51,19 +52,19 @@ public class SparkPixelNormalizeN5 {
 
 		@Option(name = "--n5DatasetInput",
 				required = true,
-				usage = "Input N5 dataset, e.g. /render/slab_070_to_079/s075_m119_align_big_block_ic___20240308_072106/s0")
+				usage = "Input N5 dataset, e.g. /render/slab_070_to_079/s075_m119/s0")
 		private String n5DatasetInput = null;
 
 		@Option(name = "--n5DatasetOutput",
 				required = true,
-				usage = "Output N5 dataset, e.g. /render/slab_070_to_079/s075_m119_align_big_block_ic___20240308_072106_norm/s0")
+				usage = "Output N5 dataset, e.g. /render/slab_070_to_079/s075_m119_norm/s0")
 		private String n5DatasetOutput = null;
 
-		@Option(name = "--scaleIndex", usage = "the scaleIndex of the image we are normalizing (if you want to specify a single resolution)")
+		@Option(name = "--scaleIndex", usage = "the scaleIndex of the image we are normalizing (if you want to specify a single resolution - will be ignored if --scaleIndexList is specified)")
 		private int scaleIndex = 0;
 
-		//@Option(name = "--scaleIndexRange", usage = "the scaleIndex range we are normalizing (e.g. 0-9, which will automatically load s0-s9 relative to the given paths)")
-		//private int[] scaleIndexRange = null;
+		@Option(name = "--scaleIndexList", usage = "the scaleIndex range we are normalizing (e.g. 0,1,2,3,4,5,6,7,8,9, which will automatically load s0-s9 relative to the given paths)")
+		private String scaleIndexList = null;
 
 		@Option(name = "--blockFactorXY", usage = "how much bigger the compute blocks in XY are than the blocks saved on disc")
 		private int blockFactorXY = 8;
@@ -194,16 +195,43 @@ public class SparkPixelNormalizeN5 {
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		runWithSparkContext(
-				sparkContext,
-				options.n5PathInput,
-				options.n5DatasetInput,
-				options.n5DatasetOutput,
-				options.blockFactorXY,
-				options.scaleIndex,
-				options.invert,
-				options.normalizeMethod );
+		if ( options.scaleIndexList != null )
+		{
+			for ( final String s : options.scaleIndexList.split( "," ) )
+			{
+				final int scaleIndex = Integer.parseInt( s );
+
+				final String n5DatasetInput = options.n5DatasetInput + "/s" + scaleIndex;
+				final String n5DatasetOutput = options.n5DatasetOutput + "/s" + scaleIndex;
+
+				System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Running scale index " + scaleIndex + " for " + n5DatasetInput + " >>> " + n5DatasetOutput );
+
+				runWithSparkContext(
+						sparkContext,
+						options.n5PathInput,
+						n5DatasetInput,
+						n5DatasetOutput,
+						options.blockFactorXY,
+						scaleIndex,
+						options.invert,
+						options.normalizeMethod );
+			}
+		}
+		else
+		{
+			runWithSparkContext(
+					sparkContext,
+					options.n5PathInput,
+					options.n5DatasetInput,
+					options.n5DatasetOutput,
+					options.blockFactorXY,
+					options.scaleIndex,
+					options.invert,
+					options.normalizeMethod );
+		}
 
 		sparkContext.close();
+
+		System.out.println( "Done." );
 	}
 }
