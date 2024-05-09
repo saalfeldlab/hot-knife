@@ -15,6 +15,9 @@ RAW_SLAB="${1}"
 #  50 mostly/all slow 11-core worker nodes:              /flat/s070_m104/top4... (7 mFOVs) invert+normalize took 102 min
 #  50 mostly/all slow 11-core worker nodes:              /flat/s070_m104/top4... (7 mFOVs) invert           took   5 min
 #  35 mostly/all slow 11-core worker nodes:              /flat/s071_m331/top4... (7 mFOVs) invert           took   6 min
+#   5 all slow 11-core worker nodes:                     /flat/s072_m150/top4... (7 mFOVs) invert           took  42 min
+#   5 all slow 11-core worker nodes:                     /flat/s001_m239/top4... (7 mFOVs) (nothing)        took  43 min
+#   2 all slow 11-core worker nodes:                     /flat/s006_m167/bot4... (7 mFOVs) (nothing)        took 100 min
 N_NODES="${2}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
@@ -42,7 +45,7 @@ SURFACE_SIZE=$((AVG_SIZE - 2))
 
 TOP_SURFACE_DEPTH=4
 BOT_SURFACE_DEPTH=4
-COLOR="in" # i, n, in (or nothing)
+COLOR="" # i, n, in (or nothing)
 
 ${SCRIPT_DIR}/72_spark_extract_face.sh ${RAW_SLAB} ${N_NODES} top ${TOP_SURFACE_DEPTH} ${SURFACE_SIZE} ${COLOR}
 sleep 5
