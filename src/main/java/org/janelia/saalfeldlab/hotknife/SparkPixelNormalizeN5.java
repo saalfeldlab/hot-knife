@@ -36,13 +36,11 @@ public class SparkPixelNormalizeN5 {
 		/**
 		 * Contrast Limited Local Contrast Normalization
 		 */
-		LOCAL_CONTRAST("_norm-local"),
-		;
-
-		private final String fileNameSuffix;
-		NormalizationMethod(final String fileNameSuffix) {
-			this.fileNameSuffix = fileNameSuffix;
-		}
+		LOCAL_CONTRAST,
+		/**
+		 * Contrast limited adaptive histogram equalization
+		 */
+		CLAHE
 	}
 
 	@SuppressWarnings({"FieldMayBeFinal", "unused"})
