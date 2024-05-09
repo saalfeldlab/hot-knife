@@ -70,6 +70,9 @@ public class SparkNormalizeN5 {
 				usage = "Input N5 dataset, e.g. /render/slab_070_to_079/s075_m119_align_big_block_ic___20240308_072106")
 		private String n5DatasetInput = null;
 
+		@Option(name = "--scaleIndex", usage = "the scaleIndex of the image we are normalizing (only for LOCAL_CONTRAST)")
+		private int scaleIndex = 0;
+
 		@Option(
 				name = "--factors",
 				usage = "If specified, generates a scale pyramid with given factors, e.g. 2,2,1")
@@ -102,6 +105,7 @@ public class SparkNormalizeN5 {
 										   final int[] blockSize,
 										   final long[][] gridBlock,
 										   final NormalizationMethod normalizeMethod,
+										   final int scaleIndex,
 										   final boolean invert) {
 
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
@@ -111,7 +115,7 @@ public class SparkNormalizeN5 {
 
 		final RandomAccessibleInterval<UnsignedByteType> filteredSource;
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST) {
-			 filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, 0, blockSize );
+			 filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, scaleIndex, blockSize ); // scaleIndex defines radius of the Local contrast
 		} else if (normalizeMethod == NormalizationMethod.LAYER_INTENSITY) {
 			filteredSource = applyShifts(sourceRaw, shifts, invert);
 		} else {
@@ -182,6 +186,7 @@ public class SparkNormalizeN5 {
 												blockSize,
 												gridBlock,
 												options.normalizeMethod,
+												options.scaleIndex,
 												options.invert));
 		n5Output.close();
 		n5Input.close();
