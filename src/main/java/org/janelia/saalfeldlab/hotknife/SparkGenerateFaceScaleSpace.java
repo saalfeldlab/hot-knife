@@ -44,6 +44,7 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.type.numeric.RealType;
@@ -322,8 +323,10 @@ public class SparkGenerateFaceScaleSpace {
 			final boolean invert,
 			final boolean normalizeContrast,
 			final int scaleIndex,
-			final int[] blocksize )
+			int[] blocksize )
 	{
+		final int n = sourceRaw.numDimensions();
+
 		if ( invert )
 			sourceRaw = Converters.convertRAI(sourceRaw, (in,out) -> out.set( 255 - in.get() ), new UnsignedByteType() );
 
@@ -334,6 +337,12 @@ public class SparkGenerateFaceScaleSpace {
 
 			final int blockRadius = (int)Math.round(511 * inverseScale); //1023
 
+			if ( n == 2 )
+			{
+				sourceRaw = Views.addDimension( sourceRaw, 0, 0 );
+				blocksize = new int[] { blocksize[0], blocksize[1],1};
+			}
+
 			final ImageJStackOp<UnsignedByteType> cllcn =
 					new ImageJStackOp<>(
 							Views.extendZero(sourceRaw),
@@ -343,12 +352,17 @@ public class SparkGenerateFaceScaleSpace {
 							255,
 							true ); // do nothing if all black
 
-			return Lazy.process(
+			final CachedCellImg<UnsignedByteType, ?> out = Lazy.process(
 					sourceRaw,
 					blocksize,
 					new UnsignedByteType(),
 					AccessFlags.setOf(AccessFlags.VOLATILE),
 					cllcn);
+
+			if ( n == 2 )
+				return Views.hyperSlice( out, 2, 0 );
+			else
+				return out;
 		}
 		else
 		{
