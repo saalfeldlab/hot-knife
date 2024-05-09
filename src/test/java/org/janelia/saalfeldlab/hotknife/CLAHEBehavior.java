@@ -77,7 +77,7 @@ public class CLAHEBehavior implements Callable<Void> {
 		final long[] min = img.minAsLongArray();
 		final long[] max = img.maxAsLongArray();
 		final long[] midpoint = new long[] {(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, min[2]};
-		img = Views.zeroMin( Views.interval(img, midpoint, new long[] {midpoint[0] + 1024, midpoint[1] + 1024, max[2]}) );
+		img = Views.zeroMin( Views.interval(img, midpoint, new long[] {midpoint[0] + 1024, midpoint[1] + 1024, max[2]}) ); // has to sit on 0,0,0,... because of the known issue with Lazy (is fixed meanwhile)
 
 		final boolean invert = true; // for multisem
 
