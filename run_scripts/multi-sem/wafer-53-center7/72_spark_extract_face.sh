@@ -11,7 +11,7 @@ RAW_SLAB="${1}"
 N_NODES="${2}" # wafer 52 cut_035_slab_001 top 20 took 2 minutes with 15 nodes
 TOP_OR_BOTTOM="${3}"
 SURFACE_DEPTH="${4}"
-SURFACE_SIZE="${5}" # TODO: read this from ${FULL_FACE_DATASET_PATH}/attributes.json: int(avg) - 2
+SURFACE_SIZE="${5}" # can be read from /heightfields_fix/slab_.../s..._m.../max/attributes.json: int(avg) - 2
 COLOR="${6}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
@@ -47,9 +47,11 @@ esac
 
 COLOR_ARGS=""
 case "${COLOR}" in
-  "i") COLOR_ARGS="--invert" ;;
-  "n") COLOR_ARGS="--normalizeContrast" ;;
+  "")   COLOR_ARGS="" ;;
+  "i")  COLOR_ARGS="--invert" ;;
+  "n")  COLOR_ARGS="--normalizeContrast" ;;
   "in") COLOR_ARGS="--invert --normalizeContrast" ;;
+  *)    echo "ERROR: invalid COLOR option ${COLOR} - must be i, n, in (or nothing)"; exit 1 ;;
 esac
 
 ARGV="\
