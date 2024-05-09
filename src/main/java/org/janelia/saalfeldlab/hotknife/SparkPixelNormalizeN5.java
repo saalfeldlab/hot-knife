@@ -1,9 +1,12 @@
 package org.janelia.saalfeldlab.hotknife;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.spark.SparkConf;
@@ -52,12 +55,12 @@ public class SparkPixelNormalizeN5 {
 
 		@Option(name = "--n5DatasetInput",
 				required = true,
-				usage = "Input N5 dataset, e.g. /render/slab_070_to_079/s075_m119/s0")
+				usage = "Input N5 dataset, e.g. /render/s075_m119/s0 when running with --scaleIndex; /render/s075_m119 when running with --scaleIndexList; or /render/*/face/top for all subdirectories")
 		private String n5DatasetInput = null;
 
 		@Option(name = "--n5DatasetOutput",
 				required = true,
-				usage = "Output N5 dataset, e.g. /render/slab_070_to_079/s075_m119_norm/s0")
+				usage = "Output N5 dataset, e.g. /render/s075_m119_norm/s0 when running with --scaleIndex or /render/s075_m119_norm when running with --scaleIndexList; or /render/*/face/top for all subdirectories")
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--scaleIndex", usage = "the scaleIndex of the image we are normalizing (if you want to specify a single resolution - will be ignored if --scaleIndexList is specified)")
@@ -191,43 +194,90 @@ public class SparkPixelNormalizeN5 {
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
+		options.n5DatasetInput = options.n5DatasetInput.trim();
+		options.n5DatasetOutput = options.n5DatasetOutput.trim();
+
+		while ( options.n5DatasetInput.length() > 1 && options.n5DatasetInput.endsWith( "/" ) )
+			options.n5DatasetInput = options.n5DatasetInput.substring(0, options.n5DatasetInput.length() - 1 );
+
+		while ( options.n5DatasetOutput.length() > 1 && options.n5DatasetOutput.endsWith( "/" ) )
+			options.n5DatasetOutput = options.n5DatasetOutput.substring(0, options.n5DatasetOutput.length() - 1 );
+
+		System.out.println( "n5DatasetInput=" + options.n5DatasetInput);
+		System.out.println( "n5DatasetOutput=" + options.n5DatasetOutput);
+
+		final HashMap< String, String > in2out = new HashMap<>();
+
+		if ( options.n5DatasetInput.contains( "*" ) )
+		{
+			if ( !options.n5DatasetOutput.contains("*") || options.n5DatasetInput.split("\\*", -1).length-1 > 1 || options.n5DatasetOutput.split("\\*", -1).length-1 > 1 )
+				throw new RuntimeException( "both in & out need to contain exactly one '*'." );
+
+			final String startIn = options.n5DatasetInput.substring(0, options.n5DatasetInput.indexOf('*') );
+			final String endIn = options.n5DatasetInput.substring(options.n5DatasetInput.indexOf('*') + 1, options.n5DatasetInput.length() );
+			final String startOut = options.n5DatasetOutput.substring(0, options.n5DatasetOutput.indexOf('*') );
+			final String endOut = options.n5DatasetOutput.substring(options.n5DatasetOutput.indexOf('*') + 1, options.n5DatasetOutput.length() );
+
+			final String[] inputDirs = new File( options.n5PathInput, startIn ).list( (dir, name) -> new File( dir, name ).isDirectory() );
+
+			System.out.println( "Range specified, processing the following " + inputDirs.length + " folders, saving to ... " );
+
+			for ( final String s : inputDirs )
+			{
+				in2out.put( startIn + s + endIn, startOut + s + endOut );
+				System.out.println( startIn + s + endIn + " >>> " + startOut + s + endOut );
+			}
+		}
+		else
+		{
+			in2out.put( options.n5DatasetInput, options.n5DatasetOutput );
+		}
+
 		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		if ( options.scaleIndexList != null )
+		for ( final Entry<String, String > entry : in2out.entrySet() )
 		{
-			for ( final String s : options.scaleIndexList.split( "," ) )
+			final String n5DatasetInput = entry.getKey();
+			final String n5DatasetOutput = entry.getValue();
+
+			System.out.println( "Processing: " + n5DatasetInput + " >>> " + n5DatasetOutput );
+
+			if ( options.scaleIndexList != null )
 			{
-				final int scaleIndex = Integer.parseInt( s );
-
-				final String n5DatasetInput = options.n5DatasetInput + "/s" + scaleIndex;
-				final String n5DatasetOutput = options.n5DatasetOutput + "/s" + scaleIndex;
-
-				System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Running scale index " + scaleIndex + " for " + n5DatasetInput + " >>> " + n5DatasetOutput );
-
+				for ( final String s : options.scaleIndexList.split( "," ) )
+				{
+					final int scaleIndex = Integer.parseInt( s );
+	
+					final String myN5DatasetInput = n5DatasetInput + "/s" + scaleIndex;
+					final String myN5DatasetOutput = n5DatasetOutput + "/s" + scaleIndex;
+	
+					System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Running scale index " + scaleIndex + " for " + myN5DatasetInput + " >>> " + myN5DatasetOutput );
+	
+					runWithSparkContext(
+							sparkContext,
+							options.n5PathInput,
+							myN5DatasetInput,
+							myN5DatasetOutput,
+							options.blockFactorXY,
+							scaleIndex,
+							options.invert,
+							options.normalizeMethod );
+				}
+			}
+			else
+			{
 				runWithSparkContext(
 						sparkContext,
 						options.n5PathInput,
 						n5DatasetInput,
 						n5DatasetOutput,
 						options.blockFactorXY,
-						scaleIndex,
+						options.scaleIndex,
 						options.invert,
 						options.normalizeMethod );
 			}
-		}
-		else
-		{
-			runWithSparkContext(
-					sparkContext,
-					options.n5PathInput,
-					options.n5DatasetInput,
-					options.n5DatasetOutput,
-					options.blockFactorXY,
-					options.scaleIndex,
-					options.invert,
-					options.normalizeMethod );
 		}
 
 		sparkContext.close();
