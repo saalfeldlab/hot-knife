@@ -18,10 +18,29 @@ N_NODES="${2}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
+source "${SCRIPT_DIR}/00_config.sh" "${RAW_SLAB}"
+
+SLAB_PROJECT=$(getSlabProjectName "${RAW_SLAB}")
+
+# /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/heightfields_fix/slab_070_to_079/s070_m104/max/attributes.json
+HF_FIX_MAX_ATTR_FILE="${N5_SAMPLE_PATH}/heightfields_fix/${SLAB_PROJECT}/${RAW_SLAB}/max/attributes.json"
+if [[ ! -f ${HF_FIX_MAX_ATTR_FILE} ]]; then
+  echo "ERROR: missing file ${HF_FIX_MAX_ATTR_FILE}"
+  exit 1
+fi
+
+#{
+#  "dataType": "float32", "compression": { "type": "gzip", "useZlib": false, "level": -1 },
+#  "blockSize": [ 1024, 1024 ],
+#  "dimensions": [ 26497, 26072 ],
+#  "avg": 33.3189829188907,
+#  "downsamplingFactors": [ 2, 2, 1 ]
+#}
+AVG_SIZE=$(/groups/flyem/data/render/bin/jq '. .avg | tonumber | floor' "${HF_FIX_MAX_ATTR_FILE}")
+SURFACE_SIZE=$((AVG_SIZE - 2))
 
 TOP_SURFACE_DEPTH=4
 BOT_SURFACE_DEPTH=4
-SURFACE_SIZE=31 # TODO: remove this hardcoding and read from attributes.json in 72_spark_extract_face.sh
 COLOR="in" # i, n, in (or nothing)
 
 ${SCRIPT_DIR}/72_spark_extract_face.sh ${RAW_SLAB} ${N_NODES} top ${TOP_SURFACE_DEPTH} ${SURFACE_SIZE} ${COLOR}
