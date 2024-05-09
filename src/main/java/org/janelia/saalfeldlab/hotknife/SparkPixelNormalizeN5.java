@@ -2,11 +2,8 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -25,13 +22,8 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.loops.LoopBuilder;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 public class SparkPixelNormalizeN5 {
@@ -67,8 +59,14 @@ public class SparkPixelNormalizeN5 {
 				usage = "Output N5 dataset, e.g. /render/slab_070_to_079/s075_m119_align_big_block_ic___20240308_072106_norm/s0")
 		private String n5DatasetOutput = null;
 
-		@Option(name = "--scaleIndex", usage = "the scaleIndex of the image we are normalizing")
+		@Option(name = "--scaleIndex", usage = "the scaleIndex of the image we are normalizing (if you want to specify a single resolution)")
 		private int scaleIndex = 0;
+
+		//@Option(name = "--scaleIndexRange", usage = "the scaleIndex range we are normalizing (e.g. 0-9, which will automatically load s0-s9 relative to the given paths)")
+		//private int[] scaleIndexRange = null;
+
+		@Option(name = "--blockFactorXY", usage = "how much bigger the compute blocks in XY are than the blocks saved on disc")
+		private int blockFactorXY = 8;
 
 		@Option(name = "--invert", usage = "Invert before saving to N5, e.g. for MultiSEM")
 		private boolean invert = false;
@@ -133,6 +131,58 @@ public class SparkPixelNormalizeN5 {
 								  new UnsignedByteType());
 	}
 
+	public static void runWithSparkContext(
+			final JavaSparkContext sparkContext,
+			final String n5PathInput,
+			final String n5DatasetInput,
+			final String n5DatasetOutput,
+			final int blockFactorXY,
+			final int scaleIndex,
+			final boolean invert,
+			final NormalizationMethod normalizeMethod )
+	{
+		final N5Reader n5Input = new N5FSReader(n5PathInput);
+
+		//final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
+		final int[] blockSize = n5Input.getAttribute(n5DatasetInput, "blockSize", int[].class);
+		final long[] dimensions = n5Input.getAttribute(n5DatasetInput, "dimensions", long[].class);
+
+		final int[] gridBlockSize = new int[blockSize.length]; //{ blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
+		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d)
+			gridBlockSize[ d ] = blockSize[d] * blockFactorXY;
+
+		for ( int d = 2; d < blockSize.length; ++d )
+			gridBlockSize[ d ] = blockSize[d];
+
+		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
+
+		final N5Writer n5Output = new N5FSWriter(n5PathInput);
+
+		if (n5Output.exists(n5DatasetOutput)) {
+			n5Input.close();
+			n5Output.close();
+			throw new IllegalArgumentException("Output data set exists: " + n5PathInput + n5DatasetOutput);
+		}
+
+		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+
+		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
+		pGrid.foreach(
+				gridBlock -> saveFullScaleBlock(n5PathInput,
+												n5PathInput,
+												n5DatasetInput,
+												n5DatasetOutput,
+												dimensions,
+												blockSize,
+												gridBlock,
+												normalizeMethod,
+												scaleIndex,
+												invert));
+		n5Output.close();
+		n5Input.close();
+
+	}
+
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final SparkPixelNormalizeN5.Options options = new SparkPixelNormalizeN5.Options(args);
@@ -140,49 +190,19 @@ public class SparkPixelNormalizeN5 {
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final N5Reader n5Input = new N5FSReader(options.n5PathInput);
-
-		//final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
-		final int[] blockSize = n5Input.getAttribute(options.n5DatasetInput, "blockSize", int[].class);
-		final long[] dimensions = n5Input.getAttribute(options.n5DatasetInput, "dimensions", long[].class);
-
-		final int[] gridBlockSize = new int[blockSize.length]; //{ blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
-		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d)
-			gridBlockSize[ d ] = blockSize[d] * 8;
-
-		for ( int d = 2; d < blockSize.length; ++d )
-			gridBlockSize[ d ] = blockSize[d];
-
-		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
-
-		final N5Writer n5Output = new N5FSWriter(options.n5PathInput);
-
-		if (n5Output.exists(options.n5DatasetOutput)) {
-			n5Input.close();
-			n5Output.close();
-			throw new IllegalArgumentException("Output data set exists: " + options.n5PathInput + options.n5DatasetOutput);
-		}
-
-		n5Output.createDataset(options.n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
-
 		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
-		pGrid.foreach(
-				gridBlock -> saveFullScaleBlock(options.n5PathInput,
-												options.n5PathInput,
-												options.n5DatasetInput,
-												options.n5DatasetOutput,
-												dimensions,
-												blockSize,
-												gridBlock,
-												options.normalizeMethod,
-												options.scaleIndex,
-												options.invert));
-		n5Output.close();
-		n5Input.close();
+		runWithSparkContext(
+				sparkContext,
+				options.n5PathInput,
+				options.n5DatasetInput,
+				options.n5DatasetOutput,
+				options.blockFactorXY,
+				options.scaleIndex,
+				options.invert,
+				options.normalizeMethod );
 
 		sparkContext.close();
 	}
