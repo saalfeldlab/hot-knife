@@ -19,6 +19,7 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
 import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
 import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
@@ -35,7 +36,10 @@ import bdv.util.volatiles.VolatileViews;
 import ij.ImagePlus;
 import mpicbg.ij.clahe.Flat;
 import mpicbg.ij.plugin.NormalizeLocalContrast;
+import net.imglib2.Cursor;
+import net.imglib2.IterableInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.view.Views;
@@ -59,17 +63,54 @@ public class CLAHEBehavior implements Callable<Void> {
 
 		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
 
+		/*
 		final int scaleIndex = 4;
 		final double scale = 1.0 / Math.pow(2, scaleIndex);
 		final N5Reader n5 = new N5FSReader("/nrs/flyem/tmp/VNC-export.n5");
 		final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/2-26/s" + scaleIndex);
+		*/
+
+		final int scaleIndex = 0;
+		final double scale = 1.0 / Math.pow(2, scaleIndex);
+		final N5Reader n5 = new N5FSReader("/nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5");
+		RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/render/slab_070_to_079/s070_m104_align_no35_horiz_avgshd_ic___20240504_085307/s" + scaleIndex);
+		final long[] min = img.minAsLongArray();
+		final long[] max = img.maxAsLongArray();
+		final long[] midpoint = new long[] {(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, min[2]};
+		img = Views.zeroMin( Views.interval(img, midpoint, new long[] {midpoint[0] + 1024, midpoint[1] + 1024, max[2]}) );
+
+		final boolean invert = true; // for multisem
+
+		if ( invert )
+		{
+			final RandomAccessibleInterval<UnsignedByteType> refimg = img;
+	
+			img = Lazy.process(
+					img,
+					new int[] {256, 256, 32},
+					new UnsignedByteType(),
+					AccessFlags.setOf(AccessFlags.VOLATILE),
+					new Consumer<RandomAccessibleInterval<UnsignedByteType>>() {
+						@Override
+						public void accept(final RandomAccessibleInterval<UnsignedByteType> t)
+						{
+							final Cursor<UnsignedByteType> c1 = Views.flatIterable( t ).cursor();
+							final Cursor<UnsignedByteType> c2 = Views.flatIterable( Views.interval( refimg, t ) ).cursor();
+	
+							while ( c1.hasNext() )
+							{
+								c1.next().set( 255 - c2.next().get() );
+							}
+						}
+					});
+		}
 
 		final int blockRadius = (int)Math.round(511 * scale);
 
 		final ImageJStackOp<UnsignedByteType> clahe =
 				new ImageJStackOp<>(
-						Views.extendZero(img),
-						(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 2.5f, null, false),
+						Views.extendMirrorSingle(img),
+						(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 25f, null, false),
 						blockRadius,
 						0,
 						255,
@@ -83,7 +124,7 @@ public class CLAHEBehavior implements Callable<Void> {
 
 		final ImageJStackOp<UnsignedByteType> lcn =
 				new ImageJStackOp<>(
-						Views.extendZero(img),
+						Views.extendMirrorSingle(img),
 						(fp) -> NormalizeLocalContrast.run(fp, blockRadius, blockRadius, 3f, true, true),
 						blockRadius,
 						0,
@@ -98,9 +139,9 @@ public class CLAHEBehavior implements Callable<Void> {
 
 		final ImageJStackOp<UnsignedByteType> cllcn =
 				new ImageJStackOp<>(
-						Views.extendZero(img),
+						Views.extendMirrorSingle(img),
 //						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
-						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 100, 0.5f, true, true, true),
 						blockRadius,
 						0,
 						255,
