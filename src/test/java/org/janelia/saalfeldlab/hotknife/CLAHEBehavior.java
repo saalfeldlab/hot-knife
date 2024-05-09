@@ -110,7 +110,7 @@ public class CLAHEBehavior implements Callable<Void> {
 		final ImageJStackOp<UnsignedByteType> clahe =
 				new ImageJStackOp<>(
 						Views.extendMirrorSingle(img),
-						(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 25f, null, false),
+						(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false),
 						blockRadius,
 						0,
 						255,
@@ -141,7 +141,7 @@ public class CLAHEBehavior implements Callable<Void> {
 				new ImageJStackOp<>(
 						Views.extendMirrorSingle(img),
 //						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
-						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 100, 0.5f, true, true, true),
+						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 25, 0.5f, true, true, true),
 						blockRadius,
 						0,
 						255,
