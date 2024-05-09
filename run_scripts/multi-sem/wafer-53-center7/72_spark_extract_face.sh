@@ -2,15 +2,17 @@
 
 set -e
 
-if (( $# < 3 )); then
-  echo "USAGE $0 <raw slab> <number of nodes> <top|bot> [abs depth] (e.g. s071_m331 5 top 20)"
+if (( $# < 5 )); then
+  echo "USAGE $0 <raw slab> <number of nodes> <top|bot> <abs depth> <size> [color] (e.g. s071_m331 5 top 31 4 31 in)"
   exit 1
 fi
 
 RAW_SLAB="${1}"
 N_NODES="${2}" # wafer 52 cut_035_slab_001 top 20 took 2 minutes with 15 nodes
 TOP_OR_BOTTOM="${3}"
-SURFACE_DEPTH="${4:-23}"
+SURFACE_DEPTH="${4}"
+SURFACE_SIZE="${5}" # TODO: read this from ${FULL_FACE_DATASET_PATH}/attributes.json: int(avg) - 2
+COLOR="${6}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
@@ -18,7 +20,7 @@ source "${SCRIPT_DIR}/00_config.sh" "${RAW_SLAB}"
 
 validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_FLAT_RAW_DATASET}"
 
-FACE_BASE_NAME="${TOP_OR_BOTTOM}${SURFACE_DEPTH}"
+FACE_BASE_NAME="${TOP_OR_BOTTOM}${SURFACE_DEPTH}${COLOR}"
 
 N5_FACE_DATASET="${N5_FLAT_DATASET_ROOT}/${FACE_BASE_NAME}"
 
@@ -31,11 +33,11 @@ fi
 case "${TOP_OR_BOTTOM}" in
   "top")
     MIN="0,0,${SURFACE_DEPTH}"
-    SIZE="0,0,0"
+    SIZE="0,0,${SURFACE_SIZE}"
   ;;
   "bot")
     MIN="0,0,-${SURFACE_DEPTH}"
-    SIZE="0,0,0"
+    SIZE="0,0,-${SURFACE_SIZE}"
   ;;
   *)
     echo "ERROR: 'location parameter ${TOP_OR_BOTTOM} must be 'top' or 'bot'"
@@ -43,14 +45,19 @@ case "${TOP_OR_BOTTOM}" in
   ;;
 esac
 
+COLOR_ARGS=""
+case "${COLOR}" in
+  "i") COLOR_ARGS="--invert" ;;
+  "n") COLOR_ARGS="--normalizeContrast" ;;
+  "in") COLOR_ARGS="--invert --normalizeContrast" ;;
+esac
+
 ARGV="\
 --n5Path=${N5_SAMPLE_PATH} \
 --n5DatasetInput=${N5_FLAT_RAW_DATASET} \
 --n5GroupOutput=${N5_FACE_DATASET} \
 --min=${MIN} \
---size=${SIZE} \
---invert \
---normalizeContrast \
+--size=${SIZE} ${COLOR_ARGS} \
 --blockSize=1024,1024"
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace"
