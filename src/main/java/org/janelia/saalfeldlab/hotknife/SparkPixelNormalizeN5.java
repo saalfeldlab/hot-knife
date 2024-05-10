@@ -58,27 +58,39 @@ public class SparkPixelNormalizeN5 {
 
 		@Option(name = "--n5DatasetInput",
 				required = true,
-				usage = "Input N5 dataset, e.g. /render/s075_m119/s0 when running with --scaleIndex; /render/s075_m119 when running with --scaleIndexList; or /render/*/face/top for all subdirectories")
+				usage = "Input N5 dataset, e.g. /flat/s075_m119/top4/face/s0 when running with --scaleIndex; " +
+						"/flat/s075_m119/top4/face when running with --scaleIndexList; " +
+						"or /flat/*/top4/face for all subdirectories")
 		private String n5DatasetInput = null;
 
 		@Option(name = "--n5DatasetOutput",
 				required = true,
-				usage = "Output N5 dataset, e.g. /render/s075_m119_norm/s0 when running with --scaleIndex or /render/s075_m119_norm when running with --scaleIndexList; or /render/*/face/top for all subdirectories")
+				usage = "Output N5 dataset, e.g. /flat/s075_m119/top4/face_local/s0 when running with --scaleIndex or " +
+						"/flat/s075_m119/top4/face_local when running with --scaleIndexList; " +
+						"or /flat/*/top4/face_local for all subdirectories")
 		private String n5DatasetOutput = null;
 
-		@Option(name = "--scaleIndex", usage = "the scaleIndex of the image we are normalizing (if you want to specify a single resolution - will be ignored if --scaleIndexList is specified)")
+		@Option(name = "--scaleIndex",
+				usage = "the scaleIndex of the image we are normalizing " +
+						"(if you want to specify a single resolution - will be ignored if --scaleIndexList is specified)")
 		private int scaleIndex = 0;
 
-		@Option(name = "--scaleIndexList", usage = "the scaleIndex range we are normalizing (e.g. 0,1,2,3,4,5,6,7,8,9, which will automatically load s0-s9 relative to the given paths)")
+		@Option(name = "--scaleIndexList",
+				usage = "the scaleIndex range we are normalizing " +
+						"(e.g. 0,1,2,3,4,5,6,7,8,9, which will automatically load s0-s9 relative to the given paths)")
 		private String scaleIndexList = null;
 
-		@Option(name = "--blockFactorXY", usage = "how much bigger the compute blocks in XY are than the blocks saved on disc")
+		@Option(name = "--blockFactorXY",
+				usage = "how much bigger the compute blocks in XY are than the blocks saved on disc")
 		private int blockFactorXY = 8;
 
-		@Option(name = "--invert", usage = "Invert before saving to N5, e.g. for MultiSEM")
+		@Option(name = "--invert",
+				usage = "Invert before saving to N5, e.g. for MultiSEM")
 		private boolean invert = false;
 
-		@Option(name = "--normalizeMethod", required = true, usage = "Normalization method, e.g. LOCAL_CONTRAST, CLAHE")
+		@Option(name = "--normalizeMethod",
+				required = true,
+				usage = "Normalization method, e.g. LOCAL_CONTRAST, CLAHE")
 		private NormalizationMethod normalizeMethod;
 
 		public Options(final String[] args) {
@@ -256,7 +268,7 @@ public class SparkPixelNormalizeN5 {
 			in2out.put( options.n5DatasetInput, options.n5DatasetOutput );
 		}
 
-		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
+		final SparkConf conf = new SparkConf().setAppName("SparkPixelNormalizeN5");
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
