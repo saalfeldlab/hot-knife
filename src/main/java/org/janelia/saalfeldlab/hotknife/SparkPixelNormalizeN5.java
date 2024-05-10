@@ -31,6 +31,7 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
@@ -111,11 +112,15 @@ public class SparkPixelNormalizeN5 {
 
 		//new ImageJ();
 		//ImageJFunctions.show( sourceRaw );
+
+		final RandomAccessibleInterval<UnsignedByteType> source = invert ?
+				Converters.convertRAI( sourceRaw, (in,out) -> { if (in.get() == 0) { out.set( 0 ); } else { out.set( 255 - in.get() );} }, new UnsignedByteType() ) : sourceRaw;
+
 		final RandomAccessibleInterval<UnsignedByteType> filteredSource;
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST) {
-			filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, scaleIndex, blockSize); // scaleIndex defines radius of the Local contrast
+			filteredSource = SparkGenerateFaceScaleSpace.filter(source, false, true, scaleIndex, blockSize); // scaleIndex defines radius of the Local contrast
 		} else if (normalizeMethod == NormalizationMethod.CLAHE) {
-			filteredSource = filterWithClahe(sourceRaw, scaleIndex, blockSize, true);
+			filteredSource = filterWithClahe(source, scaleIndex, blockSize, true);
 		} else {
 			throw new IllegalArgumentException("Unknown normalization method: " + normalizeMethod);
 		}
