@@ -15,6 +15,7 @@ import net.imglib2.img.basictypeaccess.AccessFlags;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
 import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
@@ -31,6 +32,7 @@ import org.kohsuke.args4j.Option;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
@@ -116,15 +118,7 @@ public class SparkPixelNormalizeN5 {
 		final RandomAccessibleInterval<UnsignedByteType> source = invert ?
 				Converters.convertRAI( sourceRaw, (in,out) -> { if (in.get() == 0) { out.set( 0 ); } else { out.set( 255 - in.get() );} }, new UnsignedByteType() ) : sourceRaw;
 
-		final RandomAccessibleInterval<UnsignedByteType> filteredSource;
-		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST) {
-			filteredSource = SparkGenerateFaceScaleSpace.filter(source, false, true, scaleIndex, blockSize); // scaleIndex defines radius of the Local contrast
-		} else if (normalizeMethod == NormalizationMethod.CLAHE) {
-			filteredSource = filterWithClahe(source, scaleIndex, blockSize, true);
-		} else {
-			throw new IllegalArgumentException("Unknown normalization method: " + normalizeMethod);
-		}
-
+		final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source, normalizeMethod, scaleIndex, blockSize);
 		//ImageJFunctions.show( filteredSource );
 		//SimpleMultiThreading.threadHaltUnClean();
 
@@ -145,22 +139,61 @@ public class SparkPixelNormalizeN5 {
 								  new UnsignedByteType());
 	}
 
-	private static RandomAccessibleInterval<UnsignedByteType> filterWithClahe(
-			final RandomAccessibleInterval<UnsignedByteType> sourceRaw,
+	protected static RandomAccessibleInterval<UnsignedByteType> normalizeContrast(
+			RandomAccessibleInterval<UnsignedByteType> sourceRaw,
+			final NormalizationMethod normalizeMethod,
 			final int scaleIndex,
-			final int[] blockSize,
-			final boolean fastApproximation)
+			int[] blocksize )
 	{
-		final int blockRadius = (int) Math.round(511 / Math.pow(2, scaleIndex));
-		final Flat clahe = fastApproximation ? Flat.getFastInstance() : Flat.getInstance();
-		final ImageJStackOp<UnsignedByteType> claheOp = new ImageJStackOp<>(
-				Views.extendMirrorSingle(sourceRaw),
-				fp -> clahe.run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false),
-				blockRadius,
-				0,
-				255,
-				true);
-		return Lazy.process(sourceRaw, blockSize, new UnsignedByteType(), AccessFlags.setOf(AccessFlags.VOLATILE), claheOp);
+		final int n = sourceRaw.numDimensions();
+
+		final int scale = 1 << scaleIndex;
+		final double inverseScale = 1.0 / scale;
+
+		final int blockRadius = (int)Math.round(511 * inverseScale); //1023
+
+		if ( n == 2 )
+		{
+			sourceRaw = Views.addDimension( sourceRaw, 0, 0 );
+			blocksize = new int[] { blocksize[0], blocksize[1], 1 };
+		}
+
+		final ImageJStackOp<UnsignedByteType> filter;
+
+		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST)
+		{
+			filter = new ImageJStackOp<>(
+					Views.extendMirrorSingle(sourceRaw),
+					(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 50, 0.5f, true, true, true),
+					blockRadius,
+					0,
+					255,
+					true ); // do nothing if all black
+		}
+		else if (normalizeMethod == NormalizationMethod.CLAHE)
+		{
+			filter = new ImageJStackOp<>(
+					Views.extendMirrorSingle(sourceRaw),
+					fp -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false),
+					blockRadius,
+					0,
+					255,
+					true); // do nothing if all black
+		}
+		else
+			throw new IllegalArgumentException("Unknown normalization method: " + normalizeMethod);
+
+		final CachedCellImg<UnsignedByteType, ?> out = Lazy.process(
+				sourceRaw,
+				blocksize,
+				new UnsignedByteType(),
+				AccessFlags.setOf(AccessFlags.VOLATILE),
+				filter);
+
+		if ( n == 2 )
+			return Views.hyperSlice( out, 2, 0 );
+		else
+			return out;
 	}
 
 	public static void runWithSparkContext(
