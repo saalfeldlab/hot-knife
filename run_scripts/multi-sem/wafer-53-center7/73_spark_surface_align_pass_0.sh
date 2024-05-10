@@ -7,8 +7,7 @@ SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
 
 # This runs quickly!  A 1 node job for 10 slabs in wafer 53 took 4 minutes to finish.
-# One slab per slot
-N_NODES=2
+N_NODES=41
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 # Face dataset order is important.
