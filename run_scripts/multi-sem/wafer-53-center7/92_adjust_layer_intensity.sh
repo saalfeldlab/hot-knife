@@ -16,18 +16,16 @@ USAGE: $0 <number of nodes>
 fi
 
 N_NODES="${1}" # normalizing a 10-slab 19 mFOV volume with 180 11-slot workers took 2 hours and 15 minutes
-NORMALIZE_METHOD="LOCAL_CONTRAST"
+NORMALIZE_METHOD="LOCAL_CONTRAST" # CLAHE
 
 # TODO: change this to the correct path
 SOURCE_DATASET="/wafer-53-align/run_2024MMdd_hhmmss/passNN"
 
 #-----------------------------------------------------------
-NORMALIZED_LAYER_SUFFIX="_norm-layer"
-NORMALIZED_LOCAL_SUFFIX="_norm-local"
-if [[ "${NORMALIZE_METHOD}" == "LAYER_INTENSITY" ]]; then
-  NORMALIZED_SUFFIX="${NORMALIZED_LAYER_SUFFIX}"
-elif [[ "${NORMALIZE_METHOD}" == "LOCAL_CONTRAST" ]]; then
-  NORMALIZED_SUFFIX="${NORMALIZED_LOCAL_SUFFIX}"
+if [[ "${NORMALIZE_METHOD}" == "LOCAL_CONTRAST" ]]; then
+  NORMALIZED_SUFFIX="_norm-local"
+elif [[ "${NORMALIZE_METHOD}" == "CLAHE" ]]; then
+  NORMALIZED_SUFFIX="_norm-clahe"
 else
   echo "ERROR: unknown NORMALIZE_METHOD of ${NORMALIZE_METHOD}"
   exit 1
@@ -55,7 +53,7 @@ export N_CORES_DRIVER=1
 
 #-----------------------------------------------------------
 RUN_TIME=`date +"%Y%m%d_%H%M%S"`
-CLASS="org.janelia.saalfeldlab.hotknife.SparkNormalizeN5"
+CLASS="org.janelia.saalfeldlab.hotknife.SparkPixelNormalizeN5"
 
 ARGV="\
 --n5PathInput=${N5_SAMPLE_PATH} \
