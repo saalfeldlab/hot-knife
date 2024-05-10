@@ -154,7 +154,7 @@ public class SparkPixelNormalizeN5 {
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
 					  datasetNameOutput,
-					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+					  new DatasetAttributes(dimensions, blockSize, DataType.FLOAT32, new GzipCompression()),
 					  gridBlock[2],
 					  new FloatType());
 		}
