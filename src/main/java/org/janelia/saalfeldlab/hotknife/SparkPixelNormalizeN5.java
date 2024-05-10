@@ -9,10 +9,15 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
 
+import ij.ImagePlus;
+import mpicbg.ij.clahe.Flat;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -38,7 +43,7 @@ public class SparkPixelNormalizeN5 {
 		 */
 		LOCAL_CONTRAST,
 		/**
-		 * Contrast limited adaptive histogram equalization
+		 * Contrast Limited Adaptive Histogram Equalization
 		 */
 		CLAHE
 	}
@@ -73,8 +78,8 @@ public class SparkPixelNormalizeN5 {
 		@Option(name = "--invert", usage = "Invert before saving to N5, e.g. for MultiSEM")
 		private boolean invert = false;
 
-		@Option(name = "--normalizeMethod", usage = "Normalization method, e.g. LOCAL_CONTRAST, CLAHE")
-		private NormalizationMethod normalizeMethod = null;
+		@Option(name = "--normalizeMethod", required = true, usage = "Normalization method, e.g. LOCAL_CONTRAST, CLAHE")
+		private NormalizationMethod normalizeMethod;
 
 		public Options(final String[] args) {
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -108,7 +113,9 @@ public class SparkPixelNormalizeN5 {
 		//ImageJFunctions.show( sourceRaw );
 		final RandomAccessibleInterval<UnsignedByteType> filteredSource;
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST) {
-			 filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, scaleIndex, blockSize ); // scaleIndex defines radius of the Local contrast
+			filteredSource = SparkGenerateFaceScaleSpace.filter(sourceRaw, invert, true, scaleIndex, blockSize); // scaleIndex defines radius of the Local contrast
+		} else if (normalizeMethod == NormalizationMethod.CLAHE) {
+			filteredSource = filterWithClahe(sourceRaw, scaleIndex, blockSize, true);
 		} else {
 			throw new IllegalArgumentException("Unknown normalization method: " + normalizeMethod);
 		}
@@ -131,6 +138,24 @@ public class SparkPixelNormalizeN5 {
 								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
 								  gridBlock[2],
 								  new UnsignedByteType());
+	}
+
+	private static RandomAccessibleInterval<UnsignedByteType> filterWithClahe(
+			final RandomAccessibleInterval<UnsignedByteType> sourceRaw,
+			final int scaleIndex,
+			final int[] blockSize,
+			final boolean fastApproximation)
+	{
+		final int blockRadius = (int) Math.round(511 / Math.pow(2, scaleIndex));
+		final Flat clahe = fastApproximation ? Flat.getFastInstance() : Flat.getInstance();
+		final ImageJStackOp<UnsignedByteType> claheOp = new ImageJStackOp<>(
+				Views.extendMirrorSingle(sourceRaw),
+				fp -> clahe.run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false),
+				blockRadius,
+				0,
+				255,
+				true);
+		return Lazy.process(sourceRaw, blockSize, new UnsignedByteType(), AccessFlags.setOf(AccessFlags.VOLATILE), claheOp);
 	}
 
 	public static void runWithSparkContext(
