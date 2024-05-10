@@ -34,7 +34,10 @@ import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
@@ -122,18 +125,6 @@ public class SparkPixelNormalizeN5 {
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
 		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
 
-		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
-
-		//new ImageJ();
-		//ImageJFunctions.show( sourceRaw );
-
-		final RandomAccessibleInterval<UnsignedByteType> source = invert ?
-				Converters.convertRAI( sourceRaw, (in,out) -> { if (in.get() == 0) { out.set( 0 ); } else { out.set( 255 - in.get() );} }, new UnsignedByteType() ) : sourceRaw;
-
-		final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source, normalizeMethod, scaleIndex, blockSize);
-		//ImageJFunctions.show( filteredSource );
-		//SimpleMultiThreading.threadHaltUnClean();
-
 		final FinalInterval gridBlockInterval;
 		
 		if ( blockSize.length == 3 )
@@ -143,16 +134,58 @@ public class SparkPixelNormalizeN5 {
 			gridBlockInterval = Intervals.createMinSize(gridBlock[0][0], gridBlock[0][1],
 								gridBlock[1][0], gridBlock[1][1]);
 
-		N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
-								  n5Output,
-								  datasetNameOutput,
-								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
-								  gridBlock[2],
-								  new UnsignedByteType());
+		final RandomAccessibleInterval sourceRawRaw = N5Utils.open(n5Input, datasetName);
+
+		//new ImageJ();
+		//ImageJFunctions.show( sourceRaw );
+
+		final RealType t = (RealType)sourceRawRaw.getAt( sourceRawRaw.minAsPoint() );
+
+		if ( FloatType.class.isInstance( t ) )
+		{
+			final RandomAccessibleInterval<FloatType> sourceRaw = (RandomAccessibleInterval<FloatType>)sourceRawRaw;
+			final RandomAccessibleInterval<FloatType> source;
+
+			source = invert ?
+				Converters.convertRAI( (RandomAccessibleInterval<FloatType>)sourceRaw, (in,out) -> { if (in.get() == 0) { out.set( 0 ); } else { out.set( 255 - in.get() );} }, new FloatType() ) : sourceRaw;
+
+			final RandomAccessibleInterval<FloatType> filteredSource = normalizeContrast(source, new FloatType(), normalizeMethod, scaleIndex, blockSize);
+
+			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
+					  n5Output,
+					  datasetNameOutput,
+					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+					  gridBlock[2],
+					  new FloatType());
+		}
+		else if ( UnsignedByteType.class.isInstance( t ) )
+		{
+			final RandomAccessibleInterval<UnsignedByteType> sourceRaw = (RandomAccessibleInterval<UnsignedByteType>)sourceRawRaw;
+			final RandomAccessibleInterval<UnsignedByteType> source;
+
+			source = invert ?
+					Converters.convertRAI( (RandomAccessibleInterval<UnsignedByteType>)sourceRaw, (in,out) -> { if (in.get() == 0) { out.set( 0 ); } else { out.set( 255 - in.get() );} }, new UnsignedByteType() ) : sourceRaw;
+
+			final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source,  new UnsignedByteType(), normalizeMethod, scaleIndex, blockSize);
+
+			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
+					  n5Output,
+					  datasetNameOutput,
+					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+					  gridBlock[2],
+					  new UnsignedByteType());
+		}
+		else
+			throw new IllegalArgumentException("Unsupported input type: " + t.getClass().getName() );
+
+		//ImageJFunctions.show( filteredSource );
+		//SimpleMultiThreading.threadHaltUnClean();
+
 	}
 
-	protected static RandomAccessibleInterval<UnsignedByteType> normalizeContrast(
-			RandomAccessibleInterval<UnsignedByteType> sourceRaw,
+	protected static < T extends RealType< T > & NativeType<T> > RandomAccessibleInterval<T> normalizeContrast(
+			RandomAccessibleInterval<T> sourceRaw,
+			final T type,
 			final NormalizationMethod normalizeMethod,
 			final int scaleIndex,
 			int[] blocksize )
@@ -170,7 +203,7 @@ public class SparkPixelNormalizeN5 {
 			blocksize = new int[] { blocksize[0], blocksize[1], 1 };
 		}
 
-		final ImageJStackOp<UnsignedByteType> filter;
+		final ImageJStackOp<T> filter;
 
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST)
 		{
@@ -195,10 +228,10 @@ public class SparkPixelNormalizeN5 {
 		else
 			throw new IllegalArgumentException("Unknown normalization method: " + normalizeMethod);
 
-		final CachedCellImg<UnsignedByteType, ?> out = Lazy.process(
+		final CachedCellImg<T, ?> out = Lazy.process(
 				sourceRaw,
 				blocksize,
-				new UnsignedByteType(),
+				type,
 				AccessFlags.setOf(AccessFlags.VOLATILE),
 				filter);
 
