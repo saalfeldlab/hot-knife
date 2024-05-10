@@ -256,6 +256,7 @@ public class SparkPixelNormalizeN5 {
 		//final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
 		final int[] blockSize = n5Input.getAttribute(n5DatasetInput, "blockSize", int[].class);
 		final long[] dimensions = n5Input.getAttribute(n5DatasetInput, "dimensions", long[].class);
+		final DataType dataType = n5Input.getAttribute(n5DatasetInput, "dataType", DataType.class);
 
 		final int[] gridBlockSize = new int[blockSize.length]; //{ blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d)
@@ -274,7 +275,7 @@ public class SparkPixelNormalizeN5 {
 			throw new IllegalArgumentException("Output data set exists: " + n5PathInput + n5DatasetOutput);
 		}
 
-		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, dataType, new GzipCompression());
 
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 		pGrid.foreach(
