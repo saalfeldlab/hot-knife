@@ -91,7 +91,7 @@ export N_CORES_DRIVER=1
 export RUNTIME="233:59" # must export this for flintstone
 CLASS="org.janelia.saalfeldlab.hotknife.SparkResaveMultiSemHeightField"
 
-LOG_DIR="logs"
+LOG_DIR="logs/63_fix_heightfields"
 LOG_FILE="${LOG_DIR}/hf_fix.${LAUNCH_TIME}.out"
 
 mkdir -p ${LOG_DIR}

@@ -107,8 +107,8 @@ HF_DIR="${N5_SAMPLE_PATH}${COST_DATASET}"
 mkdir -p "${HF_DIR}"
 echo "${ARGV}" > "${HF_DIR}"/args.txt
 
-LOG_DIR="logs"
-LOG_FILE="${LOG_DIR}/hf.${RUN_TIME}.out"
+LOG_DIR="logs/62_heightfields"
+LOG_FILE="${LOG_DIR}/hf.${RAW_STACK}.${RUN_TIME}.out"
 
 mkdir -p ${LOG_DIR}
 

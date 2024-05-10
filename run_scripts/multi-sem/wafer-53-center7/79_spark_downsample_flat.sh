@@ -32,7 +32,7 @@ ARGV="\
 
 CLASS="org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark"
 
-LOG_FILE=$(setupRunLog "downsample-flat-${SLAB}")
+LOG_FILE=$(setupRunLog "downsample-flat-${SLAB}" logs/79_downsample_flat)
 
 # use shell group to tee all output to log file
 {

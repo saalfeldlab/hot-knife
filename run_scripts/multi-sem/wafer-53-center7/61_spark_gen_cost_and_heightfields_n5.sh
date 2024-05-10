@@ -127,8 +127,8 @@ COST_DIR="${N5_SAMPLE_PATH}${COST_DATASET}"
 mkdir -p "${COST_DIR}"
 echo "${ARGV}" > "${COST_DIR}"/args.txt
 
-LOG_DIR="logs"
-LOG_FILE="${LOG_DIR}/cost.${RUN_TIME}.out"
+LOG_DIR="logs/61_cost"
+LOG_FILE="${LOG_DIR}/cost.${RAW_STACK}.${RUN_TIME}.out"
 
 mkdir -p ${LOG_DIR}
 

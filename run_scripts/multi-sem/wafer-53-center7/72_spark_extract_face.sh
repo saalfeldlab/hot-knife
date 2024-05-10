@@ -64,7 +64,7 @@ ARGV="\
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace"
 
-LOG_FILE=$(setupRunLog "gen-face")
+LOG_FILE=$(setupRunLog "gen-face-${SLAB}-${TOP_OR_BOTTOM}" logs/72_face)
 
 # use shell group to tee all output to log file
 {

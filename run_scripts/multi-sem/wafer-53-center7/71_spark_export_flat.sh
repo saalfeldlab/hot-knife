@@ -43,7 +43,7 @@ ARGV="\
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportFlattenedVolume"
 
-LOG_FILE=$(setupRunLog "export-flat")
+LOG_FILE=$(setupRunLog "export-flat-${SLAB}" logs/71_flat)
 
 # use shell group to tee all output to log file
 {
