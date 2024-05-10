@@ -73,7 +73,7 @@ public class SparkPixelNormalizeN5 {
 		@Option(name = "--invert", usage = "Invert before saving to N5, e.g. for MultiSEM")
 		private boolean invert = false;
 
-		@Option(name = "--normalizeMethod", usage = "Normalization method, e.g. LOCAL_CONTRAST, LAYER_INTENSITY")
+		@Option(name = "--normalizeMethod", usage = "Normalization method, e.g. LOCAL_CONTRAST, CLAHE")
 		private NormalizationMethod normalizeMethod = null;
 
 		public Options(final String[] args) {
