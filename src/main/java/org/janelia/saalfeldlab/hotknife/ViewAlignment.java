@@ -52,6 +52,7 @@ import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.Translation2D;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 
@@ -76,6 +77,9 @@ public class ViewAlignment {
 
 		@Option(name = "--noVirtual", required = false, usage = "makes a physical copy of each transformed slab surface during startup (instead of virtual rendering)")
 		private boolean noVirtual = false;
+
+		@Option(name = "--ignoreTransforms", required = false, usage = "do not load transforms, instead use identity transforms")
+		private boolean ignoreTransforms = false;
 
 		public Options(final String[] args) {
 
@@ -153,9 +157,13 @@ public class ViewAlignment {
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = 0; i < datasetNames.length; ++i) {
 				System.out.println( "z=" + i + " >>> " + transformDatasetNames[i] );
-				realTransforms[i] = Transform.loadScaledTransform(
-						n5,
-						group + "/" + transformDatasetNames[i]);
+
+				if ( options.ignoreTransforms )
+					realTransforms[i] = new Translation2D();
+				else
+					realTransforms[i] = Transform.loadScaledTransform(
+							n5,
+							group + "/" + transformDatasetNames[i]);
 
 				/*
 				if ( datasetNames[ i ].contains( "Sec27") || datasetNames[ i ].contains( "Sec28") || datasetNames[ i ].contains( "Sec29") || datasetNames[ i ].contains( "Sec30") || 
