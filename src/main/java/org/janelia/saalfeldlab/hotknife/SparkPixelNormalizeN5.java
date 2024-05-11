@@ -3,6 +3,7 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -13,6 +14,7 @@ import ij.ImagePlus;
 import mpicbg.ij.clahe.Flat;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaFutureAction;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
@@ -93,6 +95,10 @@ public class SparkPixelNormalizeN5 {
 		@Option(name = "--invert",
 				usage = "Invert before saving to N5, e.g. for MultiSEM")
 		private boolean invert = false;
+
+		@Option(name = "--overwrite",
+				usage = "Overwrite existing n5 datasets without asking")
+		private boolean overwrite = false;
 
 		@Option(name = "--normalizeMethod",
 				required = true,
@@ -241,7 +247,7 @@ public class SparkPixelNormalizeN5 {
 			return out;
 	}
 
-	public static void runWithSparkContext(
+	public static JavaFutureAction<Void> runWithSparkContext(
 			final JavaSparkContext sparkContext,
 			final String n5PathInput,
 			final String n5DatasetInput,
@@ -249,7 +255,8 @@ public class SparkPixelNormalizeN5 {
 			final int blockFactorXY,
 			final int scaleIndex,
 			final boolean invert,
-			final NormalizationMethod normalizeMethod )
+			final NormalizationMethod normalizeMethod,
+			final boolean overwrite )
 	{
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
 
@@ -269,16 +276,28 @@ public class SparkPixelNormalizeN5 {
 
 		final N5Writer n5Output = new N5FSWriter(n5PathInput);
 
-		if (n5Output.exists(n5DatasetOutput)) {
-			n5Input.close();
-			n5Output.close();
-			throw new IllegalArgumentException("Output data set exists: " + n5PathInput + n5DatasetOutput);
+		if (n5Output.exists(n5DatasetOutput))
+		{
+			if ( overwrite )
+			{
+				n5Output.remove( n5DatasetOutput );
+			}
+			else
+			{
+				n5Input.close();
+				n5Output.close();
+				throw new IllegalArgumentException("Output data set exists: " + n5PathInput + n5DatasetOutput);
+			}
 		}
 
 		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, dataType, new GzipCompression());
 
+		n5Output.close();
+		n5Input.close();
+
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
-		pGrid.foreach(
+
+		final JavaFutureAction<Void> future = pGrid.foreachAsync(
 				gridBlock -> saveFullScaleBlock(n5PathInput,
 												n5PathInput,
 												n5DatasetInput,
@@ -289,9 +308,8 @@ public class SparkPixelNormalizeN5 {
 												normalizeMethod,
 												scaleIndex,
 												invert));
-		n5Output.close();
-		n5Input.close();
 
+		return future;
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -344,6 +362,8 @@ public class SparkPixelNormalizeN5 {
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
+		ArrayList< JavaFutureAction<Void> > futures = new ArrayList<>();
+
 		for ( final Entry<String, String > entry : in2out.entrySet() )
 		{
 			final String n5DatasetInput = entry.getKey();
@@ -362,7 +382,7 @@ public class SparkPixelNormalizeN5 {
 	
 					System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Running scale index " + scaleIndex + " for " + myN5DatasetInput + " >>> " + myN5DatasetOutput );
 	
-					runWithSparkContext(
+					futures.add( runWithSparkContext(
 							sparkContext,
 							options.n5PathInput,
 							myN5DatasetInput,
@@ -370,12 +390,13 @@ public class SparkPixelNormalizeN5 {
 							options.blockFactorXY,
 							scaleIndex,
 							options.invert,
-							options.normalizeMethod );
+							options.normalizeMethod,
+							options.overwrite ) );
 				}
 			}
 			else
 			{
-				runWithSparkContext(
+				futures.add( runWithSparkContext(
 						sparkContext,
 						options.n5PathInput,
 						n5DatasetInput,
@@ -383,12 +404,20 @@ public class SparkPixelNormalizeN5 {
 						options.blockFactorXY,
 						options.scaleIndex,
 						options.invert,
-						options.normalizeMethod );
+						options.normalizeMethod,
+						options.overwrite ) );
 			}
 		}
 
+		System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): waiting for execution" );
+
+		futures.forEach( f ->
+		{
+			try { f.get(); } catch (InterruptedException | ExecutionException e) { e.printStackTrace(); }
+		} );
+
 		sparkContext.close();
 
-		System.out.println( "Done." );
+		System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Done." );
 	}
 }
