@@ -483,7 +483,7 @@ public class SparkAlignAffineGlobal {
 		final ArrayList<AffineTransform2D> transforms = new ArrayList<>();
 		tiles.forEach(
 				t -> {
-					final Affine2D<?> tileTransform = (Affine2D<?>)t.getModel();
+					AffineModel2D tileTransform = ((InterpolatedAffineModel2D<?, ?>)t.getModel()).createAffineModel2D();
 					System.out.println(tileTransform.createAffine());
 					final double[] a = new double[6];
 					tileTransform.createInverse().toArray(a);
