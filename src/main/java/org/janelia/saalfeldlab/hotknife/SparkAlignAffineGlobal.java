@@ -419,9 +419,9 @@ public class SparkAlignAffineGlobal {
 
 		final JavaPairRDD<String[], ArrayList<PointMatch>> filteredMatches = filterBlockFaceMatches(
 				scaledMatches,
-				new Transform.InterpolatedAffineModel2DSupplier<>(
+				new Transform.InterpolatedAffineModel2DSupplier<>( // rigid model for outlier detection
 						(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-						(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 0.25),
+						(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 1.0),
 				options.getNumIterations(),// 10000, 100000 for MultiSem
 				options.getMaxError(),// 200, 400 for MultiSem
 				0,
