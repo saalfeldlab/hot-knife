@@ -44,7 +44,6 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import mpicbg.imagefeatures.Feature;
-import mpicbg.models.Affine2D;
 import mpicbg.models.AffineModel2D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.InterpolatedAffineModel2D;
@@ -215,7 +214,7 @@ public class SparkAlignAffineGlobal {
 
 					System.out.println(inDatasetName + " : " + fs.size() + " features extracted.");
 
-					return new Tuple2<String, ArrayList<Feature>>(inDatasetName, fs);
+					return new Tuple2<>(inDatasetName, fs);
 				});
 
 		return features;
@@ -237,9 +236,9 @@ public class SparkAlignAffineGlobal {
 
 		for (final String[] pair : pairs)
 			tupleList.add(
-					new Tuple2<Tuple2<String, ArrayList<Feature>>, Tuple2<String, ArrayList<Feature>>>(
-							new Tuple2<String, ArrayList<Feature>>(pair[0], featuresMap.get(pair[0])),
-							new Tuple2<String, ArrayList<Feature>>(pair[1], featuresMap.get(pair[1]))));
+					new Tuple2<>(
+							new Tuple2<>(pair[0], featuresMap.get(pair[0])),
+							new Tuple2<>(pair[1], featuresMap.get(pair[1]))));
 
 		final JavaRDD<Tuple2<Tuple2<String, ArrayList<Feature>>, Tuple2<String, ArrayList<Feature>>>> tuples = sc.parallelize(tupleList);
 
@@ -254,9 +253,7 @@ public class SparkAlignAffineGlobal {
 
 					System.out.println(Arrays.toString(key) + " : " + candidates.size() + " matches found.");
 
-					return new Tuple2<String[], ArrayList<PointMatch>>(
-							key,
-							candidates);
+					return new Tuple2<>(key, candidates);
 				});
 
 		return candidateMatches;
@@ -323,9 +320,9 @@ public class SparkAlignAffineGlobal {
 				matchMap,
 				fixedModels,
 				fixedTiles,
-				new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
-						(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-						(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+				new Transform.InterpolatedAffineModel2DSupplier<>(
+						(Supplier<AffineModel2D> & Serializable) AffineModel2D::new,
+						(Supplier<RigidModel2D> & Serializable) RigidModel2D::new,
 						1.0));
 
 		return tiles;
@@ -357,7 +354,7 @@ public class SparkAlignAffineGlobal {
 	}
 
 
-	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final Options options = new Options(args);
 
@@ -367,13 +364,13 @@ public class SparkAlignAffineGlobal {
 		final List<String> datasetNames = options.getDatasetNames();
 		final List<String> transformDatasetNames = datasetNames
 				.stream()
-				.map(datasetName -> Util.flattenGroupName(datasetName))
+				.map(Util::flattenGroupName)
 				.collect(Collectors.toList());
 
 		/* collect fix tile info if requested */
 		final HashMap<String, AffineModel2D > fixedModels = new HashMap<>();
 
-		if ( options.getFixedDatasetNames() != null && options.getFixedDatasetNames().size() > 0 )
+		if ( options.getFixedDatasetNames() != null && !options.getFixedDatasetNames().isEmpty())
 		{
 			for ( int i = 0; i < options.getFixedDatasetNames().size(); ++i )
 			{
@@ -445,8 +442,8 @@ public class SparkAlignAffineGlobal {
 		tc.addTiles(tiles);
 
 		/* fix tiles if requested */
-		if ( fixedTiles.size() > 0 )
-			fixedTiles.forEach( t -> tc.fixTile( t ) );
+		if (!fixedTiles.isEmpty())
+			fixedTiles.forEach(tc::fixTile);
 
 		/* three pass optimization, first using the regularizer exclusively ... */
 		try {
