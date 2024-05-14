@@ -189,6 +189,14 @@ public class SparkAlignAffineGlobal {
 	}
 
 
+	// size of the feature descriptor for feature extraction
+	private static final int FD_SIZE = 8;
+	// minimal percentage of inliers for RANSAC
+	public static final double MIN_INLIER_RATIO = 0.05;
+	// minimal absolute number of inliers for RANSAC
+	public static final int MIN_NUM_INLIERS = 7;
+
+
 	static public JavaPairRDD<String, ArrayList<Feature>> extractFeatures(
 			final JavaSparkContext sc,
 			final String n5Path,
@@ -210,7 +218,7 @@ public class SparkAlignAffineGlobal {
 
 					System.out.println(inDatasetName + " : " + Arrays.toString(Intervals.dimensionsAsLongArray(source)) + " extracting features...");
 
-					final ArrayList<Feature> fs = Align.extractFeatures(source, 1.0, 0.5, 4);
+					final ArrayList<Feature> fs = Align.extractFeatures(source, 1.0, 0.5, FD_SIZE);
 
 					System.out.println(inDatasetName + " : " + fs.size() + " features extracted.");
 
@@ -421,8 +429,8 @@ public class SparkAlignAffineGlobal {
 						(Supplier<RigidModel2D> & Serializable)RigidModel2D::new, 1.0),
 				options.getNumIterations(),// 10000, 100000 for MultiSem
 				options.getMaxError(),// 200, 400 for MultiSem
-				0,
-				7);
+				MIN_INLIER_RATIO,
+				MIN_NUM_INLIERS);
 
 
 		/* remember fixed tiles if requested */
