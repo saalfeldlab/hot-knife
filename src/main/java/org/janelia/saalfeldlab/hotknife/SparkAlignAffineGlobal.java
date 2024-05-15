@@ -101,6 +101,9 @@ public class SparkAlignAffineGlobal {
 		@Option(name = "--maxError", required = false, usage = "RANSAC maxError (default: 200.0)")
 		private double maxError = 0;
 
+		@Option(name = "--filter", required = false, usage = "Outlier filter (RANSAC or MULTI_CONSENSUS_RANSAC (default))")
+		private OutlierFilter filter = OutlierFilter.MULTI_CONSENSUS_RANSAC;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -186,6 +189,10 @@ public class SparkAlignAffineGlobal {
 			return maxError;
 		}
 
+		public enum OutlierFilter {
+			RANSAC,
+			MULTI_CONSENSUS_RANSAC;
+		}
 	}
 
 
@@ -274,26 +281,36 @@ public class SparkAlignAffineGlobal {
 			final int numIterations,
 			final double maxEpsilon,
 			final double minInlierRatio,
-			final int minNumInliers)
+			final int minNumInliers,
+			final Options.OutlierFilter filterType)
 	{
 		final JavaPairRDD<String[], ArrayList<PointMatch>> inlierMatches = candidateMatches.mapToPair(
 				tuple -> {
-					@SuppressWarnings("unchecked")
-					final ArrayList<PointMatch> inliers =
-							new MultiConsensusFilter<>(
-									(Supplier<Model<?>>)modelSupplier,
-									numIterations,
-									maxEpsilon,
-									minInlierRatio,
-									minNumInliers).filter(tuple._2());
+					final String[] pairIds = tuple._1();
+					final ArrayList<PointMatch> candidates = tuple._2();
 
-					System.out.printf("%s : %d inliers found.", Arrays.toString(tuple._1()), inliers.size());
+					final ArrayList<PointMatch> inliers;
+					if (filterType == Options.OutlierFilter.RANSAC) {
+						inliers = new ArrayList<>();
+						final Model<?> model = modelSupplier.get();
+						model.filterRansac(tuple._2(), inliers, numIterations, maxEpsilon, minInlierRatio, minNumInliers);
+					} else if (filterType == Options.OutlierFilter.MULTI_CONSENSUS_RANSAC) {
+						@SuppressWarnings("unchecked")
+						final MultiConsensusFilter<Model<?>> multiConsensusFilter = new MultiConsensusFilter<>(
+								(Supplier<Model<?>>) modelSupplier,
+								numIterations,
+								maxEpsilon,
+								minInlierRatio,
+								minNumInliers);
+						inliers = multiConsensusFilter.filter(candidates);
+					} else {
+						throw new IllegalArgumentException("Unsupported outlier filter type: " + filterType);
+					}
+
+					System.out.printf("%s : %d inliers found.", Arrays.toString(pairIds), inliers.size());
 					System.out.println();
 
-					return new Tuple2<>(
-							tuple._1(),
-							inliers);
-
+					return new Tuple2<>(pairIds, inliers);
 				});
 
 		return inlierMatches;
@@ -430,7 +447,8 @@ public class SparkAlignAffineGlobal {
 				options.getNumIterations(),// 10000, 100000 for MultiSem
 				options.getMaxError(),// 200, 400 for MultiSem
 				MIN_INLIER_RATIO,
-				MIN_NUM_INLIERS);
+				MIN_NUM_INLIERS,
+				options.filter);
 
 
 		/* remember fixed tiles if requested */
