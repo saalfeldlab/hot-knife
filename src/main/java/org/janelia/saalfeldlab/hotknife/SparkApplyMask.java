@@ -1,10 +1,7 @@
 package org.janelia.saalfeldlab.hotknife;
 
-import ij.ImageJ;
-import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgFactory;
-import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.loops.LoopBuilder;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -17,9 +14,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
-import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineParser;
@@ -181,6 +176,7 @@ public class SparkApplyMask {
 		final N5Writer n5Writer = new N5FSWriter(n5Path);
 		if (n5Writer.exists(path.getOutput())) {
 			if (overwrite) {
+				// TODO: this can potentially be costly; consider using spark for this
 				n5Writer.remove(path.getOutput());
 			} else {
 				n5Writer.close();
@@ -195,7 +191,7 @@ public class SparkApplyMask {
 		printLogMessage("Processing task " + path + " (split into " + columns.size() + " columns)");
 
 		return sparkContext.parallelize(columns)
-				.foreachAsync(column -> processColumn(n5Path, path, column, projectionType, overwrite));
+				.foreachAsync(column -> processColumn(n5Path, path, column, projectionType));
 	}
 
 	private static void printLogMessage(final String msg) {
@@ -240,8 +236,7 @@ public class SparkApplyMask {
 			final String n5Path,
 			final PathSpecification path,
 			final List<Block> column,
-			final ProjectionType projectionType,
-			final boolean overwrite) {
+			final ProjectionType projectionType) {
 
 		final N5Writer n5Writer = new N5FSWriter(n5Path);
 
@@ -251,32 +246,33 @@ public class SparkApplyMask {
 
 		final DatasetAttributes attributes = n5Writer.getDatasetAttributes(path.getInput());
 		if (attributes.getDataType() == DataType.FLOAT32) {
-			final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Writer, path.getInput());
-			final RandomAccessibleInterval<FloatType> croppedSource = cropToColumn(source, column);
-			final RandomAccessibleInterval<FloatType> output = applyMask(croppedSource, flattenedMask);
-			N5Utils.saveNonEmptyBlock(output, n5Writer, path.getOutput(), attributes, column.get(0).getGridPosition(), new FloatType());
+			computeAndSaveResults(n5Writer, path, attributes, flattenedMask, column, new FloatType());
 			n5Writer.close();
 		} else if (attributes.getDataType() == DataType.UINT8) {
-			final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Writer, path.getInput());
-			final RandomAccessibleInterval<UnsignedByteType> croppedSource = cropToColumn(source, column);
-			final RandomAccessibleInterval<UnsignedByteType> output = applyMask(croppedSource, flattenedMask);
-			for (final Block block : column) {
-				System.out.println("Saving block " + Arrays.toString(block.getGridPosition()));
-				// save each block of the column individually
-				final RandomAccessibleInterval<UnsignedByteType> croppedOutput = Views.interval(output, block.getMin(), block.getMax());
-				N5Utils.saveNonEmptyBlock(croppedOutput, n5Writer, path.getOutput(), attributes, block.getGridPosition(), new UnsignedByteType());
-				if (block.getGridPosition()[0] == 0 && block.getGridPosition()[1] == 0) {
-					new ImageJ();
-					RandomAccessibleInterval<UnsignedByteType> copy = N5Utils.open(n5Writer, path.getInput());
-					final RandomAccessibleInterval<UnsignedByteType> croppedCopy = cropToColumn(copy, column);
-					ImageJFunctions.show(croppedCopy);
-					ImageJFunctions.show(output);
-				}
-			}
+			computeAndSaveResults(n5Writer, path, attributes, flattenedMask, column, new UnsignedByteType());
 			n5Writer.close();
 		} else {
 			n5Writer.close();
 			throw new IllegalArgumentException("Unsupported data type: " + attributes.getDataType());
+		}
+	}
+
+	private static <T extends RealType<T> & NativeType<T>> void computeAndSaveResults(
+			final N5Writer n5Writer,
+			final PathSpecification path,
+			final DatasetAttributes attributes,
+			final RandomAccessibleInterval<UnsignedByteType> flattenedMask,
+			final List<Block> column,
+			final T type) {
+
+		final RandomAccessibleInterval<T> source = N5Utils.open(n5Writer, path.getInput());
+		final RandomAccessibleInterval<T> croppedSource = cropToColumn(source, column);
+		final RandomAccessibleInterval<T> output = applyMask(croppedSource, flattenedMask);
+
+		for (final Block block : column) {
+			// save each block of the column individually
+			final RandomAccessibleInterval<T> croppedOutput = Views.interval(output, block.getMin(), block.getMax());
+			N5Utils.saveNonEmptyBlock(croppedOutput, n5Writer, path.getOutput(), attributes, block.getGridPosition(), type);
 		}
 	}
 
@@ -408,22 +404,12 @@ public class SparkApplyMask {
 			return max;
 		}
 
-		public long[] getSize() {
-			return size;
-		}
-
 		public long[] getGridPosition() {
 			return gridPosition;
 		}
 
 		public int numDimensions() {
 			return min.length;
-		}
-
-		public static Block shiftToZeroMin(final Block block) {
-			final long[] min = new long[block.numDimensions()];
-			Arrays.fill(min, 0);
-			return new Block(min, block.getSize(), block.getGridPosition());
 		}
 	}
 }
