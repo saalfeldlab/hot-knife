@@ -148,7 +148,7 @@ public class SparkApplyMask {
 		}
 
 		// TODO: this is for local testing; remove for production
-		final SparkConf conf = new SparkConf().setAppName("SparkPixelNormalizeN5").setMaster("local[*]");
+		final SparkConf conf = new SparkConf().setAppName("SparkPixelNormalizeN5");
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 		final List<JavaFutureAction<Void>> futures = new ArrayList<>(paths.size());
