@@ -1,7 +1,10 @@
 package org.janelia.saalfeldlab.hotknife;
 
+import ij.ImageJ;
+import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.loops.LoopBuilder;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -12,6 +15,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaFutureAction;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
@@ -26,8 +30,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.IntBinaryOperator;
 import java.util.stream.Collectors;
@@ -152,7 +159,6 @@ public class SparkApplyMask {
 		final List<JavaFutureAction<Void>> futures = new ArrayList<>(paths.size());
 
 		for (final PathSpecification pathSpec : paths) {
-			printLogMessage("Processing task " + pathSpec);
 			final JavaFutureAction<Void> future = processTask(sparkContext, options.n5Path, pathSpec, options.projectionType, options.overwrite);
 			futures.add(future);
 		}
@@ -172,13 +178,20 @@ public class SparkApplyMask {
 			final ProjectionType projectionType,
 			final boolean overwrite) {
 
-		final N5Reader n5Reader = new N5FSReader(n5Path);
-		if (n5Reader.exists(path.getOutput()) & !overwrite) {
-			n5Reader.close();
-			throw new IllegalArgumentException("Output data set exists: " + n5Path + path.getOutput());
+		final N5Writer n5Writer = new N5FSWriter(n5Path);
+		if (n5Writer.exists(path.getOutput())) {
+			if (overwrite) {
+				n5Writer.remove(path.getOutput());
+			} else {
+				n5Writer.close();
+				throw new IllegalArgumentException("Output data set exists: " + n5Path + path.getOutput());
+			}
 		}
 
-		final List<Column> columns = splitIntoColumns(n5Reader, path.getInput());
+		final DatasetAttributes attributes = n5Writer.getDatasetAttributes(path.getInput());
+		n5Writer.createDataset(path.getOutput(), attributes);
+
+		final List<List<Block>> columns = splitIntoColumns(attributes);
 		printLogMessage("Processing task " + path + " (split into " + columns.size() + " columns)");
 
 		return sparkContext.parallelize(columns)
@@ -190,60 +203,91 @@ public class SparkApplyMask {
 		System.out.println("[" + timeStamp + "]: " + msg);
 	}
 
-	private static List<Column> splitIntoColumns(final N5Reader n5Reader, final String dataset) {
-		// divide the dataset into columns that form a grid in the xy-plane
-		final DatasetAttributes attributes = n5Reader.getDatasetAttributes(dataset);
-		final long[] dimensions = Arrays.copyOfRange(attributes.getDimensions(), 0, 2);
-		final int[] blockSize = Arrays.copyOfRange(attributes.getBlockSize(), 0, 2);
-		final List<long[][]> rawGrid = Grid.create(dimensions, blockSize);
+	/**
+	 * Split the input dataset into columns of blocks.
+	 *
+	 * @param attributes the attributes of the input dataset
+	 * @return a list of columns, where each column is a list of blocks
+	 */
+	private static List<List<Block>> splitIntoColumns(final DatasetAttributes attributes) {
+		final long[] dimensions = attributes.getDimensions();
+		final int[] blockSize = attributes.getBlockSize();
+		final int numDimensions = attributes.getNumDimensions();
 
-		final List<Column> grid = new ArrayList<>(rawGrid.size());
-		for (final long[][] block : rawGrid) {
-			final long[] min = block[0];
-			final long[] size = block[1];
-			final long[] gridPosition = block[2];
-			final Column column = new Column(min, size, gridPosition);
-			grid.add(column);
+		if (numDimensions == 2) {
+			// there is only one 2D-block per column
+			final List<long[][]> grid2D = Grid.create(dimensions, blockSize);
+			return grid2D.stream()
+					.map(tile -> Collections.singletonList(new Block(tile[0], tile[1], tile[2])))
+					.collect(Collectors.toCollection(ArrayList::new));
+		} else if (numDimensions == 3) {
+			// there are multiple 3D-blocks per column that we accumulate into a list
+			final List<long[][]> grid3D = Grid.create(dimensions, blockSize);
+			final Map<String, List<Block>> idToColumn = new HashMap<>();
+			for (long[][] rawBlock : grid3D) {
+				final long[] xyGridPosition = Arrays.copyOfRange(rawBlock[2], 0, 2);
+				final String columnId = Arrays.toString(xyGridPosition);
+				final List<Block> column = idToColumn.computeIfAbsent(columnId, k -> new ArrayList<>());
+				column.add(new Block(rawBlock[0], rawBlock[1], rawBlock[2]));
+			}
+			return new ArrayList<>(idToColumn.values());
+		} else {
+			throw new IllegalArgumentException("Unsupported number of dimensions: " + numDimensions);
 		}
-		return grid;
 	}
 
 	private static void processColumn(
 			final String n5Path,
 			final PathSpecification path,
-			final Column column,
+			final List<Block> column,
 			final ProjectionType projectionType,
 			final boolean overwrite) {
 
 		final N5Writer n5Writer = new N5FSWriter(n5Path);
 
-		RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Writer, path.getInput());
-		RandomAccessibleInterval<UnsignedByteType> mask = N5Utils.open(n5Writer, path.getMask());
-
-		final RandomAccessibleInterval<FloatType> croppedSource = cropToColumn(source, column);
+		final RandomAccessibleInterval<UnsignedByteType> mask = N5Utils.open(n5Writer, path.getMask());
 		final RandomAccessibleInterval<UnsignedByteType> croppedMask = cropToColumn(mask, column);
-
 		final RandomAccessibleInterval<UnsignedByteType> flattenedMask = flattenMask(croppedMask, projectionType);
-		final RandomAccessibleInterval<FloatType> output = applyMask(croppedSource, flattenedMask);
 
 		final DatasetAttributes attributes = n5Writer.getDatasetAttributes(path.getInput());
-
-		if (overwrite) {
-			// existence has been checked before, so we can safely remove the output dataset
-			n5Writer.remove(path.getOutput());
+		if (attributes.getDataType() == DataType.FLOAT32) {
+			final RandomAccessibleInterval<FloatType> source = N5Utils.open(n5Writer, path.getInput());
+			final RandomAccessibleInterval<FloatType> croppedSource = cropToColumn(source, column);
+			final RandomAccessibleInterval<FloatType> output = applyMask(croppedSource, flattenedMask);
+			N5Utils.saveNonEmptyBlock(output, n5Writer, path.getOutput(), attributes, column.get(0).getGridPosition(), new FloatType());
+			n5Writer.close();
+		} else if (attributes.getDataType() == DataType.UINT8) {
+			final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5Writer, path.getInput());
+			final RandomAccessibleInterval<UnsignedByteType> croppedSource = cropToColumn(source, column);
+			final RandomAccessibleInterval<UnsignedByteType> output = applyMask(croppedSource, flattenedMask);
+			for (final Block block : column) {
+				System.out.println("Saving block " + Arrays.toString(block.getGridPosition()));
+				// save each block of the column individually
+				final RandomAccessibleInterval<UnsignedByteType> croppedOutput = Views.interval(output, block.getMin(), block.getMax());
+				N5Utils.saveNonEmptyBlock(croppedOutput, n5Writer, path.getOutput(), attributes, block.getGridPosition(), new UnsignedByteType());
+				if (block.getGridPosition()[0] == 0 && block.getGridPosition()[1] == 0) {
+					new ImageJ();
+					RandomAccessibleInterval<UnsignedByteType> copy = N5Utils.open(n5Writer, path.getInput());
+					final RandomAccessibleInterval<UnsignedByteType> croppedCopy = cropToColumn(copy, column);
+					ImageJFunctions.show(croppedCopy);
+					ImageJFunctions.show(output);
+				}
+			}
+			n5Writer.close();
+		} else {
+			n5Writer.close();
+			throw new IllegalArgumentException("Unsupported data type: " + attributes.getDataType());
 		}
-
-		N5Utils.saveNonEmptyBlock(output, n5Writer, path.getOutput(), attributes, column.getGridPosition(), new FloatType());
-		n5Writer.close();
 	}
 
 	private static <T extends RealType<T> & NativeType<T>> RandomAccessibleInterval<T> cropToColumn(
 			final RandomAccessibleInterval<T> source,
-			final Column column) {
+			final List<Block> column) {
 
 		final int n = source.numDimensions();
-		final long[] min = (n == 2) ? column.getMin() : new long[] { column.getMin()[0], column.getMin()[1], source.min(2) };
-		final long[] max = (n == 2) ? column.getMax() : new long[] { column.getMax()[0], column.getMax()[1], source.max(2) };
+		final Block firstBlock = column.get(0);
+		final long[] min = (n == 2) ? firstBlock.getMin() : new long[] { firstBlock.getMin()[0], firstBlock.getMin()[1], source.min(2) };
+		final long[] max = (n == 2) ? firstBlock.getMax() : new long[] { firstBlock.getMax()[0], firstBlock.getMax()[1], source.max(2) };
 
 		return Views.interval(source, min, max);
 	}
@@ -341,17 +385,14 @@ public class SparkApplyMask {
 		}
 	}
 
-	private static class Column implements Serializable {
+	private static class Block implements Serializable {
 		private final long[] min;
-		private final long[] max;
+		private final long[] size;
 		private final long[] gridPosition;
 
-		private Column(final long[] min, final long[] size, final long[] gridPosition) {
+		private Block(final long[] min, final long[] size, final long[] gridPosition) {
 			this.min = min;
-			this.max = new long[min.length];
-			for (int d = 0; d < min.length; d++) {
-				this.max[d] = min[d] + size[d] - 1;
-			}
+			this.size = size;
 			this.gridPosition = gridPosition;
 		}
 
@@ -360,11 +401,29 @@ public class SparkApplyMask {
 		}
 
 		public long[] getMax() {
+			final long[] max = new long[numDimensions()];
+			for (int d = 0; d < min.length; d++) {
+				max[d] = min[d] + size[d] - 1;
+			}
 			return max;
+		}
+
+		public long[] getSize() {
+			return size;
 		}
 
 		public long[] getGridPosition() {
 			return gridPosition;
+		}
+
+		public int numDimensions() {
+			return min.length;
+		}
+
+		public static Block shiftToZeroMin(final Block block) {
+			final long[] min = new long[block.numDimensions()];
+			Arrays.fill(min, 0);
+			return new Block(min, block.getSize(), block.getGridPosition());
 		}
 	}
 }
