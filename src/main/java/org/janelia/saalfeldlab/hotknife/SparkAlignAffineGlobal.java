@@ -225,7 +225,7 @@ public class SparkAlignAffineGlobal {
 
 					System.out.println(inDatasetName + " : " + Arrays.toString(Intervals.dimensionsAsLongArray(source)) + " extracting features...");
 
-					final ArrayList<Feature> fs = Align.extractFeatures(source, 1.0, 0.5, FD_SIZE);
+					final ArrayList<Feature> fs = Align.extractFeatures(source, 2.0, 0.05, FD_SIZE);
 
 					System.out.println(inDatasetName + " : " + fs.size() + " features extracted.");
 
