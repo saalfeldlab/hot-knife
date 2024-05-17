@@ -387,8 +387,7 @@ public class SparkAlignAffineGlobal {
 			return;
 
 		final List<String> datasetNames = options.getDatasetNames();
-		final List<String> transformDatasetNames = datasetNames
-				.stream()
+		final List<String> transformDatasetNames = datasetNames.stream()
 				.map(Util::flattenGroupName)
 				.collect(Collectors.toList());
 
