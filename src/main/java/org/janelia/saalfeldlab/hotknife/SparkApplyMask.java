@@ -28,8 +28,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.IntBinaryOperator;
 import java.util.stream.Collectors;
@@ -126,6 +128,8 @@ public class SparkApplyMask {
 		}
 	}
 
+	public static final HashSet<String> STANDARD_ATTRIBUTES = new HashSet<>(Arrays.asList("dataType", "dimensions", "blockSize", "compression"));
+
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
@@ -186,6 +190,7 @@ public class SparkApplyMask {
 
 		final DatasetAttributes attributes = n5Writer.getDatasetAttributes(path.getInput());
 		n5Writer.createDataset(path.getOutput(), attributes);
+		transferAttributes(n5Writer, path);
 
 		final List<List<Block>> columns = splitIntoColumns(attributes);
 		printLogMessage("Processing task " + path + " (split into " + columns.size() + " columns)");
@@ -197,6 +202,16 @@ public class SparkApplyMask {
 	private static void printLogMessage(final String msg) {
 		final Date timeStamp = new Date(System.currentTimeMillis());
 		System.out.println("[" + timeStamp + "]: " + msg);
+	}
+
+	private static void transferAttributes(final N5Writer n5Writer, final PathSpecification path) {
+		final Map<String, Class<?>> attributeTypes = n5Writer.listAttributes(path.getInput());
+		attributeTypes.forEach((name, type) -> {
+			if (! ((Set<String>) STANDARD_ATTRIBUTES).contains(name)) {
+				final Object value = n5Writer.getAttribute(path.getInput(), name, type);
+				n5Writer.setAttribute(path.getOutput(), name, value);
+			}
+		});
 	}
 
 	/**

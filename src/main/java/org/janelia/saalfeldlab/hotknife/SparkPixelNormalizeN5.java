@@ -8,8 +8,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -126,6 +129,9 @@ public class SparkPixelNormalizeN5 {
 			}
 		}
 	}
+
+	public static final HashSet<String> STANDARD_ATTRIBUTES = new HashSet<>(Arrays.asList("dataType", "dimensions", "blockSize", "compression"));
+
 
 	private static void saveFullScaleBlock(final String n5PathInput,
 										   final String n5PathOutput,
@@ -302,6 +308,7 @@ public class SparkPixelNormalizeN5 {
 		}
 
 		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, dataType, new GzipCompression());
+		transferAttributes(n5Output, n5DatasetInput, n5DatasetOutput);
 
 		n5Output.close();
 		n5Input.close();
@@ -414,5 +421,15 @@ public class SparkPixelNormalizeN5 {
 		sparkContext.close();
 
 		System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Done." );
+	}
+
+	private static void transferAttributes(final N5Writer n5Writer, final String input, final String output) {
+		final Map<String, Class<?>> attributeTypes = n5Writer.listAttributes(input);
+		attributeTypes.forEach((name, type) -> {
+			if (! ((Set<String>) STANDARD_ATTRIBUTES).contains(name)) {
+				final Object value = n5Writer.getAttribute(input, name, type);
+				n5Writer.setAttribute(output, name, value);
+			}
+		});
 	}
 }
