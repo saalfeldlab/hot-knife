@@ -4,11 +4,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import ij.ImagePlus;
 import mpicbg.ij.clahe.Flat;
@@ -66,18 +69,15 @@ public class SparkPixelNormalizeN5 {
 
 		@Option(name = "--n5DatasetInput",
 				required = true,
-				usage = "Input N5 dataset, e.g. /flat/s075_m119/top4/face/s0 when running with --scaleIndex; " +
-						"/flat/s075_m119/top4/face when running with --scaleIndexList; " +
-						"or /flat/*/top4/face for all subdirectories")
+				usage = "Input N5 dataset, e.g. /flat/s075_m119/top4/face; or /flat/*/top4/face for all subdirectories")
 		private String n5DatasetInput = null;
 
 		@Option(name = "--n5DatasetOutput",
 				required = true,
-				usage = "Output N5 dataset, e.g. /flat/s075_m119/top4/face_local/s0 when running with --scaleIndex or " +
-						"/flat/s075_m119/top4/face_local when running with --scaleIndexList; " +
-						"or /flat/*/top4/face_local for all subdirectories")
+				usage = "Output N5 dataset, e.g. /flat/s075_m119/top4/face_local; or /flat/*/top4/face_local for all subdirectories")
 		private String n5DatasetOutput = null;
 
+		// TODO: this is completely included in scaleIndexList; consolidate the two (see SparkApplyMask)
 		@Option(name = "--scaleIndex",
 				usage = "the scaleIndex of the image we are normalizing " +
 						"(if you want to specify a single resolution - will be ignored if --scaleIndexList is specified)")
@@ -113,6 +113,16 @@ public class SparkPixelNormalizeN5 {
 			} catch (final Exception e) {
 				e.printStackTrace(System.err);
 				parser.printUsage(System.err);
+			}
+		}
+
+		public List<Integer> getScaleIndices() {
+			if (scaleIndexList != null) {
+				return Arrays.stream(scaleIndexList.split("," ))
+						.map(Integer::parseInt)
+						.collect(Collectors.toList());
+			} else {
+				return Collections.singletonList(scaleIndex);
 			}
 		}
 	}
@@ -261,9 +271,10 @@ public class SparkPixelNormalizeN5 {
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
 
 		//final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
-		final int[] blockSize = n5Input.getAttribute(n5DatasetInput, "blockSize", int[].class);
-		final long[] dimensions = n5Input.getAttribute(n5DatasetInput, "dimensions", long[].class);
-		final DataType dataType = n5Input.getAttribute(n5DatasetInput, "dataType", DataType.class);
+		final DatasetAttributes attributes = n5Input.getDatasetAttributes(n5DatasetInput);
+		final int[] blockSize = attributes.getBlockSize();
+		final long[] dimensions = attributes.getDimensions();
+		final DataType dataType = attributes.getDataType();
 
 		final int[] gridBlockSize = new int[blockSize.length]; //{ blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d)
@@ -364,6 +375,8 @@ public class SparkPixelNormalizeN5 {
 
 		ArrayList< JavaFutureAction<Void> > futures = new ArrayList<>();
 
+		final List<Integer> scaleIndices = options.getScaleIndices();
+
 		for ( final Entry<String, String > entry : in2out.entrySet() )
 		{
 			final String n5DatasetInput = entry.getKey();
@@ -371,38 +384,20 @@ public class SparkPixelNormalizeN5 {
 
 			System.out.println( "Processing: " + n5DatasetInput + " >>> " + n5DatasetOutput );
 
-			if ( options.scaleIndexList != null )
-			{
-				for ( final String s : options.scaleIndexList.split( "," ) )
-				{
-					final int scaleIndex = Integer.parseInt( s );
-	
-					final String myN5DatasetInput = n5DatasetInput + "/s" + scaleIndex;
-					final String myN5DatasetOutput = n5DatasetOutput + "/s" + scaleIndex;
-	
-					System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Running scale index " + scaleIndex + " for " + myN5DatasetInput + " >>> " + myN5DatasetOutput );
-	
-					futures.add( runWithSparkContext(
-							sparkContext,
-							options.n5PathInput,
-							myN5DatasetInput,
-							myN5DatasetOutput,
-							options.blockFactorXY,
-							scaleIndex,
-							options.invert,
-							options.normalizeMethod,
-							options.overwrite ) );
-				}
-			}
-			else
-			{
+			for (final Integer scaleIndex : scaleIndices) {
+
+				final String myN5DatasetInput = n5DatasetInput + "/s" + scaleIndex;
+				final String myN5DatasetOutput = n5DatasetOutput + "/s" + scaleIndex;
+
+				System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Running scale index " + scaleIndex + " for " + myN5DatasetInput + " >>> " + myN5DatasetOutput );
+
 				futures.add( runWithSparkContext(
 						sparkContext,
 						options.n5PathInput,
-						n5DatasetInput,
-						n5DatasetOutput,
+						myN5DatasetInput,
+						myN5DatasetOutput,
 						options.blockFactorXY,
-						options.scaleIndex,
+						scaleIndex,
 						options.invert,
 						options.normalizeMethod,
 						options.overwrite ) );
