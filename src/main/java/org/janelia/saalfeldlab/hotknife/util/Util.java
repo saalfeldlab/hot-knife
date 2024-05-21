@@ -60,13 +60,15 @@ public class Util {
 	public static final <T extends Type<T>> void copy(
 			final RandomAccessible<? extends T> source,
 			final RandomAccessibleInterval<T> target,
-			final ExecutorService service ) {
+			final ExecutorService service,
+			final boolean shuffle ) {
 
 		final long numPixels = Views.iterable( target ).size();
 		final ArrayList<Pair<Long,Long>> portions = divideIntoPortions( numPixels );
 
 		// maximize the probability to fetch different blocks of the N%
-		Collections.shuffle( portions );
+		if ( shuffle )
+			Collections.shuffle( portions );
 
 		final ArrayList< Callable< Void > > tasks = new ArrayList< Callable< Void > >();
 

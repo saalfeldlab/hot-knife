@@ -53,6 +53,7 @@ import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.Translation2D;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
 
@@ -176,7 +177,7 @@ public class ViewAlignment {
 
 			}
 
-			RandomAccessibleInterval<FloatType> stack = Transform.createTransformedStack(
+			RandomAccessibleInterval<UnsignedByteType> stack = Transform.createTransformedStackUnsignedByteType(
 					options.getN5Path(),
 					Arrays.asList(datasetNames),
 					showScaleIndex,
@@ -196,9 +197,9 @@ public class ViewAlignment {
 				final long[] min = new long[ stack.numDimensions() ];
 				stack.min( min );
 
-				final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
+				final RandomAccessibleInterval<UnsignedByteType> copy = Views.translate( new CellImgFactory<>( new UnsignedByteType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
 				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
-				Util.copy(stack, copy, service);
+				Util.copy(stack, copy, service, false);
 				service.shutdown();
 
 				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");

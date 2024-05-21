@@ -823,6 +823,32 @@ public class Transform {
 		return Views.stack(transformedIntervals);
 	}
 
+	public static RandomAccessibleInterval<UnsignedByteType> createTransformedStackUnsignedByteType(
+			final String n5Path,
+			final List<String> datasetNames,
+			final int scaleIndex,
+			final List<? extends RealTransform> transforms,
+			final Interval targetInterval) throws IOException {
+
+		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> transformedIntervals = new ArrayList<>();
+		final N5Reader n5Reader = new N5FSReader(n5Path);
+
+		for (int i = 0; i < transforms.size(); ++i) {
+
+			final RandomAccessibleInterval<UnsignedByteType> source =
+					Converters.convertRAI( (RandomAccessibleInterval<FloatType>)N5Utils.open(n5Reader, datasetNames.get(i) + "/s" + scaleIndex), (in,o) -> o.set( Math.round( in.get() )), new UnsignedByteType() );
+
+			transformedIntervals.add(
+					Transform.createTransformedInterval(
+							source,
+							targetInterval,
+							Transform.createScaledRealTransform(transforms.get(i), scaleIndex),
+							new UnsignedByteType(255)));
+		}
+
+		return Views.stack(transformedIntervals);
+	}
+
 
 	/**
 	 * Create a scale and shift transformation from image to world space that

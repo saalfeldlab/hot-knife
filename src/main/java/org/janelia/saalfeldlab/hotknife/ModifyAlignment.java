@@ -1538,7 +1538,7 @@ public class ModifyAlignment
 
 		final RandomAccessibleInterval<FloatType> copy = Views.translate( new CellImgFactory<>( new FloatType(), (int)stack.dimension( 2 ) ).create( stack.dimensionsAsLongArray() ), min );
 		final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
-		Util.copy(stack, copy, service);
+		Util.copy(stack, copy, service, true);
 		service.shutdown();
 
 		System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");

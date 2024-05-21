@@ -102,7 +102,7 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		System.out.println("Loading min height field " + n5FieldPath + ":/" + fieldGroupMin + "... " );
 		final RandomAccessibleInterval<FloatType> heightFieldSourceMin = N5Utils.open(n5Field, fieldGroupMin);
 		final ArrayImg<FloatType, ?> heightFieldMin = new ArrayImgFactory<>(new FloatType()).create(heightFieldSourceMin);
-		org.janelia.saalfeldlab.hotknife.util.Util.copy(heightFieldSourceMin, heightFieldMin, service);
+		org.janelia.saalfeldlab.hotknife.util.Util.copy(heightFieldSourceMin, heightFieldMin, service, true);
 
 		final RealRandomAccessible<DoubleType> minField = Transform.scaleAndShiftHeightFieldAndValues(
 				heightFieldMin,
@@ -114,7 +114,7 @@ public class CreateHeighfieldMaskN5 implements Callable<Void>
 		System.out.println("Loading max height field " + n5FieldPath + ":/" + fieldGroupMax + "... " );
 		final RandomAccessibleInterval<FloatType> heightFieldSourceMax = N5Utils.open(n5Field, fieldGroupMax);
 		final ArrayImg<FloatType, ?> heightFieldMax = new ArrayImgFactory<>(new FloatType()).create(heightFieldSourceMax);
-		org.janelia.saalfeldlab.hotknife.util.Util.copy(heightFieldSourceMax, heightFieldMax, service);
+		org.janelia.saalfeldlab.hotknife.util.Util.copy(heightFieldSourceMax, heightFieldMax, service, true);
 
 		final RealRandomAccessible<DoubleType> maxField = Transform.scaleAndShiftHeightFieldAndValues(
 				heightFieldMax,

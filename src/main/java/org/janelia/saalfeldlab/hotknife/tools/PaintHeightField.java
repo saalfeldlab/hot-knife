@@ -261,7 +261,7 @@ public class PaintHeightField implements Callable<Void>{
 		// multi-threaded copy
 		final ExecutorService service = Executors.newCachedThreadPool();
 		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
-		Util.copy(heightFieldSource, heightField, service );
+		Util.copy(heightFieldSource, heightField, service, true );
 		System.out.println("done.");
 
 		//System.out.print("Loading MANUAL heightfield.");
@@ -321,7 +321,7 @@ public class PaintHeightField implements Callable<Void>{
 
 		System.out.println("Copying gradients ... ");
 		final ArrayImg<FloatType, ?> gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
-		Util.copy(gradient, gradientCopy, service);
+		Util.copy(gradient, gradientCopy, service, true);
 		service.shutdown();
 
 		/*

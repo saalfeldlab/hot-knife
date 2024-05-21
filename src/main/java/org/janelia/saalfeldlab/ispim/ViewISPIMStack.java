@@ -632,7 +632,7 @@ public class ViewISPIMStack implements Callable<Void>, Serializable {
 					RandomAccessibleInterval< UnsignedShortType > ra = Views.zeroMin( Views.interval( Views.raster( data.getA() ), data.getB() ) );
 					System.out.println( "copying..." );
 					ShortImagePlus<UnsignedShortType> img = ImagePlusImgs.unsignedShorts( ra.dimensionsAsLongArray() );
-					Util.copy(ra, img, service);
+					Util.copy(ra, img, service, false);
 					img.getImagePlus().setDimensions(1, (int)img.dimension( 2 ), 1 );
 					img.getImagePlus().setTitle(title);
 					img.getImagePlus().show();

@@ -148,7 +148,7 @@ public class ResaveMultiSemHeightField implements Callable<Void>, Serializable {
 		if (optionalExecService == null) {
 			Util.copy(heightFieldSource, heightField);
 		} else {
-			Util.copy(heightFieldSource, heightField, optionalExecService);
+			Util.copy(heightFieldSource, heightField, optionalExecService, true);
 		}
 
 		System.out.println("SMOOTHING heightfield");
