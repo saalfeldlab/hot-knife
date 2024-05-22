@@ -7,12 +7,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
@@ -23,6 +26,7 @@ import ij.ImagePlus;
 import ij.io.FileSaver;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -106,6 +110,7 @@ public class SparkViewAlignment
 			zIndex.add( z );
 
 		final JavaRDD<Integer> rdd = sparkContext.parallelize( zIndex );
+		rdd.repartition( zIndex.size() );
 
 		rdd.foreach( z ->
 		{
@@ -127,6 +132,16 @@ public class SparkViewAlignment
 					new FinalInterval(
 							Grid.floorScaled(boundsMin, showScale),
 							Grid.ceilScaled(boundsMax, showScale)));
+
+			/*
+			// Potential speedup with local multithreading
+			final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+			final RandomAccessibleInterval<UnsignedByteType> slice = Views.hyperSlice( stack, 2, z );
+			final RandomAccessibleInterval<UnsignedByteType> copy = Views.translate( new ArrayImgFactory<>( new UnsignedByteType() ).create( slice.dimensionsAsLongArray() ), slice.minAsLongArray() );
+			Util.copy(slice, copy, service, false);
+			final ImagePlus imp = ImageJFunctions.wrap( copy, "z=" + z );
+			service.shutdown();
+			*/
 
 			final ImagePlus imp = ImageJFunctions.wrap( Views.hyperSlice( stack, 2, 0 ), "z=" + z );
 			new FileSaver(imp).saveAsTiff( new File( options.saveDir(), imp.getTitle() ).getAbsolutePath() );
