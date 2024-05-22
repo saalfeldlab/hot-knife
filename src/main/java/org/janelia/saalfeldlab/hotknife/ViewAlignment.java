@@ -121,8 +121,6 @@ public class ViewAlignment {
 		}
 	}
 
-	public static int exportZ = -1;
-
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final Options options = new Options(args);
@@ -188,10 +186,6 @@ public class ViewAlignment {
 
 			if ( options.noVirtual )
 			{
-				// TODO: hack, remove
-				if ( exportZ >= 0 )
-					stack = Views.hyperSlice( stack, 2, exportZ );
-
 				System.out.println( "copying entire stack ... " );
 				long t = System.currentTimeMillis();
 				final long[] min = new long[ stack.numDimensions() ];
