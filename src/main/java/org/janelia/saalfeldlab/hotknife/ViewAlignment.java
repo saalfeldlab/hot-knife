@@ -16,12 +16,10 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -45,22 +43,18 @@ import bdv.util.volatiles.VolatileViews;
 import ij.IJ;
 import ij.ImageJ;
 import ij.ImagePlus;
-import ij.io.FileSaver;
 import ij.process.ImageConverter;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.volatiles.CacheHints;
 import net.imglib2.cache.volatiles.LoadingStrategy;
-import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.Translation2D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 /**
@@ -84,9 +78,6 @@ public class ViewAlignment {
 
 		@Option(name = "--noVirtual", required = false, usage = "makes a physical copy of each transformed slab surface during startup (instead of virtual rendering)")
 		private boolean noVirtual = false;
-
-		@Option(name = "--saveDir", required = false, usage = "directory for saving images (when --noVirtual is selected)")
-		private String saveDir = "";
 
 		@Option(name = "--ignoreTransforms", required = false, usage = "do not load transforms, instead use identity transforms")
 		private boolean ignoreTransforms = false;
@@ -120,8 +111,6 @@ public class ViewAlignment {
 
 			return transformScaleIndex;
 		}
-
-		public String saveDir() { return saveDir; }
 
 		/**
 		 * @return the groups
@@ -197,33 +186,18 @@ public class ViewAlignment {
 
 			if ( options.noVirtual )
 			{
-				System.out.println( "saving entire stack ... " );
+				System.out.println( "copying entire stack ... " );
 				long t = System.currentTimeMillis();
 				final long[] min = new long[ stack.numDimensions() ];
 				stack.min( min );
 
-				//final RandomAccessibleInterval<UnsignedByteType> copy = Views.translate( new CellImgFactory<>( new UnsignedByteType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
-				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() / 2 );
-				//Util.copy(stack, copy, service, false);
-
-				for ( int z = 0; z < stack.dimension( 2 ); ++z )
-				{
-					System.out.println( new Date( System.currentTimeMillis() ) + ": " + z);
-
-					final RandomAccessibleInterval<UnsignedByteType> slice = Views.hyperSlice( stack, 2, z );
-					final RandomAccessibleInterval<UnsignedByteType> copy = Views.translate( new ArrayImgFactory<>( new UnsignedByteType() ).create( slice.dimensionsAsLongArray() ), slice.minAsLongArray() );
-
-					Util.copy(slice, copy, service, false);
-
-					ImagePlus imp = ImageJFunctions.wrap( slice, "z=" + z );
-					new FileSaver(imp).saveAsTiff( new File( options.saveDir(), imp.getTitle() ).getAbsolutePath() );
-					imp.close();
-					//SimpleMultiThreading.threadHaltUnClean();
-				}
+				final RandomAccessibleInterval<UnsignedByteType> copy = Views.translate( new CellImgFactory<>( new UnsignedByteType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
+				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+				Util.copy(stack, copy, service, false);
 				service.shutdown();
 
 				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");
-				/*
+
 				//BdvFunctions.show( copy, "transformed", new BdvOptions().addTo( bdv ).numRenderingThreads(Runtime.getRuntime().availableProcessors() ));
 				ImagePlus imp = ImageJFunctions.wrapFloat( copy, "group " + group );
 				imp.setDisplayRange(0, 255);
@@ -231,7 +205,6 @@ public class ViewAlignment {
 				imp.setDimensions( 1, imp.getStackSize(), 1 );
 				imp.show();
 				//ImageJFunctions.show( copy );
-				 */
 			}
 			else
 			{
