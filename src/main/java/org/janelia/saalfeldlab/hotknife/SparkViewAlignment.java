@@ -131,8 +131,9 @@ public class SparkViewAlignment
 			final ImagePlus imp = ImageJFunctions.wrap( Views.hyperSlice( stack, 2, 0 ), "z=" + z );
 			new FileSaver(imp).saveAsTiff( new File( options.saveDir(), imp.getTitle() ).getAbsolutePath() );
 			imp.close();
-
 			n5.close();
+
+			System.out.println( new Date( System.currentTimeMillis() ) + ": SAVED z=" + z + " >>> " + transformDatasetName );
 		});
 
 		sparkContext.close();
