@@ -22,7 +22,8 @@ ARGV="
 --n5GroupOutput=${N5_GROUP_OUTPUT} \
 --scaleIndex=5 \
 --iterations 100000 \
---maxError 400 \
+--maxError 300 \
+--filter RANSAC \
 ${FACE_DATASET_ARGS}"
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkAlignAffineGlobal"
