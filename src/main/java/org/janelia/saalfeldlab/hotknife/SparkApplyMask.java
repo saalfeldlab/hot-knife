@@ -11,6 +11,7 @@ import net.imglib2.view.Views;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaFutureAction;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.checkerframework.checker.units.qual.min;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -36,6 +37,17 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.IntBinaryOperator;
 import java.util.stream.Collectors;
 
+/**
+ * Apply a mask to an image. Both, the mask and the image can be 2D or 3D. If the mask is 3D, a z-projection is
+ * performed before applying the mask to the image. If the image is 3D, the mask is applied to each z-slice of the
+ * image. The dataset is resaved with the same shape and attributes as the input dataset.
+ * <p>
+ * This class is designed to be run on a Spark cluster. The parallelization is done by splitting the input dataset
+ * into columns of blocks, each column is considered as a single task. A column is a list of blocks that are stacked
+ * in z since the mask is the same for all of these blocks. The blocks are the physical blocks of the input dataset.
+ *
+ * @author Michael Innerberger
+ */
 public class SparkApplyMask {
 
 	public enum ProjectionType {
