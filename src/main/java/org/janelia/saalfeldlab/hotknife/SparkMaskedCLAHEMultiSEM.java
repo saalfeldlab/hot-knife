@@ -29,24 +29,30 @@ import ij.ImagePlus;
 import ij.ImageStack;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
+import ij.process.ImageProcessor;
 import mpicbg.ij.clahe.Flat;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.RealSum;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 public class SparkMaskedCLAHEMultiSEM
@@ -155,20 +161,20 @@ public class SparkMaskedCLAHEMultiSEM
 		pGrid.foreach(
 				gridBlock ->
 				{
+					/*
 					// TODO: remove debug
 					if ( gridBlock[0][0] < 20000 || gridBlock[0][1] < 20000 )
 						return;
+					*/
+
+					final int minIntensity = 0;
+					final int maxIntensity = 255;
 
 					final FinalInterval gridBlockInterval =
 							Intervals.createMinSize(
 									gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
 									gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
-/*
-					final FinalInterval gridBlockInterval2d =
-							Intervals.createMinSize(
-									gridBlock[0][0], gridBlock[0][1],
-									gridBlock[1][0], gridBlock[1][1] );
-*/
+
 					System.out.println( net.imglib2.util.Util.printInterval( gridBlockInterval ) );
 
 					final N5Reader n5 = new N5FSReader(n5PathInput);
@@ -177,6 +183,8 @@ public class SparkMaskedCLAHEMultiSEM
 					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, n5DatasetInput);
 					final RandomAccessible<UnsignedByteType> infiniteSource = Views.extendMirrorDouble( source );
 
+					final RandomAccessibleInterval<UnsignedByteType> result = Views.translate( ArrayImgs.unsignedBytes( gridBlockInterval.dimensionsAsLongArray() ), gridBlockInterval.minAsLongArray() );
+					
 					// extended interval for local contrast normalization
 					final int blockRadius = 511; //1023
 
@@ -202,10 +210,12 @@ public class SparkMaskedCLAHEMultiSEM
 					final RandomAccessibleInterval<FloatType> img =
 							Views.translate( ArrayImgs.floats( fArray, intervalEx.dimensionsAsLongArray() ), intervalEx.minAsLongArray() );
 
+					/*
 					// TODO: remove debug
 					ImageStack stackMask = new ImageStack();
 					ImageStack stackImg = new ImageStack();
 					ImageStack stackCLAHE = new ImageStack();
+					*/
 
 					for ( long z = gridBlockInterval.min( 2 ); z <= gridBlockInterval.max( 2 ); ++z )
 					{
@@ -219,8 +229,10 @@ public class SparkMaskedCLAHEMultiSEM
 						while ( c.hasNext() )
 						{
 							final UnsignedByteType value = c.next();
+
 							rra.setPosition( c );
-							if ( rra.get().get() > z )
+
+							if ( rra.get().get() - 1 > z )
 							{
 								value.set( 255 );
 								all0 = false;
@@ -237,52 +249,68 @@ public class SparkMaskedCLAHEMultiSEM
 						for ( final FloatType t : Views.flatIterable( img ) )
 							t.set( cImg.next().getRealFloat() );
 
-						fp.setMinAndMax( 0, 255 );
+						fp.setMinAndMax( minIntensity, maxIntensity );
 
-						//Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false);
+						/*
+						// TODO: remove debug
 						stackImg.addSlice( fp.duplicate() );
+						 */
 
 						if ( all255 )
 						{
-							System.out.println( "no mask");
-							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false);
+							//System.out.println( "no mask");
+							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, null, false);
 						}
 						else if ( all0 )
 						{
 							// do nothing
-							System.out.println( "nothing");
+							//System.out.println( "nothing");
 						}
 						else
 						{
-							System.out.println( "with mask");
-							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, bp, false);
+							//System.out.println( "with mask");
+							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, bp, false);
+							//Flat.getInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, bp, false);
 						}
 
+						// copy result into the final img for saving
+						final RandomAccessibleInterval<UnsignedByteType> resultSlice = Views.hyperSlice( result, 2, z );
+						final Cursor<UnsignedByteType> resultCursor = Views.flatIterable( resultSlice ).localizingCursor();
+						final RandomAccess<FloatType> claheRA = img.randomAccess();
+
+						while( resultCursor.hasNext() )
+						{
+							final UnsignedByteType v = resultCursor.next();
+							claheRA.setPosition( resultCursor );
+							v.set( Math.min( maxIntensity, Math.max(minIntensity, Math.round( claheRA.get().get() ) ) ) );
+						}
+
+						/*
 						// TODO: remove debug
-						System.out.println( z + ": " + all0 + ", " + all255 );
+						//System.out.println( z + ": " + all0 + ", " + all255 );
 						stackMask.addSlice( bp.duplicate() );
 						stackCLAHE.addSlice( fp.duplicate() );
+						*/
 					}
 
+					/*
 					// TODO: remove debug
 					new ImagePlus("stackMask", stackMask).show();
 					new ImagePlus("stackImg", stackImg).show();
 					new ImagePlus("stackCLAHE", stackCLAHE).show();
-					//ImageJFunctions.wrapUnsignedByte( Views.interval(source, gridBlockInterval), "src" ).duplicate().show();
+
+					ImageJFunctions.wrapUnsignedByte( Views.interval(source, gridBlockInterval), "src" ).duplicate().show();
+					ImageJFunctions.wrapUnsignedByte( result, "result" ).duplicate().show();
 					SimpleMultiThreading.threadHaltUnClean();
+					*/
 
-					//Views.interval(filteredSource, gridBlockInterval);
-
-					/*
-					final RandomAccessibleInterval<UnsignedByteType> filteredSource =
-							normalizeContrast(source,  new UnsignedByteType(), normalizeMethod, scaleIndex, blockSize);
-
-					N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
+					N5Utils.saveNonEmptyBlock(
+							  result,
 							  n5Output,
-							  datasetNameOutput,
+							  n5DatasetOutput,
 							  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
 							  gridBlock[2],
-							  new UnsignedByteType());*/
+							  new UnsignedByteType());
 				});
 
 	}
