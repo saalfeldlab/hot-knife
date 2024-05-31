@@ -232,7 +232,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 							rra.setPosition( c );
 
-							if ( rra.get().get() - 1 > z )
+							if ( rra.get().get() > z )
 							{
 								value.set( 255 );
 								all0 = false;
