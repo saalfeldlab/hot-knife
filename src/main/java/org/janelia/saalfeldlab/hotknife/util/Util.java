@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import ij.process.FloatProcessor;
 
 import org.janelia.saalfeldlab.n5.N5FSReader;
+import org.janelia.saalfeldlab.n5.N5Reader;
 
 import net.imglib2.Cursor;
 import net.imglib2.IterableInterval;
@@ -201,7 +202,7 @@ public class Util {
 		return groupName + dataSetName + "/attributes.json";
 	}
 
-	public static <T> T readRequiredAttribute(final N5FSReader n5Reader,
+	public static <T> T readRequiredAttribute(final N5Reader n5Reader,
 											  final String groupName,
 											  final String key,
 											  final Class<T> clazz) throws IOException {
