@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaFutureAction;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
@@ -24,12 +23,9 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.ImageJ;
 import ij.ImagePlus;
-import ij.ImageStack;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
-import ij.process.ImageProcessor;
 import mpicbg.ij.clahe.Flat;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -39,20 +35,11 @@ import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
-import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.ByteArray;
-import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.img.imageplus.ImagePlusImgs;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
-import net.imglib2.util.RealSum;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 public class SparkMaskedCLAHEMultiSEM
@@ -156,7 +143,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 
-		new ImageJ();
+		// new ImageJ();
 
 		pGrid.foreach(
 				gridBlock ->
@@ -166,6 +153,8 @@ public class SparkMaskedCLAHEMultiSEM
 					if ( gridBlock[0][0] < 20000 || gridBlock[0][1] < 20000 )
 						return;
 					*/
+
+					final N5Writer workerWriter = new N5FSWriter(n5PathInput);
 
 					final int minIntensity = 0;
 					final int maxIntensity = 255;
@@ -306,7 +295,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 					N5Utils.saveNonEmptyBlock(
 							  result,
-							  n5Output,
+							  workerWriter,
 							  n5DatasetOutput,
 							  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
 							  gridBlock[2],
