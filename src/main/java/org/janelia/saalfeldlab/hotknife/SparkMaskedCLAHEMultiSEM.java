@@ -24,9 +24,25 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import ij.ImageJ;
+import ij.ImagePlus;
+import ij.ImageStack;
+import ij.process.ByteProcessor;
+import ij.process.FloatProcessor;
+import mpicbg.ij.clahe.Flat;
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
+import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImg;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.basictypeaccess.array.ByteArray;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -62,6 +78,10 @@ public class SparkMaskedCLAHEMultiSEM
 				usage = "how much bigger the compute blocks in XY are than the blocks saved on disc")
 		private int blockFactorXY = 8;
 
+		@Option(name = "--blockFactorZ",
+				usage = "how much bigger the compute blocks in Z are than the blocks saved on disc")
+		private int blockFactorZ = 1;
+
 		@Option(name = "--invert",
 				usage = "Invert before saving to N5, e.g. for MultiSEM")
 		private boolean invert = false;
@@ -89,6 +109,7 @@ public class SparkMaskedCLAHEMultiSEM
 			final String n5DatasetOutput,
 			final String n5FieldMax,
 			final int blockFactorXY,
+			final int blockFactorZ,
 			final boolean overwrite ) throws IOException
 	{
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
@@ -96,7 +117,7 @@ public class SparkMaskedCLAHEMultiSEM
 		final DatasetAttributes attributes = n5Input.getDatasetAttributes(n5DatasetInput);
 		final int[] blockSize = attributes.getBlockSize();
 		final long[] dimensions = attributes.getDimensions();
-		final int[] gridBlockSize = new int[]{ blockSize[0] * blockFactorXY, blockSize[1] * blockFactorXY, blockSize[2] };
+		final int[] gridBlockSize = new int[]{ blockSize[0] * blockFactorXY, blockSize[1] * blockFactorXY, blockSize[2] * blockFactorZ };
 
 		final String factorsKey = "downsamplingFactors";
 		final double[] maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMax, factorsKey, double[].class);
@@ -129,19 +150,128 @@ public class SparkMaskedCLAHEMultiSEM
 
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 
+		new ImageJ();
+
 		pGrid.foreach(
 				gridBlock ->
 				{
-					final N5Reader n5 = new N5FSReader(n5PathInput);
-					final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5, n5FieldMax);
-					final RealRandomAccessible<DoubleType> maxFieldScaled = Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors);
+					// TODO: remove debug
+					if ( gridBlock[0][0] < 20000 || gridBlock[0][1] < 20000 )
+						return;
 
 					final FinalInterval gridBlockInterval =
 							Intervals.createMinSize(
 									gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
 									gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
+/*
+					final FinalInterval gridBlockInterval2d =
+							Intervals.createMinSize(
+									gridBlock[0][0], gridBlock[0][1],
+									gridBlock[1][0], gridBlock[1][1] );
+*/
+					System.out.println( net.imglib2.util.Util.printInterval( gridBlockInterval ) );
 
-					final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, n5DatasetInput);
+					final N5Reader n5 = new N5FSReader(n5PathInput);
+					final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5, n5FieldMax);
+					final RealRandomAccessible<DoubleType> maxFieldScaled = Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors);
+					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, n5DatasetInput);
+					final RandomAccessible<UnsignedByteType> infiniteSource = Views.extendMirrorDouble( source );
+
+					// extended interval for local contrast normalization
+					final int blockRadius = 511; //1023
+
+					final long[] min = Intervals.minAsLongArray( Intervals.hyperSlice( gridBlockInterval, 2 ) );
+					final long[] max = Intervals.maxAsLongArray( Intervals.hyperSlice( gridBlockInterval, 2 ) );
+
+					min[0] -= blockRadius;
+					min[1] -= blockRadius;
+					max[0] += blockRadius;
+					max[1] += blockRadius;
+
+					final Interval intervalEx = new FinalInterval(min, max);
+
+					// 2d mask that will re-used for each z layer
+					final byte[] bArray = new byte[ (int)intervalEx.dimension( 0 ) * (int)intervalEx.dimension( 1 ) ];
+					final ByteProcessor bp = new ByteProcessor( (int)intervalEx.dimension( 0 ), (int)intervalEx.dimension( 1 ), bArray );
+					final RandomAccessibleInterval<UnsignedByteType> maskImg =
+							Views.translate( ArrayImgs.unsignedBytes( bArray, intervalEx.dimensionsAsLongArray() ), intervalEx.minAsLongArray() );
+
+					// 2d FloatProcessor for raw image data that we will re-use for each slice
+					final float[] fArray = new float[ (int)intervalEx.dimension( 0 ) * (int)intervalEx.dimension( 1 ) ];
+					final FloatProcessor fp = new FloatProcessor( (int)intervalEx.dimension( 0 ), (int)intervalEx.dimension( 1 ), fArray );
+					final RandomAccessibleInterval<FloatType> img =
+							Views.translate( ArrayImgs.floats( fArray, intervalEx.dimensionsAsLongArray() ), intervalEx.minAsLongArray() );
+
+					// TODO: remove debug
+					ImageStack stackMask = new ImageStack();
+					ImageStack stackImg = new ImageStack();
+					ImageStack stackCLAHE = new ImageStack();
+
+					for ( long z = gridBlockInterval.min( 2 ); z <= gridBlockInterval.max( 2 ); ++z )
+					{
+						// assemble mask for this z-layer
+						final Cursor<UnsignedByteType> c = Views.flatIterable( maskImg ).localizingCursor();
+						final RealRandomAccess<DoubleType> rra = maxFieldScaled.realRandomAccess();
+
+						boolean all0 = true; // all mask values are 0
+						boolean all255 = true; // all mask values are 255
+
+						while ( c.hasNext() )
+						{
+							final UnsignedByteType value = c.next();
+							rra.setPosition( c );
+							if ( rra.get().get() > z )
+							{
+								value.set( 255 );
+								all0 = false;
+							}
+							else
+							{
+								value.set( 0 );
+								all255 = false;
+							}
+						}
+
+						// get the input image
+						final Cursor<UnsignedByteType> cImg = Views.flatIterable( Views.interval( Views.hyperSlice( infiniteSource, 2, z ), intervalEx ) ).cursor();
+						for ( final FloatType t : Views.flatIterable( img ) )
+							t.set( cImg.next().getRealFloat() );
+
+						fp.setMinAndMax( 0, 255 );
+
+						//Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false);
+						stackImg.addSlice( fp.duplicate() );
+
+						if ( all255 )
+						{
+							System.out.println( "no mask");
+							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false);
+						}
+						else if ( all0 )
+						{
+							// do nothing
+							System.out.println( "nothing");
+						}
+						else
+						{
+							System.out.println( "with mask");
+							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, bp, false);
+						}
+
+						// TODO: remove debug
+						System.out.println( z + ": " + all0 + ", " + all255 );
+						stackMask.addSlice( bp.duplicate() );
+						stackCLAHE.addSlice( fp.duplicate() );
+					}
+
+					// TODO: remove debug
+					new ImagePlus("stackMask", stackMask).show();
+					new ImagePlus("stackImg", stackImg).show();
+					new ImagePlus("stackCLAHE", stackCLAHE).show();
+					//ImageJFunctions.wrapUnsignedByte( Views.interval(source, gridBlockInterval), "src" ).duplicate().show();
+					SimpleMultiThreading.threadHaltUnClean();
+
+					//Views.interval(filteredSource, gridBlockInterval);
 
 					/*
 					final RandomAccessibleInterval<UnsignedByteType> filteredSource =
@@ -171,6 +301,6 @@ public class SparkMaskedCLAHEMultiSEM
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		process( sparkContext, options.n5PathInput, options.n5DatasetInput, options.n5DatasetOutput, options.n5FieldMax, options.blockFactorXY, options.overwrite );
+		process( sparkContext, options.n5PathInput, options.n5DatasetInput, options.n5DatasetOutput, options.n5FieldMax, options.blockFactorXY, options.blockFactorZ, options.overwrite );
 	}
 }
