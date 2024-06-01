@@ -25,7 +25,7 @@ public class SparkMaskedCLAHEMultiSEMBatch
 		// /render/slab_000_to_009/s002_m395_align_no35_horiz_avgshd_ic___20240504_084955_norm-layer/s0,/render/slab_000_to_009/s002_m395_align_no35_horiz_avgshd_ic___20240504_084955_norm-layer-clahe/s0,/heightfields_fix/slab_000_to_009/s002_m395/max
 		@Option(name = "--datasetCsv",
 				required = true,
-				usage = "File containing comma-separated input,max values")
+				usage = "File containing comma-separated input,output,max values")
 		private String datasetCsv = null;
 
 		@Option(name = "--blockFactorXY",
