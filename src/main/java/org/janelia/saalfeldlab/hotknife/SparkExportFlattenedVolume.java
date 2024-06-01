@@ -85,6 +85,33 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 		final JavaSparkContext sc = new JavaSparkContext(conf);
 		sc.setLogLevel("ERROR");
 
+		flattenVolume(sc,
+					  n5RawInputPath,
+					  n5FieldPath,
+					  n5OutPath,
+					  rawDataset,
+					  fieldGroup,
+					  outDataset,
+					  blockSize,
+					  padding,
+					  multiSem);
+
+		sc.close();
+
+		return null;
+	}
+
+	public static void flattenVolume(final JavaSparkContext sc,
+									 final String n5RawInputPath,
+									 final String n5FieldPath,
+									 final String n5OutPath,
+									 final String rawDataset,
+									 final String fieldGroup,
+									 final String outDataset,
+									 final int[] blockSize,
+									 final double padding,
+									 final boolean multiSem) throws IOException {
+
 		final int[] rawBlockSize;
 		final long[] dimensions;
 		final String minFieldName;
@@ -181,12 +208,12 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 					@SuppressWarnings("unchecked")
 					final RandomAccessibleInterval<UnsignedByteType> rawVolume =
 							multiSem ?
-									(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset)
-									:
-									Views.permute(
-											(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset),
-											1,
-											2);
+							(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset)
+									 :
+							Views.permute(
+									(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset),
+									1,
+									2);
 
 					final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5FieldReader, minFieldName);
 					final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, maxFieldName);
@@ -200,20 +227,16 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 					final RandomAccessibleInterval<UnsignedByteType> flattened =
 							Views.zeroMin(
 									Transform.createTransformedInterval(
-										rawVolume,
-										new FinalInterval(
-												new long[] {rawVolume.min(0), rawVolume.min(1), (int)Math.round(min - padding)},
-												new long[] {rawVolume.max(0), rawVolume.max(1), (int)Math.round(max + padding)}),
-										flattenTransform.inverse(),
-										new UnsignedByteType()));
+											rawVolume,
+											new FinalInterval(
+													new long[] {rawVolume.min(0), rawVolume.min(1), (int)Math.round(min - padding)},
+													new long[] {rawVolume.max(0), rawVolume.max(1), (int)Math.round(max + padding)}),
+											flattenTransform.inverse(),
+											new UnsignedByteType()));
 
 					final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
 					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDataset, gridBlock[2]);
 				});
-
-		sc.close();
-
-		return null;
 	}
 
 	public static void main(final String... args) {
