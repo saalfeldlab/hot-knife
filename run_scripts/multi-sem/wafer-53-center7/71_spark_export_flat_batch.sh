@@ -11,7 +11,7 @@ umask 0002
 
 DATASET_CSV="$1"
 N_NODES="20"
-export RUNTIME="233:59" # batches with ? slabs took between ? and ? hours to complete
+export RUNTIME="233:59" # using 20 11-core nodes, batches with 31 slabs took between 5 and 7 hours to complete
 
 if [[ ! -f ${DATASET_CSV} ]]; then
   echo "ERROR: csv file ${DATASET_CSV} not found"
