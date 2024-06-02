@@ -34,7 +34,7 @@ export RUNTIME=${3:-240:59} # default is 10+ days
 # --------------------------------------------------------------------
 # setup export parameters
 
-RUN_AND_PASS="202405dd_hhmmss/passNN"                # TODO: update this with desired run and pass
+RUN_AND_PASS="run_20240529_024833/pass12"
 TRANSFORM_GROUP="/surface-align/${RUN_AND_PASS}"
 DATA_SET_OUTPUT="/wafer-53-align/${RUN_AND_PASS}/s0"
 
@@ -43,12 +43,12 @@ ARGV="--n5PathInput ${N5_SAMPLE_PATH} \
 --n5PathOutput ${N5_SAMPLE_PATH} \
 --n5DatasetOutput ${DATA_SET_OUTPUT} \
 --zBatch ${Z_BATCH} \
---blockSize=256,256,32"
+--blockSize=256,256,128"
 # --normalizeContrast
 # --explainPlan        # use --explainPlan option to output debug info without running export
 
 for SLAB in ${ALL_SLABS}; do
-  ARGV="${ARGV} -i /flat/${SLAB}/raw -t 20 -b -21"
+  ARGV="${ARGV} -i /flat_clahe/${SLAB}/raw -t 3 -b -4"
 done
 
 CLASS="org.janelia.saalfeldlab.hotknife.SparkExportAlignedSlabSeries"
