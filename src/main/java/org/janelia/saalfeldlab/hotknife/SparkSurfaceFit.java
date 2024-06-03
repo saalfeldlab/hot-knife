@@ -233,7 +233,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	 * @param mask
 	 * @param value
 	 */
-	private static <T extends Type<T>, M extends NumericType<M>> void maskSlice(
+	public static <T extends Type<T>, M extends NumericType<M>> void maskSlice(
 			final RandomAccessibleInterval<T> slice,
 			final RandomAccessibleInterval<M> mask,
 			final T value) {
