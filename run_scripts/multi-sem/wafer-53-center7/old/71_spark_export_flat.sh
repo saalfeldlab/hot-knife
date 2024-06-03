@@ -8,13 +8,14 @@ if (( $# != 2 )); then
 fi
 
 RAW_SLAB="${1}"
-N_NODES="${2}" # wafer 53, s070 took 17 minutes with 30 nodes
+N_NODES="${2}" # wafer_53_center7: slab s251 took 49 minutes with 3 nodes, slab s402 took 19 minutes with 9 nodes
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "${RAW_SLAB}"
 
-validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_ALIGNED_SLAB_DATASET}/s0" "${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET}"
+N5_RAW_S0_DATASET="${N5_ALIGNED_SLAB_DATASET}_norm-layer-clahe/s0"
+validateDirectoriesExist "${N5_SAMPLE_PATH}${N5_RAW_S0_DATASET}" "${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET}"
 
 FULL_FLAT_DATASET_PATH="${N5_SAMPLE_PATH}${N5_FLAT_RAW_DATASET}"
 if [[ -d ${FULL_FLAT_DATASET_PATH} ]]; then
@@ -22,7 +23,7 @@ if [[ -d ${FULL_FLAT_DATASET_PATH} ]]; then
 ERROR: ${FULL_FLAT_DATASET_PATH} exists
 
 For runs after new height field fixes, move the existing data to be deleted like this:
-  mv ${N5_SAMPLE_PATH}${N5_FLAT_DATASET_ROOT} /nrs/flyem/render/n5/delete_me
+  mv ${N5_SAMPLE_PATH}${N5_HEIGHT_FIELDS_FIX_DATASET} /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5/delete_me
 "
   exit 1
 fi
@@ -34,7 +35,7 @@ ARGV="\
 --n5RawPath=${N5_SAMPLE_PATH} \
 --n5FieldPath=${N5_SAMPLE_PATH} \
 --n5OutputPath=${N5_SAMPLE_PATH} \
---n5RawDataset=${N5_ALIGNED_SLAB_DATASET}/s0 \
+--n5RawDataset=${N5_RAW_S0_DATASET} \
 --n5FieldGroup=${N5_HEIGHT_FIELDS_FIX_DATASET} \
 --n5OutDataset=${N5_FLAT_RAW_DATASET} \
 --padding=3 \

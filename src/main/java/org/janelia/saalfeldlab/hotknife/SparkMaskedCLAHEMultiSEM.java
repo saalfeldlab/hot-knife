@@ -319,5 +319,7 @@ public class SparkMaskedCLAHEMultiSEM
 		sparkContext.setLogLevel("ERROR");
 
 		process( sparkContext, options.n5PathInput, options.n5DatasetInput, options.n5DatasetOutput, options.n5FieldMax, options.blockFactorXY, options.blockFactorZ, options.overwrite );
+
+		sparkContext.close();
 	}
 }
