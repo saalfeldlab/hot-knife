@@ -46,12 +46,8 @@ public class InpaintMultiSEM
 	{
 		final Cursor<FloatType> c = Views.iterable( img ).localizingCursor();
 		final RandomAccess< FloatType > o = out.randomAccess();
-		//final RandomAccess< FloatType > i = img.randomAccess();
 
 		final int n = img.numDimensions();
-
-		//final long[][] distances = new long[ n ][ 2 ];
-		//final float[][] values = new float[ n ][ 2 ];
 
 		// random rays being shot out
 		final int numOrientations = 256;
@@ -77,8 +73,6 @@ public class InpaintMultiSEM
 			}
 			else
 			{
-				//System.out.println( Arrays.toString( o.positionAsLongArray() ) );
-
 				values.clear();
 				distances.clear();
 
@@ -126,98 +120,20 @@ public class InpaintMultiSEM
 					} while ( true );
 				} while ( distances.size() < numOrientations );
 
-				//System.out.println( Arrays.toString( vector ) + " l=" + LinAlgHelpers.length(vector));
-
 				// interpolate value
 				double sum = 0;
 				double sumV = 0;
 
 				for ( int dir = 0; dir < values.size(); ++dir )
 				{
-					double dist = 1.0 / distances.get( dir );//Math.sqrt( Math.sqrt( distances.get( dir ) + 1 ) );
-					//dist = Math.sqrt( dist );
-					//System.out.println( " " + dist + " (" + distances.get( dir ) + ")");
+					double dist = 1.0 / distances.get( dir );
 					sum += dist;
 					sumV += values.get( dir ) * dist;
 				}
 
-				//System.exit( 0 );
 				final double value = sumV / sum ;
 
 				o.get().setReal( value );
-
-
-				/*
-				// find the nearest pixels in all dim independently, interpolate
-				for ( int d = 0; d < n; ++d )
-				{
-					// going up
-					i.setPosition( c );
-
-					for ( long l = c.getLongPosition( d ) - 1; l >= img.min( d ); --l )
-					{
-						i.setPosition( l, d );
-
-						if ( !Float.isNaN( i.get().get() ) )
-						{
-							// reached the end
-							distances[ d ][ 0 ] = c.getLongPosition( d ) - l;
-							values[ d ][ 0 ] = i.get().get();
-
-							break;
-						}
-					}
-
-					// going down
-					i.setPosition( c );
-
-					for ( long l = c.getLongPosition( d ) + 1; l <= img.max( d ); ++l )
-					{
-						i.setPosition( l, d );
-
-						if ( !Float.isNaN( i.get().get() ) )
-						{
-							// reached the end
-							distances[ d ][ 1 ] = l - c.getLongPosition( d );
-							values[ d ][ 1 ] = i.get().get();
-
-							break;
-						}
-					}
-				}
-
-				// interpolate value
-				double sum = 0;
-				double sumV = 0;
-
-				for ( int d = 0; d < n; ++d )
-				{
-					for ( int e = 0; e < distances[ d ].length; ++e )
-					{
-						if ( distances[ d ][ e ] > 0 )
-						{
-							double dist = 1.0 / distances[ d ][ e ];
-							//dist = Math.sqrt( dist );
-							//System.out.println( " " + d + ": " + dist + " (" + distances[d][e] + ")");
-							sum += dist;
-							sumV += values[ d ][ e ] * dist;
-						}
-					}
-				}
-
-				final double value = sumV / sum ;
-
-				o.get().setReal( value );
-
-				
-				//System.out.println(" " + Arrays.deepToString( distances ));
-				//System.out.println(" " + Arrays.deepToString( values ));
-				//System.out.println(" " + value );
-
-				//if ( c.getIntPosition( 0 ) == 160 && c.getIntPosition( 1 ) == 160 )
-			//		SimpleMultiThreading.threadHaltUnClean();
-
-				*/
 			}
 		}
 	}
@@ -259,27 +175,5 @@ public class InpaintMultiSEM
 
 		ImageJFunctions.show( imgF );
 		ImageJFunctions.show( imgOut );
-		/*
-		// 2d code:
-		
-		final FloatProcessor fpSlice = Util.materialize( Views.hyperSlice( Views.zeroMin( imgF ), 2, 0 ) );
-
-		final ArrayImg<FloatType, FloatArray> slice =
-				ArrayImgs.floats(
-						(float[])fpSlice.getPixels(),
-						fpSlice.getWidth(),
-						fpSlice.getHeight());
-		
-		SparkSurfaceFit.maskSlice(slice, mask, new FloatType(Float.NaN));
-
-		
-		InpaintMasked.run(fpSlice);
-
-		new ImagePlus( "img", fpSlice ).show();
-		*/
-		/*
-		return Views.translate(
-				slice,
-				Intervals.minAsLongArray(mask));*/
 	}
 }
