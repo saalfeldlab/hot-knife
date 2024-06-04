@@ -29,17 +29,20 @@ public class SparkViewDeformationFieldDifference
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5")
 		private String n5Path;
 
-		@Option(name = "--n5Group", required = false, usage = "N5 group, e.g. /surface-align/run_20240517_200443/pass04")
-		private String group = "/";
+		@Option(name = "--n5Group1", required = true, usage = "N5 group, e.g. /surface_align/pass02")
+		private String n5Group1 = null;
+
+		@Option(name = "--n5Group2", required = true, usage = "N5 group, e.g. /surface_align/pass10")
+		private String n5Group2 = null;
+
+		@Option(name = "--transform1", required = true, usage = "first transform flat.Sec26.top.face")
+		private String transform1 = null;
+
+		@Option(name = "--transform2", required = true, usage = "second transform flat.Sec27.bot.face")
+		private String transform2 = null;
 
 		@Option(name = "--scaleIndex", required = true, usage = "scale index for visualization, e.g. 4 (means scale = 1.0 / 2^4)")
 		private int transformScaleIndex;
-
-		@Option(name = "-a", required = false, usage = "list of transformation fields (sorted as pairs with 'b'), e.g. -a flat_mask.s281_m206.bot4_clahe.face OR -a pass04/flat_mask.s281_m206.bot4_clahe.face")
-		private ArrayList<String> a = new ArrayList<>();
-
-		@Option(name = "-b", required = false, usage = "list of transformation fields (sorted as pairs with 'a'), e.g. -a flat_mask.s281_m206.top4_clahe.face")
-		private ArrayList<String> b = new ArrayList<>();
 
 		@Option(name = "-o", aliases = {"--saveDir"}, required = true, usage = "directory for saving differences in transformation fields")
 		private String saveDir;
@@ -64,7 +67,10 @@ public class SparkViewDeformationFieldDifference
 		public String getN5Path() { return n5Path; }
 		public int getScaleIndex() { return transformScaleIndex; }
 		public String saveDir() { return saveDir; }
-		public String getGroup() { return group; }
+		public String n5Group1() { return n5Group1; }
+		public String n5Group2() { return n5Group2; }
+		public String transform1() { return transform1; }
+		public String transform2() { return transform2; }
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException
@@ -75,33 +81,26 @@ public class SparkViewDeformationFieldDifference
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		if ( options.a.size() != options.b.size() )
-			throw new RuntimeException( "size of a and b not equal." );
-
-		if ( options.a.size() == 0 )
-			throw new RuntimeException( "a and b not specified." );
-
 		final String n5Path = options.getN5Path();
-		final String n5Group = options.getGroup();
+		final String n5Group1 = options.n5Group1();
+		final String n5Group2 = options.n5Group2();
 		final int scaleIndex = options.getScaleIndex();
-		final ArrayList< String > transformANames = options.a;
-		final ArrayList< String > transformBNames = options.b;
+		final String transform1 = options.transform1();
+		final String transform2 = options.transform2();
 
-		for ( int i = 0; i < options.a.size(); ++ i )
 		{
 			final N5Reader n5 = new N5FSReader(n5Path);
 
-			final String transformA = transformANames.get( i );
-			final String transformB = transformBNames.get( i );
+			final double[] boundsMin1 = n5.getAttribute(transform1, "boundsMin", double[].class);
+			final double[] boundsMin2 = n5.getAttribute(transform2, "boundsMin", double[].class);
+			final double transformScale1 = n5.getAttribute(transform1, "scale", double.class);
+			final double transformScale2 = n5.getAttribute(transform2, "scale", double.class);
 
-			final double[] boundsMin = n5.getAttribute(transformA, "boundsMin", double[].class);
-			final double transformScale = n5.getAttribute(transformA, "scale", double.class);
+			final RealTransform t1 = Transform.loadScaledTransform(n5, n5Group1 + "/" + transform1, transformScale1, boundsMin1 );
+			final RealTransform t2 = Transform.loadScaledTransform(n5, n5Group2 + "/" + transform2, transformScale2, boundsMin2 );
 
-			final RealTransform tA = Transform.loadScaledTransform(n5, n5Group + "/" + transformA );
-			final RealTransform tB = Transform.loadScaledTransform(n5, n5Group + "/" + transformB );
-
-			final RealTransform sTA = Transform.createScaledRealTransform( tA, scaleIndex );
-			final RealTransform sTB = Transform.createScaledRealTransform( tB, scaleIndex );
+			final RealTransform sT1 = Transform.createScaledRealTransform( t1, scaleIndex );
+			final RealTransform sT2 = Transform.createScaledRealTransform( t2, scaleIndex );
 
 
 		}
