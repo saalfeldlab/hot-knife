@@ -1,6 +1,5 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
-import java.util.Arrays;
 import java.util.Random;
 
 import org.janelia.saalfeldlab.hotknife.SparkSurfaceFit;
@@ -53,15 +52,18 @@ public class InpaintMultiSEM
 
 		final RealRandomAccess< FloatType > iR = Views.interpolate( Views.extendBorder( img ), new NLinearInterpolatorFactory<>() ).realRandomAccess();
 
-		final RayCaster rayCaster = new RayCaster(p2d, rnd);
+		final RayCaster rayCaster = new RayCaster(iR, p2d, rnd);
 
 		while (c.hasNext()) {
 			final FloatType v = c.next();
 			o.setPosition(c);
 
 			if (!Float.isNaN(v.get())) {
-				// no inpainting necessary
+				// pixel has content, no inpainting necessary
 				o.get().set(v);
+			} else if (!rayCaster.isInPseudoConvexHull(c, img)) {
+				// pixel is not in the interior of the image content, no inpainting necessary
+				o.get().setZero();
 			} else {
 				double weightSum = 0;
 				double valueSum = 0;
@@ -71,7 +73,7 @@ public class InpaintMultiSEM
 				// values of the first non-masked pixel
 				while (nRays < numOrientations) {
 					nRays++;
-					final RayCaster.Result result = rayCaster.castRandom(iR, img, c);
+					final RayCaster.Result result = rayCaster.cast(img, c, RayCaster.Direction.RANDOM);
 					if (result != null) {
 						final double weight = 1.0 / result.distance;
 						weightSum += weight;
@@ -95,8 +97,9 @@ public class InpaintMultiSEM
 		final RandomAccessibleInterval< UnsignedByteType > maskRaw = N5Utils.open(n5, maskDataset);
 		final RandomAccessibleInterval< UnsignedByteType > imgRaw = N5Utils.open(n5, imageDataset);
 
-		final Interval interval = Intervals.createMinMax( 32313, 37000, 12, 33808, 37800, 16 );
+		//final Interval interval = Intervals.createMinMax( 32313, 37000, 12, 33808, 37800, 16 );
 		//final Interval interval = Intervals.createMinMax( 32313, 37000, 14, 33808, 37800, 14 );
+		final Interval interval = Intervals.createMinMax(35700, 43600, 14, 36900, 44400, 14);
 		//final Interval interval = Intervals.createMinMax( 32313, 37000, 14, 32540, 37194, 14 );
 
 		new ImageJ();
@@ -118,7 +121,9 @@ public class InpaintMultiSEM
 		SparkSurfaceFit.maskSlice(imgF, mask, new FloatType(Float.NaN));
 
 		System.out.println("Inpainting...");
+		final long start = System.currentTimeMillis();
 		inpaint3d( Views.zeroMin( imgF ), Views.zeroMin( imgOut ));
+		System.out.println("Inpainting took " + (System.currentTimeMillis() - start) + "ms");
 
 		ImageJFunctions.show( imgF );
 		ImageJFunctions.show( imgOut );
@@ -126,64 +131,67 @@ public class InpaintMultiSEM
 
 
 	private static class RayCaster {
-		private final Random random;
 		private final double[] direction = new double[3];
 		private final Result result = new Result();
 
+		private static final RayCaster.Direction[] directionsToTry = new RayCaster.Direction[] {
+				RayCaster.Direction.UP,
+				RayCaster.Direction.DOWN,
+				RayCaster.Direction.LEFT,
+				RayCaster.Direction.RIGHT
+		};
+
+		private final RealRandomAccess<FloatType> image;
 		private final double ratioOf2dRays;
+		private final Random random;
 
 		/*
-		 * Default constructor (true random rays in 3d).
-		 */
-		public RayCaster() {
-			this(0.0);
-		}
-
-		/*
+		 * @param image the image to cast rays into
 		 * @param ratioOf2dRays the ratio of 2d rays to 3d rays. If the number of dimensions is less than 3, this
-		 * parameter is ignored.
-		 */
-		public RayCaster(final double ratioOf2dRays) {
-			this(ratioOf2dRays, new Random());
-		}
-
-		/*
-		 * @param ratioOf2dRays the ratio of 2d rays to 3d rays. If the number of dimensions is less than 3, this
-		 * parameter is ignored.
+		 * 		  parameter is ignored.
 		 * @param random the random number generator to use
 		 */
-		public RayCaster(double ratioOf2dRays, final Random random) {
-			this.random = random;
+		public RayCaster(final RealRandomAccess<FloatType> image,
+						 final double ratioOf2dRays,
+						 final Random random) {
+			this.image = image;
 			this.ratioOf2dRays = ratioOf2dRays;
+			this.random = random;
 		}
 
 		/*
-		 * Casts a random ray from the given position in the given direction until it hits a non-masked pixel or exits the
-		 * image boundaries.
+		 * Casts a ray from the given position in the given direction until it hits a non-masked (i.e., non-NaN) pixel
+		 * or exits the image boundary.
 		 *
-		 * @param img the real random access to the image
-		 * @param interval the interval of the image
+		 * @param interval the interval in which the ray search is performed
 		 * @param position the position from which to cast the ray
-		 * @return the result of the ray casting
+		 * @param direction the direction in which to cast the ray
+		 * @return the result of the ray casting or null if the ray exited the image boundary without hitting a
+		 * 		   non-NaN pixel
 		 */
-		Result castRandom(final RealRandomAccess<FloatType> img, final Interval interval, final RealLocalizable position) {
+		Result cast(final Interval interval, final RealLocalizable position, final Direction rayDirection) {
 			final int n = position.numDimensions();
 			final int rayDimension = (n > 2 && random.nextDouble() < ratioOf2dRays) ? 2 : n;
-			initializeRandomDirection(rayDimension);
 
-			img.setPosition(position);
+			if (rayDirection == Direction.RANDOM) {
+				initializeRandomDirection(rayDimension);
+			} else {
+				initializeWithGivenDirection(rayDirection);
+			}
+
+			image.setPosition(position);
 			long steps = 0;
 
 			while(true) {
-				img.move(direction);
+				image.move(direction);
 				++steps;
 
-				if (!isInside(img, interval)) {
+				if (!isInside(image, interval)) {
 					// the ray exited the image boundaries without hitting a non-masked pixel
 					return null;
 				}
 
-				final float value = img.get().get();
+				final float value = image.get().get();
 				if (!Float.isNaN(value)) {
 					// the ray reached the end of the mask
 					result.value = value;
@@ -205,9 +213,63 @@ public class InpaintMultiSEM
 			LinAlgHelpers.normalize(direction);
 		}
 
+		private void initializeWithGivenDirection(Direction rayDirection) {
+			direction[0] = rayDirection.get()[0];
+			direction[1] = rayDirection.get()[1];
+			direction[2] = rayDirection.get()[2];
+		}
+
+		/*
+		 * Checks if the given position is in the pseudo-convex hull of the image content. The pseudo-convex hull is
+		 * defined as the set of all points from which at least three rays in +/-x and +/-y directions hit the image
+		 * content. This is taking advantage of the fact that the image content is made up from multiple almost
+		 * axes-parallel rectangles.
+		 *
+		 * @param c the position to check
+		 * @param interval the interval in which to check
+		 * @return true if the position is in the pseudo-convex hull of the image content, false otherwise
+		 */
+		public boolean isInPseudoConvexHull(final Cursor<FloatType> c, final Interval interval) {
+			int hits = 0;
+			int misses = 0;
+			for (RayCaster.Direction direction : directionsToTry) {
+				final RayCaster.Result result = cast(interval, c, direction);
+				if (result != null) {
+					hits++;
+				} else {
+					misses++;
+				}
+
+				if (misses > 1) {
+					return false;
+				} else if (hits > 2) {
+					return true;
+				}
+			}
+			return false;
+		}
+
 		public static class Result {
 			public double value = 0;
 			public double distance = 0;
+		}
+
+		public enum Direction {
+			UP(new double[] { 0, 1, 0 }),
+			DOWN(new double[] { 0, -1, 0 }),
+			LEFT(new double[] { -1, 0, 0 }),
+			RIGHT(new double[] { 1, 0, 0 }),
+			RANDOM(new double[] { 0, 0, 0 });
+
+			final private double[] vector;
+
+			Direction(final double[] vector) {
+				this.vector = vector;
+			}
+
+			public double[] get() {
+				return vector;
+			}
 		}
 	}
 }
