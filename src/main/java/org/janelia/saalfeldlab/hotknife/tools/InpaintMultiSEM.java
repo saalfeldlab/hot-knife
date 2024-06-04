@@ -1,6 +1,5 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -47,8 +46,6 @@ public class InpaintMultiSEM
 		final Cursor<FloatType> c = Views.iterable( img ).localizingCursor();
 		final RandomAccess< FloatType > o = out.randomAccess();
 
-		final int n = img.numDimensions();
-
 		// random rays being shot out
 		final int numOrientations = 256;
 		final double p2d = 0.1;
@@ -56,84 +53,34 @@ public class InpaintMultiSEM
 
 		final RealRandomAccess< FloatType > iR = Views.interpolate( Views.extendBorder( img ), new NLinearInterpolatorFactory<>() ).realRandomAccess();
 
-		final ArrayList< Long > distances = new ArrayList<>( numOrientations );
-		final ArrayList< Float > values = new ArrayList<>( numOrientations );
+		final RayCaster rayCaster = new RayCaster(p2d, rnd);
 
-		final double[] vector = new double[ 3 ];
-
-		while ( c.hasNext() )
-		{
+		while (c.hasNext()) {
 			final FloatType v = c.next();
-			o.setPosition( c );
+			o.setPosition(c);
 
-			if ( !Float.isNaN( v.get() ) )
-			{
+			if (!Float.isNaN(v.get())) {
 				// no inpainting necessary
-				o.get().set( v );
-			}
-			else
-			{
-				values.clear();
-				distances.clear();
+				o.get().set(v);
+			} else {
+				double weightSum = 0;
+				double valueSum = 0;
+				int nRays = 0;
 
-				do
-				{
-					// get a random direction
-					Arrays.fill(vector, 0.0);
-
-					// limit some to 2d rays
-					final int m;
-
-					if ( n > 2 && rnd.nextDouble() < p2d )
-						m = 2;
-					else
-						m = n;
-
-					for ( int d = 0; d < m; ++d )
-						vector[ d ] = rnd.nextDouble() * ( rnd.nextBoolean() ? -1 : 1 );
-
-					LinAlgHelpers.normalize( vector );
-
-					iR.setPosition( c );
-					long steps = 0;
-
-					do
-					{
-						iR.move( vector );
-						++steps;
-
-						if ( !isInside( iR, img ) )
-						{
-							// exited the image boundaries
-							break;
-						}
-
-						if ( !Float.isNaN( iR.get().get() ) )
-						{
-							// reached the end of the mask
-							distances.add( steps );
-							values.add( iR.get().get() );
-
-							break;
-						}
-
-					} while ( true );
-				} while ( distances.size() < numOrientations );
-
-				// interpolate value
-				double sum = 0;
-				double sumV = 0;
-
-				for ( int dir = 0; dir < values.size(); ++dir )
-				{
-					double dist = 1.0 / distances.get( dir );
-					sum += dist;
-					sumV += values.get( dir ) * dist;
+				// interpolate value by casting rays in random directions and averaging (weighted by distances) the
+				// values of the first non-masked pixel
+				while (nRays < numOrientations) {
+					nRays++;
+					final RayCaster.Result result = rayCaster.castRandom(iR, img, c);
+					if (result != null) {
+						final double weight = 1.0 / result.distance;
+						weightSum += weight;
+						valueSum += result.value * weight;
+					}
 				}
 
-				final double value = sumV / sum ;
-
-				o.get().setReal( value );
+				final double value = valueSum / weightSum;
+				o.get().setReal(value);
 			}
 		}
 	}
@@ -167,7 +114,7 @@ public class InpaintMultiSEM
 
 		final RandomAccessibleInterval< FloatType > imgOut = Views.translate( ArrayImgs.floats( img.dimensionsAsLongArray() ), img.minAsLongArray() );
 
-		System.out.println("Surface fitting...");
+		System.out.println("Mask slice...");
 		SparkSurfaceFit.maskSlice(imgF, mask, new FloatType(Float.NaN));
 
 		System.out.println("Inpainting...");
@@ -175,5 +122,92 @@ public class InpaintMultiSEM
 
 		ImageJFunctions.show( imgF );
 		ImageJFunctions.show( imgOut );
+	}
+
+
+	private static class RayCaster {
+		private final Random random;
+		private final double[] direction = new double[3];
+		private final Result result = new Result();
+
+		private final double ratioOf2dRays;
+
+		/*
+		 * Default constructor (true random rays in 3d).
+		 */
+		public RayCaster() {
+			this(0.0);
+		}
+
+		/*
+		 * @param ratioOf2dRays the ratio of 2d rays to 3d rays. If the number of dimensions is less than 3, this
+		 * parameter is ignored.
+		 */
+		public RayCaster(final double ratioOf2dRays) {
+			this(ratioOf2dRays, new Random());
+		}
+
+		/*
+		 * @param ratioOf2dRays the ratio of 2d rays to 3d rays. If the number of dimensions is less than 3, this
+		 * parameter is ignored.
+		 * @param random the random number generator to use
+		 */
+		public RayCaster(double ratioOf2dRays, final Random random) {
+			this.random = random;
+			this.ratioOf2dRays = ratioOf2dRays;
+		}
+
+		/*
+		 * Casts a random ray from the given position in the given direction until it hits a non-masked pixel or exits the
+		 * image boundaries.
+		 *
+		 * @param img the real random access to the image
+		 * @param interval the interval of the image
+		 * @param position the position from which to cast the ray
+		 * @return the result of the ray casting
+		 */
+		Result castRandom(final RealRandomAccess<FloatType> img, final Interval interval, final RealLocalizable position) {
+			final int n = position.numDimensions();
+			final int rayDimension = (n > 2 && random.nextDouble() < ratioOf2dRays) ? 2 : n;
+			initializeRandomDirection(rayDimension);
+
+			img.setPosition(position);
+			long steps = 0;
+
+			while(true) {
+				img.move(direction);
+				++steps;
+
+				if (!isInside(img, interval)) {
+					// the ray exited the image boundaries without hitting a non-masked pixel
+					return null;
+				}
+
+				final float value = img.get().get();
+				if (!Float.isNaN(value)) {
+					// the ray reached the end of the mask
+					result.value = value;
+					result.distance = steps;
+					return result;
+				}
+
+			}
+		}
+
+		private void initializeRandomDirection(int dim) {
+			for (int d = 0; d < dim; ++d) {
+				direction[d] = random.nextDouble() * (random.nextBoolean() ? -1 : 1);
+			}
+			for (int d = dim; d < 3; ++d) {
+				direction[d] = 0;
+			}
+
+			LinAlgHelpers.normalize(direction);
+		}
+
+		public static class Result {
+			public double value = 0;
+			public double distance = 0;
+		}
 	}
 }
