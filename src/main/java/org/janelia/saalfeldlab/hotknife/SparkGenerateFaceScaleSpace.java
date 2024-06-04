@@ -455,15 +455,24 @@ public class SparkGenerateFaceScaleSpace {
 				});
 	}
 
-	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final Options options = new Options(args);
 
 		if (!options.parsedSuccessfully)
 			return;
 
-		final SparkConf conf = new SparkConf().setAppName( "SparkGenerateFaceScaleSpace" );
-        final JavaSparkContext sc = new JavaSparkContext(conf);
+		final SparkConf conf = new SparkConf().setAppName("SparkGenerateFaceScaleSpace");
+		final JavaSparkContext sc = new JavaSparkContext(conf);
+
+		generateFace(sc, options);
+
+		sc.close();
+	}
+
+	public static void generateFace(final JavaSparkContext sc,
+									final Options options)
+            throws IOException {
 
 		final N5Writer n5 = new N5FSWriter(options.getN5Path());
 		n5.createGroup(options.getOutputGroupName());
@@ -573,6 +582,5 @@ public class SparkGenerateFaceScaleSpace {
 			}
 		}
 
-		sc.close();
 	}
 }
