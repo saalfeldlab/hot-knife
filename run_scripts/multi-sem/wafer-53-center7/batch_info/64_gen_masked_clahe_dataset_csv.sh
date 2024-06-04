@@ -9,15 +9,18 @@ source "${SCRIPT_DIR}"/../00_config.sh "NA"
 
 SLABS_PER_FILE=35
 COUNT=0
+BATCH_COUNT=0
+CSV_PREFIX="64_masked_clahe_dataset"
 
 for SLAB in ${ALL_SLABS}; do
 
   source "${SCRIPT_DIR}"/../00_config.sh "${SLAB}"
 
   if ! (( COUNT % SLABS_PER_FILE )); then
-    C_VAL=$(printf '%05d' ${COUNT})
-    CSV_FILE="masked_clahe_dataset.${C_VAL}.csv"
+    BC_VAL=$(printf '%03d' ${BATCH_COUNT})
+    CSV_FILE="${CSV_PREFIX}.batch_${BC_VAL}.csv"
     echo -n "" > "${CSV_FILE}"
+    BATCH_COUNT=$((BATCH_COUNT+=1))
   fi
 
   DATASET_INPUT="${N5_ALIGNED_SLAB_DATASET}_norm-layer/s0"
@@ -44,4 +47,4 @@ for SLAB in ${ALL_SLABS}; do
 
 done
 
-ls -alh masked_clahe_dataset.*.csv
+ls -alh ${CSV_PREFIX}.batch_*.csv
