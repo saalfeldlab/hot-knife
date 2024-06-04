@@ -13,7 +13,7 @@ N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 # Face dataset order is important.
 unset FACE_DATASET_ARGS
 for SLAB in ${ALL_SLABS}; do
-  FACE_DATASET_ARGS="${FACE_DATASET_ARGS} -d /flat/${SLAB}/top4/face_local-inverted -d /flat/${SLAB}/bot4/face_local-inverted"
+  FACE_DATASET_ARGS="${FACE_DATASET_ARGS} -d /flat_clahe/${SLAB}/top4i/face -d /flat_clahe/${SLAB}/bot4i/face"
 done
 
 # need scaleIndex=5 for larger wafer 53 slabs
@@ -22,7 +22,7 @@ ARGV="
 --n5GroupOutput=${N5_GROUP_OUTPUT} \
 --scaleIndex=5 \
 --iterations 100000 \
---maxError 300 \
+--maxError 320 \
 --filter RANSAC \
 ${FACE_DATASET_ARGS}"
 
