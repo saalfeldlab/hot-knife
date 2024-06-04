@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
 
-import org.janelia.saalfeldlab.hotknife.InpaintMasked;
 import org.janelia.saalfeldlab.hotknife.SparkSurfaceFit;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5FSReader;
@@ -12,31 +11,20 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import ij.ImageJ;
-import ij.ImagePlus;
-import ij.process.FloatProcessor;
 import net.imglib2.Cursor;
-import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
-import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccess;
-import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.FloatArray;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.multithreading.SimpleMultiThreading;
-import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.LinAlgHelpers;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 public class InpaintMultiSEM
@@ -250,19 +238,23 @@ public class InpaintMultiSEM
 
 		new ImageJ();
 
+		System.out.println("Showing images...");
 		final RandomAccessibleInterval<UnsignedByteType> img = Views.interval( imgRaw , interval );
 		final RandomAccessibleInterval<UnsignedByteType> mask = Views.interval( maskRaw , interval );
 
 		ImageJFunctions.show( img );
 		ImageJFunctions.show( mask );
 
+		System.out.println("Converting to float...");
 		final RandomAccessibleInterval< FloatType > imgF = Views.translate( ArrayImgs.floats( img.dimensionsAsLongArray() ), img.minAsLongArray() );
 		Util.copy( Converters.convert( img, (a,b) -> b.set( a.get() ), new FloatType() ), imgF );
 
 		final RandomAccessibleInterval< FloatType > imgOut = Views.translate( ArrayImgs.floats( img.dimensionsAsLongArray() ), img.minAsLongArray() );
 
+		System.out.println("Surface fitting...");
 		SparkSurfaceFit.maskSlice(imgF, mask, new FloatType(Float.NaN));
 
+		System.out.println("Inpainting...");
 		inpaint3d( Views.zeroMin( imgF ), Views.zeroMin( imgOut ));
 
 		ImageJFunctions.show( imgF );
