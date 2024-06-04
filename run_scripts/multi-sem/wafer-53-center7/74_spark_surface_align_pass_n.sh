@@ -18,6 +18,20 @@ set -e
 #  4|5|6)        N_NODES=150
 #    pass04: 38 minutes, pass05: 59 minutes, pass06: 58 minutes
 
+# Run times for all 402 wafer_53_center7 slabs with 7 mFOVs:
+#  1|2|3)        N_NODES=60
+#    pass01: 150 minutes, pass02: 112 minutes, pass03: 200 minutes
+#  4)            N_NODES=150
+#    pass04: 377 minutes
+#  5)            N_NODES=200
+#    pass05: 245 minutes
+#  6|7|8|9)      N_NODES=???
+#    pass06: ??? minutes, pass07: ??? minutes, pass08: ??? minutes, pass09: ??? minutes
+#  10|11)        N_NODES=200
+#    pass10: 193 minutes, pass11: 324 minutes
+#  12)           N_NODES=250
+#    pass12: 922 minutes
+
 if (( $# < 1 )); then
   echo "USAGE $0 <pass (1-12)> [number of nodes (overrides default)]"
   exit 1
@@ -59,7 +73,9 @@ fi
 # setup pass specific run class
 case "${PASS}" in
   1|2|3)        N_NODES=${2:-60}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;    # wafer 52: 20 node default
-  4|5|6|7)      N_NODES=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;   # wafer 52: 50 node default
+  4)            N_NODES=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;   # wafer 52: 50 node default
+  5)            N_NODES=${2:-200}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;   # wafer 52: 50 node default
+  6|7)          N_NODES=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;   # wafer 52: 50 node default
   8|9|10)       N_NODES=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 50 node default
   11|12)        N_NODES=${2:-210}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;          # wafer 52: 70 node default
   *)

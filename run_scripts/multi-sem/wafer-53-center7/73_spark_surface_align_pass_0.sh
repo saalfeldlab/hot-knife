@@ -6,7 +6,7 @@ ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
 
-# This runs quickly!  A 1 node job for 10 slabs in wafer 53 took 4 minutes to finish.
+# This runs quickly!  A 41 node job for 402 slabs in wafer_53_center7 took 5 minutes to finish.
 N_NODES=41
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
