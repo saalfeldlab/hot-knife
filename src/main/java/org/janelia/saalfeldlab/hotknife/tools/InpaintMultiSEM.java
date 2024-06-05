@@ -1,5 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.tools;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 import org.janelia.saalfeldlab.hotknife.SparkSurfaceFit;
@@ -99,7 +101,7 @@ public class InpaintMultiSEM
 
 		//final Interval interval = Intervals.createMinMax( 32313, 37000, 12, 33808, 37800, 16 );
 		//final Interval interval = Intervals.createMinMax( 32313, 37000, 14, 33808, 37800, 14 );
-		final Interval interval = Intervals.createMinMax(35700, 43600, 14, 36900, 44400, 14);
+		final Interval interval = Intervals.createMinMax(36000, 42600, 14, 36600, 44100, 14);
 		//final Interval interval = Intervals.createMinMax( 32313, 37000, 14, 32540, 37194, 14 );
 
 		new ImageJ();
@@ -134,13 +136,6 @@ public class InpaintMultiSEM
 		private final double[] direction = new double[3];
 		private final Result result = new Result();
 
-		private static final RayCaster.Direction[] directionsToTry = new RayCaster.Direction[] {
-				RayCaster.Direction.UP,
-				RayCaster.Direction.DOWN,
-				RayCaster.Direction.LEFT,
-				RayCaster.Direction.RIGHT
-		};
-
 		private final RealRandomAccess<FloatType> image;
 		private final double ratioOf2dRays;
 		private final Random random;
@@ -169,7 +164,7 @@ public class InpaintMultiSEM
 		 * @return the result of the ray casting or null if the ray exited the image boundary without hitting a
 		 * 		   non-NaN pixel
 		 */
-		Result cast(final Interval interval, final RealLocalizable position, final Direction rayDirection) {
+		public Result cast(final Interval interval, final RealLocalizable position, final Direction rayDirection) {
 			final int n = position.numDimensions();
 			final int rayDimension = (n > 2 && random.nextDouble() < ratioOf2dRays) ? 2 : n;
 
@@ -193,7 +188,7 @@ public class InpaintMultiSEM
 
 				final float value = image.get().get();
 				if (!Float.isNaN(value)) {
-					// the ray reached the end of the mask
+					// the ray reached a non-masked pixel
 					result.value = value;
 					result.distance = steps;
 					return result;
@@ -221,7 +216,7 @@ public class InpaintMultiSEM
 
 		/*
 		 * Checks if the given position is in the pseudo-convex hull of the image content. The pseudo-convex hull is
-		 * defined as the set of all points from which at least three rays in +/-x and +/-y directions hit the image
+		 * defined as the set of all points from which at both rays in +/-x or +/-y directions hit the image
 		 * content. This is taking advantage of the fact that the image content is made up from multiple almost
 		 * axes-parallel rectangles.
 		 *
@@ -230,23 +225,21 @@ public class InpaintMultiSEM
 		 * @return true if the position is in the pseudo-convex hull of the image content, false otherwise
 		 */
 		public boolean isInPseudoConvexHull(final Cursor<FloatType> c, final Interval interval) {
-			int hits = 0;
-			int misses = 0;
-			for (RayCaster.Direction direction : directionsToTry) {
-				final RayCaster.Result result = cast(interval, c, direction);
-				if (result != null) {
-					hits++;
-				} else {
-					misses++;
-				}
+			if (hitsAll(c, interval, Arrays.asList(Direction.UP, Direction.DOWN))) {
+				return true;
+			} else {
+				return hitsAll(c, interval, Arrays.asList(Direction.LEFT, Direction.RIGHT));
+			}
+		}
 
-				if (misses > 1) {
+		private boolean hitsAll(final Cursor<FloatType> c, final Interval interval, final List<Direction> directions) {
+			for (Direction direction : directions) {
+				final Result result = cast(interval, c, direction);
+				if (result == null) {
 					return false;
-				} else if (hits > 2) {
-					return true;
 				}
 			}
-			return false;
+			return true;
 		}
 
 		public static class Result {
