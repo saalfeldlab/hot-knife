@@ -27,9 +27,11 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.LinAlgHelpers;
 import net.imglib2.view.Views;
 
-public class InpaintMultiSEM
-{
-	public static boolean isInside( final RealLocalizable p, final Interval r )
+public class InpaintMultiSEM {
+
+	public static final int MAX_INPAINTING_DIAMETER = 100;
+
+	public static boolean isInside(final RealLocalizable p, final Interval r)
 	{
 		for ( int d = 0; d < p.numDimensions(); ++d )
 		{
@@ -54,7 +56,7 @@ public class InpaintMultiSEM
 
 		final RealRandomAccess< FloatType > iR = Views.interpolate( Views.extendBorder( img ), new NLinearInterpolatorFactory<>() ).realRandomAccess();
 
-		final RayCaster rayCaster = new RayCaster(iR, p2d, rnd);
+		final RayCaster rayCaster = new RayCaster(iR, p2d, rnd, MAX_INPAINTING_DIAMETER);
 
 		while (c.hasNext()) {
 			final FloatType v = c.next();
@@ -139,6 +141,7 @@ public class InpaintMultiSEM
 		private final RealRandomAccess<FloatType> image;
 		private final double ratioOf2dRays;
 		private final Random random;
+		private final long maxRayLength;
 
 		/*
 		 * @param image the image to cast rays into
@@ -148,10 +151,12 @@ public class InpaintMultiSEM
 		 */
 		public RayCaster(final RealRandomAccess<FloatType> image,
 						 final double ratioOf2dRays,
-						 final Random random) {
+						 final Random random,
+						 long maxRayLength) {
 			this.image = image;
 			this.ratioOf2dRays = ratioOf2dRays;
 			this.random = random;
+			this.maxRayLength = maxRayLength;
 		}
 
 		/*
@@ -181,7 +186,7 @@ public class InpaintMultiSEM
 				image.move(direction);
 				++steps;
 
-				if (!isInside(image, interval)) {
+				if (!isInside(image, interval) || steps > maxRayLength) {
 					// the ray exited the image boundaries without hitting a non-masked pixel
 					return null;
 				}
