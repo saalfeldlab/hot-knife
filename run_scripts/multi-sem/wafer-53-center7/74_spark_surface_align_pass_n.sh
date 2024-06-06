@@ -106,6 +106,11 @@ ARGV="
 
 LOG_FILE=$(setupRunLog "surface-align-pass${PADDED_PASS}")
 
+# Using a single core driver for the larger wafer 53 jobs,
+# we sometimes got a driver failure: TERM_MEMLIMIT: job killed after reaching LSF memory usage limit.
+# So, bumping up driver to 4 cores here to avoid that possibility.
+export N_CORES_DRIVER=4
+
 # use shell group to tee all output to log file
 {
 
