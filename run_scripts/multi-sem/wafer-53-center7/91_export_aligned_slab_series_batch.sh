@@ -34,7 +34,7 @@ export RUNTIME=${3:-240:59} # default is 10+ days
 # --------------------------------------------------------------------
 # setup export parameters
 
-RUN_AND_PASS="run_20240529_024833/pass12"
+RUN_AND_PASS="run_20240604_104500/pass12"
 TRANSFORM_GROUP="/surface-align/${RUN_AND_PASS}"
 DATA_SET_OUTPUT="/wafer-53-align/${RUN_AND_PASS}/s0"
 
