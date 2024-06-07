@@ -423,7 +423,7 @@ public class SparkPixelNormalizeN5 {
 		System.out.println( "(" + new Date( System.currentTimeMillis() ) + "): Done." );
 	}
 
-	private static void transferAttributes(final N5Writer n5Writer, final String input, final String output) {
+	public static void transferAttributes(final N5Writer n5Writer, final String input, final String output) {
 		final Map<String, Class<?>> attributeTypes = n5Writer.listAttributes(input);
 		attributeTypes.forEach((name, type) -> {
 			if (! ((Set<String>) STANDARD_ATTRIBUTES).contains(name)) {

@@ -6,14 +6,14 @@ ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "tab_not_applicable"
 
-# This runs quickly!  A 41 node job for 402 slabs in wafer_53_center7 took 5 minutes to finish.
+# This runs quickly!  A 1 node job for 10 slabs in wafer 53 took 4 minutes to finish.
 N_NODES=41
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 # Face dataset order is important.
 unset FACE_DATASET_ARGS
 for SLAB in ${ALL_SLABS}; do
-  FACE_DATASET_ARGS="${FACE_DATASET_ARGS} -d /flat_clahe/${SLAB}/top4i/face -d /flat_clahe/${SLAB}/bot4i/face"
+  FACE_DATASET_ARGS="${FACE_DATASET_ARGS} -d /flat_mask/${SLAB}/top4_clahe/face -d /flat_mask/${SLAB}/bot4_clahe/face"
 done
 
 # need scaleIndex=5 for larger wafer 53 slabs

@@ -2,12 +2,13 @@
 
 set -e
 
-if (( $# != 1 )); then
-  echo "USAGE $0 <start with pass (1-12)>"
+if (( $# < 1 )); then
+  echo "USAGE $0 <start with pass (1-12)> [number of nodes (overrides default for each pass)]"
   exit 1
 fi
 
 START_PASS="${1}"
+N_NODES="${2}"
 
 ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
@@ -33,7 +34,7 @@ for PASS in $( seq "${START_PASS}" 12 ); do
 waiting to start setup for pass ${PASS} ...
 "
   sleep 2
-  source "${SCRIPT_DIR}"/74_spark_surface_align_pass_n.sh "${PASS}"
+  source "${SCRIPT_DIR}"/74_spark_surface_align_pass_n.sh "${PASS}" ${N_NODES}
 done
 
 unset FIRST_LAUNCH_SCRIPT

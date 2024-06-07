@@ -13,14 +13,13 @@ ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "ALL"
 
-# TODO: change this to the correct path
-INPUT_DATASET_ROOT="/wafer-53-align/run_2024MMdd_hhmmss/passNN"
+INPUT_DATASET_ROOT="/wafer-53-align/run_20240604_104500/pass12"
 
 OUTPUT_DATASET_PATHS="${INPUT_DATASET_ROOT}/s1"
-FACTORS="2,2,1"
+FACTORS="2,2,2"
 for scale in $(seq 2 9); do
   OUTPUT_DATASET_PATHS="${OUTPUT_DATASET_PATHS} ${INPUT_DATASET_ROOT}/s${scale}"
-  FACTORS="${FACTORS} 2,2,1"
+  FACTORS="${FACTORS} 2,2,2"
 done
 
 ARGV="\
