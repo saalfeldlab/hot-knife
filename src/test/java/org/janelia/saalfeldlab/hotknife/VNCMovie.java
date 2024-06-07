@@ -273,7 +273,19 @@ public class VNCMovie implements Callable<Void> {
 
 			if ( invert )
 			{
-				img = Converters.convertRAI( img, (in,out) -> { if (in.get() == 0) { out.set( 0 ); } else { out.set( 255 - in.get() );} }, new UnsignedByteType() );
+				final RandomAccessibleInterval< UnsignedByteType > imgFinal = img;
+
+				img = Lazy.process(
+						imgFinal,
+						new int[] {128, 128, 128},
+						new UnsignedByteType(),
+						AccessFlags.setOf(AccessFlags.VOLATILE),
+						out -> {
+							Views.flatIterable(Views.interval(Views.pair(imgFinal, out), out)).forEach(
+									//pair -> { if (pair.getA().get() == 0) { pair.getB().set( 0 ); } else { pair.getB().set( 255 - pair.getA().get() );} }
+									pair -> pair.getB().set(255 - pair.getA().get())
+							);
+						});
 			}
 
 			if ( normalizeContrast )
