@@ -13,7 +13,7 @@ ABSOLUTE_SCRIPT=$(readlink -m "${0}")
 SCRIPT_DIR=$(dirname "${ABSOLUTE_SCRIPT}")
 source "${SCRIPT_DIR}/00_config.sh" "ALL"
 
-INPUT_DATASET_ROOT="/wafer-53-align/run_20240604_104500/pass12"
+INPUT_DATASET_ROOT="/wafer-53-align/run_20240609_070000/pass12"
 
 OUTPUT_DATASET_PATHS="${INPUT_DATASET_ROOT}/s1"
 FACTORS="2,2,2"
