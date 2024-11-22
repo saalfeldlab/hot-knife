@@ -175,6 +175,11 @@
 			<groupId>sc.fiji</groupId>
 			<artifactId>Stitching_</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-universe</artifactId>
+		</dependency>
+
 	</dependencies>
 
 	<repositories>
