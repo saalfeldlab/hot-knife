@@ -84,7 +84,6 @@ public class SparkMaskedCLAHEMultiSEMBatch
 											 options.n5PathInput,
 											 n5DatasetInput,
 											 n5DatasetOutput,
-											 n5FieldMax,
 											 options.blockFactorXY,
 											 options.blockFactorZ,
 											 options.overwrite);

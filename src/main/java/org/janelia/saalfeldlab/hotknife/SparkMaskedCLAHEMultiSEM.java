@@ -10,6 +10,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -43,6 +44,8 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
+
+import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
 
 public class SparkMaskedCLAHEMultiSEM
 {
@@ -325,7 +328,19 @@ public class SparkMaskedCLAHEMultiSEM
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		process( sparkContext, options.n5PathInput, options.n5DatasetInput, options.n5DatasetOutput, options.blockFactorXY, options.blockFactorZ, options.overwrite );
+		final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
+		final String outputDataset = options.n5DatasetInput + "_clahe";
+		final String fullScaleOutputDataset = outputDataset + "/s0";
+		final int[] downsampleFactors = new int[] { 2, 2, 1 };
+
+		process( sparkContext, options.n5PathInput, fullScaleInputDataset, fullScaleOutputDataset, options.blockFactorXY, options.blockFactorZ, options.overwrite );
+
+		downsampleScalePyramid(sparkContext,
+							   new N5PathSupplier(options.n5PathInput),
+							   fullScaleOutputDataset,
+							   outputDataset,
+							   downsampleFactors);
+
 
 		sparkContext.close();
 	}
