@@ -21,11 +21,11 @@ import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.universe.N5Factory;
+import org.janelia.saalfeldlab.n5.universe.N5Factory.StorageFormat;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -79,8 +79,8 @@ public class SparkNormalizeLayerIntensityN5 {
 										   final int[] blockSize,
 										   final long[][] gridBlock ) {
 
-		final N5Reader n5Input = new N5FSReader(n5PathInput);
-		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+		final N5Reader n5Input = new N5Factory().openReader( StorageFormat.N5, n5PathInput );//new N5FSReader(n5PathInput);
+		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, n5PathOutput ); //new N5FSWriter(n5PathOutput);
 
 		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
 
@@ -96,6 +96,9 @@ public class SparkNormalizeLayerIntensityN5 {
 								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
 								  gridBlock[2],
 								  new UnsignedByteType());
+
+		n5Input.close();
+		n5Output.close();
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -109,7 +112,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		final N5Reader n5Input = new N5FSReader(options.n5PathInput);
+		final N5Reader n5Input = new N5Factory().openReader( StorageFormat.N5, options.n5PathInput );//new N5FSReader(options.n5PathInput);
 
 		final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
 		final int[] blockSize = n5Input.getAttribute(fullScaleInputDataset, "blockSize", int[].class);
@@ -118,7 +121,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
-		final N5Writer n5Output = new N5FSWriter(options.n5PathInput);
+		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, options.n5PathInput ); //new N5FSWriter(options.n5PathInput);
 		final String outputDataset = options.n5DatasetInput + "_norm-layer";
 		final String fullScaleOutputDataset = outputDataset + "/s0";
 
@@ -133,6 +136,7 @@ public class SparkNormalizeLayerIntensityN5 {
 
 		n5Output.createDataset(fullScaleOutputDataset, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
+		/*
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 		pGrid.foreach(
 				gridBlock -> saveFullScaleBlock(options.n5PathInput,
@@ -143,9 +147,11 @@ public class SparkNormalizeLayerIntensityN5 {
 												dimensions,
 												blockSize,
 												gridBlock ));
+		*/
+
 		n5Output.close();
 		n5Input.close();
-
+		/*
 		final int[] downsampleFactors = parseCSIntArray(options.factors);
 		if (downsampleFactors != null) {
 			downsampleScalePyramid(sparkContext,
@@ -154,7 +160,7 @@ public class SparkNormalizeLayerIntensityN5 {
 								   outputDataset,
 								   downsampleFactors);
 		}
-
+		*/
 		sparkContext.close();
 	}
 
