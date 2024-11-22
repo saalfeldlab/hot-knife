@@ -4,35 +4,28 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>saalfeldlab</groupId>
 	<artifactId>hot-knife</artifactId>
-	<version>0.0.5-SNAPSHOT</version>
+	<version>0.0.6-SNAPSHOT</version>
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>37.0.0</version>
+		<version>38.0.1</version>
 	</parent>
+
 	<properties>
 		<enforcer.skip>true</enforcer.skip>
 		<package-name>org.janelia.saalfeldlab.hotknife</package-name>
-		<jackson-databind.version>2.6.7</jackson-databind.version>
 
-<!--		<n5-imglib2.version>3.5.1</n5-imglib2.version>-->
-<!--		<n5-hdf5.version>1.2.0</n5-hdf5.version>-->
-<!--		<n5-aws-s3.version>3.2.0</n5-aws-s3.version>-->
-<!--		&lt;!&ndash; <n5-blosc.version>1.1.0</n5-blosc.version> &ndash;&gt;-->
-<!--		<n5-zarr.version>0.0.6</n5-zarr.version>-->
 		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>
-<!--		<n5-google-cloud>3.3.1</n5-google-cloud>-->
 
 		<!-- note: when upgrading to newer n5 versions, please also update render's n5 version to keep in sync -->
-		<n5-version>3.0.2</n5-version>
-
-<!--		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>-->
+		<n5-version>3.2.0</n5-version>
 	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.apache.spark</groupId>
-			<artifactId>spark-core_2.11</artifactId>
-			<version>2.4.6</version>
+			<artifactId>spark-core_2.13</artifactId>
+			<version>3.4.1</version> <!-- released on June 23, 2023, see https://spark.apache.org/releases/spark-release-3-4-1.html -->
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -121,7 +114,7 @@
 		<dependency>
 			<groupId>org.janelia.render</groupId>
 			<artifactId>render-app</artifactId>
-			<version>2.0.2</version>
+			<version>3.0.0</version> <!-- TODO: bump this to 4.2.0 or later once that version gets deployed to https://github.com/saalfeldlab/maven -->
 		</dependency>
 		<dependency>
 			<groupId>org.ejml</groupId>
@@ -201,31 +194,82 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
+					<source>11</source>
+					<target>11</target>
 				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.2.1</version>
+				<version>3.5.2</version>
 				<configuration>
+
 					<filters>
+
 						<filter>
 							<artifact>*:*</artifact>
 							<excludes>
-								<exclude>META-INF/*.SF</exclude>
-								<exclude>META-INF/*.DSA</exclude>
-								<exclude>META-INF/*.RSA</exclude>
+								<exclude>module-info.class</exclude>
+								<exclude>plugins.config</exclude>
+								<exclude>LICENSE</exclude>
+								<exclude>META-INF/*</exclude>
+								<exclude>META-INF/versions/**</exclude>
+								<exclude>META-INF/groovy/org.codehaus.groovy.runtime.ExtensionModule</exclude>
+								<exclude>META-INF/maven/com.github.jnr/jnr-ffi/*</exclude>
+								<exclude>jnr/**</exclude>
 							</excludes>
 						</filter>
+
 						<filter>
 							<artifact>sc.fiji</artifact>
 							<excludes>
 								<exclude>lenscorrection/NonLinearTransform.class</exclude>
 							</excludes>
 						</filter>
+
+						<!-- imagej-plugins-commands overlaps with imagej-common and scijava-plugins-commands -->
+						<filter>
+							<artifact>net.imagej:imagej-plugins-commands</artifact>
+							<excludes>
+								<exclude>icons/commands/*.png</exclude>
+							</excludes>
+						</filter>
+
+						<!-- overlaps in imagej-common and imagej-plugins-commands -->
+						<filter>
+							<artifact>net.imagej:imagej-plugins-commands</artifact>
+							<excludes>
+								<exclude>icons/commands/*.png</exclude>
+							</excludes>
+						</filter>
+
+						<!-- overlaps in mpicbg-trakem2 and trakem2-transform-->
+						<filter>
+							<artifact>sc.fiji:trakem2-transform</artifact>
+							<excludes>
+								<exclude>mpicbg/trakem2/transform/*</exclude>
+								<exclude>mpicbg/trakem2/util/*</exclude>
+							</excludes>
+						</filter>
+
+						<!-- overlaps in xml-apis and xpp3 -->
+						<filter>
+							<artifact>xpp3:xpp3</artifact>
+							<excludes>
+								<exclude>javax/xml/namespace/QName.class</exclude>
+							</excludes>
+						</filter>
+
+						<!-- overlaps in SPIM_Registration and multiview-reconstruction -->
+						<filter>
+							<artifact>sc.fiji:SPIM_Registration</artifact>
+							<excludes>
+								<exclude>ClassDiagramInterestPointRegistration.dia</exclude>
+							</excludes>
+						</filter>
+
 					</filters>
+
 					<artifactSet>
 						<excludes>
 							<exclude>*hadoop*</exclude>
@@ -270,6 +314,7 @@
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<mainClass>org.janelia.saalfeldlab.hotknife.tools.HotKnife</mainClass>
 								</transformer>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
 							</transformers>
 						</configuration>
 					</execution>
