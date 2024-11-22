@@ -108,9 +108,9 @@ public class SparkNormalizeLayerIntensityN5 {
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
-		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
-		sparkContext.setLogLevel("ERROR");
+		//final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
+		//final JavaSparkContext sparkContext = new JavaSparkContext(conf);
+		//sparkContext.setLogLevel("ERROR");
 
 		final N5Reader n5Input = new N5Factory().openReader( StorageFormat.N5, options.n5PathInput );//new N5FSReader(options.n5PathInput);
 
@@ -125,18 +125,27 @@ public class SparkNormalizeLayerIntensityN5 {
 		final String outputDataset = options.n5DatasetInput + "_norm-layer";
 		final String fullScaleOutputDataset = outputDataset + "/s0";
 
-		final String downScaledDataset = options.n5DatasetInput + "/s5";
-		final Img<UnsignedByteType> downScaledImg = N5Utils.open(n5Input, downScaledDataset);
-		final List<Double> shifts = computeShifts(downScaledImg);
-
 		if (n5Output.exists(fullScaleOutputDataset)) {
 			final String fullPath = options.n5PathInput + fullScaleOutputDataset;
 			throw new IllegalArgumentException("Normalized data set exists: " + fullPath);
 		}
 
+		/*
+		final String downScaledDataset = options.n5DatasetInput + "/s5";
+		final Img<UnsignedByteType> downScaledImg = N5Utils.open(n5Input, downScaledDataset);
+
+		System.out.println( "Computing shifts ... " );
+
+		final List<Double> shifts = computeShifts(downScaledImg);
+		*/
+
+		System.out.println( "Creating " + fullScaleOutputDataset );
+
 		n5Output.createDataset(fullScaleOutputDataset, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
 		/*
+		System.out.println( "Kicking off Spark for re-saving ... " );
+
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 		pGrid.foreach(
 				gridBlock -> saveFullScaleBlock(options.n5PathInput,
@@ -161,7 +170,7 @@ public class SparkNormalizeLayerIntensityN5 {
 								   downsampleFactors);
 		}
 		*/
-		sparkContext.close();
+		//sparkContext.close();
 	}
 
 	private static List<Double> computeShifts(RandomAccessibleInterval<UnsignedByteType> rai) {
