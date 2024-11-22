@@ -61,7 +61,7 @@ public class CLAHEBehavior implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() * 2));
 
 		/*
 		final int scaleIndex = 4;
@@ -70,16 +70,19 @@ public class CLAHEBehavior implements Callable<Void> {
 		final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/2-26/s" + scaleIndex);
 		*/
 
-		final int scaleIndex = 0;
+		final int scaleIndex = 4;
 		final double scale = 1.0 / Math.pow(2, scaleIndex);
-		final N5Reader n5 = new N5FSReader("/nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5");
-		RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/render/slab_070_to_079/s070_m104_align_no35_horiz_avgshd_ic___20240504_085307/s" + scaleIndex);
-		final long[] min = img.minAsLongArray();
+		//final N5Reader n5 = new N5FSReader("/nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5");
+		//RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/render/slab_070_to_079/s070_m104_align_no35_horiz_avgshd_ic___20240504_085307/s" + scaleIndex);
+		final N5Reader n5 = new N5FSReader("/Volumes/cellmap/data/jrc_mus-pancreas-5/jrc_mus-pancreas-5.n5");
+		RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, "/render/jrc_mus_pancreas_5/v3_acquire_align_destreak_ic2d___20240613_065406/s" + scaleIndex);
+		/*final long[] min = img.minAsLongArray();
 		final long[] max = img.maxAsLongArray();
 		final long[] midpoint = new long[] {(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, min[2]};
 		img = Views.zeroMin( Views.interval(img, midpoint, new long[] {midpoint[0] + 1024, midpoint[1] + 1024, max[2]}) ); // has to sit on 0,0,0,... because of the known issue with Lazy (is fixed meanwhile)
+		*/
 
-		final boolean invert = true; // for multisem
+		final boolean invert = false;//true; // for multisem
 
 		if ( invert )
 		{
@@ -105,12 +108,12 @@ public class CLAHEBehavior implements Callable<Void> {
 					});
 		}
 
-		final int blockRadius = (int)Math.round(511 * scale);
+		final int blockRadius = (int)Math.round(1023 * scale);
 
 		final ImageJStackOp<UnsignedByteType> clahe =
 				new ImageJStackOp<>(
 						Views.extendMirrorSingle(img),
-						(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false),
+						(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 2f, null, false),
 						blockRadius,
 						0,
 						255,
@@ -140,8 +143,8 @@ public class CLAHEBehavior implements Callable<Void> {
 		final ImageJStackOp<UnsignedByteType> cllcn =
 				new ImageJStackOp<>(
 						Views.extendMirrorSingle(img),
-//						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
-						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 25, 0.5f, true, true, true),
+						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 5, 0.95f, true, true, true),
+//						(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 25, 0.5f, true, true, true),
 						blockRadius,
 						0,
 						255,
