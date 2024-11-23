@@ -19,6 +19,7 @@
 
 		<!-- note: when upgrading to newer n5 versions, please also update render's n5 version to keep in sync -->
 		<n5-version>3.2.0</n5-version>
+		<!-- <guava.version>33.1.0-jre</guava.version> -->
 	</properties>
 
 	<dependencies>
@@ -27,6 +28,10 @@
 			<artifactId>spark-core_2.13</artifactId>
 			<version>3.4.1</version> <!-- released on June 23, 2023, see https://spark.apache.org/releases/spark-release-3-4-1.html -->
 			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-universe</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>net.imagej</groupId>
@@ -176,10 +181,6 @@
 			<artifactId>Stitching_</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.janelia.saalfeldlab</groupId>
-			<artifactId>n5-universe</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>org.scala-lang</groupId>
 			<artifactId>scala-library</artifactId>
 			<version>2.13.8</version>
@@ -199,136 +200,89 @@
 
 	<build>
 		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<source>11</source>
-					<target>11</target>
-				</configuration>
-			</plugin>
+			<!-- Maven shade for Uber Jar -->
+			<!-- https://maven.apache.org/plugins/maven-shade-plugin/shade-mojo.html -->
+			<!-- https://databricks.gitbooks.io/databricks-spark-knowledge-base/content/troubleshooting/missing_dependencies_in_jar_files.html -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.5.2</version>
 				<configuration>
-
+					<!-- Do not minimize for now to speed up packaging. -->
+					<transformers combine.children="append">
+						<transformer
+							implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+							<resource>
+								META-INF/json/mpicbg.spim.data.generic.sequence.ImgLoaderIo</resource>
+						</transformer>
+						<transformer
+							implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+							<resource>
+								META-INF/json/org.janelia.saalfeldlab.n5.Compression$CompressionType</resource>
+						</transformer>
+					</transformers>
+					<!--<minimizeJar>true</minimizeJar> -->
 					<filters>
-
 						<filter>
 							<artifact>*:*</artifact>
 							<excludes>
+								<exclude>Angle0.tif</exclude>
+								<exclude>LICENSE</exclude>
+								<exclude>LICENSE.txt</exclude>
+								<exclude>META-INF/DEPENDENCIES</exclude>
+								<exclude>META-INF/LICENSE</exclude>
+								<exclude>META-INF/NOTICE</exclude>
+								<exclude>META-INF/BSDL</exclude>
+								<exclude>META-INF/COPYING</exclude>
+								<exclude>META-INF/LEGAL</exclude>
+								<exclude>META-INF/LICENSE.RUBY</exclude>
+								<exclude>META-INF/json/org.scijava.plugin.Plugin</exclude>
+								<exclude>META-INF/*.MF</exclude>
+								<exclude>META-INF/*.SF</exclude>
+								<exclude>META-INF/*.DSA</exclude>
+								<exclude>META-INF/*.RSA</exclude>
+								<exclude>META-INF/*.txt</exclude>
 								<exclude>module-info.class</exclude>
 								<exclude>plugins.config</exclude>
-								<exclude>LICENSE</exclude>
-								<exclude>META-INF/*</exclude>
-								<exclude>META-INF/versions/**</exclude>
-								<exclude>META-INF/groovy/org.codehaus.groovy.runtime.ExtensionModule</exclude>
-								<exclude>META-INF/maven/com.github.jnr/jnr-ffi/*</exclude>
-								<exclude>jnr/**</exclude>
+								<exclude>META-INF/versions/9/module-info.class</exclude>
+								<exclude>META-INF/okio.kotlin_module</exclude>
+								<exclude>
+									META-INF/services/com.fasterxml.jackson.core.JsonFactory</exclude>
 							</excludes>
 						</filter>
-
-						<filter>
-							<artifact>sc.fiji</artifact>
-							<excludes>
-								<exclude>lenscorrection/NonLinearTransform.class</exclude>
-							</excludes>
-						</filter>
-
-						<!-- imagej-plugins-commands overlaps with imagej-common and scijava-plugins-commands -->
-						<filter>
-							<artifact>net.imagej:imagej-plugins-commands</artifact>
-							<excludes>
-								<exclude>icons/commands/*.png</exclude>
-							</excludes>
-						</filter>
-
-						<!-- overlaps in imagej-common and imagej-plugins-commands -->
-						<filter>
-							<artifact>net.imagej:imagej-plugins-commands</artifact>
-							<excludes>
-								<exclude>icons/commands/*.png</exclude>
-							</excludes>
-						</filter>
-
-						<!-- overlaps in mpicbg-trakem2 and trakem2-transform-->
-						<filter>
-							<artifact>sc.fiji:trakem2-transform</artifact>
-							<excludes>
-								<exclude>mpicbg/trakem2/transform/*</exclude>
-								<exclude>mpicbg/trakem2/util/*</exclude>
-							</excludes>
-						</filter>
-
-						<!-- overlaps in xml-apis and xpp3 -->
-						<filter>
-							<artifact>xpp3:xpp3</artifact>
-							<excludes>
-								<exclude>javax/xml/namespace/QName.class</exclude>
-							</excludes>
-						</filter>
-
-						<!-- overlaps in SPIM_Registration and multiview-reconstruction -->
-						<filter>
-							<artifact>sc.fiji:SPIM_Registration</artifact>
-							<excludes>
-								<exclude>ClassDiagramInterestPointRegistration.dia</exclude>
-							</excludes>
-						</filter>
-
 					</filters>
-
+					<!-- Additional configuration. -->
 					<artifactSet>
 						<excludes>
-							<exclude>*hadoop*</exclude>
-							<exclude>*spark*</exclude>
-							<exclude>*scala*</exclude>
+							<exclude>xpp3:xpp3</exclude>
 						</excludes>
 					</artifactSet>
-
-					<!-- Additional configuration. -->
 					<relocations>
 						<relocation>
 							<pattern>org.apache.commons.compress</pattern>
-							<shadedPattern>org.janelia.saalfeldlab.org.apache.commons.compress</shadedPattern>
+							<shadedPattern>
+								org.janelia.saalfeldlab.org.apache.commons.compress</shadedPattern>
 						</relocation>
+						<!-- Protect newer gson version from the old one
+						preloaded by spark -->
 						<relocation>
-							<pattern>com.google.common.base</pattern>
-							<shadedPattern>org.janelia.saalfeldlab.com.google.common.base</shadedPattern>
-						</relocation>
-						<relocation>
-							<pattern>com.google.common.reflect</pattern>
-							<shadedPattern>org.janelia.saalfeldlab.com.google.common.reflect</shadedPattern>
+							<pattern>com.google.gson</pattern>
+							<shadedPattern>
+								org.janelia.saalfeldlab.com.google.gson</shadedPattern>
 						</relocation>
 					</relocations>
 				</configuration>
+				<!-- binds by default to package phase -->
 				<executions>
 					<execution>
 						<phase>package</phase>
 						<goals>
 							<goal>shade</goal>
 						</goals>
-						<configuration>
-							<transformers>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-									<resource>META-INF/json/org.janelia.saalfeldlab.n5.Compression$CompressionType</resource>
-								</transformer>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-									<resource>META-INF/json/org.scijava.plugin.Plugin</resource>
-								</transformer>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-									<resource>META-INF/json/mpicbg.spim.data.generic.sequence.ImgLoaderIo</resource>
-								</transformer>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>org.janelia.saalfeldlab.hotknife.tools.HotKnife</mainClass>
-								</transformer>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
-							</transformers>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>
+			<!-- Maven shade end -->
 		</plugins>
 	</build>
+
 </project>
