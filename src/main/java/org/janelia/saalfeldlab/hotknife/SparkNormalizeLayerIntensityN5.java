@@ -1,7 +1,9 @@
 package org.janelia.saalfeldlab.hotknife;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -34,6 +36,8 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
+import net.preibisch.legacy.io.IOFunctions;
+import net.preibisch.mvrecon.Version;
 
 import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
 import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
@@ -101,8 +105,15 @@ public class SparkNormalizeLayerIntensityN5 {
 		n5Output.close();
 	}
 
-	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
 
+		System.out.println( "com.google.common.collect.Iterables: " + new File( com.google.common.collect.Iterables.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
+		//com.google.cloud.storage.StorageImpl a;
+		System.out.println( "com.google.cloud.storage.Storage: " + new File( com.google.cloud.storage.Storage.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
+		//System.out.println( "guava: " + new File( com.google.common.collect.Iterables.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
+		//System.out.println( "guava: " + new File( com.google.common.collect.Iterables.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
+
+		
 		final SparkNormalizeLayerIntensityN5.Options options = new SparkNormalizeLayerIntensityN5.Options(args);
 		if (! options.parsedSuccessfully) {
 			throw new IllegalArgumentException("Options were not parsed successfully");
@@ -122,7 +133,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
 		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, options.n5PathInput ); //new N5FSWriter(options.n5PathInput);
-		final String outputDataset = options.n5DatasetInput + "_norm-layer";
+		final String outputDataset = options.n5DatasetInput + "_norm-layer_" + System.currentTimeMillis();
 		final String fullScaleOutputDataset = outputDataset + "/s0";
 
 		if (n5Output.exists(fullScaleOutputDataset)) {
