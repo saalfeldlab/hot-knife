@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -119,9 +120,9 @@ public class SparkNormalizeLayerIntensityN5 {
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		//final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
-		//final JavaSparkContext sparkContext = new JavaSparkContext(conf);
-		//sparkContext.setLogLevel("ERROR");
+		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
+		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
+		sparkContext.setLogLevel("ERROR");
 
 		final N5Reader n5Input = new N5Factory().openReader( StorageFormat.N5, options.n5PathInput );//new N5FSReader(options.n5PathInput);
 
@@ -141,21 +142,20 @@ public class SparkNormalizeLayerIntensityN5 {
 			throw new IllegalArgumentException("Normalized data set exists: " + fullPath);
 		}
 
-		/*
 		final String downScaledDataset = options.n5DatasetInput + "/s5";
 		final Img<UnsignedByteType> downScaledImg = N5Utils.open(n5Input, downScaledDataset);
 
-		System.out.println( "Computing shifts ... " );
+		System.out.println( new Date( System.currentTimeMillis() ) +  ": Computing shifts ... " );
 
 		final List<Double> shifts = computeShifts(downScaledImg);
-		*/
 
-		System.out.println( "Creating " + fullScaleOutputDataset );
+		shifts.forEach( d -> System.out.println( "\t" + d ) );
+
+		System.out.println( new Date( System.currentTimeMillis() ) +  ": Creating " + fullScaleOutputDataset );
 
 		n5Output.createDataset(fullScaleOutputDataset, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 
-		/*
-		System.out.println( "Kicking off Spark for re-saving ... " );
+		System.out.println( new Date( System.currentTimeMillis() ) +  ": Kicking off Spark for re-saving ... " );
 
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 		pGrid.foreach(
@@ -167,11 +167,10 @@ public class SparkNormalizeLayerIntensityN5 {
 												dimensions,
 												blockSize,
 												gridBlock ));
-		*/
 
 		n5Output.close();
 		n5Input.close();
-		/*
+
 		final int[] downsampleFactors = parseCSIntArray(options.factors);
 		if (downsampleFactors != null) {
 			downsampleScalePyramid(sparkContext,
@@ -180,8 +179,10 @@ public class SparkNormalizeLayerIntensityN5 {
 								   outputDataset,
 								   downsampleFactors);
 		}
-		*/
-		//sparkContext.close();
+
+		sparkContext.close();
+		System.out.println( new Date( System.currentTimeMillis() ) +  ": Done." );
+
 	}
 
 	private static List<Double> computeShifts(RandomAccessibleInterval<UnsignedByteType> rai) {
