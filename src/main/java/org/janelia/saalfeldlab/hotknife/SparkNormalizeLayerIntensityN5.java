@@ -108,9 +108,9 @@ public class SparkNormalizeLayerIntensityN5 {
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException, URISyntaxException {
 
-		System.out.println( "com.google.common.collect.Iterables: " + new File( com.google.common.collect.Iterables.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
+		//System.out.println( "com.google.common.collect.Iterables: " + new File( com.google.common.collect.Iterables.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
 		//com.google.cloud.storage.StorageImpl a;
-		System.out.println( "com.google.cloud.storage.Storage: " + new File( com.google.cloud.storage.Storage.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
+		//System.out.println( "com.google.cloud.storage.Storage: " + new File( com.google.cloud.storage.Storage.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
 		//System.out.println( "guava: " + new File( com.google.common.collect.Iterables.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
 		//System.out.println( "guava: " + new File( com.google.common.collect.Iterables.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath() ).getName().trim() );
 
