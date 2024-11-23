@@ -130,7 +130,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		final int[] blockSize = n5Input.getAttribute(fullScaleInputDataset, "blockSize", int[].class);
 		final long[] dimensions = n5Input.getAttribute(fullScaleInputDataset, "dimensions", long[].class);
 
-		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
+		final int[] gridBlockSize = new int[] { blockSize[0], blockSize[1], blockSize[2] };
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
 		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, options.n5PathInput ); //new N5FSWriter(options.n5PathInput);
