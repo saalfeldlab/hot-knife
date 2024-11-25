@@ -133,17 +133,13 @@ public class SparkNormalizeLayerIntensityN5 {
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
-		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
-		sparkContext.setLogLevel("ERROR");
-
 		final N5Reader n5Input = new N5Factory().openReader( StorageFormat.N5, options.n5PathInput );//new N5FSReader(options.n5PathInput);
 
 		final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
 		final int[] blockSize = n5Input.getAttribute(fullScaleInputDataset, "blockSize", int[].class);
 		final long[] dimensions = n5Input.getAttribute(fullScaleInputDataset, "dimensions", long[].class);
 
-		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
+		final int[] gridBlockSize = new int[] { blockSize[0] * 2, blockSize[1] * 2, blockSize[2] };
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
 		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, options.n5PathInput ); //new N5FSWriter(options.n5PathInput);
@@ -170,7 +166,11 @@ public class SparkNormalizeLayerIntensityN5 {
 
 		System.out.println( new Date( System.currentTimeMillis() ) +  ": Kicking off Spark for re-saving ... " );
 
-		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid, Math.min( grid.size(), 15000 ) );
+		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
+		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
+		sparkContext.setLogLevel("ERROR");
+
+		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid, grid.size() /*, Math.min( grid.size(), 15000 )*/ );
 		pGrid.foreach(
 				gridBlock -> saveFullScaleBlock(options.n5PathInput,
 												options.n5PathInput,
