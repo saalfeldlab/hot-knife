@@ -94,7 +94,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
 
 		final List<long[][]> prefetchGrid = Grid.create(gridBlock[1], blockSize);
-		final ForkJoinPool pool = new ForkJoinPool( prefetchGrid.size() );
+		final ForkJoinPool pool = new ForkJoinPool( Math.min( 64, prefetchGrid.size() ) );
 		final ArrayList< UnsignedByteType > pixels = new ArrayList<>();
 
 		pool.submit( () -> prefetchGrid.stream().parallel().forEach( grid ->
@@ -112,7 +112,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 								  n5Output,
 								  datasetNameOutput,
-								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression(1)),
 								  gridBlock[2],
 								  new UnsignedByteType());
 
