@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -16,6 +17,7 @@ import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.loops.LoopBuilder;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.view.IntervalView;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -93,11 +95,12 @@ public class SparkNormalizeLayerIntensityN5 {
 
 		final List<long[][]> prefetchGrid = Grid.create(gridBlock[1], blockSize);
 		final ForkJoinPool pool = new ForkJoinPool( prefetchGrid.size() );
+		final ArrayList< UnsignedByteType > pixels = new ArrayList<>();
 
 		pool.submit( () -> prefetchGrid.stream().parallel().forEach( grid ->
 		{
-			// fetch a single pixel for each block
-			sourceRaw.getAt( grid[0][0] + gridBlock[0][0], grid[0][1] + gridBlock[0][1], grid[0][2] + gridBlock[0][2] );
+			// fetch a single pixel for each block and keeping it
+			pixels.add( sourceRaw.getAt( grid[0][0] + gridBlock[0][0], grid[0][1] + gridBlock[0][1], grid[0][2] + gridBlock[0][2] ) );
 		}) );
 
 		final RandomAccessibleInterval<UnsignedByteType> filteredSource = applyShifts(sourceRaw, shifts);
@@ -139,7 +142,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		final int[] blockSize = n5Input.getAttribute(fullScaleInputDataset, "blockSize", int[].class);
 		final long[] dimensions = n5Input.getAttribute(fullScaleInputDataset, "dimensions", long[].class);
 
-		final int[] gridBlockSize = new int[] { blockSize[0] * 2, blockSize[1] * 2, blockSize[2] };
+		final int[] gridBlockSize = new int[] { blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
 		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, options.n5PathInput ); //new N5FSWriter(options.n5PathInput);
@@ -170,7 +173,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid, grid.size() /*, Math.min( grid.size(), 15000 )*/ );
+		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid, Math.min( grid.size(), 15000 ) );
 		pGrid.foreach(
 				gridBlock -> saveFullScaleBlock(options.n5PathInput,
 												options.n5PathInput,
