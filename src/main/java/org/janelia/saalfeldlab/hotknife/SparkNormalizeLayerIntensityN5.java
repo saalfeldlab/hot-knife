@@ -13,16 +13,17 @@ import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.loops.LoopBuilder;
 import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.NumericType;
+import net.imglib2.type.numeric.IntegerType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.view.IntervalView;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.broadcast.Broadcast;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -46,9 +47,9 @@ import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePy
  * to the first layer. The shifts are computed based on the average intensity of a column of pixels that have "content"
  * throughout the stack (i.e. pixels that are not background).
  *
- * @param <T> pixel type; determined automatically from the input stack
+ * @param <T> pixel type, determined automatically from the input stack (either 8bit or 16bit)
  */
-public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & NumericType<T>> {
+public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerType<T>> implements Serializable {
 
 	@SuppressWarnings({"FieldMayBeFinal", "unused"})
 	public static class Options extends AbstractOptions implements Serializable {
@@ -95,39 +96,63 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & NumericTyp
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final N5Reader n5reader = new N5FSReader(options.n5Path);
+		final DatasetAttributes attributes;
+		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
+			if (n5reader.exists(options.n5DatasetOutput)) {
+				throw new IllegalArgumentException("Normalized data set already exists: " + options.n5DatasetOutput);
+			}
 
-		if (n5reader.exists(options.n5DatasetOutput)) {
-			throw new IllegalArgumentException("Normalized data set already exists: " + options.n5DatasetOutput);
+			final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
+			attributes = n5reader.getDatasetAttributes(fullScaleInputDataset);
 		}
 
-		final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
-		final DatasetAttributes attributes = n5reader.getDatasetAttributes(fullScaleInputDataset);
+		if (attributes.getDataType() == DataType.UINT8) {
+			new SparkNormalizeLayerIntensityN5<>(options, attributes, new ByteHelper()).run();
+		} else if (attributes.getDataType() == DataType.UINT16) {
+			new SparkNormalizeLayerIntensityN5<>(options, attributes, new ShortHelper()).run();
+		} else {
+			throw new IllegalArgumentException("Unsupported data type: " + attributes.getDataType());
+		}
+	}
+
+
+	private final String fullScaleInputDataset;
+	private final String downScaledInputDataset;
+	private final String fullScaleOutputDataset;
+	private final Options options;
+	private final DatasetAttributes attributes;
+	private final TypeHelper<T> typeHelper;
+
+
+	private SparkNormalizeLayerIntensityN5(final Options options, final DatasetAttributes attributes, final TypeHelper<T> typeHelper) {
+		fullScaleInputDataset = options.n5DatasetInput + "/s0";
+		fullScaleOutputDataset = options.n5DatasetOutput + "/s0";
+		downScaledInputDataset = options.n5DatasetInput + "/s" + options.downsampleLevel;
+		this.options = options;
+		this.attributes = attributes;
+		this.typeHelper = typeHelper;
+	}
+
+	private void run() throws IOException {
+
+		final List<Double> shifts;
+		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
+			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
+			shifts = computeShifts(downScaledImg);
+		}
+
+		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
+			n5Writer.createDataset(fullScaleOutputDataset, attributes);
+		}
 
 		final List<long[][]> grid = Grid.create(attributes.getDimensions(), attributes.getBlockSize());
-
-		final N5Writer n5Writer = new N5FSWriter(options.n5Path);
-		final String fullScaleOutputDataset = options.n5DatasetOutput + "/s0";
-
-		final String downScaledDataset = options.n5DatasetInput + "/s" + options.downsampleLevel;
-		final Img<UnsignedByteType> downScaledImg = N5Utils.open(n5reader, downScaledDataset);
-		final List<Double> shifts = computeShifts(downScaledImg);
-
-		n5Writer.createDataset(fullScaleOutputDataset, attributes);
-
 		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeLayerIntensityN5");
+
 		try (final JavaSparkContext sparkContext = new JavaSparkContext(conf)) {
 
-			final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
-			pGrid.foreach(gridBlock -> saveFullScaleBlock(options.n5Path,
-														  fullScaleInputDataset,
-														  fullScaleOutputDataset,
-														  shifts,
-														  attributes.getDimensions(),
-														  attributes.getBlockSize(),
-														  gridBlock));
-			n5Writer.close();
-			n5reader.close();
+			final JavaRDD<long[][]> parallelizedGrid = sparkContext.parallelize(grid);
+			final Broadcast<List<Double>> shiftsBroadcast = sparkContext.broadcast(shifts);
+			parallelizedGrid.foreach(gridBlock -> saveFullScaleBlock(shiftsBroadcast.value(), gridBlock));
 
 			final int[] downsampleFactors = parseCSIntArray(options.factors);
 			if (downsampleFactors != null) {
@@ -140,42 +165,41 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & NumericTyp
 		}
 	}
 
-
-	private static List<Double> computeShifts(RandomAccessibleInterval<UnsignedByteType> rai) {
+	private List<Double> computeShifts(RandomAccessibleInterval<T> rai) {
 
 		// create mask from pixels that have "content" throughout the stack
-		final List<IntervalView<UnsignedByteType>> downScaledStack = asZStack(rai);
-		final Img<UnsignedByteType> contentMask = ArrayImgs.unsignedBytes(downScaledStack.get(0).dimensionsAsLongArray());
-		for (final UnsignedByteType pixel : contentMask) {
-			pixel.set(1);
+		final List<IntervalView<T>> downScaledStack = asZStack(rai);
+		final Img<T> contentMask = typeHelper.createImg(downScaledStack.get(0).dimensionsAsLongArray());
+		for (final T pixel : contentMask) {
+			pixel.setOne();
 		}
 
 		final int lowerThreshold = 20;
 		final int upperThreshold = 120;
-		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
+		for (final IntervalView<T> layer : downScaledStack) {
 			LoopBuilder.setImages(layer, contentMask)
 					.forEachPixel((a, b) -> {
-						if (a.get() < lowerThreshold || a.get() > upperThreshold) {
-							b.set(0);
+						if (a.getInteger() < lowerThreshold || a.getInteger() > upperThreshold) {
+							b.setZero();
 						}
 					});
 		}
 
 		final AtomicLong maskSize = new AtomicLong(0);
-		for (final UnsignedByteType pixel : contentMask) {
-			if (pixel.get() == 1) {
+		for (final T pixel : contentMask) {
+			if (pixel.getInteger() == 1) {
 				maskSize.incrementAndGet();
 			}
 		}
 
 		// compute average intensity of content pixels in each layer
 		final List<Double> contentAverages = new ArrayList<>(downScaledStack.size());
-		for (final IntervalView<UnsignedByteType> layer : downScaledStack) {
+		for (final IntervalView<T> layer : downScaledStack) {
 			final AtomicLong sum = new AtomicLong(0);
 			LoopBuilder.setImages(layer, contentMask)
 					.forEachPixel((a, b) -> {
-						if (b.get() == 1) {
-							sum.addAndGet(a.get());
+						if (b.getInteger() == 1) {
+							sum.addAndGet(a.getInteger());
 						}
 					});
 			contentAverages.add((double) sum.get() / maskSize.get());
@@ -186,25 +210,25 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & NumericTyp
 		return contentAverages.stream().map(a -> a - fixedPoint).collect(Collectors.toList());
 	}
 
-	private static RandomAccessibleInterval<UnsignedByteType> applyShifts(
-			final RandomAccessibleInterval<UnsignedByteType> sourceRaw,
-			final List<Double> shifts ) {
-
-		final List<IntervalView<UnsignedByteType>> sourceStack = asZStack(sourceRaw);
-		final List<RandomAccessibleInterval<UnsignedByteType>> convertedLayers = new ArrayList<>(sourceStack.size());
+	private RandomAccessibleInterval<T> applyShifts(
+			final RandomAccessibleInterval<T> sourceRaw,
+			final List<Double> shifts
+	) {
+		final List<IntervalView<T>> sourceStack = asZStack(sourceRaw);
+		final List<RandomAccessibleInterval<T>> convertedLayers = new ArrayList<>(sourceStack.size());
 
 		for (int z = 0; z < sourceStack.size(); ++z) {
 			final byte shift = (byte) Math.round(shifts.get(z));
-			final RandomAccessibleInterval<UnsignedByteType> layer = sourceStack.get(z);
+			final RandomAccessibleInterval<T> layer = sourceStack.get(z);
 
-			RandomAccessibleInterval<UnsignedByteType> convertedLayer = Converters.convert(layer, (s, t) -> {
+			RandomAccessibleInterval<T> convertedLayer = Converters.convert(layer, (s, t) -> {
 				// only shift foreground
-				if (s.get() > 0) {
-					t.set( Math.max(0, Math.min( 255, s.get() - shift)));
+				if (s.getInteger() > 0) {
+					t.setInteger(typeHelper.clip(s.getInteger() - shift));
 				} else {
-					t.set(0);
+					t.setZero();
 				}
-			}, new UnsignedByteType());
+			}, typeHelper.getType());
 
 			convertedLayers.add(convertedLayer);
 		}
@@ -212,27 +236,19 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & NumericTyp
 		return Views.stack(convertedLayers);
 	}
 
-	private static List<IntervalView<UnsignedByteType>> asZStack(final RandomAccessibleInterval<UnsignedByteType> rai) {
-		final List<IntervalView<UnsignedByteType>> stack = new ArrayList<>((int) rai.dimension(2));
+	private List<IntervalView<T>> asZStack(final RandomAccessibleInterval<T> rai) {
+		final List<IntervalView<T>> stack = new ArrayList<>((int) rai.dimension(2));
 		for (int z = 0; z < rai.dimension(2); ++z) {
 			stack.add(Views.hyperSlice(rai, 2, z));
 		}
 		return stack;
 	}
 
-	private static void saveFullScaleBlock(final String n5Path,
-										   final String datasetName, // should be s0
-										   final String datasetNameOutput,
-										   final List<Double> shifts,
-										   final long[] dimensions,
-										   final int[] blockSize,
-										   final long[][] gridBlock ) {
+	private void saveFullScaleBlock(final List<Double> shifts, final long[][] gridBlock) {
 
-		final N5Writer n5Writer = new N5FSWriter(n5Path);
-
-		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Writer, datasetName);
-
-		final RandomAccessibleInterval<UnsignedByteType> filteredSource = applyShifts(sourceRaw, shifts);
+		final N5Writer n5Writer = new N5FSWriter(options.n5Path);
+		final RandomAccessibleInterval<T> sourceRaw = N5Utils.open(n5Writer, fullScaleInputDataset);
+		final RandomAccessibleInterval<T> filteredSource = applyShifts(sourceRaw, shifts);
 
 		final FinalInterval gridBlockInterval =
 				Intervals.createMinSize(gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
@@ -240,9 +256,50 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & NumericTyp
 
 		N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 								  n5Writer,
-								  datasetNameOutput,
-								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+								  fullScaleOutputDataset,
+								  attributes,
 								  gridBlock[2],
-								  new UnsignedByteType());
+								  typeHelper.getType());
+	}
+
+
+	private interface TypeHelper<T extends NativeType<T> & IntegerType<T>> extends Serializable {
+		T getType();
+		Img<T> createImg(final long[] dimensions);
+		int clip(final int value);
+	}
+
+	private static class ByteHelper implements TypeHelper<UnsignedByteType> {
+		@Override
+		public UnsignedByteType getType() {
+			return new UnsignedByteType();
+		}
+
+		@Override
+		public Img<UnsignedByteType> createImg(final long[] dimensions) {
+			return ArrayImgs.unsignedBytes(dimensions);
+		}
+
+		@Override
+		public int clip(final int value) {
+			return UnsignedByteType.getCodedSignedByteChecked(value);
+		}
+	}
+
+	private static class ShortHelper implements TypeHelper<UnsignedShortType> {
+		@Override
+		public UnsignedShortType getType() {
+			return new UnsignedShortType();
+		}
+
+		@Override
+		public Img<UnsignedShortType> createImg(final long[] dimensions) {
+			return ArrayImgs.unsignedShorts(dimensions);
+		}
+
+		@Override
+		public int clip(final int value) {
+			return UnsignedShortType.getCodedSignedShortChecked(value);
+		}
 	}
 }
