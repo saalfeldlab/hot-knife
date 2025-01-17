@@ -70,34 +70,6 @@ public class SparkNormalizeLayerIntensityN5 {
 		}
 	}
 
-	private static void saveFullScaleBlock(final String n5PathInput,
-										   final String n5PathOutput,
-										   final String datasetName, // should be s0
-										   final String datasetNameOutput,
-										   final List<Double> shifts,
-										   final long[] dimensions,
-										   final int[] blockSize,
-										   final long[][] gridBlock ) {
-
-		final N5Reader n5Input = new N5FSReader(n5PathInput);
-		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
-
-		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
-
-		final RandomAccessibleInterval<UnsignedByteType> filteredSource = applyShifts(sourceRaw, shifts);
-
-		final FinalInterval gridBlockInterval =
-				Intervals.createMinSize(gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
-										gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
-
-		N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
-								  n5Output,
-								  datasetNameOutput,
-								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
-								  gridBlock[2],
-								  new UnsignedByteType());
-	}
-
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final SparkNormalizeLayerIntensityN5.Options options = new SparkNormalizeLayerIntensityN5.Options(args);
@@ -105,7 +77,7 @@ public class SparkNormalizeLayerIntensityN5 {
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeN5");
+		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeLayerIntensityN5");
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
@@ -157,6 +129,7 @@ public class SparkNormalizeLayerIntensityN5 {
 
 		sparkContext.close();
 	}
+
 
 	private static List<Double> computeShifts(RandomAccessibleInterval<UnsignedByteType> rai) {
 
@@ -226,9 +199,7 @@ public class SparkNormalizeLayerIntensityN5 {
 			convertedLayers.add(convertedLayer);
 		}
 
-		RandomAccessibleInterval<UnsignedByteType> target = Views.stack(convertedLayers);
-
-		return target;
+		return Views.stack(convertedLayers);
 	}
 
 	private static List<IntervalView<UnsignedByteType>> asZStack(final RandomAccessibleInterval<UnsignedByteType> rai) {
@@ -237,5 +208,33 @@ public class SparkNormalizeLayerIntensityN5 {
 			stack.add(Views.hyperSlice(rai, 2, z));
 		}
 		return stack;
+	}
+
+	private static void saveFullScaleBlock(final String n5PathInput,
+										   final String n5PathOutput,
+										   final String datasetName, // should be s0
+										   final String datasetNameOutput,
+										   final List<Double> shifts,
+										   final long[] dimensions,
+										   final int[] blockSize,
+										   final long[][] gridBlock ) {
+
+		final N5Reader n5Input = new N5FSReader(n5PathInput);
+		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+
+		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
+
+		final RandomAccessibleInterval<UnsignedByteType> filteredSource = applyShifts(sourceRaw, shifts);
+
+		final FinalInterval gridBlockInterval =
+				Intervals.createMinSize(gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
+										gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
+
+		N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
+								  n5Output,
+								  datasetNameOutput,
+								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+								  gridBlock[2],
+								  new UnsignedByteType());
 	}
 }
