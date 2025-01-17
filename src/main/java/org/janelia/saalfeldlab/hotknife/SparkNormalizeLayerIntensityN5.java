@@ -3,9 +3,9 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.DoubleSummaryStatistics;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import net.imglib2.converter.Converters;
@@ -169,40 +169,31 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 
 		// create mask from pixels that have "content" throughout the stack
 		final List<IntervalView<T>> downScaledStack = asZStack(rai);
-		final Img<T> contentMask = typeHelper.createImg(downScaledStack.get(0).dimensionsAsLongArray());
-		for (final T pixel : contentMask) {
+		final Img<T> zProjectedContentMask = typeHelper.createImg(downScaledStack.get(0).dimensionsAsLongArray());
+		for (final T pixel : zProjectedContentMask) {
 			pixel.setOne();
 		}
 
-		final int lowerThreshold = 20;
-		final int upperThreshold = 120;
 		for (final IntervalView<T> layer : downScaledStack) {
-			LoopBuilder.setImages(layer, contentMask)
+			LoopBuilder.setImages(layer, zProjectedContentMask)
 					.forEachPixel((a, b) -> {
-						if (a.getInteger() < lowerThreshold || a.getInteger() > upperThreshold) {
+						if (typeHelper.isOutsideThreshold(a.getInteger())) {
 							b.setZero();
 						}
 					});
 		}
 
-		final AtomicLong maskSize = new AtomicLong(0);
-		for (final T pixel : contentMask) {
-			if (pixel.getInteger() == 1) {
-				maskSize.incrementAndGet();
-			}
-		}
-
 		// compute average intensity of content pixels in each layer
 		final List<Double> contentAverages = new ArrayList<>(downScaledStack.size());
 		for (final IntervalView<T> layer : downScaledStack) {
-			final AtomicLong sum = new AtomicLong(0);
-			LoopBuilder.setImages(layer, contentMask)
+			final DoubleSummaryStatistics stats = new DoubleSummaryStatistics();
+			LoopBuilder.setImages(layer, zProjectedContentMask)
 					.forEachPixel((a, b) -> {
 						if (b.getInteger() == 1) {
-							sum.addAndGet(a.getInteger());
+							stats.accept(a.getInteger());
 						}
 					});
-			contentAverages.add((double) sum.get() / maskSize.get());
+			contentAverages.add(stats.getAverage());
 		}
 
 		// compute shifts for adjusting intensities relative to the first layer
@@ -218,13 +209,13 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		final List<RandomAccessibleInterval<T>> convertedLayers = new ArrayList<>(sourceStack.size());
 
 		for (int z = 0; z < sourceStack.size(); ++z) {
-			final byte shift = (byte) Math.round(shifts.get(z));
+			final double shift = shifts.get(z);
 			final RandomAccessibleInterval<T> layer = sourceStack.get(z);
 
 			RandomAccessibleInterval<T> convertedLayer = Converters.convert(layer, (s, t) -> {
 				// only shift foreground
 				if (s.getInteger() > 0) {
-					t.setInteger(typeHelper.clip(s.getInteger() - shift));
+					t.setInteger(typeHelper.clip((int) Math.round(s.getInteger() - shift)));
 				} else {
 					t.setZero();
 				}
@@ -267,6 +258,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		T getType();
 		Img<T> createImg(final long[] dimensions);
 		int clip(final int value);
+		boolean isOutsideThreshold(final int value);
 	}
 
 	private static class ByteHelper implements TypeHelper<UnsignedByteType> {
@@ -284,6 +276,11 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		public int clip(final int value) {
 			return UnsignedByteType.getCodedSignedByteChecked(value);
 		}
+
+		@Override
+		public boolean isOutsideThreshold(final int value) {
+			return (value < 20 || value > 200);
+		}
 	}
 
 	private static class ShortHelper implements TypeHelper<UnsignedShortType> {
@@ -300,6 +297,11 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		@Override
 		public int clip(final int value) {
 			return UnsignedShortType.getCodedSignedShortChecked(value);
+		}
+
+		@Override
+		public boolean isOutsideThreshold(final int value) {
+			return (value < 5000 || value > 60000);
 		}
 	}
 }
