@@ -70,7 +70,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--downsampleLevel",
-				usage = "Take this downsample level for computing the intensity shifts.")
+				usage = "Take this downsample level for computing the intensity shifts. Note that that downsampling in z is not supported.")
 		private Integer downsampleLevel = 5;
 
 		@Option(name = "--factors",
@@ -139,6 +139,11 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
 			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
 			shifts = computeShifts(downScaledImg);
+		}
+
+		if (shifts.size() != attributes.getDimensions()[2]) {
+			throw new IllegalArgumentException("Number of shifts does not match number of layers: " + shifts.size()
+					+ " vs. " + attributes.getDimensions()[2] + ". Is the z-dimension downsampled?");
 		}
 
 		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
