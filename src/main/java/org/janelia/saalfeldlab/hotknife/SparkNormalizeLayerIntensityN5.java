@@ -3,11 +3,17 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.DoubleSummaryStatistics;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
+import java.util.function.Supplier;
 
+import mpicbg.models.AbstractAffineModel1D;
+import mpicbg.models.IllDefinedDataPointsException;
+import mpicbg.models.NotEnoughDataPointsException;
+import mpicbg.models.TranslationModel1D;
+import net.imglib2.Cursor;
+import net.imglib2.RandomAccess;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
@@ -43,8 +49,8 @@ import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePy
 
 
 /**
- * Normalize layer intensity in N5 data set. The normalization is done by shifting the intensity of each layer relative
- * to the first layer. The shifts are computed based on the average intensity of a column of pixels that have "content"
+ * Normalize layer intensity in N5 data set. The normalization is done by transforming the intensity of each layer
+ * relative to the first layer. The transformations are computed based on a column of pixels that have "content"
  * throughout the stack (i.e. pixels that are not background).
  *
  * @param <T> pixel type, determined automatically from the input stack (either 8bit or 16bit)
@@ -70,7 +76,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--downsampleLevel",
-				usage = "Take this downsample level for computing the intensity shifts. Note that that downsampling in z is not supported.")
+				usage = "Take this downsample level for computing the intensity transformations. Note that that downsampling in z is not supported.")
 		private Integer downsampleLevel = 5;
 
 		@Option(name = "--factors",
@@ -135,14 +141,14 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 
 	private void run() throws IOException {
 
-		final List<Double> shifts;
+		final List<? extends AbstractAffineModel1D<?>> transformations;
 		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
 			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
-			shifts = computeShifts(downScaledImg);
+			transformations = computeTransformations(downScaledImg, TranslationModel1D::new);
 		}
 
-		if (shifts.size() != attributes.getDimensions()[2]) {
-			throw new IllegalArgumentException("Number of shifts does not match number of layers: " + shifts.size()
+		if (transformations.size() != attributes.getDimensions()[2]) {
+			throw new IllegalArgumentException("Number of transformations does not match number of layers: " + transformations.size()
 					+ " vs. " + attributes.getDimensions()[2] + ". Is the z-dimension downsampled?");
 		}
 
@@ -156,8 +162,8 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		try (final JavaSparkContext sparkContext = new JavaSparkContext(conf)) {
 
 			final JavaRDD<long[][]> parallelizedGrid = sparkContext.parallelize(grid);
-			final Broadcast<List<Double>> shiftsBroadcast = sparkContext.broadcast(shifts);
-			parallelizedGrid.foreach(gridBlock -> saveFullScaleBlock(shiftsBroadcast.value(), gridBlock));
+			final Broadcast<List<? extends AbstractAffineModel1D<?>>> transformationsBroadcast = sparkContext.broadcast(transformations);
+			parallelizedGrid.foreach(gridBlock -> saveFullScaleBlock(transformationsBroadcast.value(), gridBlock));
 
 			final int[] downsampleFactors = parseCSIntArray(options.factors);
 			if (downsampleFactors != null) {
@@ -170,7 +176,12 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		}
 	}
 
-	private List<Double> computeShifts(RandomAccessibleInterval<T> rai) {
+
+	private <A extends AbstractAffineModel1D<A>>
+	List<A> computeTransformations(
+			final RandomAccessibleInterval<T> rai,
+			final Supplier<A> modelSupplier
+	) {
 
 		// create mask from pixels that have "content" throughout the stack
 		final List<IntervalView<T>> downScaledStack = asZStack(rai);
@@ -188,39 +199,72 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 					});
 		}
 
-		// compute average intensity of content pixels in each layer
-		final List<Double> contentAverages = new ArrayList<>(downScaledStack.size());
-		for (final IntervalView<T> layer : downScaledStack) {
-			final DoubleSummaryStatistics stats = new DoubleSummaryStatistics();
-			LoopBuilder.setImages(layer, zProjectedContentMask)
-					.forEachPixel((a, b) -> {
-						if (b.getInteger() == 1) {
-							stats.accept(a.getInteger());
-						}
-					});
-			contentAverages.add(stats.getAverage());
+		final int nContentPixels = (int) zProjectedContentMask.stream()
+				.filter(pixel -> pixel.getInteger() == 1)
+				.count();
+
+		// Match intensity of content pixels in each layer and compute relative transformations
+		final List<A> models = new ArrayList<>(downScaledStack.size());
+		models.add(modelSupplier.get());
+		final double[][] previousLayerPixels = new double[1][nContentPixels];
+		final double[][] currentLayerPixels = new double[1][nContentPixels];
+		final double[] weights = new double[nContentPixels];
+		Arrays.fill(weights, 1);
+		extractContentPixels(downScaledStack.get(0), zProjectedContentMask, previousLayerPixels);
+
+		for (int z = 1; z < downScaledStack.size(); ++z) {
+			final A model = modelSupplier.get();
+			final IntervalView<T> currentLayer = downScaledStack.get(z);
+			extractContentPixels(currentLayer, zProjectedContentMask, currentLayerPixels);
+			try {
+				model.fit(currentLayerPixels, previousLayerPixels, weights);
+			} catch (final NotEnoughDataPointsException | IllDefinedDataPointsException e) {
+				throw new RuntimeException("Could not estimate model for layer " + z, e);
+			}
+			models.add(model);
+			System.arraycopy(currentLayerPixels[0], 0, previousLayerPixels[0], 0, currentLayerPixels[0].length);
 		}
 
-		// compute shifts for adjusting intensities relative to the first layer
-		final double fixedPoint = contentAverages.get(0);
-		return contentAverages.stream().map(a -> a - fixedPoint).collect(Collectors.toList());
+		// Make transformations relative to the first layer
+		for (int z = 1; z < models.size(); ++z) {
+			models.get(z).preConcatenate(models.get(z - 1));
+		}
+
+		return models;
 	}
 
-	private RandomAccessibleInterval<T> applyShifts(
+	private void extractContentPixels(final RandomAccessibleInterval<T> layer, final Img<T> mask, final double[][] contentPixels) {
+		final Cursor<T> layerCursor = Views.flatIterable(layer).localizingCursor();
+		final RandomAccess<T> maskAccess = mask.randomAccess();
+		int i = 0;
+		while (layerCursor.hasNext()) {
+			layerCursor.fwd();
+			maskAccess.setPosition(layerCursor);
+			if (maskAccess.get().getInteger() == 1) {
+				contentPixels[0][i++] = layerCursor.get().getInteger();
+			}
+		}
+//		Arrays.sort(contentPixels, Comparator.comparingDouble(a -> a[0]));
+	}
+
+	private RandomAccessibleInterval<T> applyTransformations(
 			final RandomAccessibleInterval<T> sourceRaw,
-			final List<Double> shifts
+			final List<? extends AbstractAffineModel1D<?>> transformations
 	) {
 		final List<IntervalView<T>> sourceStack = asZStack(sourceRaw);
 		final List<RandomAccessibleInterval<T>> convertedLayers = new ArrayList<>(sourceStack.size());
+		final double[] pixel = new double[1];
 
 		for (int z = 0; z < sourceStack.size(); ++z) {
-			final double shift = shifts.get(z);
+			final AbstractAffineModel1D<?> transformation = transformations.get(z);
 			final RandomAccessibleInterval<T> layer = sourceStack.get(z);
 
 			RandomAccessibleInterval<T> convertedLayer = Converters.convert(layer, (s, t) -> {
 				// only shift foreground
 				if (s.getInteger() > 0) {
-					t.setInteger(typeHelper.clip((int) Math.round(s.getInteger() - shift)));
+					pixel[0] = s.getInteger();
+					transformation.applyInPlace(pixel);
+					t.setInteger(typeHelper.clip((int) pixel[0]));
 				} else {
 					t.setZero();
 				}
@@ -240,11 +284,11 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		return stack;
 	}
 
-	private void saveFullScaleBlock(final List<Double> shifts, final long[][] gridBlock) {
+	private void saveFullScaleBlock(final List<? extends AbstractAffineModel1D<?>> transformations, final long[][] gridBlock) {
 
 		final N5Writer n5Writer = new N5FSWriter(options.n5Path);
 		final RandomAccessibleInterval<T> sourceRaw = N5Utils.open(n5Writer, fullScaleInputDataset);
-		final RandomAccessibleInterval<T> filteredSource = applyShifts(sourceRaw, shifts);
+		final RandomAccessibleInterval<T> filteredSource = applyTransformations(sourceRaw, transformations);
 
 		final FinalInterval gridBlockInterval =
 				Intervals.createMinSize(gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
