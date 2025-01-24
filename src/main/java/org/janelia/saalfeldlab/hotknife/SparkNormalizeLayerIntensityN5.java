@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
 import mpicbg.models.AbstractAffineModel1D;
+import mpicbg.models.AffineModel1D;
 import mpicbg.models.IllDefinedDataPointsException;
 import mpicbg.models.NotEnoughDataPointsException;
 import mpicbg.models.TranslationModel1D;
@@ -56,6 +57,10 @@ import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePy
  * @param <T> pixel type, determined automatically from the input stack (either 8bit or 16bit)
  */
 public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerType<T>> implements Serializable {
+	public static enum NormalizationModel {
+		TRANSLATION,
+		AFFINE
+	}
 
 	@SuppressWarnings({"FieldMayBeFinal", "unused"})
 	public static class Options extends AbstractOptions implements Serializable {
@@ -82,6 +87,10 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		@Option(name = "--factors",
 				usage = "If specified, generates a scale pyramid with given factors, e.g. 2,2,1")
 		public String factors;
+
+		@Option(name = "--model",
+				usage = "Normalization model: TRANSLATION or AFFINE")
+		private NormalizationModel model = NormalizationModel.TRANSLATION;
 
 		public Options(final String[] args) {
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -144,7 +153,16 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		final List<? extends AbstractAffineModel1D<?>> transformations;
 		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
 			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
-			transformations = computeTransformations(downScaledImg, TranslationModel1D::new);
+			switch (options.model) {
+				case TRANSLATION:
+					transformations = computeTransformations(downScaledImg, TranslationModel1D::new);
+					break;
+				case AFFINE:
+					transformations = computeTransformations(downScaledImg, AffineModel1D::new);
+					break;
+				default:
+					throw new IllegalArgumentException("Unsupported normalization model: " + options.model);
+			}
 		}
 
 		if (transformations.size() != attributes.getDimensions()[2]) {
