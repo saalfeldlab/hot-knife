@@ -2,6 +2,7 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -9,6 +10,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -31,6 +34,7 @@ import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
+import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.position.FunctionRealRandomAccessible;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -97,7 +101,7 @@ public class SparkMaskedCLAHEMultiSEM
 			final String n5PathInput,
 			final String n5DatasetInput,
 			final String n5DatasetOutput,
-			//final String n5FieldMax,
+			final String n5FieldMax,
 			final int blockFactorXY,
 			final int blockFactorZ,
 			final boolean overwrite ) throws IOException
@@ -109,10 +113,19 @@ public class SparkMaskedCLAHEMultiSEM
 		final long[] dimensions = attributes.getDimensions();
 		final int[] gridBlockSize = new int[]{ blockSize[0] * blockFactorXY, blockSize[1] * blockFactorXY, blockSize[2] * blockFactorZ };
 
-		/*final String factorsKey = "downsamplingFactors";
-		final double[] maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMax, factorsKey, double[].class);
-
-		System.out.println("loaded " + factorsKey + " " + Arrays.toString(maxFactors) + " from " + n5FieldMax);*/
+		final double[] maxFactors;
+		
+		if ( n5FieldMax == null )
+		{
+			maxFactors = null;
+		}
+		else
+		{
+			final String factorsKey = "downsamplingFactors";
+			maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMax, factorsKey, double[].class);
+	
+			System.out.println("loaded " + factorsKey + " " + Arrays.toString(maxFactors) + " from " + n5FieldMax);
+		}
 
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
@@ -164,12 +177,21 @@ public class SparkMaskedCLAHEMultiSEM
 					System.out.println( net.imglib2.util.Util.printInterval( gridBlockInterval ) );
 
 					final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, n5PathInput );//new N5FSReader(n5PathInput);
-					//final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5, n5FieldMax);
-					//final RealRandomAccessible<DoubleType> maxFieldScaled = Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors);
-					final FunctionRealRandomAccessible< DoubleType > maxFieldScaled = new FunctionRealRandomAccessible<>(
-							2,
-							(i,o) -> o.set( 52 ),
-							() -> new DoubleType() );
+					
+					final RealRandomAccessible< DoubleType > maxFieldScaled;
+
+					if ( n5FieldMax == null )
+					{
+						maxFieldScaled = new FunctionRealRandomAccessible<>(
+								2,
+								(i,o) -> o.set( 52 ),
+								() -> new DoubleType() );
+					}
+					else
+					{
+						final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5, n5FieldMax);
+						maxFieldScaled = Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors);
+					}
 
 					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, n5DatasetInput);
 					final RandomAccessible<UnsignedByteType> infiniteSource = Views.extendMirrorDouble( source );
@@ -320,7 +342,7 @@ public class SparkMaskedCLAHEMultiSEM
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		process( sparkContext, options.n5PathInput, options.n5DatasetInput, options.n5DatasetOutput, options.blockFactorXY, options.blockFactorZ, options.overwrite );
+		process( sparkContext, options.n5PathInput, options.n5DatasetInput, options.n5DatasetOutput, options.n5FieldMax, options.blockFactorXY, options.blockFactorZ, options.overwrite );
 
 		sparkContext.close();
 	}
