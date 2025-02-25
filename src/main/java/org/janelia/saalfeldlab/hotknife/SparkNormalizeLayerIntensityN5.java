@@ -1,11 +1,12 @@
 package org.janelia.saalfeldlab.hotknife;
 
-import java.io.File;
+import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
+import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -13,12 +14,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.loops.LoopBuilder;
-import net.imglib2.multithreading.SimpleMultiThreading;
-import net.imglib2.view.IntervalView;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -30,22 +25,22 @@ import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
 import org.janelia.saalfeldlab.n5.universe.N5Factory;
 import org.janelia.saalfeldlab.n5.universe.N5Factory.StorageFormat;
+import org.janelia.scicomp.n5.zstandard.ZstandardCompression;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.loops.LoopBuilder;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
-import net.preibisch.legacy.io.IOFunctions;
-import net.preibisch.mvrecon.Version;
-
-import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
-import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
 
 public class SparkNormalizeLayerIntensityN5 {
 
@@ -93,7 +88,9 @@ public class SparkNormalizeLayerIntensityN5 {
 
 		final RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5Input, datasetName);
 
-		final List<long[][]> prefetchGrid = Grid.create(gridBlock[1], blockSize);
+		final int[] blockSizeIn = n5Input.getAttribute(datasetName, "blockSize", int[].class);
+
+		final List<long[][]> prefetchGrid = Grid.create(gridBlock[1], blockSizeIn);
 		final ForkJoinPool pool = new ForkJoinPool( Math.min( 64, prefetchGrid.size() ) );
 		final ArrayList< UnsignedByteType > pixels = new ArrayList<>();
 
@@ -112,7 +109,7 @@ public class SparkNormalizeLayerIntensityN5 {
 		N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 								  n5Output,
 								  datasetNameOutput,
-								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression(1)),
+								  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new ZstandardCompression()/*new GzipCompression(1)*/),
 								  gridBlock[2],
 								  new UnsignedByteType());
 
@@ -165,7 +162,7 @@ public class SparkNormalizeLayerIntensityN5 {
 
 		System.out.println( new Date( System.currentTimeMillis() ) +  ": Creating " + fullScaleOutputDataset );
 
-		n5Output.createDataset(fullScaleOutputDataset, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+		n5Output.createDataset(fullScaleOutputDataset, dimensions, blockSize, DataType.UINT8, new ZstandardCompression() /*new GzipCompression(1)*/);
 
 		System.out.println( new Date( System.currentTimeMillis() ) +  ": Kicking off Spark for re-saving ... " );
 
