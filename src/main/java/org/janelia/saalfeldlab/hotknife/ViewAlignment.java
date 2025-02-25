@@ -153,8 +153,11 @@ public class ViewAlignment {
 			final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
 			final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
+			final int zFrom = 0; // 0 is everything
+			final int zTo = datasetNames.length; //datasetNames.length is everything
+
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
-			for (int i = 0; i < datasetNames.length; ++i) {
+			for (int i = zFrom; i < zTo /*datasetNames.length*/; ++i) {
 				System.out.println( "z=" + i + " >>> " + transformDatasetNames[i] );
 
 				if ( options.ignoreTransforms )
@@ -175,11 +178,20 @@ public class ViewAlignment {
 
 			}
 
+			String[] datasetNamesCrop = new String[ zTo - zFrom ];
+			RealTransform[] realTransformsCrop = new RealTransform[ zTo - zFrom ];
+
+			for (int i = zFrom; i < zTo; ++i)
+			{
+				datasetNamesCrop[ i - zFrom ] = datasetNames[ i ];
+				realTransformsCrop[ i - zFrom] = realTransforms[ i ];
+			}
+
 			RandomAccessibleInterval<UnsignedByteType> stack = Transform.createTransformedStackUnsignedByteType(
 					options.getN5Path(),
-					Arrays.asList(datasetNames),
+					Arrays.asList(datasetNamesCrop),
 					showScaleIndex,
-					Arrays.asList(realTransforms),
+					Arrays.asList(realTransformsCrop),
 					new FinalInterval(
 							Grid.floorScaled(boundsMin, showScale),
 							Grid.ceilScaled(boundsMax, showScale)));
