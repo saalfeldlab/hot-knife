@@ -2,7 +2,6 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -10,16 +9,14 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
-import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.universe.N5Factory;
+import org.janelia.saalfeldlab.n5.universe.N5Factory.StorageFormat;
+import org.janelia.scicomp.n5.zstandard.ZstandardCompression;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -34,10 +31,8 @@ import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
-import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.position.FunctionRealRandomAccessible;
-import net.imglib2.position.FunctionRealRandomAccessible.RealFunctionRealRandomAccess;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -107,7 +102,7 @@ public class SparkMaskedCLAHEMultiSEM
 			final int blockFactorZ,
 			final boolean overwrite ) throws IOException
 	{
-		final N5Reader n5Input = new N5FSReader(n5PathInput);
+		final N5Reader n5Input = new N5Factory().openReader( StorageFormat.N5, n5PathInput );//new N5FSReader(n5PathInput);
 
 		final DatasetAttributes attributes = n5Input.getDatasetAttributes(n5DatasetInput);
 		final int[] blockSize = attributes.getBlockSize();
@@ -121,7 +116,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
-		final N5Writer n5Output = new N5FSWriter(n5PathInput);
+		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, n5PathInput );//new N5FSWriter(n5PathInput);
 
 		if (n5Output.exists(n5DatasetOutput))
 		{
@@ -137,13 +132,13 @@ public class SparkMaskedCLAHEMultiSEM
 			}
 		}
 
-		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
+		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new ZstandardCompression());
 		SparkPixelNormalizeN5.transferAttributes(n5Output, n5DatasetInput, n5DatasetOutput);
 
 		n5Output.close();
 		n5Input.close();
 
-		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
+		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid, Math.min( grid.size(), 15000 ));
 
 		// new ImageJ();
 
@@ -156,7 +151,7 @@ public class SparkMaskedCLAHEMultiSEM
 						return;
 					*/
 
-					final N5Writer workerWriter = new N5FSWriter(n5PathInput);
+					final N5Writer workerWriter = new N5Factory().openWriter( StorageFormat.N5, n5PathInput );//new N5FSWriter(n5PathInput);
 
 					final int minIntensity = 0;
 					final int maxIntensity = 255;
@@ -168,12 +163,12 @@ public class SparkMaskedCLAHEMultiSEM
 
 					System.out.println( net.imglib2.util.Util.printInterval( gridBlockInterval ) );
 
-					final N5Reader n5 = new N5FSReader(n5PathInput);
+					final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, n5PathInput );//new N5FSReader(n5PathInput);
 					//final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5, n5FieldMax);
 					//final RealRandomAccessible<DoubleType> maxFieldScaled = Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors);
 					final FunctionRealRandomAccessible< DoubleType > maxFieldScaled = new FunctionRealRandomAccessible<>(
 							2,
-							(i,o) -> o.set( 51 ),
+							(i,o) -> o.set( 52 ),
 							() -> new DoubleType() );
 
 					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, n5DatasetInput);
@@ -304,7 +299,7 @@ public class SparkMaskedCLAHEMultiSEM
 							  result,
 							  workerWriter,
 							  n5DatasetOutput,
-							  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+							  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new ZstandardCompression()),
 							  gridBlock[2],
 							  new UnsignedByteType());
 				});
