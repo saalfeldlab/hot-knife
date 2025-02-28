@@ -33,11 +33,9 @@ import org.janelia.alignment.ArgbRenderer;
 import org.janelia.alignment.RenderParameters;
 import org.janelia.alignment.util.ImageProcessorCache;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
-import org.janelia.saalfeldlab.n5.DataType;
-import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
-import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.*;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.spark.N5RemoveSpark;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -427,8 +425,9 @@ public class SparkConvertRenderStackToN5 {
 			for(File f : datasetDir.listFiles()) {
 				// try/catch to check for int parse errors which happen if this is not a scale dir
 				try {
-					if (f.isDirectory() && f.getName().startsWith("s") && Integer.parseInt(f.getName().substring(1)) > 0)
-						FileUtils.deleteDirectory(f);
+					if (f.isDirectory() && f.getName().startsWith("s") && Integer.parseInt(f.getName().substring(1)) > 0) {
+						N5RemoveSpark.remove(sc, n5Supplier, Paths.get(datasetName, f.getName()).toString());
+					}
 				} catch( Exception ignored ) {
 				}
 			}
