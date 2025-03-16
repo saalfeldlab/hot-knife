@@ -60,7 +60,7 @@ public class ImportSOFIMA implements Callable<Void>
 	@Option(names = {"-s", "--sofimaField"}, required = true, description = "The SOFIMA transformation field, e.g. /nrs/flyem/data/sofima/3.invmap.zarr")
 	private String sofimaField;
 
-	@Option(names = "--scaleIndexSOFIMAinput", required = true, description = "The scale index at which the deformed images were fed to SOFIMA (the same as --scaleIndex that was used in SparkViewAlignment)")
+	@Option(names = "--scaleIndexSOFIMAinput", required = true, description = "The scale index at which the deformed images were fed to SOFIMA, needed for vector size adjustment (the same as --scaleIndex that was used in SparkViewAlignment)")
 	private int scaleIndexSOFIMAinput;
 
 	@Option(names = "--z", required = true, description = "surface slice index to apply it to")
@@ -79,7 +79,7 @@ public class ImportSOFIMA implements Callable<Void>
 		final String[] transformDatasetNames = n5.getAttribute(groupIn, "transforms", String[].class);
 		final double[] boundsMin = n5.getAttribute(groupIn, "boundsMin", double[].class);
 		final double[] boundsMax = n5.getAttribute(groupIn, "boundsMax", double[].class);
-		final int transformScaleIndexPass = n5.getAttribute(groupIn, "scale", int.class);
+		final int transformScaleIndexPass = n5.getAttribute(groupIn, "scaleIndex", int.class);
 
 		final String datasetName = groupIn + Path.SEPARATOR + transformDatasetNames[ z ];
 		final double transformScaleDataset = n5.getAttribute(datasetName, "scale", double.class);
@@ -122,7 +122,7 @@ public class ImportSOFIMA implements Callable<Void>
 		final double sofimaBaseScale = 1.0 / (1 << scaleIndexSOFIMAinput );
 
 		System.out.println( "scalingFactor (SOFIMA relative to hot-knife): " + Arrays.toString( scalingFactor ) );
-		System.out.println( "scale at which the deformed images were fed to SOFIMA: " + sofimaBaseScale );
+		System.out.println( "scale at which the deformed images were fed to SOFIMA (needed for vector size adjustment): " + sofimaBaseScale );
 
 		new ImageJ();
 		//ImageJFunctions.show( positionField, Executors.newFixedThreadPool( 36 ) );
@@ -214,7 +214,7 @@ public class ImportSOFIMA implements Callable<Void>
 
 		final String datasetNameOut = groupOut + Path.SEPARATOR + transformDatasetNames[ z ];
 
-		if ( !n5.exists( datasetNameOut ) )
+		if ( n5.exists( datasetNameOut ) )
 		{
 			System.out.println( "Output group dataset " + datasetNameOut + " exists. Stopping.");
 			return null;
