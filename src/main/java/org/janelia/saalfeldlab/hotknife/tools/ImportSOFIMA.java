@@ -158,7 +158,7 @@ public class ImportSOFIMA implements Callable<Void>
 
 			// original scale
 			positionFieldScaledX = Views.hyperSlice( positionField, 2, 0 );
-			positionFieldScaledY = Views.hyperSlice( positionField, 2, 0 );
+			positionFieldScaledY = Views.hyperSlice( positionField, 2, 1 );
 
 			outputX = new CellImgFactory<>( new DoubleType() ).create( positionFieldScaledX );
 			outputY = new CellImgFactory<>( new DoubleType() ).create( positionFieldScaledY );
