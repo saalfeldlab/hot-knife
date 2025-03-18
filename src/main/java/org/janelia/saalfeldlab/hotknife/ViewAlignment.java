@@ -153,8 +153,8 @@ public class ViewAlignment {
 			final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
 			final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
-			final int zFrom = 0; // 0 is everything
-			final int zTo = datasetNames.length; //datasetNames.length is everything
+			final int zFrom = 1; // 0 is everything
+			final int zTo = 3;//datasetNames.length; //datasetNames.length is everything
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = zFrom; i < zTo /*datasetNames.length*/; ++i) {

@@ -27,6 +27,7 @@ import net.imglib2.converter.Converters;
 import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineRandomAccessible;
 import net.imglib2.realtransform.RealViews;
@@ -101,14 +102,15 @@ public class ImportSOFIMA implements Callable<Void>
 		System.out.println( "blockSize: " + Arrays.toString( blockSize ));
 		System.out.println( "dataType: " + dataType);
 
-		final RandomAccessibleInterval< DoubleType > sofimaRaw = N5Utils.open( zarr, "/" );
-		final RandomAccessibleInterval< DoubleType > sofima;
+		// XY axes are flipped compared to python (N5 solves that already)
+		// still, first slice are X vectors, 2nd slice are Y vectors
+		RandomAccessibleInterval< DoubleType > sofima = N5Utils.open( zarr, "/" );
 
 		// Note: the SOFIMA field can contain NaN's
-		if ( sofimaRaw.numDimensions() == 4 )
-			sofima = Converters.convertRAI( Views.hyperSlice( sofimaRaw, 2, 1 ), (i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ), new DoubleType() );
+		if ( sofima.numDimensions() == 4 )
+			sofima = Converters.convertRAI( Views.hyperSlice( sofima, 2, 1 ), (i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ), new DoubleType() );
 		else
-			sofima = Converters.convertRAI( sofimaRaw, (i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ), new DoubleType() );
+			sofima = Converters.convertRAI( sofima, (i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ), new DoubleType() );
 
 		System.out.println( "dimensions of hot-knife position field: " + Arrays.toString( positionField.dimensionsAsLongArray() ) );
 		System.out.println( "dimensions of SOFIMA deformation field: " + Arrays.toString( sofima.dimensionsAsLongArray() ) );
@@ -124,9 +126,10 @@ public class ImportSOFIMA implements Callable<Void>
 		System.out.println( "scalingFactor (SOFIMA relative to hot-knife): " + Arrays.toString( scalingFactor ) );
 		System.out.println( "scale at which the deformed images were fed to SOFIMA (needed for vector size adjustment): " + sofimaBaseScale );
 
-		new ImageJ();
-		//ImageJFunctions.show( positionField, Executors.newFixedThreadPool( 36 ) );
-		//ImageJFunctions.show( sofima, Executors.newFixedThreadPool( 36 ) );
+//		new ImageJ();
+//		ImageJFunctions.show( positionField, Executors.newFixedThreadPool( 36 ) );
+//		ImageJFunctions.show( sofima, Executors.newFixedThreadPool( 36 ) );
+//		SimpleMultiThreading.threadHaltUnClean();
 
 		final double outTransformScaleDataset;
 
@@ -137,7 +140,10 @@ public class ImportSOFIMA implements Callable<Void>
 		if ( scalingFactor[ 0 ] > 1 )
 		{
 			// we need to increase the size of the SOFIMA field
+
+			// the scale of the transformation dataset that will be written
 			outTransformScaleDataset = transformScaleDataset;
+
 			final AffineRandomAccessible<DoubleType, AffineGet> transformedX = RealViews.affine(
 					Views.interpolate(
 							Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 0 ) ),
@@ -162,6 +168,21 @@ public class ImportSOFIMA implements Callable<Void>
 
 			outputX = new CellImgFactory<>( new DoubleType() ).create( positionFieldScaledX );
 			outputY = new CellImgFactory<>( new DoubleType() ).create( positionFieldScaledY );
+
+			// we need to apply the original scale of the images
+			//
+			// The SOFIMA vectors have the same size, no matter with which stride they were computed,
+			// so they must be in the size of the input images fed to SOFIMA
+			//
+			// Saalfeld's absolute transformation fields store the vectors in the scale the transformation fields
+			// are stored in. E.g. at scale 0.03125 a value that is 2400, will be 4800 at scale 0.0625
+			//
+			// Next topic, values:
+			// SOFIMA imports e.g. 343, 516 X=1.3092;Y=7.3169 (positive means move up)
+			// SOFIMA x positive means move left
+
+			sofimaScaledX = Converters.convertRAI( sofimaScaledX, (i,o) -> o.set( i.get() / sofimaBaseScale * outTransformScaleDataset), new DoubleType() );
+			sofimaScaledY = Converters.convertRAI( sofimaScaledY, (i,o) -> o.set( i.get() / sofimaBaseScale * outTransformScaleDataset), new DoubleType() );
 		}
 		else
 		{
@@ -169,10 +190,6 @@ public class ImportSOFIMA implements Callable<Void>
 			sofimaScaledX = sofimaScaledY = positionFieldScaledX = positionFieldScaledY = outputX = outputY = null;
 			outTransformScaleDataset = transformScaleDataset / scalingFactor[ 0 ];
 		}
-
-		// we need to apply the original scale of the images
-		sofimaScaledX = Converters.convertRAI( sofimaScaledX, (i,o) -> o.set( i.get() / sofimaBaseScale), new DoubleType() );
-		sofimaScaledY = Converters.convertRAI( sofimaScaledY, (i,o) -> o.set( i.get() / sofimaBaseScale), new DoubleType() );
 
 		//ImageJFunctions.show( sofimaScaledX ).setTitle( "sofimaScaledX" );
 		//ImageJFunctions.show( sofimaScaledY ).setTitle( "sofimaScaledY" );
