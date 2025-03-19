@@ -9,6 +9,7 @@ import java.util.concurrent.Executors;
 
 import org.apache.hadoop.fs.Path;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.N5Reader;
@@ -30,8 +31,10 @@ import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineRandomAccessible;
+import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale;
+import net.imglib2.realtransform.Scale2D;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
@@ -57,6 +60,9 @@ public class ImportSOFIMA implements Callable<Void>
 
 	@Option(names = {"-o", "--n5GroupOut"}, required = true, description = "N5 group to save, e.g. /pass01-sofima")
 	private String groupOut;
+
+	@Option(names = {"--overwrite"}, required = false, description = "Overwrite an existing N5 group, specified with --n5GroupOut, default: false")
+	private boolean overwrite = false;
 
 	@Option(names = {"-s", "--sofimaField"}, required = true, description = "The SOFIMA transformation field, e.g. /nrs/flyem/data/sofima/3.invmap.zarr")
 	private String sofimaField;
@@ -112,6 +118,8 @@ public class ImportSOFIMA implements Callable<Void>
 		else
 			sofima = Converters.convertRAI( sofima, (i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ), new DoubleType() );
 
+		sofima = Views.permute( sofima, 0, 1 );
+
 		System.out.println( "dimensions of hot-knife position field: " + Arrays.toString( positionField.dimensionsAsLongArray() ) );
 		System.out.println( "dimensions of SOFIMA deformation field: " + Arrays.toString( sofima.dimensionsAsLongArray() ) );
 
@@ -132,6 +140,29 @@ public class ImportSOFIMA implements Callable<Void>
 //		SimpleMultiThreading.threadHaltUnClean();
 
 		final double outTransformScaleDataset;
+
+		// TODO: do it with Saalfelds tools
+		
+		final RealTransformSequence transformSequence = new RealTransformSequence();
+
+		/*
+		Transform.loadScaledTransform(
+							n5,
+							group + "/" + transformDatasetNames[i]);
+		transformSequence.add(new Scale2D(scale,  scale));
+		transformSequence.add(transform);
+		transformSequence.add(new Scale2D(1.0 / scale,  1.0 / scale));
+		transformSequence.add(transformB);
+		Transform.saveScaledTransformBlock(
+				n5,
+				datasetName,
+				transformSequence,
+				scale,
+				boundsMin,
+				boundsMax,
+				gridOffset,
+				new int[] {stepSize, stepSize});
+		*/
 
 		RandomAccessibleInterval< DoubleType > sofimaScaledX, sofimaScaledY;
 		final RandomAccessibleInterval< DoubleType > positionFieldScaledX, positionFieldScaledY;
@@ -181,8 +212,11 @@ public class ImportSOFIMA implements Callable<Void>
 			// SOFIMA imports e.g. 343, 516 X=1.3092;Y=7.3169 (positive means move up)
 			// SOFIMA x positive means move left
 
-			sofimaScaledX = Converters.convertRAI( sofimaScaledX, (i,o) -> o.set( i.get() / sofimaBaseScale * outTransformScaleDataset), new DoubleType() );
-			sofimaScaledY = Converters.convertRAI( sofimaScaledY, (i,o) -> o.set( i.get() / sofimaBaseScale * outTransformScaleDataset), new DoubleType() );
+			sofimaScaledX = Converters.convertRAI( sofimaScaledX, (i,o) -> o.set( 512/*( -i.get() / sofimaBaseScale ) * outTransformScaleDataset */), new DoubleType() );
+			sofimaScaledY = Converters.convertRAI( sofimaScaledY, (i,o) -> o.set( 0/*( -i.get() / sofimaBaseScale ) * outTransformScaleDataset */), new DoubleType() );
+
+			// adding 512 in y moves it 1024 right and 1024 down
+			// adding 512 in x moves it 1024 right and 1024 up
 		}
 		else
 		{
@@ -224,12 +258,14 @@ public class ImportSOFIMA implements Callable<Void>
 			n5.setAttribute(groupOut, "boundsMin", boundsMin);
 			n5.setAttribute(groupOut, "boundsMax", boundsMax);
 		}
-		else
-		{
-			System.out.println( "Output group " + groupOut + " exists.");
-		}
 
 		final String datasetNameOut = groupOut + Path.SEPARATOR + transformDatasetNames[ z ];
+
+		if ( n5.exists( datasetNameOut ) && overwrite )
+		{
+			System.out.println( "Deleting existing output group: " + datasetNameOut );
+			n5.remove( datasetNameOut );
+		}
 
 		if ( n5.exists( datasetNameOut ) )
 		{
