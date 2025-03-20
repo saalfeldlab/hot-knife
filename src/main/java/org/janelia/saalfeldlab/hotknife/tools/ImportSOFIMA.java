@@ -12,6 +12,7 @@ import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -118,7 +119,7 @@ public class ImportSOFIMA implements Callable<Void>
 		else
 			sofima = Converters.convertRAI( sofima, (i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ), new DoubleType() );
 
-		sofima = Views.permute( sofima, 0, 1 );
+		//sofima = Views.permute( sofima, 0, 1 );
 
 		System.out.println( "dimensions of hot-knife position field: " + Arrays.toString( positionField.dimensionsAsLongArray() ) );
 		System.out.println( "dimensions of SOFIMA deformation field: " + Arrays.toString( sofima.dimensionsAsLongArray() ) );
@@ -212,7 +213,7 @@ public class ImportSOFIMA implements Callable<Void>
 			// SOFIMA imports e.g. 343, 516 X=1.3092;Y=7.3169 (positive means move up)
 			// SOFIMA x positive means move left
 
-			sofimaScaledX = Converters.convertRAI( sofimaScaledX, (i,o) -> o.set( 512/*( -i.get() / sofimaBaseScale ) * outTransformScaleDataset */), new DoubleType() );
+			sofimaScaledX = Converters.convertRAI( sofimaScaledX, (i,o) -> o.set( 128/*( -i.get() / sofimaBaseScale ) * outTransformScaleDataset */), new DoubleType() );
 			sofimaScaledY = Converters.convertRAI( sofimaScaledY, (i,o) -> o.set( 0/*( -i.get() / sofimaBaseScale ) * outTransformScaleDataset */), new DoubleType() );
 
 			// adding 512 in y moves it 1024 right and 1024 down
@@ -280,7 +281,7 @@ public class ImportSOFIMA implements Callable<Void>
 
 			try
 			{
-				N5Utils.save( output, n5, datasetNameOut, blockSize, new ZstandardCompression() , exec );
+				N5Utils.save( output, n5, datasetNameOut, blockSize, new GzipCompression(), exec );
 			}
 			catch (InterruptedException | ExecutionException e)
 			{

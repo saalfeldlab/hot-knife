@@ -121,8 +121,8 @@ public class ImportSOFIMA2 implements Callable<Void>
 		final RandomAccessibleInterval<DoubleType> positionFieldB = ArrayImgs.doubles( positionField.dimensionsAsLongArray() );
 		// TODO: change field
 		final PositionFieldTransform<DoubleType> pfTransformB = Transform.createPositionFieldTransform(
-				Views.translate(positionField, translation));
-		final RealTransform transformB = Transform.createScaledRealTransform(pfTransform, transformScale);
+				Views.translate(positionFieldB, translation));
+		final RealTransform transformB = Transform.createScaledRealTransform(pfTransformB, transformScale);
 
 		final RealTransformSequence transformSequence = new RealTransformSequence();
 		transformSequence.add(transformA);
@@ -156,8 +156,7 @@ public class ImportSOFIMA2 implements Callable<Void>
 				return null;
 			}
 
-			// TODO: save transformSequence
-			Transform.saveScaledTransform( n5, datasetNameOut, transformA, transformScale, boundsMin, boundsMax );
+			Transform.saveScaledTransform( n5, datasetNameOut, transformSequence, transformScale, boundsMin, boundsMax );
 
 		} catch (IOException e)
 		{
