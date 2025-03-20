@@ -105,9 +105,12 @@ public class TestFieldLoading
 		RealTransformRandomAccessible<UnsignedByteType, ?>.RealTransformRandomAccess ra =
 				(RealTransformRandomAccessible<UnsignedByteType, ?>.RealTransformRandomAccess)rai.randomAccess();
 
+		RealTransformRandomAccessible.debug = true;
 		ra.setPosition( new long[] { 3120 + rai.min( 0 ), 1920 + rai.min( 1 ) } );
-		int value = ra.get().get();
+		UnsignedByteType v = ra.get();
+		int value = v.get();
 		System.out.println( "Pixel value at [3120, 1920]: " + value );
+		RealTransformRandomAccessible.debug = false;
 
 		ImageJFunctions.show( rai, Executors.newFixedThreadPool( 36 ) );
 	}
