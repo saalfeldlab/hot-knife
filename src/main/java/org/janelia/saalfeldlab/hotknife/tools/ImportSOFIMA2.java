@@ -79,12 +79,16 @@ public class ImportSOFIMA2 implements Callable<Void>
 	@Override
 	public final Void call()// throws IOException, InterruptedException, ExecutionException
 	{
-		System.out.println( n5Path );
-		System.out.println( sofimaField );
+		System.out.println( "hot-knife in: " + n5Path + Path.SEPARATOR + groupIn );
+		System.out.println( "sofima: " + sofimaField );
+		System.out.println( "hot-knife out: " + n5Path + Path.SEPARATOR + groupOut );
 
 		final N5Writer n5 = new N5Factory().openWriter( StorageFormat.N5, n5Path );
 		final N5Reader zarr = new N5Factory().openReader( StorageFormat.ZARR, sofimaField );
 
+		//
+		// load metadata
+		//
 		final String[] datasetNames = n5.getAttribute(groupIn, "datasets", String[].class);
 		final String[] transformDatasetNames = n5.getAttribute(groupIn, "transforms", String[].class);
 		final double[] boundsMin = n5.getAttribute(groupIn, "boundsMin", double[].class);
@@ -92,7 +96,7 @@ public class ImportSOFIMA2 implements Callable<Void>
 		final int transformScaleIndexPass = n5.getAttribute(groupIn, "scaleIndex", int.class);
 
 		final String datasetName = groupIn + Path.SEPARATOR + transformDatasetNames[ z ];
-		final double transformScale = n5.getAttribute(datasetName, "scale", double.class);
+		final double transformScaleDataset = n5.getAttribute(datasetName, "scale", double.class);
 		final int[] blockSize = n5.getAttribute( datasetName, "blockSize", int[].class);
 		final DataType dataType = n5.getAttribute( datasetName, "dataType", DataType.class);
 
@@ -102,31 +106,143 @@ public class ImportSOFIMA2 implements Callable<Void>
 		System.out.println( "N5 transform datasetName: " + datasetName );
 		System.out.println( "dataset: " + datasetNames[ z ] );
 
-		// load the position field
-		//final RealTransform transform = Transform.loadScaledTransform( n5, datasetName );
-		final RandomAccessibleInterval<DoubleType> positionField = N5Utils.open(n5, datasetName);
-		final int n = positionField.numDimensions() - 1;
-		final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMin, transformScale), n + 1);
-		final PositionFieldTransform<DoubleType> pfTransform = Transform.createPositionFieldTransform(
-				Views.translate(positionField, translation));
-		final RealTransform transformA = Transform.createScaledRealTransform(pfTransform, transformScale);
+		//
+		// load the hot-knife position field
+		//
 
+		// we cannot use the convenience method because we need the translation[]
+		//final RealTransform transform = Transform.loadScaledTransform( n5, datasetName );
+
+		final RandomAccessibleInterval<DoubleType> positionFieldHotKnife = N5Utils.open(n5, datasetName);
+		final int n = positionFieldHotKnife.numDimensions() - 1;
+		final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMin, transformScaleDataset), n + 1);
+		final PositionFieldTransform<DoubleType> positionFieldHotKnifeTransform = Transform.createPositionFieldTransform(
+				Views.translate(positionFieldHotKnife, translation));
+		final RealTransform transformHotKnife = Transform.createScaledRealTransform(positionFieldHotKnifeTransform, transformScaleDataset);
+
+		System.out.println( "dimensions of hot-knife position field: " + Arrays.toString( positionFieldHotKnife.dimensionsAsLongArray() ) );
 		System.out.println( "translation: " + Arrays.toString( translation ));
-		System.out.println( "scale: " + transformScale);
+		System.out.println( "scale: " + transformScaleDataset);
 		System.out.println( "blockSize: " + Arrays.toString( blockSize ));
 		System.out.println( "dataType: " + dataType);
 
-		// do it with Saalfelds tools
-		
-		final RandomAccessibleInterval<DoubleType> positionFieldB = ArrayImgs.doubles( positionField.dimensionsAsLongArray() );
-		// TODO: change field
-		final PositionFieldTransform<DoubleType> pfTransformB = Transform.createPositionFieldTransform(
-				Views.translate(positionFieldB, translation));
-		final RealTransform transformB = Transform.createScaledRealTransform(pfTransformB, transformScale);
+		//
+		// load the SOFIMA relative deformation field and scale it
+		//
+
+		// XY axes are flipped compared to python (N5 solves that already)
+		// still, first slice are X vectors, 2nd slice are Y vectors
+		final RandomAccessibleInterval< DoubleType > sofimaRaw = N5Utils.open( zarr, "/" );
+
+		// Note: the SOFIMA field can contain NaN's
+		final RandomAccessibleInterval< DoubleType > sofima;
+		if ( sofimaRaw.numDimensions() == 4 )
+			sofima = Converters.convertRAI(
+					Views.hyperSlice(sofimaRaw, 2, 1),
+					(i, o) -> o.set(Double.isNaN(i.get()) ? 0 : i.get()),
+					new DoubleType());
+		else
+			sofima = Converters.convertRAI(
+					sofimaRaw,
+					(i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ),
+					new DoubleType() );
+
+		System.out.println( "dimensions of SOFIMA deformation field: " + Arrays.toString( sofima.dimensionsAsLongArray() ) );
+
+		//
+		// scale relative SOFIMA field and prepare to be pre-concatenated to hot-knife positionfield
+		//
+		final Interval positionField2dInterval = new FinalInterval( positionFieldHotKnife.dimension( 0 ), positionFieldHotKnife.dimension( 1 ) );
+		final Interval sofima2DInterval = new FinalInterval( sofima.dimension( 0 ), sofima.dimension( 1 ) );
+
+		// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
+		final double[] scalingFactorSofima = scalingFactor( positionField2dInterval, sofima2DInterval );
+
+		// the vectors are scaled relative to the input image size, i.e. we need to know at which factor the images
+		// that were fed into SOFIMA were scaled
+		final double sofimaBaseScale = 1.0 / (1 << scaleIndexSOFIMAinput );
+
+		System.out.println( "scalingFactor (SOFIMA relative to hot-knife): " + Arrays.toString( scalingFactorSofima ) );
+		System.out.println( "scale at which the deformed images were fed to SOFIMA (needed for vector size adjustment): " + sofimaBaseScale );
+
+		final RandomAccessibleInterval< DoubleType > sofimaScaled;
+
+		if ( scalingFactorSofima[ 0 ] > 1 )
+		{
+			// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
+			final AffineRandomAccessible<DoubleType, AffineGet> transformedX = RealViews.affine(
+					Views.interpolate(
+							Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 0 ) ),
+							new NLinearInterpolatorFactory<>()),
+					new Scale( scalingFactorSofima ) );
+
+			// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
+			final AffineRandomAccessible<DoubleType, AffineGet> transformedY = RealViews.affine(
+					Views.interpolate(
+							Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 1 ) ),
+							new NLinearInterpolatorFactory<>()),
+					new Scale( scalingFactorSofima ) );
+
+			RandomAccessibleInterval< DoubleType > sofimaScaledX = Views.interval( Views.raster( transformedX ), positionField2dInterval );
+			RandomAccessibleInterval< DoubleType > sofimaScaledY = Views.interval( Views.raster( transformedY ), positionField2dInterval );
+
+			sofimaScaled = Views.stack( sofimaScaledX, sofimaScaledY );
+		}
+		else
+		{
+			throw new RuntimeException( "not supported yet." );
+		}
+
+		//
+		// create a new positionfield for the ZARR SOFIMA import
+		//
+		final RandomAccessibleInterval<DoubleType> positionFieldSofimaRaw = ArrayImgs.doubles( positionFieldHotKnife.dimensionsAsLongArray() );
+		final RandomAccessibleInterval<DoubleType> positionFieldSofima = Views.translate( positionFieldSofimaRaw, translation );
+
+		final Cursor< DoubleType > o = Views.flatIterable( positionFieldSofima ).localizingCursor();
+		final Cursor< DoubleType > i = Views.flatIterable( sofimaScaled ).localizingCursor();
+
+		while ( o.hasNext() )
+		{
+			o.fwd();
+
+			// create identity transformation (identity means X value contains X location, Y value contains Y location)
+			final double identity = o.getDoublePosition( o.getIntPosition( 2 ) );
+
+			// we need to adjust the sofima vectors for the original scale of the images and the scale of the hot-knife field
+			//
+			// The SOFIMA vectors have the same size, no matter with which stride they were computed,
+			// so they must be in the size of the input images fed to SOFIMA
+			//
+			// Saalfeld's absolute transformation fields store the vectors in the scale the transformation fields
+			// are stored in. E.g. at scale 0.03125 a value that is 2400, will be 4800 at scale 0.0625
+			//
+			// Next topic, values:
+			// SOFIMA imports e.g. 343, 516 X=1.3092;Y=7.3169 (positive means move up)
+			// SOFIMA x positive means move left
+
+			o.get().set( identity + ( i.next().get() / sofimaBaseScale ) * transformScaleDataset );
+		}
+
+		final PositionFieldTransform<DoubleType> positionFieldSofimaTransform = Transform.createPositionFieldTransform( positionFieldSofima );
+		final RealTransform transformSofima = Transform.createScaledRealTransform( positionFieldSofimaTransform, transformScaleDataset );
 
 		final RealTransformSequence transformSequence = new RealTransformSequence();
-		transformSequence.add(transformA);
-		transformSequence.add(transformB);
+		transformSequence.add(transformSofima); // pre-concatenate SOFIMA
+		transformSequence.add(transformHotKnife);
+
+		/*
+		final double[] l1 = new double[] { 1000, 2000 };
+		final double[] l2 = new double[ 2 ];
+		transformA.apply(l1, l2);
+		System.out.println( "transformA: " + Arrays.toString( l1 ) + " maps to: " + Arrays.toString( l2 ) );
+
+		transformB.apply(l1, l2);
+		System.out.println( "transformB: " + Arrays.toString( l1 ) + " maps to: " + Arrays.toString( l2 ) );
+
+		transformSequence.apply(l1, l2);
+		System.out.println( "transformSequence: " + Arrays.toString( l1 ) + " maps to: " + Arrays.toString( l2 ) );
+		*/
 
 		final String datasetNameOut = groupOut + Path.SEPARATOR + transformDatasetNames[ z ];
 
@@ -156,7 +272,7 @@ public class ImportSOFIMA2 implements Callable<Void>
 				return null;
 			}
 
-			Transform.saveScaledTransform( n5, datasetNameOut, transformSequence, transformScale, boundsMin, boundsMax );
+			Transform.saveScaledTransform( n5, datasetNameOut, transformSequence, transformScaleDataset, boundsMin, boundsMax );
 
 		} catch (IOException e)
 		{
@@ -168,161 +284,6 @@ public class ImportSOFIMA2 implements Callable<Void>
 		zarr.close();
 
 		System.out.println( "Done.");
-
-		/*
-		transformSequence.add(new Scale2D(scale,  scale));
-		transformSequence.add(transform);
-		transformSequence.add(new Scale2D(1.0 / scale,  1.0 / scale));
-		transformSequence.add(transformB);
-		Transform.saveScaledTransformBlock(
-				n5,
-				datasetName,
-				transformSequence,
-				scale,
-				boundsMin,
-				boundsMax,
-				gridOffset,
-				new int[] {stepSize, stepSize});
-		*/
-
-		System.exit( 0 );
-		/*
-		RandomAccessibleInterval< DoubleType > sofimaScaledX, sofimaScaledY;
-		final RandomAccessibleInterval< DoubleType > positionFieldScaledX, positionFieldScaledY;
-		final RandomAccessibleInterval< DoubleType > outputX, outputY;
-
-		if ( scalingFactor[ 0 ] > 1 )
-		{
-			// we need to increase the size of the SOFIMA field
-
-			// the scale of the transformation dataset that will be written
-			outTransformScaleDataset = transformScaleDataset;
-
-			final AffineRandomAccessible<DoubleType, AffineGet> transformedX = RealViews.affine(
-					Views.interpolate(
-							Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 0 ) ),
-							new NLinearInterpolatorFactory<>()),
-					new Scale( scalingFactor ) );
-
-			final AffineRandomAccessible<DoubleType, AffineGet> transformedY = RealViews.affine(
-					Views.interpolate(
-							Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 1 ) ),
-							new NLinearInterpolatorFactory<>()),
-					new Scale( scalingFactor ) );
-
-			sofimaScaledX = Views.interval( Views.raster( transformedX ), positionField2dInterval );
-			sofimaScaledY = Views.interval( Views.raster( transformedY ), positionField2dInterval );
-
-			//ImageJFunctions.show( sofimaScaledX );
-			//ImageJFunctions.show( sofimaScaledY );
-
-			// original scale
-			positionFieldScaledX = Views.hyperSlice( positionField, 2, 0 );
-			positionFieldScaledY = Views.hyperSlice( positionField, 2, 1 );
-
-			outputX = new CellImgFactory<>( new DoubleType() ).create( positionFieldScaledX );
-			outputY = new CellImgFactory<>( new DoubleType() ).create( positionFieldScaledY );
-
-			// we need to apply the original scale of the images
-			//
-			// The SOFIMA vectors have the same size, no matter with which stride they were computed,
-			// so they must be in the size of the input images fed to SOFIMA
-			//
-			// Saalfeld's absolute transformation fields store the vectors in the scale the transformation fields
-			// are stored in. E.g. at scale 0.03125 a value that is 2400, will be 4800 at scale 0.0625
-			//
-			// Next topic, values:
-			// SOFIMA imports e.g. 343, 516 X=1.3092;Y=7.3169 (positive means move up)
-			// SOFIMA x positive means move left
-
-			sofimaScaledX = Converters.convertRAI( sofimaScaledX, (i,o) -> o.set( ( -i.get() / sofimaBaseScale ) * outTransformScaleDataset ), new DoubleType() );
-			sofimaScaledY = Converters.convertRAI( sofimaScaledY, (i,o) -> o.set( ( -i.get() / sofimaBaseScale ) * outTransformScaleDataset ), new DoubleType() );
-
-			// adding 512 in y moves it 1024 right and 1024 down
-			// adding 512 in x moves it 1024 right and 1024 up
-		}
-		else
-		{
-			// TODO: 
-			sofimaScaledX = sofimaScaledY = positionFieldScaledX = positionFieldScaledY = outputX = outputY = null;
-			outTransformScaleDataset = transformScaleDataset / scalingFactor[ 0 ];
-		}
-
-		//ImageJFunctions.show( sofimaScaledX ).setTitle( "sofimaScaledX" );
-		//ImageJFunctions.show( sofimaScaledY ).setTitle( "sofimaScaledY" );
-
-		Cursor< DoubleType > outC = Views.flatIterable( outputX ).localizingCursor();
-		Cursor< DoubleType > sofimaC = Views.flatIterable( sofimaScaledX ).localizingCursor();
-		Cursor< DoubleType > pfC = Views.flatIterable( positionFieldScaledX ).localizingCursor();
-
-		while ( outC.hasNext() )
-			outC.next().set( pfC.next().get() + sofimaC.next().get() );
-
-		outC = Views.flatIterable( outputY ).localizingCursor();
-		sofimaC = Views.flatIterable( sofimaScaledY ).localizingCursor();
-		pfC = Views.flatIterable( positionFieldScaledY ).localizingCursor();
-
-		while ( outC.hasNext() )
-			outC.next().set( pfC.next().get() + sofimaC.next().get() );
-
-		RandomAccessibleInterval<DoubleType> output = Views.stack( outputX, outputY );
-
-		//ImageJFunctions.show( output );
-
-		// write output
-		if ( !n5.exists( groupOut ) )
-		{
-			System.out.println( "Creating output group: " + groupOut );
-
-			n5.createGroup(groupOut);
-			n5.setAttribute(groupOut, "datasets", datasetNames);
-			n5.setAttribute(groupOut, "transforms", transformDatasetNames);
-			n5.setAttribute(groupOut, "scaleIndex", transformScaleIndexPass ); // TODO: is that still true, and does it matter?
-			n5.setAttribute(groupOut, "boundsMin", boundsMin);
-			n5.setAttribute(groupOut, "boundsMax", boundsMax);
-		}
-
-		final String datasetNameOut = groupOut + Path.SEPARATOR + transformDatasetNames[ z ];
-
-		if ( n5.exists( datasetNameOut ) && overwrite )
-		{
-			System.out.println( "Deleting existing output group: " + datasetNameOut );
-			n5.remove( datasetNameOut );
-		}
-
-		if ( n5.exists( datasetNameOut ) )
-		{
-			System.out.println( "Output group dataset " + datasetNameOut + " exists. Stopping.");
-			return null;
-		}
-		else
-		{
-			System.out.println( "Saving dataset " + datasetNameOut + " ...");
-
-			final ExecutorService exec = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
-
-			try
-			{
-				//N5Utils.save( output, n5, datasetNameOut, blockSize, new ZstandardCompression() , exec );
-			}
-			catch (Exception e)
-			{
-				e.printStackTrace();
-			}
-
-			exec.shutdown();
-
-			n5.setAttribute( datasetNameOut, "boundsMin", boundsMin);
-			n5.setAttribute( datasetNameOut, "boundsMax", boundsMax);
-			//n5.setAttribute( datasetNameOut, "scale", outTransformScaleDataset );
-		}
-		
-
-		n5.close();
-		zarr.close();
-
-		System.out.println( "Done.");
-		*/
 
 		return null;
 	}
