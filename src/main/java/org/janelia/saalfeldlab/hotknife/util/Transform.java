@@ -835,6 +835,7 @@ public class Transform {
 
 		for (int i = 0; i < transforms.size(); ++i) {
 
+			System.out.println( "opening " + datasetNames.get(i) + "/s" + scaleIndex + " for showing at that scale." );
 			final RandomAccessibleInterval<UnsignedByteType> source =
 					Converters.convertRAI( (RandomAccessibleInterval<FloatType>)N5Utils.open(n5Reader, datasetNames.get(i) + "/s" + scaleIndex), (in,o) -> o.set( Math.round( in.get() )), new UnsignedByteType() );
 
