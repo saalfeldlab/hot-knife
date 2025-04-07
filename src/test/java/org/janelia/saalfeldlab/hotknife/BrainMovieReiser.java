@@ -59,7 +59,7 @@ public class BrainMovieReiser implements Callable<Void> {
 	private final int screenWidth = 1280;
 	private final int screenHeight = 720;
 	private final String outDir = "/groups/scicompsoft/home/preibischs/record3";
-	private final String n5Path = "/Volumes/flyem/render/n5/Z0720_07m_CNS-dvid-coords.n5/";
+	private final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_CNS-dvid-coords.n5/";
 	private final String n5Group = "/";
 	//String n5Group = "/22-34";
 
@@ -157,14 +157,14 @@ public class BrainMovieReiser implements Callable<Void> {
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
-		new CommandLine(new BrainMovie()).execute(args);
+		new CommandLine(new BrainMovieReiser()).execute(args);
 	}
 
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
 		//final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, true );
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, false );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, false, false, false );
 
 		//final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1) / 2));
 		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
