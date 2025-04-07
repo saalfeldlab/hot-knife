@@ -59,7 +59,7 @@ public class MultiSemMovieFlySingleSlab implements Callable<Void> {
 	private final int screenWidth = 1280;
 	private final int screenHeight = 720;
 	private final String outDir = "/Users/preibischs/Downloads/msemstack/";
-	private final String n5Path = "/Users/preibischs/Downloads/msemstack/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5/render/w60_serial_360_to_369/w60_s360_r00_d20_gc_align_b_ic";
+	private final String n5Path = /*"/Users/preibischs/Downloads/msemstack*/"/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5/render/w60_serial_360_to_369/w60_s360_r00_d20_gc_align_b_ic";
 	private final String n5Group = "/";//"/wafer-52-align/run_20230329_104500/pass12";
 
 	private final AffineTransform3D viewerScale = new AffineTransform3D();
@@ -162,12 +162,11 @@ public class MultiSemMovieFlySingleSlab implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, true );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, false, false, true );
 
-		//BdvFunctions.show((Source)mipmapSource.asVolatile(new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1))));
-		//SimpleMultiThreading.threadHaltUnClean();
+		BdvFunctions.show((Source)mipmapSource.asVolatile(new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1))));
 
-//		Thread.sleep(10000);
+	//	Thread.sleep(10000);
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1)));
 
@@ -177,6 +176,8 @@ public class MultiSemMovieFlySingleSlab implements Callable<Void> {
 		frame.setSize(screenWidth, screenHeight);
 
 		Thread.sleep(1000);
+
+		SimpleMultiThreading.threadHaltUnClean();
 
 		/* animate */
 		int i = 0;
