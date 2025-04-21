@@ -28,11 +28,11 @@ import javax.imageio.ImageIO;
 import javax.swing.SwingUtilities;
 
 import bdv.cache.CacheControl;
-import bdv.cache.SharedQueue;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
+import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Interpolation;
 import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
@@ -53,15 +53,14 @@ import picocli.CommandLine.Command;
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
 @Command
-public class BrainMovieReiser implements Callable<Void> {
+public class MultiSemMovieFlySingleSlabReiser implements Callable<Void> {
 
 	/* some parameters */
 	private final int screenWidth = 1280;
 	private final int screenHeight = 720;
-	private final String outDir = "/groups/scicompsoft/home/preibischs/recordReiserBrain";
-	private final String n5Path = "/nrs/flyem/render/n5/Z0720_07m_CNS-dvid-coords.n5/";
-	private final String n5Group = "/";
-	//String n5Group = "/22-34";
+	private final String outDir = "/home/preibischs@hhmi.org/Documents/msemreiser";
+	private final String n5Path = /*"/Users/preibischs/Downloads/msemstack*/"/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5/render/w60_serial_360_to_369/w60_s360_r00_d20_gc_align_b_ic";
+	private final String n5Group = "/";//"/wafer-52-align/run_20230329_104500/pass12";
 
 	private final AffineTransform3D viewerScale = new AffineTransform3D();
 	private final AffineTransform3D viewerTranslation = new AffineTransform3D();
@@ -157,70 +156,95 @@ public class BrainMovieReiser implements Callable<Void> {
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
-		new CommandLine(new BrainMovieReiser()).execute(args);
+		new CommandLine(new MultiSemMovieFlySingleSlab()).execute(args);
 	}
 
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, false );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, true );
+
+		//BdvFunctions.show((Source)mipmapSource.asVolatile(new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1))));
+
+	//	Thread.sleep(10000);
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1)));
-		//final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
-		//final BdvStackSource<?> bdv = BdvFunctions.show((Source)mipmapSource.asVolatile(queue));
 
 		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
 		bdv.getBdvHandle().getViewerPanel().setCanvasSize(screenWidth, screenHeight);
 		final Window frame = SwingUtilities.getWindowAncestor(bdv.getBdvHandle().getViewerPanel());
 		frame.setSize(screenWidth, screenHeight);
 
-		//SimpleMultiThreading.threadHaltUnClean();
-
 		Thread.sleep(1000);
 
+		//SimpleMultiThreading.threadHaltUnClean();
+
 		/* animate */
-		final AffineTransform3D[] transforms = new AffineTransform3D[7];
+		int i = 0;
+		final AffineTransform3D[] transforms = new AffineTransform3D[8];
 		final int[] frames = new int[transforms.length];
 		final int[] accel  = new int[transforms.length];
 
-		transforms[0] = new AffineTransform3D();
-		transforms[0].set(0.0,0.0,0.00840654243947731,-587.9588589179976,0.0,0.00840654243947731,0.0,-323.69055615315864,-0.00840654243947731,0.0,0.0,395.5833498764163);
-		frames[0] = 0;
-		accel[0] = 0;
+		/*
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.014489339342299963,0.0,0.0,-1486.2297494649208,0.0,0.014489339342299963,0.0,-2102.1785180872384,0.0,0.0,0.014489339342299963,-0.5505948950073986);
+		frames[i] = 0;
+		accel[i++] = 0;
 
-		transforms[1] = new AffineTransform3D();
-		transforms[1].set(0.0,0.0,0.00840654243947731,-587.9588589179976,0.0,0.00840654243947731,0.0,-323.69055615315864,-0.00840654243947731,0.0,0.0,395.5833498764163);
-		frames[1] = 0;
-		accel[1] = 0;
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.014489339342299963,0.0,0.0,-1486.2297494649208,0.0,0.014489339342299963,0.0,-2102.1785180872384,0.0,0.0,0.014489339342299963,-0.5505948950073986);
+		frames[i] = 0;
+		accel[i++] = 0;
+		*/
 
-		transforms[2] = new AffineTransform3D();
-		transforms[2].set(0.00840654243947731,0.0,0.0,-462.5833498764164,0.0,0.00840654243947731,0.0,-242.69055615315864,0.0,0.0,0.00840654243947731,-268.95885891799753);
-		frames[2] = 240;
-		accel[2] = 0;
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.0020933038087551353,-0.004489104504604405,4.648068172030973E-19,170.33247628452432,0.004489104504604405,0.0020933038087551353,9.967814361920635E-19,-557.5006943159339,-1.099826626726043E-18,3.389102454473741E-51,0.004953178786295557,-0.18822079387911833);
+		frames[i] = 0;
+		accel[i++] = 0;
 
-		transforms[3] = new AffineTransform3D();
-		transforms[3].set(1.4621184198317384E-16,0.7482262220338273,2.715362779687515E-16,-23719.419326217067,-0.7482262220338277,1.0443702998798133E-16,3.710348650115995E-32,10127.163279966628,0.0,-2.715362779687515E-16,0.7482262220338277,-23938.744417170285);
-		frames[3] = 240;
-		accel[3] = 0;
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.0020933038087551353,-0.004489104504604405,4.648068172030973E-19,170.33247628452432,0.004489104504604405,0.0020933038087551353,9.967814361920635E-19,-557.5006943159339,-1.099826626726043E-18,3.389102454473741E-51,0.004953178786295557,-0.18822079387911833);
+		frames[i] = 0;
+		accel[i++] = 0;
 
-		transforms[4] = new AffineTransform3D();
-		transforms[4].set(1.4621184198317384E-16,0.7482262220338273,2.715362779687515E-16,-23719.419326217067,-0.7482262220338277,1.0443702998798133E-16,3.710348650115995E-32,10127.163279966628,0.0,-2.715362779687515E-16,0.7482262220338277,-25198.744417170285);
-		frames[4] = 240;
-		accel[4] = 0;
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.014489339342299963,0.0,0.0,-1486.2297494649208,0.0,0.014489339342299963,0.0,-2102.1785180872384,0.0,0.0,0.014489339342299963,-0.5505948950073986);
+		frames[i] = 240;
+		accel[i++] = 0;
 
-		transforms[5] = new AffineTransform3D();
-		transforms[5].set(0.0,0.02230505976286431,8.755251531041043E-18,-663.9367455230245,-0.02230505976286431,0.0,0.0,365.3865664809555,0.0,-8.755251531041043E-18,0.02230505976286431,-751.1892575033489);
-		frames[5] = 240;
-		accel[5] = 0;
+		// zoom in
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(2.100666399634009,0.0,0.0,-209141.31995319773,0.0,2.100666399634009,0.0,-325171.6972765285,0.0,0.0,2.100666399634009,-79.82532318609236);
+		frames[i] = 240;
+		accel[i++] = 0;
 
-		transforms[6] = new AffineTransform3D();
-		transforms[6].set(0.0,0.02230505976286431,8.755251531041043E-18,-663.9367455230245,-0.02230505976286431,0.0,0.0,365.3865664809555,0.0,-8.755251531041043E-18,0.02230505976286431,-751.1892575033489);
-		frames[6] = 0;
-		accel[6] = 3;
+		// zoom out
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.03844453082598323,0.0,0.0,-4025.8534601081838,0.0,0.03844453082598323,0.0,-5615.597236398843,0.0,0.0,0.03844453082598323,-1.4608921713873628);
+		frames[i] = 240;
+		accel[i++] = 0;
+
+		// zoom in 
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(1.4929043910515476,0.0,0.0,-167490.94727876032,0.0,1.4929043910515476,0.0,-213524.15223648536,0.0,0.0,1.4929043910515476,-56.73036685995885);
+		frames[i] = 240;
+		accel[i++] = 0;
+
+		// back
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.014489339342299963,0.0,0.0,-1486.2297494649208,0.0,0.014489339342299963,0.0,-2102.1785180872384,0.0,0.0,0.014489339342299963,-0.5505948950073986);
+		frames[i] = 240;
+		accel[i++] = 0;
+
+		// over to the left
+		transforms[i] = new AffineTransform3D();
+		transforms[i].set(0.014489339342299963,0.0,0.0,-1486.2297494649208,0.0,0.014489339342299963,0.0,-2102.1785180872384,0.0,0.0,0.014489339342299963,-0.5505948950073986);
+		frames[i] = 0;
+		accel[i++] = 0;
 
 		// play at 60 FPS
-		for ( int i = 0; i < frames.length; ++i )
-			frames[ i ] *= 2;
+		for ( i = 0; i < frames.length; ++i )
+			frames[ i ] *= 2.0;
 
 		recordMovie(
 				bdv.getBdvHandle().getViewerPanel(),
