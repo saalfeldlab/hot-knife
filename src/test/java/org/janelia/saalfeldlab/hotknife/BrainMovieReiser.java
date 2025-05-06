@@ -157,7 +157,7 @@ public class BrainMovieReiser implements Callable<Void> {
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
-		new CommandLine(new BrainMovie()).execute(args);
+		new CommandLine(new BrainMovieReiser()).execute(args);
 	}
 
 	@Override
