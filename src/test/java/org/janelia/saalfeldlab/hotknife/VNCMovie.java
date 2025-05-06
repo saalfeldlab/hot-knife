@@ -33,6 +33,7 @@ import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
 
 import bdv.cache.CacheControl;
 import bdv.util.BdvFunctions;
@@ -259,7 +260,8 @@ public class VNCMovie implements Callable<Void> {
 			final boolean invert,
 			final boolean mSem ) throws IOException {
 
-		final N5Reader n5 = new N5FSReader(n5Path);
+		System.out.println( n5Path );
+		final N5Reader n5 = n5Path.toLowerCase().endsWith( ".zarr" ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
 
 		final int numScales = 7;
 		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = (RandomAccessibleInterval<UnsignedByteType>[])new RandomAccessibleInterval[numScales];
