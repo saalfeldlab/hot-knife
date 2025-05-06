@@ -154,7 +154,7 @@ public class ViewAlignment {
 			final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
 			final int zFrom = 1; // 0 is everything
-			final int zTo = 3;//datasetNames.length; //datasetNames.length is everything
+			final int zTo = 2; //datasetNames.length is everything
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = zFrom; i < zTo /*datasetNames.length*/; ++i) {
@@ -196,7 +196,7 @@ public class ViewAlignment {
 				stack.min( min );
 
 				final RandomAccessibleInterval<UnsignedByteType> copy = Views.translate( new CellImgFactory<>( new UnsignedByteType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
-				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() / 2 );
 				Util.copy(stack, copy, service, false);
 				service.shutdown();
 
