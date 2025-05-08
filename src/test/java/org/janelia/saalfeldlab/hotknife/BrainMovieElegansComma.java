@@ -27,6 +27,8 @@ import java.util.concurrent.ExecutionException;
 import javax.imageio.ImageIO;
 import javax.swing.SwingUtilities;
 
+import org.janelia.saalfeldlab.hotknife.VNCMovie.Normalization;
+
 import bdv.cache.CacheControl;
 import bdv.cache.SharedQueue;
 import bdv.util.BdvFunctions;
@@ -164,7 +166,7 @@ public class BrainMovieElegansComma implements Callable<Void> {
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
 		//final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, false );
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, false, false, false );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, Normalization.CLAHE );
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1) / 2));
 

@@ -27,6 +27,8 @@ import java.util.concurrent.ExecutionException;
 import javax.imageio.ImageIO;
 import javax.swing.SwingUtilities;
 
+import org.janelia.saalfeldlab.hotknife.VNCMovie.Normalization;
+
 import bdv.cache.CacheControl;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
@@ -162,7 +164,7 @@ public class MultiSemMovie implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, true, true );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, Normalization.CLLCN, true, true );
 
 		BdvFunctions.show((Source)mipmapSource.asVolatile(new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1))));
 		SimpleMultiThreading.threadHaltUnClean();

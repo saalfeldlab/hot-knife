@@ -50,13 +50,20 @@ import bdv.viewer.render.MultiResolutionRenderer;
 import bdv.viewer.render.PainterThread;
 import bdv.viewer.render.RenderTarget;
 import bdv.viewer.render.awt.BufferedImageRenderResult;
+import ij.ImageJ;
+import ij.ImagePlus;
 import ij.process.ColorProcessor;
+import mpicbg.ij.clahe.Flat;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.basictypeaccess.AccessFlags;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.util.Util;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -67,6 +74,8 @@ import picocli.CommandLine.Command;
  */
 @Command
 public class VNCMovie implements Callable<Void> {
+
+	public enum Normalization { NONE, CLLCN, CLAHE, CLAHE_WITH_THRESHOLDMASK }
 
 	/* some parameters */
 	private final int screenWidth = 1280;
@@ -248,15 +257,16 @@ public class VNCMovie implements Callable<Void> {
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
 			final String n5Path,
-			final String n5Group ) throws IOException
+			final String n5Group,
+			final Normalization normalization ) throws IOException
 	{
-		return createMipmapSource(n5Path, n5Group, false, false, false );
+		return createMipmapSource(n5Path, n5Group, normalization, false, false );
 	}
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
 			final String n5Path,
 			final String n5Group,
-			final boolean normalizeContrast,
+			final Normalization normalization,
 			final boolean invert,
 			final boolean mSem ) throws IOException {
 
@@ -290,25 +300,53 @@ public class VNCMovie implements Callable<Void> {
 						});
 			}
 
-			if ( normalizeContrast )
+			final int blockRadius = (int)Math.round(511 * inverseScale);
+
+			if ( normalization == Normalization.CLLCN )
 			{
-				final int blockRadius = (int)Math.round(511 * inverseScale);
-	
 				final ImageJStackOp<UnsignedByteType> cllcn =
 						new ImageJStackOp<>(
-								Views.extendZero(img),
+								img,
 								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
 								blockRadius,
 								0,
 								255,
 								true );
+
 				final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
 						img,
-						new int[] {128, 128, 16},
+						new int[] {128, 128, 1},
 						new UnsignedByteType(),
 						AccessFlags.setOf(AccessFlags.VOLATILE),
 						cllcn);
+
 				mipmaps[scaleIndex] = cllcned;
+			}
+			else if ( normalization == Normalization.CLAHE )
+			{
+				final ImageJStackOp<UnsignedByteType> cllcn =
+						new ImageJStackOp<>(
+								img,
+								(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, null, false),
+								blockRadius,
+								0,
+								255,
+								true );
+
+				final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
+						img,
+						new int[] {128, 128, 1},
+						new UnsignedByteType(),
+						AccessFlags.setOf(AccessFlags.VOLATILE),
+						cllcn);
+
+				mipmaps[scaleIndex] = cllcned;
+
+				//Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, bp, false);
+			}
+			else if ( normalization == Normalization.CLAHE_WITH_THRESHOLDMASK )
+			{
+				//Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, bp, false);
 			}
 			else
 			{
@@ -333,7 +371,7 @@ public class VNCMovie implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = createMipmapSource( n5Path, n5Group );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = createMipmapSource( n5Path, n5Group, Normalization.NONE );
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1) / 2));
 //		final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
