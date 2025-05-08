@@ -30,13 +30,10 @@ import javax.swing.SwingUtilities;
 import org.janelia.saalfeldlab.hotknife.VNCMovie.Normalization;
 
 import bdv.cache.CacheControl;
-import bdv.cache.SharedQueue;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
-import bdv.viewer.Interpolation;
-import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.ViewerState;
 import bdv.viewer.animate.SimilarityTransformAnimator;
@@ -166,7 +163,7 @@ public class BrainMovieElegansComma implements Callable<Void> {
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
 		//final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, false );
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, Normalization.CLAHE );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, Normalization.CLAHE_WITH_THRESHOLDMASK );
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1) / 2));
 
@@ -180,7 +177,7 @@ public class BrainMovieElegansComma implements Callable<Void> {
 		final Window frame = SwingUtilities.getWindowAncestor(bdv.getBdvHandle().getViewerPanel());
 		frame.setSize(screenWidth, screenHeight);
 
-		//SimpleMultiThreading.threadHaltUnClean();
+		SimpleMultiThreading.threadHaltUnClean();
 
 		Thread.sleep(1000);
 

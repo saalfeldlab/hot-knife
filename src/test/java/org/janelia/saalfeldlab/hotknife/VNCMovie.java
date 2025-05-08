@@ -52,11 +52,13 @@ import bdv.viewer.render.RenderTarget;
 import bdv.viewer.render.awt.BufferedImageRenderResult;
 import ij.ImageJ;
 import ij.ImagePlus;
+import ij.process.ByteProcessor;
 import ij.process.ColorProcessor;
 import mpicbg.ij.clahe.Flat;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
@@ -302,12 +304,14 @@ public class VNCMovie implements Callable<Void> {
 
 			final int blockRadius = (int)Math.round(511 * inverseScale);
 
-			if ( normalization == Normalization.CLLCN )
+			if ( normalization == Normalization.CLLCN || normalization == Normalization.CLAHE )
 			{
 				final ImageJStackOp<UnsignedByteType> cllcn =
 						new ImageJStackOp<>(
-								img,
-								(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true),
+								Views.extendZero( img ),
+								normalization == Normalization.CLLCN ?
+										(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true) :
+										(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 5f, null, false),
 								blockRadius,
 								0,
 								255,
@@ -315,38 +319,70 @@ public class VNCMovie implements Callable<Void> {
 
 				final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
 						img,
-						new int[] {128, 128, 1},
+						new int[] {128, 128, 16},
 						new UnsignedByteType(),
 						AccessFlags.setOf(AccessFlags.VOLATILE),
 						cllcn);
 
 				mipmaps[scaleIndex] = cllcned;
-			}
-			else if ( normalization == Normalization.CLAHE )
-			{
-				final ImageJStackOp<UnsignedByteType> cllcn =
-						new ImageJStackOp<>(
-								img,
-								(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, null, false),
-								blockRadius,
-								0,
-								255,
-								true );
-
-				final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
-						img,
-						new int[] {128, 128, 1},
-						new UnsignedByteType(),
-						AccessFlags.setOf(AccessFlags.VOLATILE),
-						cllcn);
-
-				mipmaps[scaleIndex] = cllcned;
-
-				//Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, bp, false);
 			}
 			else if ( normalization == Normalization.CLAHE_WITH_THRESHOLDMASK )
 			{
-				//Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, bp, false);
+				final ImageJStackOp<UnsignedByteType> clahe =
+						new ImageJStackOp<>(
+								Views.extendZero( img ),
+								(fp) ->
+								{
+									final float[] fArray = (float[])fp.getPixels();
+									final byte[] bArray = new byte[ fArray.length ];
+									final ByteProcessor bp = new ByteProcessor( fp.getWidth(), fp.getHeight(), bArray );
+
+									boolean all0 = true; // all mask values are 0
+									boolean all255 = true; // all mask values are 255
+
+									for ( int i = 0; i < fArray.length; ++i )
+									{
+										if ( fArray[ i ] > 0 )
+										{
+											//bp.set( i, 255 );
+											bp.set( i, UnsignedByteType.getCodedSignedByte( 255 ) );
+											all0 = false;
+										}
+										else
+										{
+											bp.set( i, 0 );
+											all255 = false;
+										}
+									}
+
+									if ( all0 )
+									{
+										// everything is black, nothing to do
+										return;
+									}
+									else if ( all255 )
+									{
+										// all weights are 255, so we need no weights
+										Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 5f, null, false);
+									}
+									else
+									{
+										Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 5f, bp, false);
+									}
+								},
+								blockRadius,
+								0,
+								255,
+								true );
+
+				final RandomAccessibleInterval<UnsignedByteType> clahed = Lazy.process(
+						img,
+						new int[] {128, 128, 16},
+						new UnsignedByteType(),
+						AccessFlags.setOf(AccessFlags.VOLATILE),
+						clahe);
+
+				mipmaps[scaleIndex] = clahed;
 			}
 			else
 			{
@@ -368,6 +404,7 @@ public class VNCMovie implements Callable<Void> {
 		return mipmapSource;
 	}
 
+	public static int i = 0;
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
