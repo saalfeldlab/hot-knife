@@ -45,6 +45,7 @@ import net.imglib2.converter.Converters;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
@@ -171,7 +172,7 @@ public class SparkPixelNormalizeN5 {
 			source = invert ?
 				Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(255 - in.get() );} }, new FloatType() ) : sourceRaw;
 
-			final RandomAccessibleInterval<FloatType> filteredSource = normalizeContrast(source, new FloatType(), normalizeMethod, scaleIndex, blockSize);
+			final RandomAccessibleInterval<FloatType> filteredSource = normalizeContrast(source, new FloatType(), normalizeMethod, 0, 255, scaleIndex, blockSize);
 
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
@@ -179,6 +180,23 @@ public class SparkPixelNormalizeN5 {
 					  new DatasetAttributes(dimensions, blockSize, DataType.FLOAT32, new GzipCompression()),
 					  gridBlock[2],
 					  new FloatType());
+		}
+		else if (t instanceof UnsignedShortType)
+		{
+			final RandomAccessibleInterval<UnsignedShortType> sourceRaw = (RandomAccessibleInterval<UnsignedShortType>)sourceRawRaw;
+			final RandomAccessibleInterval<UnsignedShortType> source;
+
+			source = invert ?
+					Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(65535 - in.get() );} }, new UnsignedShortType() ) : sourceRaw;
+
+			final RandomAccessibleInterval<UnsignedShortType> filteredSource = normalizeContrast(source,  new UnsignedShortType(), normalizeMethod, 0, 65535, scaleIndex, blockSize);
+
+			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
+					  n5Output,
+					  datasetNameOutput,
+					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+					  gridBlock[2],
+					  new UnsignedShortType());
 		}
 		else if (t instanceof UnsignedByteType)
 		{
@@ -188,7 +206,7 @@ public class SparkPixelNormalizeN5 {
 			source = invert ?
 					Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(255 - in.get() );} }, new UnsignedByteType() ) : sourceRaw;
 
-			final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source,  new UnsignedByteType(), normalizeMethod, scaleIndex, blockSize);
+			final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source,  new UnsignedByteType(), normalizeMethod, 0, 255, scaleIndex, blockSize);
 
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
@@ -209,6 +227,8 @@ public class SparkPixelNormalizeN5 {
 			RandomAccessibleInterval<T> sourceRaw,
 			final T type,
 			final NormalizationMethod normalizeMethod,
+			final double minIntensity,
+			final double maxIntensity,
 			final int scaleIndex,
 			int[] blocksize )
 	{
@@ -233,8 +253,8 @@ public class SparkPixelNormalizeN5 {
 					Views.extendMirrorSingle(sourceRaw),
 					(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 50, 0.5f, true, true, true),
 					blockRadius,
-					0,
-					255,
+					minIntensity,
+					maxIntensity,
 					true ); // do nothing if all black
 		}
 		else if (normalizeMethod == NormalizationMethod.CLAHE)
@@ -243,8 +263,8 @@ public class SparkPixelNormalizeN5 {
 					Views.extendMirrorSingle(sourceRaw),
 					fp -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, null, false),
 					blockRadius,
-					0,
-					255,
+					minIntensity,
+					maxIntensity,
 					true); // do nothing if all black
 		}
 		else
