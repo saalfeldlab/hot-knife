@@ -21,6 +21,7 @@ import java.awt.Window;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
@@ -54,15 +55,20 @@ import ij.ImageJ;
 import ij.ImagePlus;
 import ij.process.ByteProcessor;
 import ij.process.ColorProcessor;
+import ij.process.FloatProcessor;
 import mpicbg.ij.clahe.Flat;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.position.FunctionRandomAccessible;
 import net.imglib2.realtransform.AffineTransform3D;
+import net.imglib2.type.Type;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
@@ -262,13 +268,25 @@ public class VNCMovie implements Callable<Void> {
 			final String n5Group,
 			final Normalization normalization ) throws IOException
 	{
-		return createMipmapSource(n5Path, n5Group, normalization, false, false );
+		return createMipmapSource(n5Path, n5Group, normalization, 0, 255, false, false );
 	}
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
 			final String n5Path,
 			final String n5Group,
 			final Normalization normalization,
+			final boolean invert,
+			final boolean mSem ) throws IOException
+	{
+		return createMipmapSource(n5Path, n5Group, normalization, 0, 255, invert, mSem );
+	}
+
+	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
+			final String n5Path,
+			final String n5Group,
+			final Normalization normalization,
+			final double minIntensity,
+			final double maxIntensity,
 			final boolean invert,
 			final boolean mSem ) throws IOException {
 
@@ -279,11 +297,30 @@ public class VNCMovie implements Callable<Void> {
 		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = (RandomAccessibleInterval<UnsignedByteType>[])new RandomAccessibleInterval[numScales];
 		final double[][] scales = new double[numScales][3];
 
+		new ImageJ();
 		for (int scaleIndex = 0; scaleIndex < numScales; ++scaleIndex) {
 
 			final int scale = 1 << scaleIndex;
 			final double inverseScale = 1.0 / scale;
-			RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
+
+			final RandomAccessibleInterval imgIn = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
+			final Type<?> type = (Type<?>)Views.iterable( imgIn ).firstElement();
+
+			RandomAccessibleInterval<UnsignedByteType> img;
+
+			if ( !UnsignedByteType.class.isInstance( imgIn ) || minIntensity != 0 || maxIntensity != 255 )
+			{
+				final double range = maxIntensity - minIntensity;
+	
+				img = Converters.convertRAI(
+							(RandomAccessibleInterval<RealType>)imgIn,
+							(i,o) -> o.set( Math.min( 255, Math.max( 0, (int)Math.round( (i.getRealDouble() - minIntensity) / range * 255.0 ) ) ) ),
+							new UnsignedByteType() );
+			}
+			else
+			{
+				img = (RandomAccessibleInterval<UnsignedByteType>)imgIn;
+			}
 
 			if ( invert )
 			{
@@ -306,12 +343,45 @@ public class VNCMovie implements Callable<Void> {
 
 			if ( normalization == Normalization.CLLCN || normalization == Normalization.CLAHE )
 			{
+				/*
+				final RandomAccessibleInterval<UnsignedByteType> myImg = img;
+				final FunctionRandomAccessible< UnsignedByteType > function =
+						new FunctionRandomAccessible<>(3, (l, t) ->
+						{
+							final int v = myImg.getAt(l).get();
+
+							if (v == 0)
+								t.set(96);
+							else
+								t.set(v);
+						}, UnsignedByteType::new);
+				img = Views.interval( function, myImg );
+				*/
+
 				final ImageJStackOp<UnsignedByteType> cllcn =
 						new ImageJStackOp<>(
-								Views.extendZero( img ),
-								normalization == Normalization.CLLCN ?
-										(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true) :
-										(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 5f, null, false),
+								Views.extendValue( img, 96 ),
+								(fp) ->
+								{
+									final FloatProcessor fpCopy = (FloatProcessor) fp.duplicate();
+
+									for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
+										if ( fp.getf( i ) == 0 )
+											fp.setf( i, 96 );
+
+									if ( normalization == Normalization.CLLCN )
+									{
+										new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true);
+									}
+									else
+									{
+										Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 2f, null, false);
+									}
+
+									for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
+										if ( fpCopy.getf( i ) == 0 )
+											fp.setf( i, 0 );
+								},
 								blockRadius,
 								0,
 								255,
@@ -363,11 +433,11 @@ public class VNCMovie implements Callable<Void> {
 									else if ( all255 )
 									{
 										// all weights are 255, so we need no weights
-										Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 5f, null, false);
+										Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 2f, null, false);
 									}
 									else
 									{
-										Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 5f, bp, false);
+										Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 2f, bp, false);
 									}
 								},
 								blockRadius,
@@ -377,7 +447,7 @@ public class VNCMovie implements Callable<Void> {
 
 				final RandomAccessibleInterval<UnsignedByteType> clahed = Lazy.process(
 						img,
-						new int[] {128, 128, 16},
+						new int[] {512, 512, 1},
 						new UnsignedByteType(),
 						AccessFlags.setOf(AccessFlags.VOLATILE),
 						clahe);

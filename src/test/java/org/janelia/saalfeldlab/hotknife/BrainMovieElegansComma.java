@@ -58,9 +58,12 @@ public class BrainMovieElegansComma implements Callable<Void> {
 	private final int screenWidth = 1280;
 	private final int screenHeight = 720;
 	private final String outDir = "/Users/preibischs/Downloads/movie";
-	private final String n5Path = "/nrs/cellmap/data/jrc_c-elegans-comma-1/jrc_c-elegans-comma-1.zarr";
-	private final String n5Group = "/recon-1/em/fibsem-uint8/";
-	//String n5Group = "/22-34";
+//	private final String n5Path = "/nrs/cellmap/data/jrc_c-elegans-comma-1/jrc_c-elegans-comma-1.zarr";
+//	private final String n5Group = "/recon-1/em/fibsem-uint8/";
+
+	private final String n5Path = "/nrs/cellmap/data/jrc_mus-cerebellum-3/jrc_mus-cerebellum-3.n5";
+	private final String n5Group = "/render/jrc_mus_cerebellum_3/v4_acquire_align_16bit_destreak_sc___20250416_123056_review_norm-layer";
+
 
 	private final AffineTransform3D viewerScale = new AffineTransform3D();
 	private final AffineTransform3D viewerTranslation = new AffineTransform3D();
@@ -163,7 +166,7 @@ public class BrainMovieElegansComma implements Callable<Void> {
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
 		//final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, false );
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, Normalization.CLAHE_WITH_THRESHOLDMASK );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, Normalization.CLLCN, 36500, 38000, false, false );
 
 		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource, BdvOptions.options().numRenderingThreads((Runtime.getRuntime().availableProcessors() - 1) / 2));
 
