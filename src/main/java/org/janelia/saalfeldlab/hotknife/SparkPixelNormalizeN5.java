@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import ij.ImagePlus;
+import ij.process.FloatProcessor;
 import mpicbg.ij.clahe.Flat;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import org.apache.spark.SparkConf;
@@ -157,12 +158,26 @@ public class SparkPixelNormalizeN5 {
 			gridBlockInterval = Intervals.createMinSize(gridBlock[0][0], gridBlock[0][1],
 								gridBlock[1][0], gridBlock[1][1]);
 
-		final RandomAccessibleInterval<?> sourceRawRaw = N5Utils.open(n5Input, datasetName);
+		RandomAccessibleInterval<?> sourceRawRaw = N5Utils.open(n5Input, datasetName);
 
 		//new ImageJ();
 		//ImageJFunctions.show( sourceRaw );
 
-		final RealType<?> t = (RealType<?>) sourceRawRaw.getAt( sourceRawRaw.minAsPoint() );
+		RealType<?> t = (RealType<?>) sourceRawRaw.getAt( sourceRawRaw.minAsPoint() );
+
+		// map 16bit to 8bit for jrc_mus-cerebellum-3
+		if (t instanceof UnsignedShortType)
+		{
+			final double minIntensity = 33800;
+			final double range = 38500 - minIntensity;
+			
+			sourceRawRaw = Converters.convertRAI(
+						(RandomAccessibleInterval<RealType>)sourceRawRaw,
+						(i,o) -> o.set( Math.min( 255, Math.max( 0, (int)Math.round( (i.getRealDouble() - minIntensity) / range * 255.0 ) ) ) ),
+						new UnsignedByteType() );
+
+			t = new UnsignedByteType();
+		}
 
 		if (t instanceof FloatType)
 		{
@@ -250,8 +265,20 @@ public class SparkPixelNormalizeN5 {
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST)
 		{
 			filter = new ImageJStackOp<>(
-					Views.extendMirrorSingle(sourceRaw),
-					(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 50, 0.5f, true, true, true),
+					Views.extendValue(sourceRaw, 175),
+					(fp) -> {
+						final FloatProcessor fpCopy = (FloatProcessor) fp.duplicate();
+
+						for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
+							if ( fp.getf( i ) == 0 )
+								fp.setf( i, 175 );
+
+						new CLLCN(fp).run(blockRadius, blockRadius, 5f, 10, 0.5f, true, true, true);
+
+						for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
+							if ( fpCopy.getf( i ) == 0 )
+								fp.setf( i, 0 );
+					},
 					blockRadius,
 					minIntensity,
 					maxIntensity,
