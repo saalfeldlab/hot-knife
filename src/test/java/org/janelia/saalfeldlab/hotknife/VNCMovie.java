@@ -58,6 +58,7 @@ import ij.process.ColorProcessor;
 import ij.process.FloatProcessor;
 import mpicbg.ij.clahe.Flat;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.converter.Converters;
@@ -348,10 +349,12 @@ public class VNCMovie implements Callable<Void> {
 				final FunctionRandomAccessible< UnsignedByteType > function =
 						new FunctionRandomAccessible<>(3, (l, t) ->
 						{
-							final int v = myImg.getAt(l).get();
+							final RandomAccess<UnsignedByteType> ra = myImg.randomAccess();
+							ra.setPosition( l );
+							final int v = ra.get().get();
 
 							if (v == 0)
-								t.set(96);
+								t.set(170);
 							else
 								t.set(v);
 						}, UnsignedByteType::new);
@@ -360,18 +363,18 @@ public class VNCMovie implements Callable<Void> {
 
 				final ImageJStackOp<UnsignedByteType> cllcn =
 						new ImageJStackOp<>(
-								Views.extendValue( img, 96 ),
+								Views.extendValue( img, 175 ),
 								(fp) ->
 								{
 									final FloatProcessor fpCopy = (FloatProcessor) fp.duplicate();
 
 									for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
 										if ( fp.getf( i ) == 0 )
-											fp.setf( i, 96 );
+											fp.setf( i, 175 );
 
 									if ( normalization == Normalization.CLLCN )
 									{
-										new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true);
+										new CLLCN(fp).run(blockRadius, blockRadius, 5f, 10, 0.5f, true, true, true);
 									}
 									else
 									{
