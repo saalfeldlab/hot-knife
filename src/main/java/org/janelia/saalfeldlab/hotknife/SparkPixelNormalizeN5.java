@@ -36,6 +36,7 @@ import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.scicomp.n5.zstandard.ZstandardCompression;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -354,7 +355,8 @@ public class SparkPixelNormalizeN5 {
 			}
 		}
 
-		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, dataType, new GzipCompression());
+		// TODO: very specific for 16 > 8 bit conversion
+		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new ZstandardCompression());
 		transferAttributes(n5Output, n5DatasetInput, n5DatasetOutput);
 
 		n5Output.close();
