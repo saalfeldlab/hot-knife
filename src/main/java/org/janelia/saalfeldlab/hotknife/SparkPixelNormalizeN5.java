@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.function.DoubleUnaryOperator;
 import java.util.stream.Collectors;
 
 import ij.ImagePlus;
@@ -171,10 +172,11 @@ public class SparkPixelNormalizeN5 {
 		{
 			final double minIntensity = 33800;
 			final double range = 38500 - minIntensity;
+			final DoubleUnaryOperator spreadOperator = x -> (x - minIntensity) / range * 255.0;
 			
 			sourceRawRaw = Converters.convertRAI(
 						(RandomAccessibleInterval<RealType>)sourceRawRaw,
-						(i,o) -> o.set( Math.min( 255, Math.max( 0, (int)Math.round( (i.getRealDouble() - minIntensity) / range * 255.0 ) ) ) ),
+						(i,o) -> o.set(UnsignedByteType.getCodedSignedByteChecked((int)Math.round(spreadOperator.applyAsDouble(i.getRealDouble())))),
 						new UnsignedByteType() );
 
 			t = new UnsignedByteType();
@@ -227,7 +229,7 @@ public class SparkPixelNormalizeN5 {
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
 					  datasetNameOutput,
-					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new ZstandardCompression()),
 					  gridBlock[2],
 					  new UnsignedByteType());
 		}
@@ -328,14 +330,15 @@ public class SparkPixelNormalizeN5 {
 		final DatasetAttributes attributes = n5Input.getDatasetAttributes(n5DatasetInput);
 		final int[] blockSize = attributes.getBlockSize();
 		final long[] dimensions = attributes.getDimensions();
-		final DataType dataType = attributes.getDataType();
 
 		final int[] gridBlockSize = new int[blockSize.length]; //{ blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
-		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d)
-			gridBlockSize[ d ] = blockSize[d] * blockFactorXY;
+		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d) {
+			gridBlockSize[d] = blockSize[d] * blockFactorXY;
+		}
 
-		for ( int d = 2; d < blockSize.length; ++d )
-			gridBlockSize[ d ] = blockSize[d];
+		for ( int d = 2; d < blockSize.length; ++d ) {
+			gridBlockSize[d] = blockSize[d];
+		}
 
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
@@ -364,7 +367,7 @@ public class SparkPixelNormalizeN5 {
 
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 
-		final JavaFutureAction<Void> future = pGrid.foreachAsync(
+		return pGrid.foreachAsync(
 				gridBlock -> saveFullScaleBlock(n5PathInput,
 												n5PathInput,
 												n5DatasetInput,
@@ -375,8 +378,6 @@ public class SparkPixelNormalizeN5 {
 												normalizeMethod,
 												scaleIndex,
 												invert));
-
-		return future;
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
