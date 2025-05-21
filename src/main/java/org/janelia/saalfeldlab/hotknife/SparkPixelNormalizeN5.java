@@ -29,12 +29,12 @@ import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.GzipCompression;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.scicomp.n5.zstandard.ZstandardCompression;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -130,7 +130,7 @@ public class SparkPixelNormalizeN5 {
 		}
 	}
 
-	public static final HashSet<String> STANDARD_ATTRIBUTES = new HashSet<>(Arrays.asList("dataType", "dimensions", "blockSize", "compression"));
+	public static final Set<String> STANDARD_ATTRIBUTES = new HashSet<>(Arrays.asList("dataType", "dimensions", "blockSize", "compression"));
 
 
 	private static void saveFullScaleBlock(final String n5PathInput,
@@ -176,7 +176,7 @@ public class SparkPixelNormalizeN5 {
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
 					  datasetNameOutput,
-					  new DatasetAttributes(dimensions, blockSize, DataType.FLOAT32, new GzipCompression()),
+					  new DatasetAttributes(dimensions, blockSize, DataType.FLOAT32, new ZstandardCompression()),
 					  gridBlock[2],
 					  new FloatType());
 		}
@@ -193,7 +193,7 @@ public class SparkPixelNormalizeN5 {
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
 					  datasetNameOutput,
-					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new GzipCompression()),
+					  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new ZstandardCompression()),
 					  gridBlock[2],
 					  new UnsignedByteType());
 		}
@@ -283,11 +283,13 @@ public class SparkPixelNormalizeN5 {
 		final DataType dataType = attributes.getDataType();
 
 		final int[] gridBlockSize = new int[blockSize.length]; //{ blockSize[0] * 8, blockSize[1] * 8, blockSize[2] };
-		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d)
-			gridBlockSize[ d ] = blockSize[d] * blockFactorXY;
+		for ( int d = 0; d < Math.min(2, blockSize.length); ++ d) {
+			gridBlockSize[d] = blockSize[d] * blockFactorXY;
+		}
 
-		for ( int d = 2; d < blockSize.length; ++d )
-			gridBlockSize[ d ] = blockSize[d];
+		for ( int d = 2; d < blockSize.length; ++d ) {
+			gridBlockSize[d] = blockSize[d];
+		}
 
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
@@ -307,7 +309,7 @@ public class SparkPixelNormalizeN5 {
 			}
 		}
 
-		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, dataType, new GzipCompression());
+		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, dataType, new ZstandardCompression());
 		transferAttributes(n5Output, n5DatasetInput, n5DatasetOutput);
 
 		n5Output.close();
@@ -315,19 +317,16 @@ public class SparkPixelNormalizeN5 {
 
 		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid);
 
-		final JavaFutureAction<Void> future = pGrid.foreachAsync(
-				gridBlock -> saveFullScaleBlock(n5PathInput,
-												n5PathInput,
-												n5DatasetInput,
-												n5DatasetOutput,
-												dimensions,
-												blockSize,
-												gridBlock,
-												normalizeMethod,
-												scaleIndex,
-												invert));
-
-		return future;
+		return pGrid.foreachAsync(gridBlock -> saveFullScaleBlock(n5PathInput,
+																  n5PathInput,
+																  n5DatasetInput,
+																  n5DatasetOutput,
+																  dimensions,
+																  blockSize,
+																  gridBlock,
+																  normalizeMethod,
+																  scaleIndex,
+																  invert));
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -426,7 +425,7 @@ public class SparkPixelNormalizeN5 {
 	public static void transferAttributes(final N5Writer n5Writer, final String input, final String output) {
 		final Map<String, Class<?>> attributeTypes = n5Writer.listAttributes(input);
 		attributeTypes.forEach((name, type) -> {
-			if (! ((Set<String>) STANDARD_ATTRIBUTES).contains(name)) {
+			if (! STANDARD_ATTRIBUTES.contains(name)) {
 				final Object value = n5Writer.getAttribute(input, name, type);
 				n5Writer.setAttribute(output, name, value);
 			}
