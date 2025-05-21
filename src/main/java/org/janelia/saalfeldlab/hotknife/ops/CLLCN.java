@@ -36,11 +36,6 @@ public class CLLCN extends BlockStatistics {
 //	f(x, a, b) = x < b ? x : (x - b + g(a))**a + b - g(a)**a
 
 
-	/**
-	 *
-	 * @param ip
-	 * @param v
-	 */
 	public void runCenter(
 			final int blockRadiusX,
 			final int blockRadiusY) {
@@ -62,7 +57,7 @@ public class CLLCN extends BlockStatistics {
 			for (int x = 0; x < width; ++x) {
 				final int xMin = Math.max(-1, x - blockRadiusX - 1);
 				final int xMax = Math.min(w, x + blockRadiusX);
-				final long bs = (xMax - xMin) * bh;
+				final double bs = (xMax - xMin) * bh;
 				final double scale = 1.0 / bs;
 				final double sum = sums.getDoubleSum(xMin, yMin, xMax, yMax);
 				final int i = row + x;
@@ -75,11 +70,6 @@ public class CLLCN extends BlockStatistics {
 		}
 	}
 
-	/**
-	 *
-	 * @param ip
-	 * @param v
-	 */
 	public void runStretch(
 			final int blockRadiusX,
 			final int blockRadiusY,
@@ -102,7 +92,7 @@ public class CLLCN extends BlockStatistics {
 			for (int x = 0; x < width; ++x) {
 				final int xMin = Math.max(-1, x - blockRadiusX - 1);
 				final int xMax = Math.min(w, x + blockRadiusX);
-				final long bs = (xMax - xMin) * bh;
+				final double bs = (xMax - xMin) * bh;
 				final double scale1 = 1.0 / (bs - 1);
 				final double scale2 = 1.0 / (bs * bs - bs);
 				final double sum = sums.getDoubleSum(xMin, yMin, xMax, yMax);
@@ -131,11 +121,6 @@ public class CLLCN extends BlockStatistics {
 		return x < limit ? x : Math.pow(x + gradientOnePointMinusLimit, gamma) + limitMinusGradientOnePointPowGamma;
 	}
 
-	/**
-	 *
-	 * @param ip
-	 * @param v
-	 */
 	public void runStretch(
 			final int blockRadiusX,
 			final int blockRadiusY,
@@ -164,7 +149,7 @@ public class CLLCN extends BlockStatistics {
 			for (int x = 0; x < width; ++x) {
 				final int xMin = Math.max(-1, x - blockRadiusX - 1);
 				final int xMax = Math.min(w, x + blockRadiusX);
-				final long bs = (xMax - xMin) * bh;
+				final double bs = (xMax - xMin) * bh;
 				final double scale1 = 1.0 / (bs - 1);
 				final double scale2 = 1.0 / (bs * bs - bs);
 				final double sum = sums.getDoubleSum(xMin, yMin, xMax, yMax);
@@ -187,11 +172,6 @@ public class CLLCN extends BlockStatistics {
 	}
 
 
-	/**
-	 *
-	 * @param ip
-	 * @param v
-	 */
 	protected void runCenterStretch(
 			final int blockRadiusX,
 			final int blockRadiusY,
@@ -213,7 +193,7 @@ public class CLLCN extends BlockStatistics {
 			for (int x = 0; x < width; ++x) {
 				final int xMin = Math.max(-1, x - blockRadiusX - 1);
 				final int xMax = Math.min(w, x + blockRadiusX);
-				final long bs = (xMax - xMin) * bh;
+				final double bs = (xMax - xMin) * bh;
 				final double scale = 1.0 / bs;
 				final double scale1 = 1.0 / (bs - 1);
 				final double scale2 = 1.0 / (bs * bs - bs);
@@ -233,11 +213,6 @@ public class CLLCN extends BlockStatistics {
 	}
 
 
-	/**
-	 *
-	 * @param ip
-	 * @param v
-	 */
 	protected void runCenterStretch(
 			final int blockRadiusX,
 			final int blockRadiusY,
@@ -267,7 +242,7 @@ public class CLLCN extends BlockStatistics {
 			for (int x = 0; x < width; ++x) {
 				final int xMin = Math.max(-1, x - blockRadiusX - 1);
 				final int xMax = Math.min(w, x + blockRadiusX);
-				final long bs = (xMax - xMin) * bh;
+				final double bs = (xMax - xMin) * bh;
 				final double scale = 1.0 / bs;
 				final double scale1 = 1.0 / (bs - 1);
 				final double scale2 = 1.0 / (bs * bs - bs);
@@ -298,11 +273,6 @@ public class CLLCN extends BlockStatistics {
 	}
 
 
-	/**
-	 *
-	 * @param ip
-	 * @param v
-	 */
 	public void run(
 			final int blockRadiusX,
 			final int blockRadiusY,
