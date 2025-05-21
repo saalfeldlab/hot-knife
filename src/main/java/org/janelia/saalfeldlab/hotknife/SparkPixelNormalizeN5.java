@@ -147,6 +147,7 @@ public class SparkPixelNormalizeN5 {
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
 		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
 
+		final int[] gridBlockSize = Arrays.stream(gridBlock[1]).mapToInt(i -> (int)i).toArray();
 		final FinalInterval gridBlockInterval;
 		
 		if ( blockSize.length == 3 )
@@ -171,7 +172,7 @@ public class SparkPixelNormalizeN5 {
 			source = invert ?
 				Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(255 - in.get() );} }, new FloatType() ) : sourceRaw;
 
-			final RandomAccessibleInterval<FloatType> filteredSource = normalizeContrast(source, new FloatType(), normalizeMethod, scaleIndex, blockSize);
+			final RandomAccessibleInterval<FloatType> filteredSource = normalizeContrast(source, new FloatType(), normalizeMethod, scaleIndex, gridBlockSize);
 
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
@@ -188,7 +189,7 @@ public class SparkPixelNormalizeN5 {
 			source = invert ?
 					Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(255 - in.get() );} }, new UnsignedByteType() ) : sourceRaw;
 
-			final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source,  new UnsignedByteType(), normalizeMethod, scaleIndex, blockSize);
+			final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source,  new UnsignedByteType(), normalizeMethod, scaleIndex, gridBlockSize);
 
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
