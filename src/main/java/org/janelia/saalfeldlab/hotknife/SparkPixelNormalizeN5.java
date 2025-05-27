@@ -166,11 +166,11 @@ public class SparkPixelNormalizeN5 {
 
 		RealType<?> t = (RealType<?>) sourceRawRaw.getAt( sourceRawRaw.minAsPoint() );
 
-		// map 16bit to 8bit for jrc_mus-cerebellum-3
+		// map 16bit to 8bit for jrc_mus-pancreas-7
 		if (t instanceof UnsignedShortType)
 		{
-			final double minIntensity = 33800;
-			final double range = 38500 - minIntensity;
+			final double minIntensity = 32000;
+			final double range = 37000 - minIntensity;
 			
 			sourceRawRaw = Converters.convertRAI(
 						(RandomAccessibleInterval<RealType>)sourceRawRaw,
@@ -266,13 +266,13 @@ public class SparkPixelNormalizeN5 {
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST)
 		{
 			filter = new ImageJStackOp<>(
-					Views.extendValue(sourceRaw, 175),
+					Views.extendValue(sourceRaw, 170),
 					(fp) -> {
 						final FloatProcessor fpCopy = (FloatProcessor) fp.duplicate();
 
 						for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
 							if ( fp.getf( i ) == 0 )
-								fp.setf( i, 175 );
+								fp.setf( i, 170 );
 
 						new CLLCN(fp).run(blockRadius, blockRadius, 5f, 10, 0.5f, true, true, true);
 

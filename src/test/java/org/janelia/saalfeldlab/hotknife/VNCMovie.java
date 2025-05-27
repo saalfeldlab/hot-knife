@@ -312,7 +312,9 @@ public class VNCMovie implements Callable<Void> {
 			if ( !UnsignedByteType.class.isInstance( imgIn ) || minIntensity != 0 || maxIntensity != 255 )
 			{
 				final double range = maxIntensity - minIntensity;
-	
+
+				System.out.println( "converting to 8 bit");
+
 				img = Converters.convertRAI(
 							(RandomAccessibleInterval<RealType>)imgIn,
 							(i,o) -> o.set( Math.min( 255, Math.max( 0, (int)Math.round( (i.getRealDouble() - minIntensity) / range * 255.0 ) ) ) ),
@@ -345,6 +347,7 @@ public class VNCMovie implements Callable<Void> {
 			if ( normalization == Normalization.CLLCN || normalization == Normalization.CLAHE )
 			{
 				/*
+				final Random rnd = new Random( 34 );
 				final RandomAccessibleInterval<UnsignedByteType> myImg = img;
 				final FunctionRandomAccessible< UnsignedByteType > function =
 						new FunctionRandomAccessible<>(3, (l, t) ->
@@ -353,25 +356,25 @@ public class VNCMovie implements Callable<Void> {
 							ra.setPosition( l );
 							final int v = ra.get().get();
 
-							if (v == 0)
-								t.set(170);
+							if (v < 10)
+								t.set(215);
 							else
 								t.set(v);
 						}, UnsignedByteType::new);
 				img = Views.interval( function, myImg );
 				*/
+				final int bg = 170;// 180, 215;
 
 				final ImageJStackOp<UnsignedByteType> cllcn =
 						new ImageJStackOp<>(
-								Views.extendValue( img, 175 ),
+								Views.extendValue( img, bg ),
 								(fp) ->
 								{
 									final FloatProcessor fpCopy = (FloatProcessor) fp.duplicate();
 
 									for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
 										if ( fp.getf( i ) == 0 )
-											fp.setf( i, 175 );
-
+											fp.setf( i, bg );
 									if ( normalization == Normalization.CLLCN )
 									{
 										new CLLCN(fp).run(blockRadius, blockRadius, 5f, 10, 0.5f, true, true, true);
@@ -392,7 +395,7 @@ public class VNCMovie implements Callable<Void> {
 
 				final RandomAccessibleInterval<UnsignedByteType> cllcned = Lazy.process(
 						img,
-						new int[] {128, 128, 16},
+						new int[] {256, 256, 16},
 						new UnsignedByteType(),
 						AccessFlags.setOf(AccessFlags.VOLATILE),
 						cllcn);
