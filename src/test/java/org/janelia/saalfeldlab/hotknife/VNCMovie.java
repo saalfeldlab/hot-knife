@@ -363,7 +363,7 @@ public class VNCMovie implements Callable<Void> {
 						}, UnsignedByteType::new);
 				img = Views.interval( function, myImg );
 				*/
-				final int bg = 170;// 180, 215;
+				final int bg = 110;// 180, 215;
 
 				final ImageJStackOp<UnsignedByteType> cllcn =
 						new ImageJStackOp<>(
@@ -377,7 +377,7 @@ public class VNCMovie implements Callable<Void> {
 											fp.setf( i, bg );
 									if ( normalization == Normalization.CLLCN )
 									{
-										new CLLCN(fp).run(blockRadius, blockRadius, 5f, 10, 0.5f, true, true, true);
+										new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true);
 									}
 									else
 									{

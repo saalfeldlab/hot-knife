@@ -166,11 +166,11 @@ public class SparkPixelNormalizeN5 {
 
 		RealType<?> t = (RealType<?>) sourceRawRaw.getAt( sourceRawRaw.minAsPoint() );
 
-		// map 16bit to 8bit for jrc_mus-pancreas-7
+		// map 16bit to 8bit for jrc_mosquito-stylet-5
 		if (t instanceof UnsignedShortType)
 		{
-			final double minIntensity = 32000;
-			final double range = 37000 - minIntensity;
+			final double minIntensity = 35000;
+			final double range = 39648 - minIntensity;
 			
 			sourceRawRaw = Converters.convertRAI(
 						(RandomAccessibleInterval<RealType>)sourceRawRaw,
@@ -274,7 +274,7 @@ public class SparkPixelNormalizeN5 {
 							if ( fp.getf( i ) == 0 )
 								fp.setf( i, 170 );
 
-						new CLLCN(fp).run(blockRadius, blockRadius, 5f, 10, 0.5f, true, true, true);
+						new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true);
 
 						for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
 							if ( fpCopy.getf( i ) == 0 )
@@ -356,7 +356,7 @@ public class SparkPixelNormalizeN5 {
 		}
 
 		// TODO: very specific for 16 > 8 bit conversion
-		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new ZstandardCompression());
+		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new GzipCompression());
 		transferAttributes(n5Output, n5DatasetInput, n5DatasetOutput);
 
 		n5Output.close();
