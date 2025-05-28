@@ -173,6 +173,7 @@ public class SparkPixelNormalizeN5 {
 		{
 			final double minIntensity = 32000;
 			final double range = 37000 - minIntensity;
+			final DoubleUnaryOperator spreadOperator = x -> (x - minIntensity) / range * 255.0;
 			
 			sourceRawRaw = Converters.convertRAI(
 						(RandomAccessibleInterval<RealType>)sourceRawRaw,
