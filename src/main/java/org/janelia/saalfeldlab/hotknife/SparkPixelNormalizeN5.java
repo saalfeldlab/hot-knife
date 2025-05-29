@@ -266,13 +266,13 @@ public class SparkPixelNormalizeN5 {
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST)
 		{
 			filter = new ImageJStackOp<>(
-					Views.extendValue(sourceRaw, 170),
+					Views.extendValue(sourceRaw, 110),
 					(fp) -> {
 						final FloatProcessor fpCopy = (FloatProcessor) fp.duplicate();
 
 						for ( int i = 0; i < fp.getWidth() * fp.getHeight(); ++i )
 							if ( fp.getf( i ) == 0 )
-								fp.setf( i, 170 );
+								fp.setf( i, 110 );
 
 						new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true);
 
