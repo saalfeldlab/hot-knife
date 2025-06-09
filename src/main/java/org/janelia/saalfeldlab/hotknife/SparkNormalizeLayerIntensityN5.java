@@ -82,7 +82,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		public String factors;
 
 		@Option(name = "--spreadIntensities",
-				usage = "Spread intensities to full range of first layer in addition to shifting them")
+				usage = "Spread intensities to full range of layer with largest range in addition to shifting them")
 		private boolean spreadIntensities = false;
 
 		public Options(final String[] args) {
@@ -144,7 +144,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 	}
 
 	private void run() throws IOException {
-
+		// Compute transformations based on downsampled input
 		final List<AffineModel1D> transformations;
 		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
 			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
@@ -156,6 +156,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 					+ " vs. " + attributes.getDimensions()[2] + ". Is the z-dimension downsampled?");
 		}
 
+		// Apply transformations to full scale input and save to output dataset
 		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
 			n5Writer.createDataset(fullScaleOutputDataset, attributes);
 		}
@@ -186,7 +187,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 			final boolean spreadIntensities
 	) {
 
-		// create mask from pixels that have "content" throughout the stack
+		// Create mask of xy-pixels that have "content" throughout all z-layers
 		final List<IntervalView<T>> downScaledStack = asZStack(rai);
 		final Img<T> zProjectedContentMask = typeHelper.createImg(downScaledStack.get(0).dimensionsAsLongArray());
 		for (final T pixel : zProjectedContentMask) {
@@ -206,30 +207,27 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 				.filter(pixel -> pixel.getInteger() == 1)
 				.count();
 
-		// Match intensity of content pixels in each layer to match first layer
-		final List<AffineModel1D> models = new ArrayList<>(downScaledStack.size());
-		models.add(new AffineModel1D());
-
+		// Compute key statistics for each layer
 		final double[] layerPixels = new double[nContentPixels];
-		extractContentPixels(downScaledStack.get(0), zProjectedContentMask, layerPixels);
-		final double firstLayerIntensityAverage = Arrays.stream(layerPixels).average().orElseThrow(NoSuchElementException::new);
-		final double firstLayerIntensitySpread = computeIntensitySpread(layerPixels, DEFAULT_CUTOFF);
-
-		for (int z = 1; z < downScaledStack.size(); ++z) {
-			final IntervalView<T> currentLayer = downScaledStack.get(z);
+		final List<LayerModes> layerModes = new ArrayList<>(downScaledStack.size());
+		for (final IntervalView<T> currentLayer : downScaledStack) {
 			extractContentPixels(currentLayer, zProjectedContentMask, layerPixels);
-			final double currentLayerIntensityAverage = Arrays.stream(layerPixels).average().orElseThrow(NoSuchElementException::new);
+			final LayerModes modes = LayerModes.from(layerPixels, DEFAULT_CUTOFF);
+			layerModes.add(modes);
+		}
 
+		// Compute intensity transformations for each layer (pure shift or shift + spread)
+		final double targetMedian = layerModes.get(0).median;
+		final double targetSpread = layerModes.stream()
+				.mapToDouble(modes -> modes.max - modes.min)
+				.max().orElseThrow(NoSuchElementException::new);
+
+		final List<AffineModel1D> models = new ArrayList<>(downScaledStack.size());
+		for (final LayerModes modes : layerModes) {
 			final AffineModel1D model = new AffineModel1D();
-			if (spreadIntensities) {
-				final double currentLayerIntensitySpread = computeIntensitySpread(layerPixels, DEFAULT_CUTOFF);
-				final double scale = firstLayerIntensitySpread / currentLayerIntensitySpread;
-				final double shift = firstLayerIntensityAverage - currentLayerIntensityAverage * scale;
-				model.set(scale, shift);
-			} else {
-				final double shift = firstLayerIntensityAverage - currentLayerIntensityAverage;
-				model.set(1.0, shift);
-			}
+			final double scale = spreadIntensities ? targetSpread / (modes.max - modes.min) : 1.0;
+			final double shift = targetMedian - modes.median * scale;
+			model.set(scale, shift);
 			models.add(model);
 		}
 
@@ -247,14 +245,6 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 				contentPixels[i++] = layerCursor.get().getInteger();
 			}
 		}
-	}
-
-	private double computeIntensitySpread(final double[] pixels, final double cutoff) {
-		Arrays.sort(pixels);
-		final int n = (int) Math.round(pixels.length * cutoff);
-		final double min = pixels[n];
-		final double max = pixels[pixels.length - n - 1];
-		return max - min;
 	}
 
 	private RandomAccessibleInterval<T> applyTransformations(
@@ -313,6 +303,37 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 	}
 
 
+	/**
+	 * Helper class to hold the median, min and max (discarding some cutoff pixels on either side) of a layer.
+	 */
+	private static class LayerModes {
+		public final double median;
+		public final double min;
+		public final double max;
+
+		private LayerModes(final double median, final double min, final double max) {
+			this.median = median;
+			this.min = min;
+			this.max = max;
+		}
+
+		public static LayerModes from(final double[] pixels, final double cutoff) {
+			Arrays.sort(pixels);
+			final int n = (int) Math.round(pixels.length * cutoff);
+			final double median = pixels[pixels.length / 2];
+			final double min = pixels[n];
+			final double max = pixels[pixels.length - n - 1];
+			return new LayerModes(median, min, max);
+		}
+	}
+
+
+	/**
+	 * Helper interface to abstract over the different pixel types (8bit and 16bit).
+	 * Provides methods to create images, clip values, and check if a value is outside a threshold.
+	 *
+	 * @param <T> the pixel type
+	 */
 	private interface TypeHelper<T extends NativeType<T> & IntegerType<T>> extends Serializable {
 		T getType();
 		Img<T> createImg(final long[] dimensions);
