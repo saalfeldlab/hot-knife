@@ -209,24 +209,24 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 
 		// Compute key statistics for each layer
 		final double[] layerPixels = new double[nContentPixels];
-		final List<LayerModes> layerModes = new ArrayList<>(downScaledStack.size());
+		final List<LayerStats> layerModes = new ArrayList<>(downScaledStack.size());
 		for (final IntervalView<T> currentLayer : downScaledStack) {
 			extractContentPixels(currentLayer, zProjectedContentMask, layerPixels);
-			final LayerModes modes = LayerModes.from(layerPixels, DEFAULT_CUTOFF);
+			final LayerStats modes = LayerStats.from(layerPixels, DEFAULT_CUTOFF);
 			layerModes.add(modes);
 		}
 
 		// Compute intensity transformations for each layer (pure shift or shift + spread)
-		final double targetMedian = layerModes.get(0).median;
+		final double targetMean = layerModes.get(0).mean;
 		final double targetSpread = layerModes.stream()
 				.mapToDouble(modes -> modes.max - modes.min)
 				.max().orElseThrow(NoSuchElementException::new);
 
 		final List<AffineModel1D> models = new ArrayList<>(downScaledStack.size());
-		for (final LayerModes modes : layerModes) {
+		for (final LayerStats modes : layerModes) {
 			final AffineModel1D model = new AffineModel1D();
 			final double scale = spreadIntensities ? targetSpread / (modes.max - modes.min) : 1.0;
-			final double shift = targetMedian - modes.median * scale;
+			final double shift = targetMean - modes.mean * scale;
 			model.set(scale, shift);
 			models.add(model);
 		}
@@ -304,26 +304,29 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 
 
 	/**
-	 * Helper class to hold the median, min and max (discarding some cutoff pixels on either side) of a layer.
+	 * Helper class to hold the median, mean, min and max (discarding some cutoff pixels on either side) of a layer.
 	 */
-	private static class LayerModes {
+	private static class LayerStats {
 		public final double median;
+		public final double mean;
 		public final double min;
 		public final double max;
 
-		private LayerModes(final double median, final double min, final double max) {
+		private LayerStats(final double median, final double mean, final double min, final double max) {
 			this.median = median;
+			this.mean = mean;
 			this.min = min;
 			this.max = max;
 		}
 
-		public static LayerModes from(final double[] pixels, final double cutoff) {
+		public static LayerStats from(final double[] pixels, final double cutoff) {
 			Arrays.sort(pixels);
 			final int n = (int) Math.round(pixels.length * cutoff);
 			final double median = pixels[pixels.length / 2];
+			final double mean = Arrays.stream(pixels).average().orElse(0.0);
 			final double min = pixels[n];
 			final double max = pixels[pixels.length - n - 1];
-			return new LayerModes(median, min, max);
+			return new LayerStats(median, mean, min, max);
 		}
 	}
 
