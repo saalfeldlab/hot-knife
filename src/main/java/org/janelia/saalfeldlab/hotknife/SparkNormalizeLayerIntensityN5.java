@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 import mpicbg.models.AbstractAffineModel1D;
 import mpicbg.models.AffineModel1D;
@@ -82,9 +83,17 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 				usage = "If specified, generates a scale pyramid with given factors, e.g. 2,2,1")
 		public String factors;
 
-		@Option(name = "--spreadIntensities",
-				usage = "Spread intensities to full range of layer with largest range in addition to shifting them")
-		private boolean spreadIntensities = false;
+		@Option(name = "--shift",
+				usage = "Shift intensities based on the given mean: 'NONE', 'MEDIAN', or 'MEAN'")
+		private ShiftType shift = ShiftType.MEAN;
+
+		@Option(name = "--scale",
+				usage = "Scale intensities based on the given method: 'NONE', 'FULL_RANGE', or 'GAUSS'")
+		private ScaleType scale = ScaleType.NONE;
+
+		@Option(name = "--cutoff",
+				usage = "Cut this fraction of pixels on either side when computing the layer statistics (default: 0.03)")
+		private double cutoff = 0.03;
 
 		public Options(final String[] args) {
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -125,7 +134,6 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 	}
 
 
-	private static final double DEFAULT_CUTOFF = 0.03;
 
 	private final String fullScaleInputDataset;
 	private final String downScaledInputDataset;
@@ -149,7 +157,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		final List<AffineModel1D> transformations;
 		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
 			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
-			transformations = computeTransformations(downScaledImg, options.spreadIntensities);
+			transformations = computeTransformations(downScaledImg);
 		}
 
 		if (transformations.size() != attributes.getDimensions()[2]) {
@@ -185,8 +193,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 
 
 	List<AffineModel1D> computeTransformations(
-			final RandomAccessibleInterval<T> rai,
-			final boolean spreadIntensities
+			final RandomAccessibleInterval<T> rai
 	) {
 
 		// Create mask of xy-pixels that have "content" throughout all z-layers
@@ -211,24 +218,24 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 
 		// Compute key statistics for each layer
 		final double[] layerPixels = new double[nContentPixels];
-		final List<LayerStats> layerModes = new ArrayList<>(downScaledStack.size());
+		final List<LayerStats> layerStats = new ArrayList<>(downScaledStack.size());
 		for (final IntervalView<T> currentLayer : downScaledStack) {
 			extractContentPixels(currentLayer, zProjectedContentMask, layerPixels);
-			final LayerStats modes = LayerStats.from(layerPixels, DEFAULT_CUTOFF);
-			layerModes.add(modes);
+			final LayerStats stats = LayerStats.from(layerPixels, options.cutoff);
+			layerStats.add(stats);
 		}
 
 		// Compute intensity transformations for each layer (pure shift or shift + spread)
-		final double targetMean = layerModes.get(0).mean;
-		final double targetSpread = layerModes.stream()
-				.mapToDouble(modes -> modes.max - modes.min)
+		final double targetShift = options.shift.from(layerStats.get(0));
+		final double targetScale = layerStats.stream()
+				.mapToDouble(options.scale::get)
 				.max().orElseThrow(NoSuchElementException::new);
 
 		final List<AffineModel1D> models = new ArrayList<>(downScaledStack.size());
-		for (final LayerStats modes : layerModes) {
+		for (final LayerStats stats : layerStats) {
 			final AffineModel1D model = new AffineModel1D();
-			final double scale = spreadIntensities ? targetSpread / (modes.max - modes.min) : 1.0;
-			final double shift = targetMean - modes.mean * scale;
+			final double scale = targetScale / options.scale.get(stats);
+			final double shift = targetShift - options.shift.from(stats) * scale;
 			model.set(scale, shift);
 			models.add(model);
 		}
@@ -311,12 +318,20 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 	private static class LayerStats {
 		public final double median;
 		public final double mean;
+		public final double std;
 		public final double min;
 		public final double max;
 
-		private LayerStats(final double median, final double mean, final double min, final double max) {
+		private LayerStats(
+				final double median,
+				final double mean,
+				final double std,
+				final double min,
+				final double max
+		) {
 			this.median = median;
 			this.mean = mean;
+			this.std = std;
 			this.min = min;
 			this.max = max;
 		}
@@ -326,9 +341,52 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 			final int n = (int) Math.round(pixels.length * cutoff);
 			final double median = pixels[pixels.length / 2];
 			final double mean = Arrays.stream(pixels).average().orElse(0.0);
+			final double std = Math.sqrt(Arrays.stream(pixels)
+					.map(v -> (v - mean) * (v - mean))
+					.average().orElse(0.0));
 			final double min = pixels[n];
 			final double max = pixels[pixels.length - n - 1];
-			return new LayerStats(median, mean, min, max);
+			return new LayerStats(median, mean, std, min, max);
+		}
+	}
+
+	/**
+	 * Small helper enum to represent the type of mean used for normalization.
+	 */
+	private enum ShiftType {
+		NONE(stats -> 0.0),
+		MEDIAN(stats -> stats.median),
+		MEAN(stats -> stats.mean);
+
+		private final Function<LayerStats, Double> function;
+
+		ShiftType(final Function<LayerStats, Double> function) {
+			this.function = function;
+		}
+
+		public double from(final LayerStats stats) {
+			return function.apply(stats);
+		}
+	}
+
+
+	/**
+	 * Small helper enum to represent the type of scaling used for normalization.
+	 * 'GAUSS' scaling is what is used to normalize 8bit FIB-SEM data.
+	 */
+	private enum ScaleType {
+		NONE(stats -> 1.0),
+		FULL_RANGE(stats -> stats.max - stats.min),
+		GAUSS(stats -> 3 * stats.std);
+
+		private final Function<LayerStats, Double> function;
+
+		ScaleType(final Function<LayerStats, Double> function) {
+			this.function = function;
+		}
+
+		public double get(final LayerStats stats) {
+			return function.apply(stats);
 		}
 	}
 
@@ -399,10 +457,8 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 	public void transferBaseAttributes(final N5Writer n5Writer) {
 		final Map<String, Class<?>> attributeTypes = n5Writer.listAttributes(options.n5DatasetInput);
 		attributeTypes.forEach((name, type) -> {
-			if (! name.equals("scales")) {
-				final Object value = n5Writer.getAttribute(options.n5DatasetInput, name, type);
-				n5Writer.setAttribute(options.n5DatasetOutput, name, value);
-			}
+			final Object value = n5Writer.getAttribute(options.n5DatasetInput, name, type);
+			n5Writer.setAttribute(options.n5DatasetOutput, name, value);
 		});
 
 		// Handle 'scales' attribute separately since the downsampling factors might have changed
@@ -417,6 +473,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 			return;
 		}
 
+		// Overwrite scales with the new factors
 		for (int i = 0; i < nScales; ++i) {
 			scales[i][0] = xScale;
 			scales[i][1] = yScale;
