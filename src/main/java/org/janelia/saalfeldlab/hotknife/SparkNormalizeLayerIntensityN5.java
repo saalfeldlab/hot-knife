@@ -168,7 +168,6 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		// Apply transformations to full scale input and save to output dataset
 		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
 			n5Writer.createDataset(fullScaleOutputDataset, attributes);
-			transferBaseAttributes(n5Writer);
 		}
 
 		final List<long[][]> grid = Grid.create(attributes.getDimensions(), attributes.getBlockSize());
@@ -188,6 +187,11 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 									   options.n5DatasetOutput,
 									   downsampleFactors);
 			}
+		}
+
+		// Copy attributes and rebuild 'scales' attribute
+		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
+			transferBaseAttributes(n5Writer);
 		}
 	}
 
