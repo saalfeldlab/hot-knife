@@ -468,7 +468,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		int xScale = 1, yScale = 1, zScale = 1;
 		int[] factors = parseCSIntArray(options.factors);
 
-		if (factors == null || n5Writer.getAttribute(options.n5DatasetInput, "scales", int[].class) == null) {
+		if (factors == null || n5Writer.getAttribute(options.n5DatasetInput, "scales", int[][].class) == null) {
 			// Skip writing scales if no factors are provided
 			return;
 		}
