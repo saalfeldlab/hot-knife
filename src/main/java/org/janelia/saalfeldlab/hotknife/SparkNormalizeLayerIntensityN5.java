@@ -5,6 +5,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
 
@@ -159,6 +160,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		// Apply transformations to full scale input and save to output dataset
 		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
 			n5Writer.createDataset(fullScaleOutputDataset, attributes);
+			transferBaseAttributes(n5Writer);
 		}
 
 		final List<long[][]> grid = Grid.create(attributes.getDimensions(), attributes.getBlockSize());
@@ -386,5 +388,44 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		public boolean isOutsideThreshold(final int value) {
 			return (value < 5000 || value > 60000);
 		}
+	}
+
+	/**
+	 * Transfer base-level attributes from input dataset to output dataset. Since the downsampling
+	 * factors might have changed, the 'scales' attribute is assembled afresh using the new factors
+	 * and the actual number of scales in the output dataset. If the input dataset does not have a
+	 * 'scales' attribute or if no factors are provided, the scales attribute is not written.
+	 */
+	public void transferBaseAttributes(final N5Writer n5Writer) {
+		final Map<String, Class<?>> attributeTypes = n5Writer.listAttributes(options.n5DatasetInput);
+		attributeTypes.forEach((name, type) -> {
+			if (! name.equals("scales")) {
+				final Object value = n5Writer.getAttribute(options.n5DatasetInput, name, type);
+				n5Writer.setAttribute(options.n5DatasetOutput, name, value);
+			}
+		});
+
+		// Handle 'scales' attribute separately since the downsampling factors might have changed
+		// Read actual number of scales from the output and write factors to the base level attributes
+		int nScales = n5Writer.list(options.n5DatasetOutput).length;
+		final int[][] scales = new int[nScales][3];
+		int xScale = 1, yScale = 1, zScale = 1;
+		int[] factors = parseCSIntArray(options.factors);
+
+		if (factors == null || n5Writer.getAttribute(options.n5DatasetInput, "scales", int[].class) == null) {
+			// Skip writing scales if no factors are provided
+			return;
+		}
+
+		for (int i = 0; i < nScales; ++i) {
+			scales[i][0] = xScale;
+			scales[i][1] = yScale;
+			scales[i][2] = zScale;
+
+			xScale *= factors[0];
+			yScale *= factors[1];
+			zScale *= factors[2];
+		}
+		n5Writer.setAttribute(options.n5DatasetOutput, "scales", scales);
 	}
 }
