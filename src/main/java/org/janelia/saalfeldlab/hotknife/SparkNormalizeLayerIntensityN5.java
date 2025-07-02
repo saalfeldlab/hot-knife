@@ -4,11 +4,13 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
+import java.util.stream.IntStream;
 
 import mpicbg.models.AbstractAffineModel1D;
 import mpicbg.models.AffineModel1D;
@@ -229,12 +231,16 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 			layerStats.add(stats);
 		}
 
-		// Compute intensity transformations for each layer (pure shift or shift + spread)
-		final double targetShift = options.shift.from(layerStats.get(0));
-		final double targetScale = layerStats.stream()
-				.mapToDouble(options.scale::get)
-				.max().orElseThrow(NoSuchElementException::new);
+		// Determine the target shift and scale based on the layer with the maximum scale
+		// which maximizes the expressive range while minimizing the risk of clipping
+		final int maxScaleIndex = IntStream.range(0, layerStats.size())
+				.boxed()
+				.max(Comparator.comparingDouble(i -> options.scale.get(layerStats.get(i))))
+				.orElseThrow(NoSuchElementException::new);
+		final double targetShift = options.shift.from(layerStats.get(maxScaleIndex));
+		final double targetScale = options.scale.get(layerStats.get(maxScaleIndex));
 
+		// Compute intensity transformations for each layer transforming them to the target scale and shift
 		final List<AffineModel1D> models = new ArrayList<>(downScaledStack.size());
 		for (final LayerStats stats : layerStats) {
 			final AffineModel1D model = new AffineModel1D();
@@ -341,15 +347,22 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		}
 
 		public static LayerStats from(final double[] pixels, final double cutoff) {
+			// Compute histogram clipping bounds
+			final int start = (int) Math.round(pixels.length * cutoff);
+			final int end = pixels.length - start;
+
+			// Sort the pixels to compute rank statistics
 			Arrays.sort(pixels);
-			final int n = (int) Math.round(pixels.length * cutoff);
 			final double median = pixels[pixels.length / 2];
-			final double mean = Arrays.stream(pixels).average().orElse(0.0);
-			final double std = Math.sqrt(Arrays.stream(pixels)
+			final double min = pixels[start];
+			final double max = pixels[end - 1];
+
+			// Compute accumulated statistics over clipped pixels
+			final double mean = Arrays.stream(pixels, start, end).average().orElse(0.0);
+			final double std = Math.sqrt(Arrays.stream(pixels, start, end)
 					.map(v -> (v - mean) * (v - mean))
 					.average().orElse(0.0));
-			final double min = pixels[n];
-			final double max = pixels[pixels.length - n - 1];
+
 			return new LayerStats(median, mean, std, min, max);
 		}
 	}
@@ -381,7 +394,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 	private enum ScaleType {
 		NONE(stats -> 1.0),
 		FULL_RANGE(stats -> stats.max - stats.min),
-		GAUSS(stats -> 3 * stats.std);
+		GAUSS(stats -> 4 * stats.std);
 
 		private final Function<LayerStats, Double> function;
 
