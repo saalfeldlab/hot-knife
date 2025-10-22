@@ -262,7 +262,7 @@ public class VNCMovie implements Callable<Void> {
 			final String n5Group,
 			final Normalization normalization ) throws IOException
 	{
-		return createMipmapSource(n5Path, n5Group, normalization, false, false );
+		return createMipmapSource(n5Path, n5Group, normalization, false, false, 0, 65535 );
 	}
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
@@ -270,7 +270,19 @@ public class VNCMovie implements Callable<Void> {
 			final String n5Group,
 			final Normalization normalization,
 			final boolean invert,
-			final boolean mSem ) throws IOException {
+			final boolean mSem ) throws IOException
+	{
+		return createMipmapSource(n5Path, n5Group, normalization, invert, mSem, 0, 255 );
+	}
+
+	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
+			final String n5Path,
+			final String n5Group,
+			final Normalization normalization,
+			final boolean invert,
+			final boolean mSem,
+			final int min, // only for 16 bit sources
+			final int max ) throws IOException {
 
 		System.out.println( n5Path );
 		final N5Reader n5 = n5Path.toLowerCase().endsWith( ".zarr" ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
@@ -283,7 +295,30 @@ public class VNCMovie implements Callable<Void> {
 
 			final int scale = 1 << scaleIndex;
 			final double inverseScale = 1.0 / scale;
-			RandomAccessibleInterval<UnsignedByteType> img = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
+			RandomAccessibleInterval imgRaw = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
+			RandomAccessibleInterval<UnsignedByteType> img;
+
+			if ( UnsignedByteType.class.isInstance( Views.iterable( imgRaw ).firstElement() ) )
+				img = imgRaw;
+			else if ( UnsignedShortType.class.isInstance( Views.iterable( imgRaw ).firstElement() ) )
+			{
+				//img = Converters.convertRAI( (RandomAccessibleInterval<UnsignedShortType>)imgRaw, (i,o) -> clipToUnsignedByte(0, 2000, i, o), new UnsignedByteType() );
+				if ( scaleIndex == 0 )
+					System.out.println( "Clipping to UINT8 ... " );
+
+				img = Lazy.process(
+						(RandomAccessibleInterval<UnsignedShortType>)imgRaw,
+						new int[] {128, 128, 128},
+						new UnsignedByteType(),
+						AccessFlags.setOf(AccessFlags.VOLATILE),
+						out -> {
+							Views.flatIterable(Views.interval(Views.pair((RandomAccessibleInterval<UnsignedShortType>)imgRaw, out), out)).forEach(
+									pair -> clipToUnsignedByte(min, max, pair.getA(), pair.getB())
+							);
+						});
+			}
+			else
+				throw new RuntimeException( "Unsupported type: " + Views.iterable( imgRaw ).firstElement().getClass() );
 
 			if ( invert )
 			{
@@ -390,7 +425,31 @@ public class VNCMovie implements Callable<Void> {
 			}
 
 			// TODO: read the downsamplings rather than assuming stuff
-			scales[scaleIndex] = new double[]{scale, scale, mSem ? 1 : scale};
+
+			// multisem
+			//scales[scaleIndex] = new double[]{scale, scale, mSem ? 1 : scale};
+
+			// mouse
+			//if ( scaleIndex == 0 )
+			//	scales[scaleIndex] = new double[]{scale, scale, scale * 4 };
+			//else
+			//	scales[scaleIndex] = new double[]{scale, scale, scale / 2 * 4 };
+
+			// drosophila
+			//if ( scaleIndex == 0 )
+			//	scales[scaleIndex] = new double[]{scale, scale, scale * 6.369426751592357 };
+			//else if ( scaleIndex == 1 )
+			//	scales[scaleIndex] = new double[]{scale, scale, scale / 2 * 6.369426751592357 };
+			//else
+			//	scales[scaleIndex] = new double[]{scale, scale, scale / 4 * 6.369426751592357 };
+
+			// 3-channel mouse
+			if ( scaleIndex == 0 )
+				scales[scaleIndex] = new double[]{scale, scale, scale * 4 };
+			else
+				scales[scaleIndex] = new double[]{scale, scale, scale / 2 * 4 };
+
+			System.out.println( "s" + scaleIndex + ": " + Arrays.toString( scales[ scaleIndex ] ) );
 		}
 
 		final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
