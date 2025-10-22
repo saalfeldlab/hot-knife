@@ -299,10 +299,11 @@ public class VNCMovie implements Callable<Void> {
 			RandomAccessibleInterval<UnsignedByteType> img;
 
 			if ( UnsignedByteType.class.isInstance( Views.iterable( imgRaw ).firstElement() ) )
+			{
 				img = imgRaw;
+			}
 			else if ( UnsignedShortType.class.isInstance( Views.iterable( imgRaw ).firstElement() ) )
 			{
-				//img = Converters.convertRAI( (RandomAccessibleInterval<UnsignedShortType>)imgRaw, (i,o) -> clipToUnsignedByte(0, 2000, i, o), new UnsignedByteType() );
 				if ( scaleIndex == 0 )
 					System.out.println( "Clipping to UINT8 ... " );
 
@@ -318,7 +319,9 @@ public class VNCMovie implements Callable<Void> {
 						});
 			}
 			else
+			{
 				throw new RuntimeException( "Unsupported type: " + Views.iterable( imgRaw ).firstElement().getClass() );
+			}
 
 			if ( invert )
 			{
