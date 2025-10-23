@@ -23,6 +23,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import javax.imageio.ImageIO;
 import javax.swing.SwingUtilities;
@@ -56,6 +58,7 @@ import ij.process.ByteProcessor;
 import ij.process.ColorProcessor;
 import mpicbg.ij.clahe.Flat;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.array.ArrayImgs;
@@ -262,7 +265,10 @@ public class VNCMovie implements Callable<Void> {
 			final String n5Group,
 			final Normalization normalization ) throws IOException
 	{
-		return createMipmapSource(n5Path, n5Group, normalization, false, false, 0, 65535 );
+		return createMipmapSource(
+				n5Path, n5Group, normalization, false, false, 0, 65535,
+				new FinalVoxelDimensions("um", new double[]{0.008, 0.008, 0.008}),
+				(scaleIndex, scale) -> new double[]{scale, scale, scale});
 	}
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
@@ -272,7 +278,10 @@ public class VNCMovie implements Callable<Void> {
 			final boolean invert,
 			final boolean mSem ) throws IOException
 	{
-		return createMipmapSource(n5Path, n5Group, normalization, invert, mSem, 0, 255 );
+		return createMipmapSource(
+				n5Path, n5Group, normalization, invert, mSem, 0, 255,
+				new FinalVoxelDimensions("um", new double[]{0.008, 0.008, 0.008}),
+				(scaleIndex, scale) -> new double[]{scale, scale, mSem ? 1 : scale} );
 	}
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
@@ -282,7 +291,9 @@ public class VNCMovie implements Callable<Void> {
 			final boolean invert,
 			final boolean mSem,
 			final int min, // only for 16 bit sources
-			final int max ) throws IOException {
+			final int max,
+			final VoxelDimensions voxelDimensions,
+			final BiFunction<Integer, Integer, double[]> computeScales ) throws IOException {
 
 		System.out.println( n5Path );
 		final N5Reader n5 = n5Path.toLowerCase().endsWith( ".zarr" ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
@@ -447,10 +458,12 @@ public class VNCMovie implements Callable<Void> {
 			//	scales[scaleIndex] = new double[]{scale, scale, scale / 4 * 6.369426751592357 };
 
 			// 3-channel mouse
-			if ( scaleIndex == 0 )
-				scales[scaleIndex] = new double[]{scale, scale, scale * 4 };
-			else
-				scales[scaleIndex] = new double[]{scale, scale, scale / 2 * 4 };
+			//if ( scaleIndex == 0 )
+			//	scales[scaleIndex] = new double[]{scale, scale, scale * 4 };
+			//else
+			//	scales[scaleIndex] = new double[]{scale, scale, scale / 2 * 4 };
+
+			scales[ scaleIndex ] = computeScales.apply( scaleIndex, scale );
 
 			System.out.println( "s" + scaleIndex + ": " + Arrays.toString( scales[ scaleIndex ] ) );
 		}
@@ -460,7 +473,7 @@ public class VNCMovie implements Callable<Void> {
 						mipmaps,
 						new UnsignedByteType(),
 						scales,
-						new FinalVoxelDimensions("um", new double[]{0.008, 0.008, 0.008}),
+						voxelDimensions,
 						"VNC");
 
 		return mipmapSource;
