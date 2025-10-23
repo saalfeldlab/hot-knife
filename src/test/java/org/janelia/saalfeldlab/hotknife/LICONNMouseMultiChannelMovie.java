@@ -94,7 +94,7 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 			final String dir) throws IOException {
 
 		final ViewerState renderState = viewer.state();
-		//final ScaleBarOverlayRenderer scalebar = new ScaleBarOverlayRenderer();
+		final ScaleBarOverlayRenderer scalebar = new ScaleBarOverlayRenderer();
 		final MultiBoxOverlayRenderer box = new MultiBoxOverlayRenderer(width, height);
 
 		final VNCMovie.Target target = new VNCMovie.Target(width, height);
@@ -149,8 +149,8 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 
 				/* scalebar */
 				g2.setClip(0, 0, width, height);
-				//scalebar.setViewerState(renderState);
-				//scalebar.paint(g2);
+				scalebar.setViewerState(renderState);
+				scalebar.paint(g2);
 				box.setViewerState(renderState);
 				box.paint(g2);
 
@@ -175,7 +175,7 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 		final ARGBType color1 = new ARGBType( ARGBType.rgba( 0, 255, 255, 255) );
 		final ARGBType color2 = new ARGBType( ARGBType.rgba( 255, 0, 255, 255) );
 
-		final double expansionFactor = 16.0;
+		final double expansionFactor = 15.5;
 		final VoxelDimensions vx = new FinalVoxelDimensions("um", new double[]{0.157 / expansionFactor, 0.157 / expansionFactor, 0.157 / expansionFactor });
 
 		final BiFunction<Integer, Integer, double[]> computeScales = (scaleIndex, scale) -> {
