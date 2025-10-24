@@ -67,8 +67,8 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 	private final String outDir = "/home/preibischs@hhmi.org/Downloads/movie_multichannel_mouse";
 	private final String n5Path = "/nrs/tavakoli/data_internal/s12c/samples_for_stitching/20250902_mouse_hipp_3_channels/fused.n5";
 	private final String n5GroupCh0 = "/ch0tp0/";
-	private final String n5GroupCh1 = "/ch0tp0/";
-	private final String n5GroupCh2 = "/ch0tp0/";
+	private final String n5GroupCh1 = "/ch1tp0/";
+	private final String n5GroupCh2 = "/ch2tp0/";
 
 	private final AffineTransform3D viewerScale = new AffineTransform3D();
 	private final AffineTransform3D viewerTranslation = new AffineTransform3D();
@@ -170,7 +170,7 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 	@Override
 	public final Void call() throws IOException, InterruptedException, ExecutionException {
 
-		//final ARGBType color0 = new ARGBType( ARGBType.rgba( 255, 204, 51, 255) );
+		//final ARGBType color0 = new ARGBType( ARGBType.rgba( 255, 255, 255, 255) );
 		final ARGBType color0 = new ARGBType( ARGBType.rgba( 255, 204, 153, 255) );
 		final ARGBType color1 = new ARGBType( ARGBType.rgba( 0, 255, 255, 255) );
 		final ARGBType color2 = new ARGBType( ARGBType.rgba( 255, 0, 255, 255) );
@@ -187,8 +187,8 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 
 		//final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, false );
 		final RandomAccessibleIntervalMipmapSource<?> mipmapSource0 = VNCMovie.createMipmapSource( n5Path, n5GroupCh0, Normalization.CLAHE, false, false, 100, 3000, vx, computeScales );
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource1 = VNCMovie.createMipmapSource( n5Path, n5GroupCh1, Normalization.NONE, false, false, 800, 1000, vx, computeScales );
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource2 = VNCMovie.createMipmapSource( n5Path, n5GroupCh2, Normalization.NONE, true, false, 0, 100, vx, computeScales );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource1 = VNCMovie.createMipmapSource( n5Path, n5GroupCh1, Normalization.NONE, false, false, 10, 450, vx, computeScales );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource2 = VNCMovie.createMipmapSource( n5Path, n5GroupCh2, Normalization.NONE, false, false, 10, 125, vx, computeScales );
 
 		// for recording
 		/*
