@@ -112,6 +112,10 @@ public class SparkPixelNormalizeN5 {
 				usage = "Normalization method, e.g. LOCAL_CONTRAST, CLAHE")
 		private NormalizationMethod normalizeMethod;
 
+        @Option(name = "--localContrastOutOfBoundsIntensity",
+                usage = "for LOCAL_CONTRAST normalization, assign this intensity when the source pixel is 0")
+        private float localContrastOutOfBoundsIntensity = 110.0f;
+
 		public Options(final String[] args) {
 			final CmdLineParser parser = new CmdLineParser(this);
 			try {
@@ -145,6 +149,7 @@ public class SparkPixelNormalizeN5 {
 										   final int[] blockSize,
 										   final long[][] gridBlock,
 										   final NormalizationMethod normalizeMethod,
+                                           final float localContrastOutOfBoundsIntensity,
 										   final int scaleIndex,
 										   final boolean invert) {
 
@@ -191,7 +196,14 @@ public class SparkPixelNormalizeN5 {
 			source = invert ?
 				Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(255 - in.get() );} }, new FloatType() ) : sourceRaw;
 
-			final RandomAccessibleInterval<FloatType> filteredSource = normalizeContrast(source, new FloatType(), normalizeMethod, 0, 255, scaleIndex, gridBlockSize);
+			final RandomAccessibleInterval<FloatType> filteredSource = normalizeContrast(source,
+                                                                                         new FloatType(),
+                                                                                         normalizeMethod,
+                                                                                         0,
+                                                                                         255,
+                                                                                         localContrastOutOfBoundsIntensity,
+                                                                                         scaleIndex,
+                                                                                         gridBlockSize);
 
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
@@ -208,7 +220,14 @@ public class SparkPixelNormalizeN5 {
 			source = invert ?
 					Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(65535 - in.get() );} }, new UnsignedShortType() ) : sourceRaw;
 
-			final RandomAccessibleInterval<UnsignedShortType> filteredSource = normalizeContrast(source,  new UnsignedShortType(), normalizeMethod, 0, 65535, scaleIndex, gridBlockSize);
+			final RandomAccessibleInterval<UnsignedShortType> filteredSource = normalizeContrast(source,
+                                                                                                 new UnsignedShortType(),
+                                                                                                 normalizeMethod,
+                                                                                                 0,
+                                                                                                 65535,
+                                                                                                 localContrastOutOfBoundsIntensity,
+                                                                                                 scaleIndex,
+                                                                                                 gridBlockSize);
 
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
@@ -225,7 +244,14 @@ public class SparkPixelNormalizeN5 {
 			source = invert ?
 					Converters.convertRAI(sourceRaw, (in, out) -> { if (in.get() == 0) { out.set(0 ); } else { out.set(255 - in.get() );} }, new UnsignedByteType() ) : sourceRaw;
 
-			final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source,  new UnsignedByteType(), normalizeMethod, 0, 255, scaleIndex, gridBlockSize);
+			final RandomAccessibleInterval<UnsignedByteType> filteredSource = normalizeContrast(source,
+                                                                                                new UnsignedByteType(),
+                                                                                                normalizeMethod,
+                                                                                                0,
+                                                                                                255,
+                                                                                                localContrastOutOfBoundsIntensity,
+                                                                                                scaleIndex,
+                                                                                                gridBlockSize);
 
 			N5Utils.saveNonEmptyBlock(Views.interval(filteredSource, gridBlockInterval),
 					  n5Output,
@@ -248,6 +274,7 @@ public class SparkPixelNormalizeN5 {
 			final NormalizationMethod normalizeMethod,
 			final double minIntensity,
 			final double maxIntensity,
+            final float localContrastOutOfBoundsIntensity,
 			final int scaleIndex,
 			int[] blocksize )
 	{
@@ -269,14 +296,14 @@ public class SparkPixelNormalizeN5 {
 		if (normalizeMethod == NormalizationMethod.LOCAL_CONTRAST)
 		{
 			filter = new ImageJStackOp<>(
-					Views.extendValue(sourceRaw, 110),
+					Views.extendValue(sourceRaw, localContrastOutOfBoundsIntensity),
 					(fp) -> {
 						final FloatProcessor fpCopy = (FloatProcessor) fp.duplicate();
 
 						final int N = fp.getWidth() * fp.getHeight();
 						for ( int i = 0; i < N; ++i )
 							if ( fp.getf( i ) == 0 )
-								fp.setf( i, 110 );
+								fp.setf( i, localContrastOutOfBoundsIntensity );
 
 						new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true);
 
@@ -324,6 +351,7 @@ public class SparkPixelNormalizeN5 {
 			final int scaleIndex,
 			final boolean invert,
 			final NormalizationMethod normalizeMethod,
+            final float localContrastOutOfBoundsIntensity,
 			final boolean overwrite )
 	{
 		final N5Reader n5Input = new N5FSReader(n5PathInput);
@@ -378,6 +406,7 @@ public class SparkPixelNormalizeN5 {
 												blockSize,
 												gridBlock,
 												normalizeMethod,
+                                                localContrastOutOfBoundsIntensity,
 												scaleIndex,
 												invert));
 	}
@@ -459,6 +488,7 @@ public class SparkPixelNormalizeN5 {
 						scaleIndex,
 						options.invert,
 						options.normalizeMethod,
+                        options.localContrastOutOfBoundsIntensity,
 						options.overwrite ) );
 			}
 		}
