@@ -34,6 +34,13 @@
 			<artifactId>spark-core_2.13</artifactId>
 			<version>3.4.1</version> <!-- released on June 23, 2023, see https://spark.apache.org/releases/spark-release-3-4-1.html -->
 			<scope>provided</scope>
+            <exclusions>
+                <!-- exclude unused audience-annotations library to avoid build warning -->
+                <exclusion>
+                    <groupId>org.apache.yetus</groupId>
+                    <artifactId>audience-annotations</artifactId>
+                </exclusion>
+            </exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
@@ -186,11 +193,7 @@
 			<groupId>sc.fiji</groupId>
 			<artifactId>Stitching_</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.scala-lang</groupId>
-			<artifactId>scala-library</artifactId>
-			<version>2.13.8</version>
-		</dependency>
+        <!-- exclude org.scala-lang : scala-library : 2.13.8 dependency here because 2.13.9 is specified above -->
 	</dependencies>
 
 	<repositories>
@@ -258,12 +261,54 @@
 								<exclude>META-INF/*.txt</exclude>
 								<exclude>module-info.class</exclude>
 								<exclude>plugins.config</exclude>
+                                <exclude>META-INF/groovy/org.codehaus.groovy.runtime.ExtensionModule</exclude>
+                                <exclude>META-INF/groovy-release-info.properties</exclude>
+                                <exclude>META-INF/io.netty.versions.properties</exclude>
+                                <exclude>META-INF/okio.kotlin_module</exclude>
+                                <exclude>META-INF/rxjava.properties</exclude>
+                                <exclude>META-INF/services/com.fasterxml.jackson.core.JsonFactory</exclude>
+                                <exclude>META-INF/services/io.grpc.NameResolverProvider</exclude>
+                                <exclude>META-INF/services/io.grpc.LoadBalancerProvider</exclude>
+                                <exclude>META-INF/services/javax.script.ScriptEngineFactory</exclude>
+                                <exclude>META-INF/services/reactor.blockhound.integration.BlockHoundIntegration</exclude>
 								<exclude>META-INF/versions/9/module-info.class</exclude>
-								<exclude>META-INF/okio.kotlin_module</exclude>
-								<exclude>
-									META-INF/services/com.fasterxml.jackson.core.JsonFactory</exclude>
 							</excludes>
 						</filter>
+                        <filter>
+                            <!-- artifacts exist in imagej-common and scijava-plugins-commands -->
+                            <artifact>*:imagej-plugins-commands</artifact>
+                            <excludes>
+                                <exclude>icons/commands/door_in.png</exclude>
+                                <exclude>icons/commands/folder_picture.png</exclude>
+                                <exclude>icons/commands/information.png</exclude>
+                            </excludes>
+                        </filter>
+                        <filter>
+                            <!-- artifacts exist in jnr-ffi -->
+                            <artifact>*:jruby-core</artifact>
+                            <excludes>
+                                <exclude>META-INF/**</exclude>
+                                <exclude>jnr/ffi/**</exclude>
+                            </excludes>
+                        </filter>
+                        <filter>
+                            <!-- artifacts exist in n5-universe -->
+                            <artifact>*:n5-imglib2</artifact>
+                            <excludes>
+                                <exclude>canonical.json</exclude>
+                                <exclude>cosem.json</exclude>
+                                <exclude>n5-compression.jq</exclude>
+                                <exclude>n5.jq</exclude>
+                                <exclude>zyx.zattrs.json</exclude>
+                            </excludes>
+                        </filter>
+                        <filter>
+                            <!-- artifacts exist in multiview-reconstruction -->
+                            <artifact>*:SPIM_Registration</artifact>
+                            <excludes>
+                                <exclude>ClassDiagramInterestPointRegistration.dia</exclude>
+                            </excludes>
+                        </filter>
 					</filters>
 					<!-- Additional configuration. -->
 					<artifactSet>
