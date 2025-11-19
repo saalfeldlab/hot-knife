@@ -34,21 +34,17 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
 import org.janelia.saalfeldlab.hotknife.cost.PreFilter;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
-import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.ImageJ;
-import ij.ImagePlus;
 import ij.process.ByteProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
@@ -62,8 +58,6 @@ import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
-import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -71,7 +65,6 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
-import net.imglib2.view.ExtendedRandomAccessibleInterval;
 import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 
@@ -212,8 +205,8 @@ public class SparkComputeCostMultiSem {
 		final long[] surfaceBlockSize = options.getSurfaceBlockSize();
 		System.out.println("surfaceBlockSize: " + Util.printCoordinates(surfaceBlockSize) );
 		
-		final N5Reader n5 = new N5FSReader(n5Path);
-		final N5Writer n5w = new N5FSWriter(costN5Path);
+		final N5Reader n5 = N5Util.createN5Reader(n5Path);
+		final N5Writer n5w = N5Util.createN5Writer(costN5Path);
 
 		final int outOfBoundsValue;
 		if (options.outOfBoundsValue == null) {
@@ -421,7 +414,7 @@ public class SparkComputeCostMultiSem {
 		System.out.println("Writing blocks");
 
         // TODO: wrong dimensions
-        N5Writer n5w = new N5FSWriter(costN5Path);
+        N5Writer n5w = N5Util.createN5Writer(costN5Path);
 
         // Now loop over blocks and write (for multisem, usually just one block in z)
         for( int zGrid = 0; zGrid <= Math.ceil(zcorrSize[2] / (double) zcorrBlockSize[2]); zGrid++ )
@@ -484,11 +477,11 @@ public class SparkComputeCostMultiSem {
 		final RandomAccessibleInterval<UnsignedByteType> maskRaw;
 		final RandomAccessible<UnsignedByteType> maskExtended;
 
-        zcorrRaw = N5Utils.open(new N5FSReader(n5Path), zcorrDataset);
+        zcorrRaw = N5Utils.open(N5Util.createN5Reader(n5Path), zcorrDataset);
 
         if ( maskDataset != null )
         {
-            maskRaw = N5Utils.open(new N5FSReader(n5Path), maskDataset);
+            maskRaw = N5Utils.open(N5Util.createN5Reader(n5Path), maskDataset);
 
             if ( !Intervals.equals(zcorrRaw, maskRaw) )
                 throw new RuntimeException( "zCorrRaw interval [" + Util.printInterval(zcorrRaw) + "] and mask interval [" + Util.printInterval(maskRaw) + "] are not the same, quitting." );

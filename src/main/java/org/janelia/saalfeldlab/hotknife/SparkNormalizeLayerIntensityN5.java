@@ -1,8 +1,5 @@
 package org.janelia.saalfeldlab.hotknife;
 
-import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
-import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -15,39 +12,42 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
-import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.loops.LoopBuilder;
-import net.imglib2.view.IntervalView;
 import mpicbg.models.AbstractAffineModel1D;
 import mpicbg.models.AffineModel1D;
-import net.imglib2.Cursor;
-import net.imglib2.RandomAccess;
-import net.imglib2.type.NativeType;
-import net.imglib2.type.numeric.IntegerType;
-import net.imglib2.type.numeric.integer.UnsignedShortType;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.converter.Converters;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.loops.LoopBuilder;
+import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Intervals;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
+
+import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
+import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
 
 
 /**
@@ -117,16 +117,19 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		}
 
 		final DatasetAttributes attributes;
-		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
+		try (final N5Reader n5reader = N5Util.createN5Reader(options.n5Path)) {
 			if (n5reader.exists(options.n5DatasetOutput)) {
 				throw new IllegalArgumentException("Normalized data set already exists: " + options.n5DatasetOutput);
 			}
 
 			final String fullScaleInputDataset = options.n5DatasetInput + "/s0";
 			attributes = n5reader.getDatasetAttributes(fullScaleInputDataset);
+            if (attributes == null) {
+                throw new IllegalArgumentException("no attributes found in " + options.n5Path + fullScaleInputDataset);
+            }
 		}
 
-		if (attributes.getDataType() == DataType.UINT8) {
+        if (attributes.getDataType() == DataType.UINT8) {
 			new SparkNormalizeLayerIntensityN5<>(options, attributes, new ByteHelper()).run();
 		} else if (attributes.getDataType() == DataType.UINT16) {
 			new SparkNormalizeLayerIntensityN5<>(options, attributes, new ShortHelper()).run();
@@ -157,7 +160,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 	private void run() throws IOException {
 		// Compute transformations based on downsampled input
 		final List<AffineModel1D> transformations;
-		try (final N5Reader n5reader = new N5FSReader(options.n5Path)) {
+		try (final N5Reader n5reader = N5Util.createN5Reader(options.n5Path)) {
 			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
 			transformations = computeTransformations(downScaledImg);
 		}
@@ -168,7 +171,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		}
 
 		// Apply transformations to full scale input and save to output dataset
-		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
+		try (final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path)) {
 			n5Writer.createDataset(fullScaleOutputDataset, attributes);
 		}
 
@@ -192,7 +195,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 		}
 
 		// Copy attributes and rebuild 'scales' attribute
-		try (final N5Writer n5Writer = new N5FSWriter(options.n5Path)) {
+		try (final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path)) {
 			transferBaseAttributes(n5Writer);
 		}
 	}
@@ -305,7 +308,7 @@ public class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & IntegerTyp
 
 	private void saveFullScaleBlock(final List<? extends AbstractAffineModel1D<?>> transformations, final long[][] gridBlock) {
 
-		final N5Writer n5Writer = new N5FSWriter(options.n5Path);
+		final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path);
 		final RandomAccessibleInterval<T> sourceRaw = N5Utils.open(n5Writer, fullScaleInputDataset);
 		final RandomAccessibleInterval<T> filteredSource = applyTransformations(sourceRaw, transformations);
 
