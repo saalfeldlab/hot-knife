@@ -30,14 +30,13 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -679,8 +678,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final int maxStepSize,
 			final boolean multisem ) throws IOException {
 
-		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5FSWriter(n5CostPath);
-		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
+		final N5Reader n5Cost = N5Util.createN5Reader(n5CostPath);
+		final N5Writer n5Field = N5Util.createN5Writer(n5FieldPath);
 
 		@SuppressWarnings("unchecked")
 		final RandomAccessibleInterval<UnsignedByteType> fullCost;
@@ -829,8 +828,8 @@ public class SparkSurfaceFit implements Callable<Void>{
 			final int maxDeltaZTimes,
 			final boolean multiSem ) throws IOException {
 
-		final N5Reader n5Cost = isZarr( n5CostPath ) ? new N5ZarrReader( n5CostPath ) : new N5FSReader(n5CostPath);
-		final N5Writer n5Field = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
+        final N5Reader n5Cost = N5Util.createN5Reader(n5CostPath);
+        final N5Writer n5Field = N5Util.createN5Writer(n5FieldPath);
 
 		final int[] blockSizeOutInt = new int[blockSizeOut.length];
 		Arrays.setAll(blockSizeOutInt, i -> (int)blockSizeOut[i]);
@@ -928,7 +927,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 	public Void callSingle() throws IOException {
 
 		new ImageJ();
-		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
+        final N5Reader n5 = N5Util.createN5Reader(n5Path);
 
 		//final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
 		//final JavaSparkContext sc = new JavaSparkContext(conf);
@@ -996,7 +995,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
 		{
-			final N5Writer n5Writer = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
+            final N5Writer n5Writer = N5Util.createN5Writer(n5FieldPath);
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
@@ -1177,7 +1176,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		if( useVisualization)
 			new ImageJ();
 
-		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
+        final N5Reader n5 = N5Util.createN5Reader(n5Path);
 
 		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
 		final JavaSparkContext sc = new JavaSparkContext(conf);
@@ -1247,7 +1246,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		RandomAccessibleInterval<FloatType> minField;
 		RandomAccessibleInterval<FloatType> maxField;
 		{
-			final N5Writer n5Writer = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
+            final N5Writer n5Writer = N5Util.createN5Writer(n5FieldPath);
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
@@ -1333,7 +1332,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 
 			/* visualization again ... */
 			if( useVisualization ) {
-				final N5FSReader n5Field = new N5FSReader(n5FieldPath);
+                final N5Reader n5Field = N5Util.createN5Reader(n5FieldPath);
 				final String groupName = outGroup + "/s" + s;
 				final String minFieldName = groupName + "/min";
 				final String maxFieldName = groupName + "/max";
@@ -1427,7 +1426,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 									 final long[] blockSize)
 			throws IOException {
 
-		final N5Reader n5 = isZarr( n5Path ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
+        final N5Reader n5 = N5Util.createN5Reader(n5Path);
 
 		/* initialize */
 		double minAvg;
@@ -1440,7 +1439,7 @@ public class SparkSurfaceFit implements Callable<Void>{
 		{
 			System.out.println( "Processing scale: " + firstScaleIndex );
 
-			final N5Writer n5Writer = isZarr( n5FieldPath ) ? new N5ZarrWriter( n5FieldPath ) : new N5FSWriter(n5FieldPath);
+            final N5Writer n5Writer = N5Util.createN5Writer(n5FieldPath);
 
 			final String dataset = inGroup + "/s" + firstScaleIndex;
 			final RandomAccessibleInterval<UnsignedByteType> cost = wrap( N5Utils.openVolatile(n5, dataset) );
