@@ -18,9 +18,6 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
@@ -218,13 +215,13 @@ public class SparkComputeCostMultiSem {
 				s5DatasetName = options.inputDatasetName + "/s5";
 			}
 
-			final Path s5Path = Paths.get(options.n5Path, s5DatasetName);
-			if (Files.exists(s5Path)) {
+			if (n5.datasetExists(s5DatasetName)) {
 				final IterableInterval<UnsignedByteType> lastLayer = getLastLayer(n5, s5DatasetName);
 				outOfBoundsValue = median(lastLayer);
 				System.out.println("Out of bounds value automatically computed to be " + outOfBoundsValue);
 			} else {
-				throw new RuntimeException("Cannot compute out of bounds value automatically because " + s5Path + " does not exist.");
+				throw new RuntimeException("Cannot compute out of bounds value automatically because " + s5DatasetName +
+                                           " does not exist under " + n5Path);
 			}
 
 		} else {
