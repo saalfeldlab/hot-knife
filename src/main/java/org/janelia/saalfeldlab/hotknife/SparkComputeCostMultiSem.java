@@ -55,6 +55,7 @@ import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
+import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -71,6 +72,17 @@ import net.imglib2.view.Views;
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
 public class SparkComputeCostMultiSem {
+
+	// Static initializer to configure logging before anything else
+	static {
+		org.apache.log4j.Logger.getRootLogger().setLevel(org.apache.log4j.Level.ERROR);
+		org.apache.log4j.Logger.getLogger("org").setLevel(org.apache.log4j.Level.ERROR);
+		org.apache.log4j.Logger.getLogger("akka").setLevel(org.apache.log4j.Level.ERROR);
+		org.apache.log4j.Logger.getLogger("org.sparkproject").setLevel(org.apache.log4j.Level.ERROR);
+		org.apache.log4j.Logger.getLogger("org.apache.spark").setLevel(org.apache.log4j.Level.ERROR);
+		org.apache.log4j.Logger.getLogger("org.apache.hadoop").setLevel(org.apache.log4j.Level.ERROR);
+		org.apache.log4j.Logger.getLogger("org.eclipse.jetty").setLevel(org.apache.log4j.Level.ERROR);
+	}
 
 	final static public String ownerFormat = "%s/owner/%s";
 	final static public String stackListFormat = ownerFormat + "/stacks";
@@ -158,6 +170,15 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--localSparkBindAddress", usage = "specify Spark bind address as localhost")
 		private boolean localSparkBindAddress = false;
 
+		@Option(name = "--debugMode", usage = "enable debug mode to process only specific blocks")
+		private boolean debugMode = false;
+
+		@Option(name = "--debugBlockX", usage = "X coordinate of block to process in debug mode (e.g., 53)")
+		private Long debugBlockX = null;
+
+		@Option(name = "--debugBlockY", usage = "Y coordinate of block to process in debug mode (e.g., 34)")
+		private Long debugBlockY = null;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -203,7 +224,15 @@ public class SparkComputeCostMultiSem {
 		System.out.println("surfaceBlockSize: " + Util.printCoordinates(surfaceBlockSize) );
 		
 		final N5Reader n5 = N5Util.createN5Reader(n5Path);
-		final N5Writer n5w = N5Util.createN5Writer(costN5Path);
+
+		// Skip N5Writer creation in debug mode
+		final N5Writer n5w;
+		if (options.debugMode) {
+			System.out.println("Debug mode: Skipping N5Writer creation for output");
+			n5w = null;
+		} else {
+			n5w = N5Util.createN5Writer(costN5Path);
+		}
 
 		final int outOfBoundsValue;
 		if (options.outOfBoundsValue == null) {
@@ -250,28 +279,40 @@ public class SparkComputeCostMultiSem {
 		System.out.println( "costSteps: " + Util.printCoordinates( costSteps ) );
 		System.out.println( "costSize: " + Util.printCoordinates( costSize ) );
 
-		n5w.createDataset(
-        		costDataset,
-        		costSize,
-        		costBlockSize,
-        		DataType.UINT8,
-        		new GzipCompression());
-		n5w.setAttribute(costDataset, "downsamplingFactors", costSteps);
+		// Skip dataset creation in debug mode
+		if (!options.debugMode) {
+			n5w.createDataset(
+					costDataset,
+					costSize,
+					costBlockSize,
+					DataType.UINT8,
+					new GzipCompression());
+			n5w.setAttribute(costDataset, "downsamplingFactors", costSteps);
+		}
 		final ArrayList<Long[]> gridCoords = new ArrayList<>();
 
 		// for multisem grid along xy
 		int gridXSize = (int)Math.ceil(costSize[0] / (float)costBlockSize[0]);
 		int gridYSize = (int)Math.ceil(costSize[1] / (float)costBlockSize[1]);
 
-		//new ImageJ();
-		//for (long x = 53; x <= 53; x++) {
-		//	for (long y = 34; y <= 34; y++) {
-
-		for (long x = 0; x < gridXSize; x++) {
-			//System.out.println( "x: " + x + ": " + getZcorrInterval(x, 0l, zcorrSize, zcorrBlockSize, costSteps).min( 0 ) );
-			for (long y = 0; y < gridYSize; y++) {
-				//if ( x == 53 ) System.out.println( "y: " + y + ": " + getZcorrInterval(x, y, zcorrSize, zcorrBlockSize, costSteps).min( 1 ));
-				gridCoords.add(new Long[]{x, y});
+		// Debug mode: process only specific blocks
+		if (options.debugMode) {
+			System.out.println("Debug mode: === DEBUG MODE ENABLED ===");
+			if (options.debugBlockX != null && options.debugBlockY != null) {
+				System.out.println("Debug mode: Processing single block: [" + options.debugBlockX + ", " + options.debugBlockY + "]");
+				gridCoords.add(new Long[]{options.debugBlockX, options.debugBlockY});
+			} else {
+				// Default: process just the middle block
+				long midX = gridXSize / 2;
+				long midY = gridYSize / 2;
+				System.out.println("Debug mode: No specific debug blocks specified, processing middle block: [" + midX + ", " + midY + "]");
+				gridCoords.add(new Long[]{midX, midY});
+			}
+		} else {
+			for (long x = 0; x < gridXSize; x++) {
+				for (long y = 0; y < gridYSize; y++) {
+					gridCoords.add(new Long[]{x, y});
+				}
 			}
 		}
 
@@ -305,6 +346,13 @@ public class SparkComputeCostMultiSem {
 
 		final boolean filter = options.median;
 		final boolean gauss = options.smoothCost;
+		final boolean debugMode = options.debugMode;
+
+		// Initialize ImageJ if in debug mode
+		if (options.debugMode) {
+			System.out.println("Debug mode: Initializing ImageJ for visualization...");
+			new ij.ImageJ();
+		}
 
 		rddSlices.foreachPartition( gridCoordPartition -> {
 			//gridCoords.forEach(gridCoord -> {
@@ -313,13 +361,19 @@ public class SparkComputeCostMultiSem {
 			ExecutorService executorService =  Executors.newFixedThreadPool(1 );
 			//ExecutorService executorService =  Executors.newCachedThreadPool();
 
-			gridCoordPartition.forEachRemaining(gridCoord -> processColumn(n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService));
+			gridCoordPartition.forEachRemaining(gridCoord -> processColumn(n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, debugMode, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService));
 
 			executorService.shutdown();
 
 		    });
 
 		// done with cost
+
+		if (options.debugMode) {
+			System.out.println("Debug mode: Skipping downsampling and surface fitting");
+			SimpleMultiThreading.threadHaltUnClean();
+			return;
+		}
 
 		final N5PathSupplier n5PathSupplier = new N5PathSupplier(costN5Path);
 		for (int i = 1; i < options.costStepsStrings.length; i++) {
@@ -390,6 +444,7 @@ public class SparkComputeCostMultiSem {
 			String maskDataset,
 			final boolean filter,
 			final boolean gauss,
+			final boolean debugMode,
 			int[] costBlockSize,
 			int[] zcorrBlockSize,
 			long[] zcorrSize,
@@ -401,13 +456,20 @@ public class SparkComputeCostMultiSem {
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService);
+				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService);
 
-		//ImageJFunctions.show( cost );
-		//SimpleMultiThreading.threadHaltUnClean();
+		if (debugMode) {
+			net.imglib2.img.display.imagej.ImageJFunctions.show( cost, "Cost Block [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+		}
 
 		System.out.println( "cost: " + Util.printInterval( cost ));
-		
+
+		// Skip writing in debug mode
+		if (debugMode) {
+			System.out.println("Debug mode: Skipping N5 write operations");
+			return;
+		}
+
 		System.out.println("Writing blocks");
 
         // TODO: wrong dimensions
@@ -463,6 +525,7 @@ public class SparkComputeCostMultiSem {
 			String maskDataset,
 			final boolean filter,
 			final boolean gauss,
+			final boolean debugMode,
 			int[] zcorrBlockSize,
 			long[] zcorrSize,
 			int[] costSteps,
@@ -496,12 +559,14 @@ public class SparkComputeCostMultiSem {
 
 		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue(zcorrRaw, outOfBoundsValue);
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
-		//final RandomAccessibleInterval<UnsignedByteType> zcorr = Views.interval( zcorrExtended, zcorrInterval );
 
-		//ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ) ).setTitle( "input" );
-		//if ( maskRaw != null)
-		//	ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ) ).setTitle( "mask" );
-		//SimpleMultiThreading.threadHaltUnClean();
+		if (debugMode) {
+			System.out.println("Debug mode: Displaying input data...");
+			net.imglib2.img.display.imagej.ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ), "Input [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+			if ( maskRaw != null) {
+				net.imglib2.img.display.imagej.ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ), "Mask [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+			}
+		}
 
 		// compute derivative in z and keep only negative values
 		// we set the outofbounds to "outsideValue" above, which is about the resin color in case the sample touches the image boundary
@@ -636,23 +701,30 @@ public class SparkComputeCostMultiSem {
 			}
 		}
 
-		//ImageJFunctions.show( Views.subsample( Views.zeroMin( Views.interval( zcorrExtended, zcorrInterval ) ), costSteps[ 0 ], costSteps[ 1 ], costSteps[ 2 ] ) );
-		//ImageJFunctions.show( derivative ).setTitle( "derivative");
-
-		//return derivative;
+		if (debugMode) {
+			System.out.println("Debug mode: Displaying derivative...");
+			net.imglib2.img.display.imagej.ImageJFunctions.show( derivative, "Derivative [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+		}
 
 		// derivative typically between 105-255, scale it (2.5 brings it back to 105 after gauss of {0,0,1})
 		final RandomAccessibleInterval<DoubleType> derivativeConvert = Converters.convertRAI( derivative, (i,o) -> o.setReal(255.0-((255.0-i.getRealDouble())*4)), new DoubleType() );
 
-		//ImagePlus imp = ImageJFunctions.show( derivativeConvert );
-		//imp.setDisplayRange( 0, 255 );
-		//imp.setTitle( "derivativeConvert" );
-		//SimpleMultiThreading.threadHaltUnClean();
+		if (debugMode) {
+			System.out.println("Debug mode: Displaying derivative converted...");
+			ij.ImagePlus imp = net.imglib2.img.display.imagej.ImageJFunctions.show( derivativeConvert, "Derivative Converted [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+			imp.setDisplayRange( 0, 255 );
+		}
 
 		if ( gauss )
 		{
 			final RandomAccessibleInterval<DoubleType> derivativeSmooth = ArrayImgs.doubles( dim );
 			Gauss3.gauss( new double[] {0,0,1 }, Views.extendValue( derivativeConvert, 255 ), derivativeSmooth );
+
+			if (debugMode) {
+				System.out.println("Debug mode: Displaying derivative smoothed...");
+				ij.ImagePlus imp = net.imglib2.img.display.imagej.ImageJFunctions.show( derivativeSmooth, "Derivative Smoothed [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+				imp.setDisplayRange( 0, 255 );
+			}
 
 			return Converters.convertRAI(derivativeSmooth, (i, o) -> o.set((int) Math.round(Math.max(0, Math.min(255.0, i.get())))), new UnsignedByteType());
 		}
@@ -899,6 +971,8 @@ public class SparkComputeCostMultiSem {
 
 		if (!options.parsedSuccessfully)
 			return;
+
+		System.out.println( "DEBUGMODE: " + options.debugMode );
 
 		final SparkConf conf = new SparkConf().setAppName("SparkComputeCostMultiSem");
 		if (options.localSparkBindAddress) {
