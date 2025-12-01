@@ -284,6 +284,7 @@ public class SparkComputeCostMultiSem {
 		System.out.println( "zcorrSize: " + Util.printCoordinates( zcorrSize ) );
 		System.out.println( "costSteps: " + Util.printCoordinates( costSteps ) );
 		System.out.println( "costSize: " + Util.printCoordinates( costSize ) );
+        System.out.println( "surfaceMaxDeltaZ: " + options.getSurfaceMaxDeltaZ( zcorrSize ) );
 
 		// Skip dataset creation in debug mode
 		if (!options.debugMode) {
