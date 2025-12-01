@@ -158,7 +158,7 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--surfaceMinDistance", usage = "minimum distance between the both surfaces, e.g. 15")
 		private double surfaceMinDistance = 15;
 
-		@Option(name = "--surfaceMaxDistance", usage = "maximum distance between the both surfaces, e.g. 30")
+		@Option(name = "--surfaceMaxDistance", usage = "maximum distance between the both surfaces, e.g. 30 (specify a negative value to set relative to dataset size, e.g. -4)")
 		private double surfaceMaxDistance = 30;
 
 		@Option(name = "--surfaceBlockSize", usage = "surface block size in pixels, e.g. 128,128")
@@ -202,6 +202,11 @@ public class SparkComputeCostMultiSem {
 		public int[] getCostSteps(final int index) {
 			return costSteps[index];
 		}
+
+        /** @return surfaceMaxDistance if surfaceMaxDistance >= 0 else inputDatasetDimensions[2] + surfaceMaxDistance */
+        public double getSurfaceMaxDeltaZ(final long[] inputDatasetDimensions) {
+            return surfaceMaxDistance < 0 ? inputDatasetDimensions[2] + surfaceMaxDistance : surfaceMaxDistance;
+        }
 	}
 
 	public static void computeCost(
@@ -400,7 +405,7 @@ public class SparkComputeCostMultiSem {
 																  options.surfaceInitMaxDeltaZ,
 																  options.finalMaxDeltaZ, // finaldeltaZ
 																  options.surfaceMinDistance,
-																  options.surfaceMaxDistance,
+                                                                  options.getSurfaceMaxDeltaZ(zcorrSize),
 																  true, // no need to permute with multi-sem
 																  false);
 			sparkSurfaceFit.callWithSparkContext(sparkContext,
