@@ -55,6 +55,7 @@ import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.array.ByteArray;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
@@ -459,7 +460,7 @@ public class SparkComputeCostMultiSem {
 				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService);
 
 		if (debugMode) {
-			net.imglib2.img.display.imagej.ImageJFunctions.show( cost, "Cost Block [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+			ImageJFunctions.show( cost, "Cost Block [" + gridCoord[0] + "," + gridCoord[1] + "]" );
 		}
 
 		System.out.println( "cost: " + Util.printInterval( cost ));
@@ -533,7 +534,7 @@ public class SparkComputeCostMultiSem {
 			int outOfBoundsValue,
 			ExecutorService executorService ) {
 
-		final RandomAccessibleInterval<UnsignedByteType> zcorrRaw;
+		RandomAccessibleInterval<UnsignedByteType> zcorrRaw;
 		final RandomAccessibleInterval<UnsignedByteType> maskRaw;
 		final RandomAccessible<UnsignedByteType> maskExtended;
 
@@ -557,14 +558,16 @@ public class SparkComputeCostMultiSem {
         // The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
 		// zcorr = Views.permute(zcorr, costAxis, 2);
 
+        zcorrRaw = Converters.convertRAI( zcorrRaw, (i,o) -> {o.set( 255-i.get());}, new UnsignedByteType() );
+        
 		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue(zcorrRaw, outOfBoundsValue);
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 
 		if (debugMode) {
 			System.out.println("Debug mode: Displaying input data...");
-			net.imglib2.img.display.imagej.ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ), "Input [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+			ImageJFunctions.show( Views.interval( zcorrExtended, zcorrInterval ), "Input [" + gridCoord[0] + "," + gridCoord[1] + "]" );
 			if ( maskRaw != null) {
-				net.imglib2.img.display.imagej.ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ), "Mask [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+				ImageJFunctions.show( Views.interval( maskRaw, zcorrInterval ), "Mask [" + gridCoord[0] + "," + gridCoord[1] + "]" );
 			}
 		}
 
@@ -703,7 +706,7 @@ public class SparkComputeCostMultiSem {
 
 		if (debugMode) {
 			System.out.println("Debug mode: Displaying derivative...");
-			net.imglib2.img.display.imagej.ImageJFunctions.show( derivative, "Derivative [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+			ImageJFunctions.show( derivative, "Derivative [" + gridCoord[0] + "," + gridCoord[1] + "]" );
 		}
 
 		// derivative typically between 105-255, scale it (2.5 brings it back to 105 after gauss of {0,0,1})
@@ -711,7 +714,7 @@ public class SparkComputeCostMultiSem {
 
 		if (debugMode) {
 			System.out.println("Debug mode: Displaying derivative converted...");
-			ij.ImagePlus imp = net.imglib2.img.display.imagej.ImageJFunctions.show( derivativeConvert, "Derivative Converted [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+			ij.ImagePlus imp = ImageJFunctions.show( derivativeConvert, "Derivative Converted [" + gridCoord[0] + "," + gridCoord[1] + "]" );
 			imp.setDisplayRange( 0, 255 );
 		}
 
@@ -722,7 +725,7 @@ public class SparkComputeCostMultiSem {
 
 			if (debugMode) {
 				System.out.println("Debug mode: Displaying derivative smoothed...");
-				ij.ImagePlus imp = net.imglib2.img.display.imagej.ImageJFunctions.show( derivativeSmooth, "Derivative Smoothed [" + gridCoord[0] + "," + gridCoord[1] + "]" );
+				ij.ImagePlus imp = ImageJFunctions.show( derivativeSmooth, "Derivative Smoothed [" + gridCoord[0] + "," + gridCoord[1] + "]" );
 				imp.setDisplayRange( 0, 255 );
 			}
 
