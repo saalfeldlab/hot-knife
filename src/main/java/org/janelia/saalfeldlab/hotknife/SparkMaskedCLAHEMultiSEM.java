@@ -1,15 +1,22 @@
 package org.janelia.saalfeldlab.hotknife;
 
+import ij.ImagePlus;
+import ij.process.ByteProcessor;
+import ij.process.FloatProcessor;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import mpicbg.ij.clahe.Flat;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -17,16 +24,10 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.universe.N5Factory;
-import org.janelia.saalfeldlab.n5.universe.N5Factory.StorageFormat;
 import org.janelia.scicomp.n5.zstandard.ZstandardCompression;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.ImagePlus;
-import ij.process.ByteProcessor;
-import ij.process.FloatProcessor;
-import mpicbg.ij.clahe.Flat;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
@@ -64,7 +65,6 @@ public class SparkMaskedCLAHEMultiSEM
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--n5FieldMax",
-				required = false,
 				usage = "Input N5 dataset, e.g. /heightfields/slab-01/max")
 		private String n5FieldMax = null;
 
@@ -106,30 +106,34 @@ public class SparkMaskedCLAHEMultiSEM
 			final int blockFactorZ,
 			final boolean overwrite ) throws IOException
 	{
-		final N5Reader n5Input = new N5Factory().openReader( StorageFormat.N5, n5PathInput );//new N5FSReader(n5PathInput);
+		final N5Reader n5Input = N5Util.createN5Reader(n5PathInput);
+        final String inputAttrPath = Util.getAttributesJsonPath(n5PathInput, n5DatasetInput);
 
-		final DatasetAttributes attributes = n5Input.getDatasetAttributes(n5DatasetInput);
-		final int[] blockSize = attributes.getBlockSize();
-		final long[] dimensions = attributes.getDimensions();
+        System.out.println("loading blockSize and dimensions from " + inputAttrPath);
+		final int[] blockSize = Util.readRequiredAttribute(n5Input, n5DatasetInput, "blockSize", int[].class);
+		final long[] dimensions = Util.readRequiredAttribute(n5Input, n5DatasetInput, "dimensions", long[].class);
+
 		final int[] gridBlockSize = new int[]{ blockSize[0] * blockFactorXY, blockSize[1] * blockFactorXY, blockSize[2] * blockFactorZ };
 
 		final double[] maxFactors;
-		
 		if ( n5FieldMax == null )
 		{
 			maxFactors = null;
 		}
 		else
 		{
+            final String n5FieldMaxParent = n5FieldMax.substring(0, n5FieldMax.lastIndexOf('/'));
+            final String fieldMaxParentAttrPath = Util.getAttributesJsonPath(n5PathInput, n5FieldMaxParent);
 			final String factorsKey = "downsamplingFactors";
-			maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMax, factorsKey, double[].class);
-	
-			System.out.println("loaded " + factorsKey + " " + Arrays.toString(maxFactors) + " from " + n5FieldMax);
+
+            System.out.println("loading " + factorsKey + " from " + fieldMaxParentAttrPath);
+			maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMaxParent, factorsKey, double[].class);
+			System.out.println("loaded " + factorsKey + " " + Arrays.toString(maxFactors) + " from " + fieldMaxParentAttrPath);
 		}
 
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
-		final N5Writer n5Output = new N5Factory().openWriter( StorageFormat.N5, n5PathInput );//new N5FSWriter(n5PathInput);
+		final N5Writer n5Output = N5Util.createN5Writer(n5PathInput);
 
 		if (n5Output.exists(n5DatasetOutput))
 		{
@@ -164,8 +168,7 @@ public class SparkMaskedCLAHEMultiSEM
 						return;
 					*/
 
-					final N5Writer workerWriter = new N5Factory().openWriter( StorageFormat.N5, n5PathInput );//new N5FSWriter(n5PathInput);
-
+                    final N5Writer workerWriter = N5Util.createN5Writer(n5PathInput);
 					final int minIntensity = 0;
 					final int maxIntensity = 255;
 
@@ -176,7 +179,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 					System.out.println( net.imglib2.util.Util.printInterval( gridBlockInterval ) );
 
-					final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, n5PathInput );//new N5FSReader(n5PathInput);
+					final N5Reader n5 = N5Util.createN5Reader(n5PathInput);
 					
 					final RealRandomAccessible< DoubleType > maxFieldScaled;
 
@@ -185,7 +188,7 @@ public class SparkMaskedCLAHEMultiSEM
 						maxFieldScaled = new FunctionRealRandomAccessible<>(
 								2,
 								(i,o) -> o.set( 52 ),
-								() -> new DoubleType() );
+                                DoubleType::new);
 					}
 					else
 					{
@@ -211,7 +214,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 					final Interval intervalEx = new FinalInterval(min, max);
 
-					// 2d mask that will re-used for each z layer
+					// 2d mask that will be reused for each z layer
 					final byte[] bArray = new byte[ (int)intervalEx.dimension( 0 ) * (int)intervalEx.dimension( 1 ) ];
 					final ByteProcessor bp = new ByteProcessor( (int)intervalEx.dimension( 0 ), (int)intervalEx.dimension( 1 ), bArray );
 					final RandomAccessibleInterval<UnsignedByteType> maskImg =
@@ -274,17 +277,13 @@ public class SparkMaskedCLAHEMultiSEM
 							//System.out.println( "no mask");
 							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, null, false);
 						}
-						else if ( all0 )
-						{
-							// do nothing
-							//System.out.println( "nothing");
-						}
-						else
+						else if ( ! all0 )
 						{
 							//System.out.println( "with mask");
 							Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 7f, bp, false);
 							//Flat.getInstance().run(new ImagePlus("", fp), blockRadius, 256, 10f, bp, false);
-						}
+
+						} // else all0: do nothing
 
 						// copy result into the final img for saving
 						final RandomAccessibleInterval<UnsignedByteType> resultSlice = Views.hyperSlice( result, 2, z );
