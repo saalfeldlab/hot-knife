@@ -51,21 +51,21 @@ public class SparkMaskedCLAHEMultiSEM
 
 		@Option(name = "--n5PathInput",
 				required = true,
-				usage = "Input N5 path, e.g. /nrs/hess/data/hess_wafer_53/export/hess_wafer_53b.n5")
+				usage = "Input N5 path, e.g. gs://janelia-spark-test/hess_wafers_60_61_export")
 		private String n5PathInput = null;
 
 		@Option(name = "--n5DatasetInput",
 				required = true,
-				usage = "Input N5 dataset, e.g. /flat/s075_m119/top4/face")
+				usage = "Input N5 dataset, e.g. /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s0")
 		private String n5DatasetInput = null;
 
 		@Option(name = "--n5DatasetOutput",
 				required = true,
-				usage = "Output N5 dataset, e.g. /flat/s075_m119/top4/face_local")
+				usage = "Output N5 dataset, e.g. /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer_clahe/s0")
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--n5FieldMax",
-				usage = "Input N5 dataset, e.g. /heightfields/slab-01/max")
+				usage = "Input N5 dataset, e.g. /heightfields_v3/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max")
 		private String n5FieldMax = null;
 
 		@Option(name = "--blockFactorXY",
@@ -77,7 +77,7 @@ public class SparkMaskedCLAHEMultiSEM
 		private int blockFactorZ = 1;
 
 		@Option(name = "--invert",
-				usage = "Invert before saving to N5, e.g. for MultiSEM")
+				usage = "Invert before saving to N5, e.g. for old MultiSEM")
 		private boolean invert = false;
 
 		@Option(name = "--overwrite",
@@ -124,11 +124,8 @@ public class SparkMaskedCLAHEMultiSEM
 		{
             final String n5FieldMaxParent = n5FieldMax.substring(0, n5FieldMax.lastIndexOf('/'));
             final String fieldMaxParentAttrPath = Util.getAttributesJsonPath(n5PathInput, n5FieldMaxParent);
-			final String factorsKey = "downsamplingFactors";
-
-            System.out.println("loading " + factorsKey + " from " + fieldMaxParentAttrPath);
-			maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMaxParent, factorsKey, double[].class);
-			System.out.println("loaded " + factorsKey + " " + Arrays.toString(maxFactors) + " from " + fieldMaxParentAttrPath);
+			maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMaxParent, FACTORS_KEY, double[].class);
+			System.out.println("loaded " + FACTORS_KEY + " " + Arrays.toString(maxFactors) + " from " + fieldMaxParentAttrPath);
 		}
 
 		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
@@ -345,4 +342,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 		sparkContext.close();
 	}
+
+    public static final String FACTORS_KEY = "downsamplingFactors";
+
 }
