@@ -324,5 +324,7 @@ SparkExportAlignedSlabSeries \
 - **Key features**:
   - `--debugMode`: Process single block, no N5 writing, automatic ImageJ visualization
   - `--debugBlockX/Y`: Specify block coordinates (defaults to center block)
+  - `--topLayerCost/--bottomLayerCost`: Independent control of boundary costs (replaces `--outOfBoundsValue`)
+  - Image inversion and border extension for improved boundary handling
   - All debug output prefixed with "Debug mode:"
 - **See**: DEBUG_COST_MULTISEM.md for complete usage guide
