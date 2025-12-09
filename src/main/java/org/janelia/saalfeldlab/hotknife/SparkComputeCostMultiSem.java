@@ -74,17 +74,6 @@ import net.imglib2.view.Views;
  */
 public class SparkComputeCostMultiSem {
 
-	// Static initializer to configure logging before anything else
-	static {
-		org.apache.log4j.Logger.getRootLogger().setLevel(org.apache.log4j.Level.ERROR);
-		org.apache.log4j.Logger.getLogger("org").setLevel(org.apache.log4j.Level.ERROR);
-		org.apache.log4j.Logger.getLogger("akka").setLevel(org.apache.log4j.Level.ERROR);
-		org.apache.log4j.Logger.getLogger("org.sparkproject").setLevel(org.apache.log4j.Level.ERROR);
-		org.apache.log4j.Logger.getLogger("org.apache.spark").setLevel(org.apache.log4j.Level.ERROR);
-		org.apache.log4j.Logger.getLogger("org.apache.hadoop").setLevel(org.apache.log4j.Level.ERROR);
-		org.apache.log4j.Logger.getLogger("org.eclipse.jetty").setLevel(org.apache.log4j.Level.ERROR);
-	}
-
 	final static public String ownerFormat = "%s/owner/%s";
 	final static public String stackListFormat = ownerFormat + "/stacks";
 	final static public String stackFormat = ownerFormat + "/project/%s/stack/%s";
@@ -128,8 +117,14 @@ public class SparkComputeCostMultiSem {
 
 		private int[][] costSteps;
 
-		@Option(name = "--outOfBoundsValue", usage = "value to use for out-of-bounds pixels (if not given, estimate from data)")
-		private Integer outOfBoundsValue = null;
+		//@Option(name = "--outOfBoundsValue", usage = "value to use for out-of-bounds pixels (if not given, estimate from data)")
+		//private Integer outOfBoundsValue = null;
+
+		@Option(name = "--topLayerCost", usage = "value to use for top cost layer (default: 105)")
+		private Integer topLayerCost = 105;
+
+		@Option(name = "--bottomLayerCost", usage = "value to use for top cost layer (default: 230)")
+		private Integer bottomLayerCost = 230;
 
 		@Option(name = "--median", usage = "uses median (r=3 in z) before cost computation")
 		private boolean median = false;
@@ -240,6 +235,7 @@ public class SparkComputeCostMultiSem {
 			n5w = N5Util.createN5Writer(costN5Path);
 		}
 
+		/*
 		final int outOfBoundsValue;
 		if (options.outOfBoundsValue == null) {
 
@@ -262,6 +258,10 @@ public class SparkComputeCostMultiSem {
 		} else {
 			outOfBoundsValue = options.outOfBoundsValue;
 		}
+
+		System.out.println( "outOfBoundsValue=" + outOfBoundsValue );
+		System.exit( 0 );
+		*/
 
 		int[] zcorrBlockSize = n5.getAttribute(zcorrDataset, "blockSize", int[].class);
 		long[] zcorrSize = n5.getAttribute(zcorrDataset, "dimensions", long[].class);
@@ -355,6 +355,9 @@ public class SparkComputeCostMultiSem {
 		final boolean gauss = options.smoothCost;
 		final boolean debugMode = options.debugMode;
 
+		final int topLayerCost = options.topLayerCost;
+		final int  bottomLayerCost = options.bottomLayerCost;
+
 		// Initialize ImageJ if in debug mode
 		if (options.debugMode) {
 			System.out.println("Debug mode: Initializing ImageJ for visualization...");
@@ -368,7 +371,9 @@ public class SparkComputeCostMultiSem {
 			ExecutorService executorService =  Executors.newFixedThreadPool(1 );
 			//ExecutorService executorService =  Executors.newCachedThreadPool();
 
-			gridCoordPartition.forEachRemaining(gridCoord -> processColumn(n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, debugMode, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService));
+			gridCoordPartition.forEachRemaining( gridCoord ->
+				processColumn(
+						n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, debugMode, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, executorService));
 
 			executorService.shutdown();
 
@@ -457,13 +462,15 @@ public class SparkComputeCostMultiSem {
 			long[] zcorrSize,
 			int[] costSteps,
 			Long[] gridCoord,
-			int outOfBoundsValue,
+			//int outOfBoundsValue,
+			int topLayerCost,
+			int bottomLayerCost,
 			ExecutorService executorService )
 	{
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, outOfBoundsValue, executorService);
+				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, executorService);
 
 		if (debugMode) {
 			ImageJFunctions.show( cost, "Cost Block [" + gridCoord[0] + "," + gridCoord[1] + "]" );
@@ -537,7 +544,9 @@ public class SparkComputeCostMultiSem {
 			long[] zcorrSize,
 			int[] costSteps,
 			Long[] gridCoord,
-			int outOfBoundsValue,
+			//int outOfBoundsValue,
+			int topLayerCost,
+			int bottomLayerCost,
 			ExecutorService executorService ) {
 
 		RandomAccessibleInterval<UnsignedByteType> zcorrRaw;
@@ -566,7 +575,7 @@ public class SparkComputeCostMultiSem {
 
         zcorrRaw = Converters.convertRAI( zcorrRaw, (i,o) -> {o.set( 255-i.get());}, new UnsignedByteType() );
         
-		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendValue(zcorrRaw, outOfBoundsValue);
+		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendBorder( zcorrRaw );//Views.extendValue(zcorrRaw, outOfBoundsValue);
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
 
 		if (debugMode) {
@@ -653,7 +662,7 @@ public class SparkComputeCostMultiSem {
 			if ( m.get().get() == 0 )
 			{
 				if ( pos[ 2 ] == zcorrInterval.min( 2 ) || pos[ 2 ] == zcorrInterval.max( 2 ) )
-					v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
+					v.set( topLayerCost );//v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
 				else
 					v.set( 255 );
 			}
@@ -662,7 +671,12 @@ public class SparkComputeCostMultiSem {
 				if ( pos[ 2 ] == zcorrInterval.min( 2 ) )
 				{
 					// the second surface on top we just fake for now (outsideValue all)
-					v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
+					v.set( topLayerCost );//v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
+				}
+				else if ( pos[ 2 ] == zcorrInterval.max( 2 ) )
+				{
+					// the second surface on top we just fake for now (outsideValue all)
+					v.set( bottomLayerCost );//v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
 				}
 				else if ( filter )
 				{
