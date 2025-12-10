@@ -76,6 +76,7 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - **ViewAlignedSlabSeries**: Manual tuning of slab spacing
 - **ViewN5**: General N5 dataset viewer
 - **ViewFlattenedSlab**: Visualize flattened volumes
+- **PaintHeightField**: Interactive height field editor (see below)
 
 ### Image Processing
 - **SparkNormalizeLayerIntensityN5**: Layer-wise intensity normalization
@@ -317,6 +318,93 @@ SparkExportAlignedSlabSeries \
 6. **Format agnostic**: N5Util abstraction supports both N5 and ZARR formats transparently
 
 7. **Grid-based parallelization**: Spatial decomposition enables efficient distributed processing with Spark
+
+## Interactive Height Field Editing with PaintHeightField
+
+### Overview
+**PaintHeightField** is a BigDataViewer-based interactive tool for manually correcting and refining height fields produced by automated surface detection (SparkSurfaceFit). Essential for quality control before final volume assembly.
+
+**Location**: `org.janelia.saalfeldlab.hotknife.tools.PaintHeightField`
+
+### What It Does
+- Loads multi-scale N5 raw images and 2D height field arrays
+- Uses **HeightFieldTransform** to flatten curved tissue slabs in real-time
+- Provides brush-based editing to manually correct surface detection errors
+- Displays gradients to identify discontinuities and artifacts
+
+### Key Capabilities
+
+**1. Real-Time Flattening**
+```java
+// Transform: z_flat = z_curved - heightField(x,y) + offset
+```
+- Inverse transform applied for display (samples from curved raw data)
+- Updates immediately as you edit height fields
+- `offset` parameter positions target surface at z=0
+
+**2. Interactive Editing Tools**
+- **Push/Pull** (SPACE + mouse): Adjust height values ±0.1 × magnitude
+- **Smooth** (Q + mouse): Gaussian smoothing with adjustable radius/sigma
+- **Weighted Smooth** (W + mouse): Gradient-weighted smoothing (preserves edges)
+- All tools use Gaussian brush masks for smooth modifications
+
+**3. Visual Feedback**
+- Flattened raw data view (multi-scale mipmaps)
+- Current gradient (green) - updates with edits to show current quality
+- Input gradient (red) - reference showing original issues
+- Brush overlays indicate editing region and tool type
+
+### Usage
+
+**Command Line:**
+```bash
+java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
+  --n5Path=gs://bucket/dataset.n5 \
+  --n5Raw=/raw/s0 \
+  --n5Field=/heightfields/s1/min \
+  --n5FieldOutput=/heightfields_fixed/s1/min \
+  --scale=4,4,4 \
+  --offset=3 \
+  --multiSem
+```
+
+**Key Parameters:**
+- `--n5Path`: N5 container with raw data (supports gs:// for Google Cloud)
+- `--n5Raw`: Raw image dataset path (e.g., `/raw/s0`)
+- `--n5Field`: Input height field to edit (e.g., `/heightfields/s1/min`)
+- `--n5FieldOutput`: Where to save edited height field (can overwrite input)
+- `--scale`: Downsampling factors [x,y,z] matching height field resolution
+- `--offset`: Z offset for target surface positioning (typically 3-10)
+- `--multiSem`: Flag for Multi-SEM data (no axis permutation)
+- `--heightfieldOffset`: Optional [x,y,z] correction for DL-predicted height fields
+
+**Keyboard Shortcuts:**
+- **Ctrl+S**: Save edited height field to N5
+- **Ctrl+U**: Undo (reload from disk)
+- **Ctrl+C**: Go to z=0 surface
+- **Ctrl+0**: Toggle z=0 line overlay
+- **Ctrl+F/D/R/V**: Navigate (right/left/up/down)
+- **SPACE + scroll**: Adjust push/pull brush radius
+- **Q + scroll**: Adjust smooth brush radius
+- **Shift+Q + scroll**: Adjust smoothing sigma
+- **W + scroll**: Adjust weighted smooth brush radius
+
+### Workflow Integration
+
+**Typical Pipeline:**
+1. **SparkComputeCostMultiSem** → Compute cost function
+2. **SparkSurfaceFit** → Detect surfaces → Output height fields (`min` and `max`)
+3. **PaintHeightField** → Manually correct height field errors
+4. **SparkExportFlattenedVolume** → Use corrected height fields to flatten slabs
+5. **SparkPairAlignSIFT** / **SparkExportAlignedSlabSeries** → Final assembly
+
+**When to Use:**
+- Automated surface detection has artifacts or discontinuities
+- High gradient regions in the height field gradient view
+- Visual inspection shows misaligned surfaces in flattened view
+- Before committing to expensive downstream processing
+
+**Note:** Height fields are typically stored at s1 resolution (downsampled 6x6x1 or 4x4x4). Process both `min` (top surface) and `max` (bottom surface) separately.
 
 ## Current Branch: cloud-cost-debug
 - **Based on**: cloud branch
