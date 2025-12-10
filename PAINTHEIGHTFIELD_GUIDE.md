@@ -76,14 +76,17 @@ If both raw data and height fields are in the same N5 container:
 ```bash
 java -Xmx16G -cp /path/to/hot-knife-0.0.7-SNAPSHOT.jar \
   org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
-  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export/[DATASET].n5" \
-  --n5Raw="/raw/w61_s079_r00_gc_par_align_ic2d___norm-layer" \
+  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5FieldPath="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5Raw="/render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer" \
   --n5Field="/heightfields_b240/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
   --n5FieldOutput="/heightfields_b240_fixed/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
   --scale=2,2,1 \
   --offset=0 \
   --multiSem
 ```
+
+**Note:** If raw data and height fields are in the same N5 container, `--n5FieldPath` can be omitted (it defaults to `--n5Path`).
 
 ### Template 2: Separate Containers
 ```bash
@@ -103,8 +106,9 @@ java -Xmx16G -cp /path/to/hot-knife-0.0.7-SNAPSHOT.jar \
 ```bash
 java -Xmx16G -cp /path/to/hot-knife-0.0.7-SNAPSHOT.jar \
   org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
-  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export/[DATASET].n5" \
-  --n5Raw="/raw/w61_s079_r00_gc_par_align_ic2d___norm-layer" \
+  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5FieldPath="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5Raw="/render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer" \
   --n5Field="/heightfields_b240/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
   --n5FieldOutput="/heightfields_b240_fixed/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
   --scale=4,4,4 \
@@ -193,10 +197,11 @@ Start with a simple test to verify paths are correct:
 # Test 1: Just open the height field (no output)
 java -Xmx8G -cp /path/to/hot-knife.jar \
   org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
-  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export/[DATASET].n5" \
-  --n5Raw="/[RAW_PATH]" \
+  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5FieldPath="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5Raw="/render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer" \
   --n5Field="/heightfields_b240/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
-  --n5FieldOutput="/tmp/test_output" \
+  --n5FieldOutput="/heightfields_b240_fixed/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
   --scale=2,2,1 \
   --offset=0 \
   --multiSem
@@ -220,15 +225,19 @@ Remember to edit both `min` (top) and `max` (bottom) surfaces:
 ```bash
 # Edit top surface (min)
 java -Xmx16G -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
-  --n5Path="..." \
-  --n5Field=".../s1/min" \
-  --n5FieldOutput=".../s1/min" \
-  --scale=4,4,4 --offset=5 --multiSem
+  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5FieldPath="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5Raw="/render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer" \
+  --n5Field="/heightfields_b240/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/min" \
+  --n5FieldOutput="/heightfields_b240_fixed/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/min" \
+  --scale=2,2,1 --offset=0 --multiSem
 
 # Edit bottom surface (max)
 java -Xmx16G -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
-  --n5Path="..." \
-  --n5Field=".../s1/max" \
-  --n5FieldOutput=".../s1/max" \
-  --scale=4,4,4 --offset=5 --multiSem
+  --n5Path="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5FieldPath="gs://janelia-spark-test/hess_wafers_60_61_export" \
+  --n5Raw="/render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer" \
+  --n5Field="/heightfields_b240/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
+  --n5FieldOutput="/heightfields_b240_fixed/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max" \
+  --scale=2,2,1 --offset=0 --multiSem
 ```
