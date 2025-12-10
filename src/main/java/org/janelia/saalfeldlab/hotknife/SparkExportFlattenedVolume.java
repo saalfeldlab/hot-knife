@@ -24,18 +24,19 @@ import java.util.concurrent.Callable;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.FlatteningInfo;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5Path;
+import org.janelia.saalfeldlab.hotknife.util.N5PathAndDataset;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.hotknife.util.Util;
-import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccessible;
+import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -78,169 +79,101 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
 	private boolean multiSem = false;
 
-	@Override
-	public Void call() throws IOException {
+    private FlatteningInfo buildFlatteningInfo()
+            throws IOException {
 
-		final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
-		final JavaSparkContext sc = new JavaSparkContext(conf);
-		sc.setLogLevel("ERROR");
+        final N5PathAndDataset clahePathAndDataset = new N5PathAndDataset(n5RawInputPath, rawDataset);
+        final N5PathAndDataset heightfieldPathAndDataset = new N5PathAndDataset(n5FieldPath, fieldGroup);
+        final N5PathAndDataset flatPathAndDataset = new N5PathAndDataset(n5OutPath, outDataset);
 
-		flattenVolume(sc,
-					  n5RawInputPath,
-					  n5FieldPath,
-					  n5OutPath,
-					  rawDataset,
-					  fieldGroup,
-					  outDataset,
-					  blockSize,
-					  padding,
-					  multiSem);
+        return new FlatteningInfo(clahePathAndDataset,
+                                  heightfieldPathAndDataset,
+                                  multiSem,
+                                  padding,
+                                  flatPathAndDataset,
+                                  blockSize);
+    }
 
-		sc.close();
+    @Override
+    public Void call() throws IOException {
 
-		return null;
-	}
+        final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());
+        final JavaSparkContext sc = new JavaSparkContext(conf);
+        sc.setLogLevel("ERROR");
 
-	public static void flattenVolume(final JavaSparkContext sc,
-									 final String n5RawInputPath,
-									 final String n5FieldPath,
-									 final String n5OutPath,
-									 final String rawDataset,
-									 final String fieldGroup,
-									 final String outDataset,
-									 final int[] blockSize,
-									 final double padding,
-									 final boolean multiSem) throws IOException {
+        flattenVolume(sc, buildFlatteningInfo());
 
-		final int[] rawBlockSize;
-		final long[] dimensions;
-		final String minFieldName;
-		final String maxFieldName;
-		final double[] minFactors;
-		final double[] maxFactors;
-		final double min;
-		final double max;
-		{
-			final N5Reader n5RawReader = new N5FSReader(n5RawInputPath);
-			final N5FSReader n5FieldReader = new N5FSReader(n5FieldPath);
+        sc.close();
 
-			minFieldName = fieldGroup + "/min";
-			maxFieldName = fieldGroup + "/max";
+        return null;
+    }
 
-			final String minAttrPath = Util.getAttributesJsonPath(n5FieldPath, minFieldName);
-			final String maxAttrPath = Util.getAttributesJsonPath(n5FieldPath, maxFieldName);
+    public static void flattenVolume(final JavaSparkContext sc,
+                                     final FlatteningInfo flatInfo) {
 
-			final String avgKey = "avg";
-			final Double minAvg = Util.readRequiredAttribute(n5FieldReader, minFieldName, avgKey, Double.class);
-			final Double maxAvg = Util.readRequiredAttribute(n5FieldReader, maxFieldName, avgKey, Double.class);
+        final N5PathAndDataset rawPathAndDataset = flatInfo.getRawPathAndDataset();
+        final N5Path fieldPath = flatInfo.getFieldPath();
+        final N5PathAndDataset flatPathAndDataset = flatInfo.getFlatPathAndDataset();
 
-			final String factorsKey = "downsamplingFactors";
-			minFactors = Util.readRequiredAttribute(n5FieldReader, minFieldName, factorsKey, double[].class);
-			maxFactors = Util.readRequiredAttribute(n5FieldReader, maxFieldName, factorsKey, double[].class);
+        try (N5Writer n5Writer = flatPathAndDataset.openWriter()) {
+            n5Writer.createDataset(flatPathAndDataset.getDataset(),
+                                   flatInfo.getDimensions(),
+                                   flatInfo.getRawBlockSize(),
+                                   flatInfo.getRawDataType(),
+                                   flatInfo.getRawCompression());
+        }
 
-			System.out.println("loaded " + factorsKey + " " + Arrays.toString(minFactors) + " from " + minAttrPath);
-			System.out.println("loaded " + factorsKey + " " + Arrays.toString(maxFactors) + " from " + maxAttrPath);
+        /* grid block size for parallelization to minimize double loading of blocks */
+        final int[] rawBlockSize = flatInfo.getRawBlockSize();
+        final int[] flatBlockSize = flatInfo.getFlatBlockSize();
+        final int[] gridBlockSize = new int[flatBlockSize.length];
+        Arrays.setAll(gridBlockSize, i -> Math.max(rawBlockSize[i], flatBlockSize[i]));
 
-			min = (minAvg + 0.5) * minFactors[2] - 0.5;
-			max = (maxAvg + 0.5) * maxFactors[2] - 0.5;
+        final JavaRDD<long[][]> rdd =
+                sc.parallelize(
+                        Grid.create(
+                                flatInfo.getDimensions(),
+                                gridBlockSize,
+                                flatBlockSize));
 
-			if (min >= max) {
-				throw new IllegalStateException(
-						"output volume has negative dimension because scaled min " + min + " >= scaled max " + max +
-						", min " + avgKey + " " + minAvg +  " and " + factorsKey + " " + Arrays.toString(minFactors) +
-						" read from " + minAttrPath +
-						", max " + avgKey + " " + maxAvg +  " and " + factorsKey + " " + Arrays.toString(maxFactors) +
-						" read from " + maxAttrPath);
-			}
+        // TODO: make sure no longer need to call N5Utils.open(setupRawReader, rawDataset); to prime attributes
+        rdd.foreach(
+                gridBlock -> {
+                    final N5Reader n5RawReader = rawPathAndDataset.openReader();
+                    final N5Reader n5FieldReader = fieldPath.openReader();
+                    final N5Writer n5Writer = flatPathAndDataset.openWriter();
 
-			final DatasetAttributes attributes = n5RawReader.getDatasetAttributes(rawDataset);
-			rawBlockSize = attributes.getBlockSize();
-			final long[] rawDimensions = attributes.getDimensions();
+                    /* raw */
+                    final CachedCellImg<UnsignedByteType, ?> rawCellImg = N5Utils.open(n5RawReader, rawPathAndDataset.getDataset());
+                    final RandomAccessibleInterval<UnsignedByteType> rawVolume =
+                            flatInfo.isMultiSEMData() ? rawCellImg : Views.permute(rawCellImg, 1, 2);
 
-			if ( multiSem )
-				dimensions = new long[] {
-						rawDimensions[0],
-						rawDimensions[1],
-						Math.round(max + padding) - Math.round(min - padding)
-				};
-			else
-				dimensions = new long[] {
-						rawDimensions[0],
-						rawDimensions[2],
-						Math.round(max + padding) - Math.round(min - padding)
-				};
+                    final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5FieldReader, flatInfo.getMinFieldDataset());
+                    final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, flatInfo.getMaxFieldDataset());
 
-			final N5FSWriter n5Writer = new N5FSWriter(n5OutPath);
-			n5Writer.createDataset(
-					outDataset,
-					dimensions,
-					blockSize,
-					attributes.getDataType(),
-					attributes.getCompression());
-		}
+                    final RealRandomAccessible<DoubleType> minFactors = Transform.scaleAndShiftHeightFieldAndValues(minField, flatInfo.getMinFactors());
+                    final RealRandomAccessible<DoubleType> maxFactors = Transform.scaleAndShiftHeightFieldAndValues(maxField, flatInfo.getMaxFactors());
 
-		/* grid block size for parallelization to minimize double loading of blocks */
-		final int[] gridBlockSize = new int[blockSize.length];
-		Arrays.setAll(gridBlockSize, i -> Math.max(rawBlockSize[i], blockSize[i]));
+                    final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(minFactors,
+                                                                                                 maxFactors,
+                                                                                                 flatInfo.getMin(),
+                                                                                                 flatInfo.getMax());
+                    final RandomAccessibleInterval<UnsignedByteType> flattened =
+                            Views.zeroMin(
+                                    Transform.createTransformedInterval(
+                                            rawVolume,
+                                            new FinalInterval(
+                                                    new long[] {rawVolume.min(0), rawVolume.min(1), flatInfo.getMinWithPadding()},
+                                                    new long[] {rawVolume.max(0), rawVolume.max(1), flatInfo.getMaxWithPadding()}),
+                                            flattenTransform.inverse(),
+                                            new UnsignedByteType()));
 
-		final JavaRDD<long[][]> rdd =
-				sc.parallelize(
-						Grid.create(
-								dimensions,
-								gridBlockSize,
-								blockSize));
+                    final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
+                    N5Utils.saveBlock(sourceGridBlock, n5Writer, flatPathAndDataset.getDataset(), gridBlock[2]);
+                });
+    }
 
-		// access all attributes.json files here to prevent concurrent access NPE issues in RDD loops
-		System.out.println("priming attributes for: " + n5RawInputPath + ", " + n5FieldPath +
-						   ", " + n5OutPath + ", " + rawDataset);
-		final N5Reader setupRawReader = new N5FSReader(n5RawInputPath);
-		new N5FSReader(n5FieldPath);
-		new N5FSWriter(n5OutPath);
-		N5Utils.open(setupRawReader, rawDataset);
-
-		rdd.foreach(
-				gridBlock -> {
-					final N5Reader n5RawReader = new N5FSReader(n5RawInputPath);
-					final N5Reader n5FieldReader = new N5FSReader(n5FieldPath);
-					final N5Writer n5Writer = new N5FSWriter(n5OutPath);
-
-					/* raw */
-					@SuppressWarnings("unchecked")
-					final RandomAccessibleInterval<UnsignedByteType> rawVolume =
-							multiSem ?
-							(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset)
-									 :
-							Views.permute(
-									(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5RawReader, rawDataset),
-									1,
-									2);
-
-					final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5FieldReader, minFieldName);
-					final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, maxFieldName);
-
-					final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(
-							Transform.scaleAndShiftHeightFieldAndValues(minField, minFactors),
-							Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors),
-							min,
-							max);
-
-					final RandomAccessibleInterval<UnsignedByteType> flattened =
-							Views.zeroMin(
-									Transform.createTransformedInterval(
-											rawVolume,
-											new FinalInterval(
-													new long[] {rawVolume.min(0), rawVolume.min(1), (int)Math.round(min - padding)},
-													new long[] {rawVolume.max(0), rawVolume.max(1), (int)Math.round(max + padding)}),
-											flattenTransform.inverse(),
-											new UnsignedByteType()));
-
-					final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
-					N5Utils.saveBlock(sourceGridBlock, n5Writer, outDataset, gridBlock[2]);
-				});
-	}
-
-	public static void main(final String... args) {
-
-		CommandLine.call(new SparkExportFlattenedVolume(), args);
-	}
+    public static void main(final String... args) {
+        CommandLine.call(new SparkExportFlattenedVolume(), args);
+    }
 }
