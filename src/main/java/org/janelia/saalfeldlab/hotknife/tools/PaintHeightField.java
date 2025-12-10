@@ -283,8 +283,8 @@ public class PaintHeightField implements Callable<Void>{
 		}
 
 		// multi-threaded copy
-		final ExecutorService service = Executors.newCachedThreadPool();
 		System.out.print("Loading height field " + n5FieldPath + fieldGroup + "... " );
+		final ExecutorService service = Executors.newCachedThreadPool();
 		Util.copy(heightFieldSource, heightField, service, true );
 		System.out.println("done.");
 
@@ -484,7 +484,39 @@ public class PaintHeightField implements Callable<Void>{
 
 		((JFrame)SwingUtilities.getWindowAncestor(bdv.getBdvHandle().getViewerPanel())).setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
+		// Display keyboard shortcuts
+		printKeyboardShortcuts();
+
 		return null;
+	}
+
+	private static void printKeyboardShortcuts() {
+		System.out.println("\n=== PaintHeightField Keyboard Shortcuts ===");
+		System.out.println("\nFile Operations:");
+		System.out.println("  Ctrl+S - Save height field to N5");
+		System.out.println("  Ctrl+U - Undo (reload height field from disk)");
+		System.out.println("\nNavigation:");
+		System.out.println("  Ctrl+C - Go to z=0 surface");
+		System.out.println("  Ctrl+0 - Toggle z=0 line overlay");
+		System.out.println("  Ctrl+F - Move horizontal right");
+		System.out.println("  Ctrl+D - Move horizontal left");
+		System.out.println("  Ctrl+R - Move vertical up");
+		System.out.println("  Ctrl+V - Move vertical down");
+		System.out.println("\nHeight Field Editing Tools:");
+		System.out.println("  Push/Pull Brush:");
+		System.out.println("    SPACE + Left Mouse  - Push height field up");
+		System.out.println("    SPACE + Right Mouse - Pull height field down");
+		System.out.println("    SPACE + Scroll      - Change brush radius");
+		System.out.println("  Smooth Brush:");
+		System.out.println("    Q + Left Mouse      - Apply Gaussian smoothing");
+		System.out.println("    Q + Scroll          - Change brush radius");
+		System.out.println("    Shift+Q + Scroll    - Change smoothing sigma");
+		System.out.println("  Weighted Smooth Brush:");
+		System.out.println("    W + Left Mouse      - Apply gradient-weighted smoothing");
+		System.out.println("    W + Scroll          - Change brush radius");
+		System.out.println("    Shift+W + Scroll    - Change smoothing sigma");
+		System.out.println("\nSee PAINTHEIGHTFIELD_SHORTCUTS.md for full documentation");
+		System.out.println("============================================\n");
 	}
 
 	private ArrayImg<FloatType, ?> fix07mBRSec28HeightField( ArrayImg<FloatType, ?> hf )
