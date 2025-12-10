@@ -43,11 +43,11 @@ import org.janelia.saalfeldlab.hotknife.ops.AbsoluteGradientCenter;
 import org.janelia.saalfeldlab.hotknife.tools.actions.HeightFieldKeyActions;
 import org.janelia.saalfeldlab.hotknife.tools.proofread.LocationsPanel;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Transform.TransformedSource;
 import org.janelia.saalfeldlab.hotknife.util.Util;
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
@@ -202,8 +202,11 @@ public class PaintHeightField implements Callable<Void>{
 
 		//new ImageJ();
 
-		final N5Reader n5 = new N5FSReader(n5Path);
-		final N5FSReader n5Field = new N5FSReader(n5FieldPath);
+		System.out.println( "n5Path: " + n5Path );
+		System.out.println( "n5FieldPath: " + n5FieldPath );
+
+		final N5Reader n5 = N5Util.createN5Reader(n5Path);
+		final N5Reader n5Field = N5Util.createN5Reader(n5FieldPath);
 
 		/*
 		 * raw data
@@ -211,12 +214,21 @@ public class PaintHeightField implements Callable<Void>{
 		final int numProc = Runtime.getRuntime().availableProcessors();
 		final SharedQueue queue = new SharedQueue(Math.min(12, Math.max(1, numProc - 2)));
 
-		final int numScales = n5.list(rawGroup).length;
+		// Count only scale levels (s0, s1, s2, ...), ignoring other directories
+		int numScales = 0;
+		final String[] listing = n5.list(rawGroup);
+		for (final String entry : listing) {
+			if (entry.matches("s[0-9]+")) {
+				numScales++;
+			}
+		}
+
 		final double[][] scales = new double[numScales][];
 		final RandomAccessibleInterval<UnsignedByteType>[] rawMipmaps = new RandomAccessibleInterval[numScales];
 		for (int s = 0; s < numScales; ++s) {
 
 			final String mipmapName = rawGroup + "/s" + s;
+			System.out.println( mipmapName );
 			final RandomAccessibleInterval<UnsignedByteType> raw = (RandomAccessibleInterval<UnsignedByteType>)N5Utils.openVolatile(n5, mipmapName);
 			rawMipmaps[s] = multiSem ? raw : Views.permute(raw, 1, 2);
 			double[] scale = n5.getAttribute(mipmapName, "downsamplingFactors", double[].class);
@@ -234,9 +246,9 @@ public class PaintHeightField implements Callable<Void>{
 		BdvStackSource<?> bdv = null;
 
 		/* raw */
-		if ( !new File( n5FieldPath, fieldGroup ).exists() )
+		if ( !n5Field.datasetExists( fieldGroup ) )
 		{
-			System.out.println( "heightfield dataset does not exist: " + n5FieldPath + "/" + fieldGroup );
+			System.out.println( "heightfield dataset does not exist: " + n5FieldPath + fieldGroup );
 			System.exit( 0 );
 		}
 

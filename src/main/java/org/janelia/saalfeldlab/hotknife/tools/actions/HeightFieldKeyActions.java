@@ -12,10 +12,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.janelia.saalfeldlab.hotknife.tools.DisplayScaleOverlay;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.InputActionBindings;
@@ -83,7 +84,7 @@ public class HeightFieldKeyActions {
 
 		System.out.print( "(" +new Date( System.currentTimeMillis()) + "): Saving heightfield " + n5Path + ":/" + heightFieldDataset + " ... ");
 		final ExecutorService exec = Executors.newFixedThreadPool(4);
-		final N5FSWriter n5 = new N5FSWriter(n5Path);
+		final N5Writer n5 = N5Util.createN5Writer(n5Path);
 		N5Utils
 				.save(
 						heightField,
@@ -285,12 +286,16 @@ public class HeightFieldKeyActions {
 			synchronized (viewer) {
 
 				viewer.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-                final N5FSReader n5 = new N5FSReader(n5Path);
-                if (n5.datasetExists(heightFieldDataset)) {
-                    final long[] dimensions = n5.getAttribute(heightFieldDataset, "dimensions", long[].class);
-                    if (dimensions[0] == heightField.dimension(0) && dimensions[1] == heightField.dimension(1)) {
-                        Util.copy(N5Utils.open(n5, heightFieldDataset), heightField);
+                try {
+                    final N5Reader n5 = N5Util.createN5Reader(n5Path);
+                    if (n5.datasetExists(heightFieldDataset)) {
+                        final long[] dimensions = n5.getAttribute(heightFieldDataset, "dimensions", long[].class);
+                        if (dimensions[0] == heightField.dimension(0) && dimensions[1] == heightField.dimension(1)) {
+                            Util.copy(N5Utils.open(n5, heightFieldDataset), heightField);
+                        }
                     }
+                } catch (final Exception e) {
+                    e.printStackTrace();
                 }
                 viewer.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
 				viewer.requestRepaint();
