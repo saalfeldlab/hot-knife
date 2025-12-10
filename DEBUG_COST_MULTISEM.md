@@ -32,6 +32,22 @@ Y coordinate of the specific block to process (e.g., 34).
 - Must be used together with `--debugBlockX`
 - If omitted, processes just the middle block
 
+## Cost Function Parameters
+
+### `--topLayerCost <value>`
+Cost value to use for the top Z layer (default: 105).
+- Controls surface detection bias at the top of the volume
+- Lower values encourage surfaces at the top boundary
+- Range: 0-255
+
+### `--bottomLayerCost <value>`
+Cost value to use for the bottom Z layer (default: 230).
+- Controls surface detection bias at the bottom of the volume
+- Higher values discourage surfaces at the bottom boundary
+- Range: 0-255
+
+**Note**: These parameters replace the previous `--outOfBoundsValue` approach, providing independent control over top and bottom boundary costs.
+
 ## Usage Examples
 
 ### Example 1: Process a specific block
@@ -182,7 +198,7 @@ Debug mode: Skipping downsampling and surface fitting
 6. **Experiment with parameters**
    - Try `--median` to reduce noise in input
    - Try `--smoothCost` to smooth in Z
-   - Adjust `--outOfBoundsValue` for boundary handling
+   - Adjust `--topLayerCost` and `--bottomLayerCost` for boundary handling
    - Modify `--costSteps` for different downsampling
 
 ## Parameter Recommendations
@@ -199,9 +215,9 @@ Debug mode: Skipping downsampling and surface fitting
 
 ### For boundary artifacts
 ```bash
---outOfBoundsValue 128
+--topLayerCost 105 --bottomLayerCost 230
 ```
-(Set to approximate resin intensity)
+Adjust these values to control surface detection at volume boundaries. Lower top cost encourages top surface detection; higher bottom cost discourages bottom surface detection.
 
 ## Common Issues
 
@@ -257,6 +273,9 @@ Simply remove all `--debug*` flags:
   - Added automatic ImageJ visualization at key processing stages
   - Disabled all N5 writing operations in debug mode
   - All debug-related console output prefixed with "Debug mode:"
+  - Replaced `--outOfBoundsValue` with `--topLayerCost` and `--bottomLayerCost` for finer boundary control
+  - Changed boundary extension from `extendValue` to `extendBorder`
+  - Added image inversion (255 - value) for input data
   - Updated `processColumn` and `processColumnAlongAxis` signatures
 
 ## Building
