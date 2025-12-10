@@ -16,6 +16,8 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
+import ij.process.FloatProcessor;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,9 +25,6 @@ import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
-import ij.process.FloatProcessor;
-
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 
 import net.imglib2.Cursor;
@@ -214,4 +213,15 @@ public class Util {
 		}
 		return value;
 	}
+
+    public static void checkDatasetExistence(final N5Reader n5Reader,
+                                             final String datasetPath,
+                                             final boolean shouldExist) throws IOException {
+        final boolean exists = n5Reader.exists(datasetPath);
+        if (shouldExist && ! exists) {
+            throw new IOException("dataset " + datasetPath + " does not exist in " + n5Reader.getURI().getPath());
+        } else if(! shouldExist && exists) {
+            throw new IOException("dataset " + datasetPath + " already exists in " + n5Reader.getURI().getPath());
+        }
+    }
 }
