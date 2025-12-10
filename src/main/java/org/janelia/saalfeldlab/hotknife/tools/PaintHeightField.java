@@ -76,6 +76,7 @@ import net.imglib2.converter.Converters;
 import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.img.cell.CellImgFactory;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.basictypeaccess.FloatAccess;
 import net.imglib2.img.basictypeaccess.array.FloatArray;
@@ -268,11 +269,22 @@ public class PaintHeightField implements Callable<Void>{
 			//downsamplingFactors[ 2 ] = 1;
 		}
 
-		ArrayImg<FloatType, ?> heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
+		// Use ArrayImg for small height fields, CellImg for large ones
+		final long numElements = heightFieldSource.dimension(0) * heightFieldSource.dimension(1);
+		final boolean useArrayImg = numElements <= Integer.MAX_VALUE;
+
+		final RandomAccessibleInterval<FloatType> heightField;
+		if (useArrayImg) {
+			System.out.println("Using ArrayImg for height field (" + numElements + " elements)");
+			heightField = new ArrayImgFactory<>(new FloatType()).create(heightFieldSource);
+		} else {
+			System.out.println("Using CellImg for height field (" + numElements + " elements, exceeds ArrayImg limit)");
+			heightField = new CellImgFactory<>(new FloatType()).create(heightFieldSource);
+		}
 
 		// multi-threaded copy
 		final ExecutorService service = Executors.newCachedThreadPool();
-		System.out.print("Loading height field " + n5FieldPath + ":/" + fieldGroup + "... " );
+		System.out.print("Loading height field " + n5FieldPath + fieldGroup + "... " );
 		Util.copy(heightFieldSource, heightField, service, true );
 		System.out.println("done.");
 
