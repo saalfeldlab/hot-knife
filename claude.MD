@@ -369,14 +369,20 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 ```
 
 **Key Parameters:**
-- `--n5Path`: N5 container with raw data (supports gs:// for Google Cloud)
-- `--n5Raw`: Raw image dataset path (e.g., `/raw/s0`)
+- `--n5Path`: N5 container with raw data (supports gs:// for Google Cloud Storage)
+- `--n5FieldPath`: N5 container with height field data (optional, defaults to n5Path)
+- `--n5Raw`: Raw image dataset path (e.g., `/render/section/s0`)
 - `--n5Field`: Input height field to edit (e.g., `/heightfields/s1/min`)
 - `--n5FieldOutput`: Where to save edited height field (can overwrite input)
 - `--scale`: Downsampling factors [x,y,z] matching height field resolution
-- `--offset`: Z offset for target surface positioning (typically 3-10)
+- `--offset`: Z offset for target surface positioning (typically 0 for Multi-SEM)
 - `--multiSem`: Flag for Multi-SEM data (no axis permutation)
 - `--heightfieldOffset`: Optional [x,y,z] correction for DL-predicted height fields
+
+**Cloud Storage Support:**
+- Uses `N5Util.createN5Reader()` and `N5Util.createN5Writer()` for transparent cloud/local access
+- Automatically handles gs:// URLs for Google Cloud Storage
+- N5 API used for dataset existence checks instead of filesystem operations
 
 **Keyboard Shortcuts:**
 - **Ctrl+S**: Save edited height field to N5
@@ -384,10 +390,16 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 - **Ctrl+C**: Go to z=0 surface
 - **Ctrl+0**: Toggle z=0 line overlay
 - **Ctrl+F/D/R/V**: Navigate (right/left/up/down)
+- **SPACE + Left Mouse**: Push height field up
+- **SPACE + Right Mouse**: Pull height field down
 - **SPACE + scroll**: Adjust push/pull brush radius
+- **Q + Left Mouse**: Apply Gaussian smoothing
 - **Q + scroll**: Adjust smooth brush radius
 - **Shift+Q + scroll**: Adjust smoothing sigma
+- **W + Left Mouse**: Apply gradient-weighted smoothing
 - **W + scroll**: Adjust weighted smooth brush radius
+- **Shift+W + scroll**: Adjust weighted smoothing sigma
+- **See**: PAINTHEIGHTFIELD_SHORTCUTS.md for complete reference
 
 ### Workflow Integration
 
@@ -404,6 +416,13 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 - Visual inspection shows misaligned surfaces in flattened view
 - Before committing to expensive downstream processing
 
+**Implementation Details:**
+- Automatically uses ArrayImg for small height fields (≤2.1 billion elements) for better performance
+- Switches to CellImg for large height fields that exceed Java array size limits
+- Filters scale directories using regex pattern `s[0-9]+` to ignore non-scale subdirectories
+- Height field scale attributes stored at parent directory level (e.g., `s1/attributes.json`, not `s1/min/`)
+- All controllers accept `RandomAccessibleInterval<FloatType>` interface (compatible with both ArrayImg and CellImg)
+
 **Note:** Height fields are typically stored at s1 resolution (downsampled 6x6x1 or 4x4x4). Process both `min` (top surface) and `max` (bottom surface) separately.
 
 ## Current Branch: cloud-cost-debug
@@ -415,4 +434,10 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
   - `--topLayerCost/--bottomLayerCost`: Independent control of boundary costs (replaces `--outOfBoundsValue`)
   - Image inversion and border extension for improved boundary handling
   - All debug output prefixed with "Debug mode:"
+- **Recent updates**:
+  - PaintHeightField updated with cloud storage support (N5Util)
+  - Added CellImg support for large height fields exceeding ArrayImg limits
+  - Fixed numScales calculation to filter non-scale directories
+  - Added keyboard shortcuts documentation (PAINTHEIGHTFIELD_SHORTCUTS.md)
+  - Updated PAINTHEIGHTFIELD_GUIDE.md with correct cloud paths and --n5FieldPath parameter
 - **See**: DEBUG_COST_MULTISEM.md for complete usage guide
