@@ -16,16 +16,14 @@
  */
 package org.janelia.saalfeldlab.hotknife.util;
 
+import ij.process.FloatProcessor;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import ij.process.FloatProcessor;
 
 import org.janelia.saalfeldlab.n5.N5Reader;
 
@@ -226,26 +224,4 @@ public class Util {
             throw new IOException("dataset " + datasetPath + " already exists in " + n5Reader.getURI().getPath());
         }
     }
-
-    /**
-     * @return render project name (e.g. w61_serial_070_to_079) for a given raw name (e.g. w61_s076_r00)
-     */
-    public static String getRenderProjectName(final String rawName) {
-
-        final Matcher m = RAW_NAME_PATTERN.matcher(rawName);
-        if (! m.matches()) {
-            throw new IllegalArgumentException("invalid rawName " + rawName);
-        }
-
-        final int wafer = Integer.parseInt(m.group(1));   // e.g. 61
-        final int serial = Integer.parseInt(m.group(2));  // e.g. 79, 80
-
-        final int start = (serial / 10) * 10;  // 79 -> 70, 80 -> 80
-        final int end   = start + 9;           // 70 -> 79, 80 -> 89
-
-        return String.format("w%d_serial_%03d_to_%03d", wafer, start, end);
-    }
-
-    private static final Pattern RAW_NAME_PATTERN = Pattern.compile("^w(\\d+)_s(\\d+)_r(\\d+)$");
-
 }

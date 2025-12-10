@@ -17,6 +17,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
+import org.janelia.saalfeldlab.hotknife.util.RawStack;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -94,67 +95,95 @@ public class SparkMaskedCLAHEMultiSEM
 				parser.printUsage(System.err);
 			}
 		}
+
+        public Options(final String n5PathInput,
+                       final RawStack rawStack,
+                       final int blockFactorXY,
+                       final int blockFactorZ,
+                       final boolean overwrite) {
+            this.n5PathInput = n5PathInput;
+            this.n5DatasetInput = rawStack.getNormLayerDataset() + "/s0";
+            this.n5DatasetOutput = rawStack.getCLAHEDataset() + "/s0";
+            this.n5FieldMax = rawStack.getHeightfieldsDataset() + "/s1/max";
+            this.blockFactorXY = blockFactorXY;
+            this.blockFactorZ = blockFactorZ;
+            this.overwrite = overwrite;
+        }
 	}
 
-	public static void process(
-			final JavaSparkContext sparkContext,
-			final String n5PathInput,
-			final String n5DatasetInput,
-			final String n5DatasetOutput,
-			final String n5FieldMax,
-			final int blockFactorXY,
-			final int blockFactorZ,
-			final boolean overwrite ) throws IOException
-	{
-		final N5Reader n5Input = N5Util.createN5Reader(n5PathInput);
-        final String inputAttrPath = Util.getAttributesJsonPath(n5PathInput, n5DatasetInput);
+    public static void validateDatasets(final N5Reader n5Input,
+                                        final RawStack rawStack)
+            throws IOException {
+
+        final String normLayerDatasetS0 = rawStack.getNormLayerDataset() + "/s0";   // /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s0
+        final String claheDatasetS0 = rawStack.getCLAHEDataset() + "/s0";           // /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-clahe/s0
+        final String n5FieldMax = rawStack.getHeightfieldsDataset() + "/s1/max";    // /heightfields_v3/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max
+
+        Util.checkDatasetExistence(n5Input, normLayerDatasetS0, true);
+        Util.checkDatasetExistence(n5Input, claheDatasetS0, false);
+        Util.checkDatasetExistence(n5Input, n5FieldMax, true);
+
+        Util.readRequiredAttribute(n5Input, normLayerDatasetS0, "blockSize", int[].class);
+        Util.readRequiredAttribute(n5Input, normLayerDatasetS0, "dimensions", long[].class);
+
+        final String n5FieldMaxParent = n5FieldMax.substring(0, n5FieldMax.lastIndexOf('/'));
+        Util.readRequiredAttribute(n5Input, n5FieldMaxParent, FACTORS_KEY, double[].class);
+
+        System.out.println("SparkMaskedCLAHEMultiSEM.validateDatasets: verified datasets and max field factors for " + normLayerDatasetS0);
+    }
+
+    public static void process(final JavaSparkContext sparkContext,
+                               final Options options)
+            throws IOException {
+
+        final N5Reader n5Input = N5Util.createN5Reader(options.n5PathInput);
+        final String inputAttrPath = Util.getAttributesJsonPath(options.n5PathInput,
+                                                                options.n5DatasetInput);
 
         System.out.println("loading blockSize and dimensions from " + inputAttrPath);
-		final int[] blockSize = Util.readRequiredAttribute(n5Input, n5DatasetInput, "blockSize", int[].class);
-		final long[] dimensions = Util.readRequiredAttribute(n5Input, n5DatasetInput, "dimensions", long[].class);
+        final int[] blockSize = Util.readRequiredAttribute(n5Input, options.n5DatasetInput, "blockSize", int[].class);
+        final long[] dimensions = Util.readRequiredAttribute(n5Input, options.n5DatasetInput, "dimensions", long[].class);
 
-		final int[] gridBlockSize = new int[]{ blockSize[0] * blockFactorXY, blockSize[1] * blockFactorXY, blockSize[2] * blockFactorZ };
+        final int[] gridBlockSize = new int[]{
+                blockSize[0] * options.blockFactorXY,
+                blockSize[1] * options.blockFactorXY,
+                blockSize[2] * options.blockFactorZ
+        };
 
-		final double[] maxFactors;
-		if ( n5FieldMax == null )
-		{
-			maxFactors = null;
-		}
-		else
-		{
-            final String n5FieldMaxParent = n5FieldMax.substring(0, n5FieldMax.lastIndexOf('/'));
-            final String fieldMaxParentAttrPath = Util.getAttributesJsonPath(n5PathInput, n5FieldMaxParent);
-			maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMaxParent, FACTORS_KEY, double[].class);
-			System.out.println("loaded " + FACTORS_KEY + " " + Arrays.toString(maxFactors) + " from " + fieldMaxParentAttrPath);
-		}
+        final double[] maxFactors;
+        if (options.n5FieldMax == null) {
+            maxFactors = null;
+        } else {
+            final String n5FieldMaxParent = options.n5FieldMax.substring(0, options.n5FieldMax.lastIndexOf('/'));
+            final String fieldMaxParentAttrPath = Util.getAttributesJsonPath(options.n5PathInput, n5FieldMaxParent);
+            maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMaxParent, FACTORS_KEY, double[].class);
+            System.out.println("loaded " + FACTORS_KEY + " " + Arrays.toString(maxFactors) + " from " + fieldMaxParentAttrPath);
+        }
 
-		final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
+        final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
 
-		final N5Writer n5Output = N5Util.createN5Writer(n5PathInput);
+        final N5Writer n5Output = N5Util.createN5Writer(options.n5PathInput);
 
-		if (n5Output.exists(n5DatasetOutput))
-		{
-			if ( overwrite )
-			{
-				n5Output.remove( n5DatasetOutput );
-			}
-			else
-			{
-				n5Input.close();
-				n5Output.close();
-				throw new IllegalArgumentException("Output data set exists: " + n5PathInput + n5DatasetOutput);
-			}
-		}
+        if (n5Output.exists(options.n5DatasetOutput)) {
+            if (options.overwrite) {
+                n5Output.remove(options.n5DatasetOutput);
+            } else {
+                n5Input.close();
+                n5Output.close();
+                throw new IllegalArgumentException("Output data set exists: " +
+                                                   options.n5PathInput + options.n5DatasetOutput);
+            }
+        }
 
-		n5Output.createDataset(n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new ZstandardCompression());
-		SparkPixelNormalizeN5.transferAttributes(n5Output, n5DatasetInput, n5DatasetOutput);
+        n5Output.createDataset(options.n5DatasetOutput, dimensions, blockSize, DataType.UINT8, new ZstandardCompression());
+        SparkPixelNormalizeN5.transferAttributes(n5Output, options.n5DatasetInput, options.n5DatasetOutput);
 
-		n5Output.close();
-		n5Input.close();
+        n5Output.close();
+        n5Input.close();
 
-		final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid, Math.min( grid.size(), 15000 ));
+        final JavaRDD<long[][]> pGrid = sparkContext.parallelize(grid, Math.min(grid.size(), 15000));
 
-		// new ImageJ();
+        // new ImageJ();
 
 		pGrid.foreach(
 				gridBlock ->
@@ -165,7 +194,7 @@ public class SparkMaskedCLAHEMultiSEM
 						return;
 					*/
 
-                    final N5Writer workerWriter = N5Util.createN5Writer(n5PathInput);
+                    final N5Writer workerWriter = N5Util.createN5Writer(options.n5PathInput);
 					final int minIntensity = 0;
 					final int maxIntensity = 255;
 
@@ -176,11 +205,11 @@ public class SparkMaskedCLAHEMultiSEM
 
 					System.out.println( net.imglib2.util.Util.printInterval( gridBlockInterval ) );
 
-					final N5Reader n5 = N5Util.createN5Reader(n5PathInput);
+					final N5Reader n5 = N5Util.createN5Reader(options.n5PathInput);
 					
 					final RealRandomAccessible< DoubleType > maxFieldScaled;
 
-					if ( n5FieldMax == null )
+					if ((options.n5FieldMax == null) || (maxFactors == null))
 					{
 						maxFieldScaled = new FunctionRealRandomAccessible<>(
 								2,
@@ -189,11 +218,11 @@ public class SparkMaskedCLAHEMultiSEM
 					}
 					else
 					{
-						final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5, n5FieldMax);
+						final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5, options.n5FieldMax);
 						maxFieldScaled = Transform.scaleAndShiftHeightFieldAndValues(maxField, maxFactors);
 					}
 
-					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, n5DatasetInput);
+					final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, options.n5DatasetInput);
 					final RandomAccessible<UnsignedByteType> infiniteSource = Views.extendMirrorDouble( source );
 
 					final RandomAccessibleInterval<UnsignedByteType> result = Views.translate( ArrayImgs.unsignedBytes( gridBlockInterval.dimensionsAsLongArray() ), gridBlockInterval.minAsLongArray() );
@@ -316,7 +345,7 @@ public class SparkMaskedCLAHEMultiSEM
 					N5Utils.saveNonEmptyBlock(
 							  result,
 							  workerWriter,
-							  n5DatasetOutput,
+                              options.n5DatasetOutput,
 							  new DatasetAttributes(dimensions, blockSize, DataType.UINT8, new ZstandardCompression()),
 							  gridBlock[2],
 							  new UnsignedByteType());
@@ -338,7 +367,7 @@ public class SparkMaskedCLAHEMultiSEM
 		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
 		sparkContext.setLogLevel("ERROR");
 
-		process( sparkContext, options.n5PathInput, options.n5DatasetInput, options.n5DatasetOutput, options.n5FieldMax, options.blockFactorXY, options.blockFactorZ, options.overwrite );
+		process( sparkContext, options );
 
 		sparkContext.close();
 	}
