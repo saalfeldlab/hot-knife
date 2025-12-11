@@ -1,15 +1,15 @@
 /**
  * License: GPL
- *
+ * -
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License 2
  * as published by the Free Software Foundation.
- *
+ * -
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
+ * -
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -30,6 +30,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
 import org.janelia.saalfeldlab.hotknife.cost.PreFilter;
+import org.janelia.saalfeldlab.hotknife.util.N5Path;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -74,15 +75,8 @@ import net.imglib2.view.Views;
  */
 public class SparkComputeCostMultiSem {
 
-	final static public String ownerFormat = "%s/owner/%s";
-	final static public String stackListFormat = ownerFormat + "/stacks";
-	final static public String stackFormat = ownerFormat + "/project/%s/stack/%s";
-	final static public String stackBoundsFormat = stackFormat  + "/bounds";
-	final static public String boundingBoxFormat = stackFormat + "/z/%d/box/%d,%d,%d,%d,%f";
-	final static public String renderParametersFormat = boundingBoxFormat + "/render-parameters";
-
-	@SuppressWarnings("serial")
-	public static class Options extends AbstractOptions implements Serializable {
+	@SuppressWarnings("DefaultAnnotationParam")
+    public static class Options extends AbstractOptions implements Serializable {
 
 		@Option(name = "--inputN5Path", required = true, usage = "input N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 		private String n5Path = null;
@@ -204,7 +198,7 @@ public class SparkComputeCostMultiSem {
         }
 	}
 
-	public static void computeCost(
+	private static void computeCost(
 			final JavaSparkContext sparkContext,
 			final Options options) throws IOException {
 
@@ -223,7 +217,7 @@ public class SparkComputeCostMultiSem {
 
 		final long[] surfaceBlockSize = options.getSurfaceBlockSize();
 		System.out.println("surfaceBlockSize: " + Util.printCoordinates(surfaceBlockSize) );
-		
+
 		final N5Reader n5 = N5Util.createN5Reader(n5Path);
 
 		// Skip N5Writer creation in debug mode
@@ -399,25 +393,30 @@ public class SparkComputeCostMultiSem {
 			);
 		}
 
-		if (options.surfaceN5Output != null) {
-			SparkSurfaceFit sparkSurfaceFit = new SparkSurfaceFit(options.outputN5Path,
-																  options.outputN5Path,
-																  options.costDatasetName,
-																  options.inputDatasetName,
-																  options.surfaceN5Output,
-																  options.surfaceFirstScale,
-																  options.surfaceLastScale,
-																  options.surfaceMaxDeltaZ,
-																  options.surfaceInitMaxDeltaZ,
-																  options.finalMaxDeltaZ, // finaldeltaZ
-																  options.surfaceMinDistance,
-                                                                  options.getSurfaceMaxDeltaZ(zcorrSize),
-																  true, // no need to permute with multi-sem
-																  false);
-			sparkSurfaceFit.callWithSparkContext(sparkContext,
-												 options.getSurfaceBlockSize());
-		}
 	}
+
+    private static void computeSurfaceFit(final JavaSparkContext sparkContext,
+                                          final Options options,
+                                          final double maxDeltaZ)
+            throws IOException {
+
+        SparkSurfaceFit sparkSurfaceFit = new SparkSurfaceFit(options.outputN5Path,
+                                                              options.outputN5Path,
+                                                              options.costDatasetName,
+                                                              options.inputDatasetName,
+                                                              options.surfaceN5Output,
+                                                              options.surfaceFirstScale,
+                                                              options.surfaceLastScale,
+                                                              options.surfaceMaxDeltaZ,
+                                                              options.surfaceInitMaxDeltaZ,
+                                                              options.finalMaxDeltaZ,
+                                                              options.surfaceMinDistance,
+                                                              maxDeltaZ,
+                                                              true, // no need to permute with multi-sem
+                                                              false);
+        sparkSurfaceFit.callWithSparkContext(sparkContext,
+                                             options.getSurfaceBlockSize());
+    }
 
 	private static IterableInterval<UnsignedByteType> getLastLayer(final N5Reader n5Reader, final String dataset) {
 		final Img<UnsignedByteType> data = N5Utils.open(n5Reader, dataset);
@@ -1002,10 +1001,29 @@ public class SparkComputeCostMultiSem {
 			conf.set("spark.driver.bindAddress", "127.0.0.1");
 		}
 		final JavaSparkContext sc = new JavaSparkContext(conf);
-		
+
 		//final JavaSparkContext sc = null;
-		
-		computeCost(sc, options);
+
+        try (final N5Reader n5 = new N5Path(options.outputN5Path).openReader()) {
+
+            if (n5.exists(options.costDatasetName)) {
+                System.out.println(options.costDatasetName + " already exists, skipping cost computation");
+            } else {
+                computeCost(sc, options);
+            }
+
+            if (options.surfaceN5Output != null) {
+
+                if (n5.exists(options.surfaceN5Output)) {
+                    System.out.println(options.surfaceN5Output + " already exists, skipping surface fitting");
+                } else {
+                    final long[] inputDimensions = n5.getAttribute(options.inputDatasetName, "dimensions", long[].class);
+                    final double maxDeltaZ = options.getSurfaceMaxDeltaZ(inputDimensions);
+                    computeSurfaceFit(sc, options, maxDeltaZ);
+                }
+
+            }
+        }
 
 		sc.close();
 
