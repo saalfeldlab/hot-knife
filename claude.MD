@@ -389,6 +389,7 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 - **Ctrl+U**: Undo (reload from disk)
 - **Ctrl+C**: Go to z=0 surface
 - **Ctrl+0**: Toggle z=0 line overlay
+- **Ctrl+2**: Toggle scale display overlay
 - **Ctrl+F/D/R/V**: Navigate (right/left/up/down)
 - **SPACE + Left Mouse**: Push height field up
 - **SPACE + Right Mouse**: Pull height field down

@@ -498,6 +498,7 @@ public class PaintHeightField implements Callable<Void>{
 		System.out.println("\nNavigation:");
 		System.out.println("  Ctrl+C - Go to z=0 surface");
 		System.out.println("  Ctrl+0 - Toggle z=0 line overlay");
+		System.out.println("  Ctrl+2 - Toggle scale display overlay");
 		System.out.println("  Ctrl+F - Move horizontal right");
 		System.out.println("  Ctrl+D - Move horizontal left");
 		System.out.println("  Ctrl+R - Move vertical up");

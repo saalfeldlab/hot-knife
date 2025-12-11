@@ -7,6 +7,7 @@
 ## Navigation
 - **Ctrl+C** - Go to z=0 surface
 - **Ctrl+0** - Toggle z=0 line overlay
+- **Ctrl+2** - Toggle scale display overlay (shows current zoom level)
 - **Ctrl+F** - Move horizontal right (2000 pixels at current scale)
 - **Ctrl+D** - Move horizontal left (2000 pixels at current scale)
 - **Ctrl+R** - Move vertical up (1500 pixels at current scale)
