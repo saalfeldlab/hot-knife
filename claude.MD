@@ -67,9 +67,22 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - **SparkConvertCATMAIDStackToN5**: Import from CATMAID
 - **SparkDownsampleZarr**: Multi-scale pyramid generation for ZARR
 
-### Volume Export
+### Volume Export & Face Extraction
+- **SparkExportFlattenedVolume** / **SparkExportFlattenedVolumeMultiSEMBatch**: Flatten curved tissue slabs using height fields
+  - Applies FlattenTransform to create 3D flattened volumes
+  - Uses min/max height fields to warp between curved and flat space
+  - Outputs 3D N5 datasets for each slab
+
+- **SparkGenerateFaceScaleSpace** / **SparkGenerateFaceScaleSpaceMultiSEMBatch**: Extract 2D surface faces and generate scale spaces
+  - Takes flattened 3D volume as input
+  - Extracts top (min) and bottom (max) 2D surface faces using hyperslicing
+  - Generates multi-scale pyramids (s1-s9) for each face
+  - Use `--min` and `--size` parameters to specify face extraction (e.g., `--size=10000,20000,1` for single slice)
+  - Run twice: once for top face, once for bottom face
+  - Output used for SIFT-based surface alignment
+
 - **SparkExportAlignedSlabSeries**: Export aligned slab series as unified volume
-- **SparkGenerateFaceScaleSpace**: Generate multi-scale pyramids for faces
+  - Assembles multiple aligned slabs into final seamless 3D volume
 
 ### Visualization & Interactive Tools
 - **ViewAlignment**: Interactive viewer for alignment results
@@ -409,8 +422,10 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 2. **SparkSurfaceFit** → Detect surfaces → Output height fields (`min` and `max`)
 3. **PaintHeightField** → Manually correct height field errors (optional)
 4. **SparkMaskedCLAHEMultiSEM** / **SparkMaskedCLAHEMultiSEMBatch** → Apply CLAHE filtering to volume
-5. **SparkExportFlattenedVolume** → Use corrected height fields to flatten slabs
-6. **SparkPairAlignSIFT** / **SparkExportAlignedSlabSeries** → Final assembly
+5. **SparkExportFlattenedVolume** / **SparkExportFlattenedVolumeMultiSEMBatch** → Use height fields to flatten slabs into 3D volumes
+6. **SparkGenerateFaceScaleSpace** / **SparkGenerateFaceScaleSpaceMultiSEMBatch** → Extract 2D surface faces (top/bottom) and generate scale spaces (run twice: once for min, once for max)
+7. **SparkPairAlignSIFT** → Align surfaces using extracted faces
+8. **SparkExportAlignedSlabSeries** → Final assembly of aligned slabs
 
 **When to Use:**
 - Automated surface detection has artifacts or discontinuities
