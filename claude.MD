@@ -407,9 +407,10 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 **Typical Pipeline:**
 1. **SparkComputeCostMultiSem** → Compute cost function
 2. **SparkSurfaceFit** → Detect surfaces → Output height fields (`min` and `max`)
-3. **PaintHeightField** → Manually correct height field errors
-4. **SparkExportFlattenedVolume** → Use corrected height fields to flatten slabs
-5. **SparkPairAlignSIFT** / **SparkExportAlignedSlabSeries** → Final assembly
+3. **PaintHeightField** → Manually correct height field errors (optional)
+4. **SparkMaskedCLAHEMultiSEM** / **SparkMaskedCLAHEMultiSEMBatch** → Apply CLAHE filtering to volume
+5. **SparkExportFlattenedVolume** → Use corrected height fields to flatten slabs
+6. **SparkPairAlignSIFT** / **SparkExportAlignedSlabSeries** → Final assembly
 
 **When to Use:**
 - Automated surface detection has artifacts or discontinuities
