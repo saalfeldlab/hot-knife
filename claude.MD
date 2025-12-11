@@ -440,4 +440,5 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
   - Fixed numScales calculation to filter non-scale directories
   - Added keyboard shortcuts documentation (PAINTHEIGHTFIELD_SHORTCUTS.md)
   - Updated PAINTHEIGHTFIELD_GUIDE.md with correct cloud paths and --n5FieldPath parameter
+  - Fixed SparkSurfaceFit padding calculation to prevent NegativeArraySizeException in MinCostZSurface
 - **See**: DEBUG_COST_MULTISEM.md for complete usage guide
