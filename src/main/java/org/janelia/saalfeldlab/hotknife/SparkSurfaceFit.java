@@ -863,9 +863,9 @@ public class SparkSurfaceFit implements Callable<Void>{
 		*/
 
 		if ( multiSem )
-			padding = 5;//Math.max(15, maxStepSize * maxDeltaZTimes + 1);
+			padding = Math.max(maxStepSize + 2, Math.max(5, maxStepSize * maxDeltaZTimes + 1));
 		else
-			padding = Math.max(15, maxStepSize * maxDeltaZTimes + 1);
+			padding = Math.max(15, Math.max(maxStepSize + 2, maxStepSize * maxDeltaZTimes + 1));
 
 		System.out.println( "dzScale " + dzScale + ", downsampling of heightfield " + net.imglib2.util.Util.printCoordinates( downsamplingFactors ));
 		System.out.println("max step size " + maxStepSize + ", z-padding with " + padding + "px");
