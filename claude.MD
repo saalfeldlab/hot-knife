@@ -75,6 +75,13 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
   - Warps between curved surfaces and flat space
   - Block-wise processing for memory efficiency
 
+- **SparkGenerateFaceScaleSpace** / **SparkGenerateFaceScaleSpaceMultiSEMBatch**: Extract 2D surface faces
+  - Takes flattened 3D volume as input
+  - Extracts top (min) and bottom (max) 2D surface faces using hyperslicing
+  - Generates multi-scale pyramids (s0-s9) for each face
+  - Run twice: once for top face, once for bottom face
+  - Output: 2D face images used as input for alignment pipeline
+
 ### Alignment (12-Pass Multi-Resolution Pipeline)
 - **SparkAlignAffineGlobal** (Pass 0): Global affine alignment across all slab faces
   - Initial coarse alignment using RANSAC
@@ -138,22 +145,10 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - **SparkConvertCATMAIDStackToN5**: Import from CATMAID
 - **SparkDownsampleZarr**: Multi-scale pyramid generation for ZARR
 
-### Volume Export & Face Extraction
-- **SparkExportFlattenedVolume** / **SparkExportFlattenedVolumeMultiSEMBatch**: Flatten curved tissue slabs using height fields
-  - Applies FlattenTransform to create 3D flattened volumes
-  - Uses min/max height fields to warp between curved and flat space
-  - Outputs 3D N5 datasets for each slab
-
-- **SparkGenerateFaceScaleSpace** / **SparkGenerateFaceScaleSpaceMultiSEMBatch**: Extract 2D surface faces and generate scale spaces
-  - Takes flattened 3D volume as input
-  - Extracts top (min) and bottom (max) 2D surface faces using hyperslicing
-  - Generates multi-scale pyramids (s1-s9) for each face
-  - Use `--min` and `--size` parameters to specify face extraction (e.g., `--size=10000,20000,1` for single slice)
-  - Run twice: once for top face, once for bottom face
-  - Output used for SIFT-based surface alignment
-
+### Volume Export
 - **SparkExportAlignedSlabSeries**: Export aligned slab series as unified volume
   - Assembles multiple aligned slabs into final seamless 3D volume
+  - Applied AFTER all alignment passes complete
 
 ### Additional Visualization Tools
 - **ViewN5**: General N5 dataset viewer
