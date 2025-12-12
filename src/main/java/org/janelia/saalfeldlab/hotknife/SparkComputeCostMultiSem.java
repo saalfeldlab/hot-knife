@@ -1006,8 +1006,10 @@ public class SparkComputeCostMultiSem {
 
         try (final N5Reader n5 = new N5Path(options.outputN5Path).openReader()) {
 
-            if (n5.exists(options.costDatasetName)) {
-                System.out.println(options.costDatasetName + " already exists, skipping cost computation");
+            final String firstCostDataset = options.getCostDatasetName(0);
+            if (n5.exists(firstCostDataset)) {
+                System.out.println("outputN5Path " + options.outputN5Path + " firstCostDataset " + firstCostDataset +
+                                   " already exists, skipping cost computation");
             } else {
                 computeCost(sc, options);
             }
