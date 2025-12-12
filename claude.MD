@@ -91,6 +91,10 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
   - Applies FlattenTransform using height fields
   - Warps between curved surfaces and flat space
   - Block-wise processing for memory efficiency
+  - **Note**: Does NOT create multi-resolution pyramid by default (only s0)
+  - Batch version supports `--downsample` flag to generate s1-s9 pyramids
+  - Multi-resolution pyramids are necessary for interactive visualization in ViewAlignedSlabSeries
+  - Without downsampling, 3D volume rendering will be slow or infeasible for large datasets
 
 - **SparkGenerateFaceScaleSpace** / **SparkGenerateFaceScaleSpaceMultiSEMBatch**: Extract 2D surface faces
   - Takes flattened 3D volume as input
