@@ -152,10 +152,22 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - **ViewFlattenedSlab**: Visualize flattened volumes
 - **PaintHeightField**: Interactive height field editor (see dedicated section below)
 
-### Image Processing
+### Image Processing & Contrast Enhancement
 - **SparkNormalizeLayerIntensityN5**: Layer-wise intensity normalization
 - **SparkPixelNormalizeN5**: Pixel-level normalization
-- **SparkMaskedCLAHEMultiSEM**: Contrast-limited adaptive histogram equalization
+
+- **SparkMaskedCLAHEMultiSEM** / **SparkMaskedCLAHEMultiSEMBatch**: Masked contrast-limited adaptive histogram equalization
+  - Applied AFTER surface detection and BEFORE volume flattening
+  - Uses height fields (min/max) to create tissue mask
+  - Only processes voxels within tissue boundaries (between surfaces)
+  - Improves local contrast while avoiding resin regions
+  - Parameters:
+    - `--blockFactorXY`: Compute block size multiplier in XY (default: 8)
+    - `--blockFactorZ`: Compute block size multiplier in Z (default: 1)
+  - Batch version processes multiple stacks sequentially
+  - Input: Normalized raw data (`.../s0`)
+  - Output: CLAHE-enhanced data (`..._norm-layer-clahe/s0`)
+  - Essential for improving alignment quality by enhancing tissue features
 
 ## Key Data Structures
 
@@ -365,6 +377,36 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - Passes 8-11: 3-5 hrs each, Pass 12: ~15 hrs (most computationally intensive)
 
 ## Batch Processing Parameters (Wafer-53-Center7 Production Run)
+
+### Masked CLAHE Contrast Enhancement (SparkMaskedCLAHEMultiSEMBatch)
+**Script**: `64_spark_masked_clahe_batch.sh`
+
+**Parameters**:
+```bash
+--n5PathInput=<n5_path>
+--datasetCsv=<batch_csv>
+--blockFactorXY=32       # compute blocks are 32× larger than storage blocks in XY
+--blockFactorZ=1         # compute blocks same size as storage blocks in Z
+--overwrite              # overwrite existing output datasets
+```
+
+**Batch Configuration**:
+- 35 slabs per batch (5-10 hours per batch)
+- 402 total slabs → 12 batch CSV files
+- 15 nodes with 11 cores each (2 executors × 5 cores + 1 overhead core)
+- Runtime: ~233 hours max per batch
+
+**CSV Format** (input_dataset, output_dataset, heightfield_max):
+```
+/render/<slab>_norm-layer/s0,/render/<slab>_norm-layer-clahe/s0,/heightfields_fix/<slab>/max
+```
+
+**Processing Details**:
+- Input: Layer-normalized data (`..._norm-layer/s0`)
+- Mask: Max height field (`/heightfields_fix/<slab>/max`) defines tissue boundary
+- Output: CLAHE-enhanced data (`..._norm-layer-clahe/s0`)
+- Only voxels between min and max height fields are processed
+- Large blockFactorXY (32) improves CLAHE quality by using larger context windows
 
 ### Volume Flattening (SparkExportFlattenedVolumeMultiSEMBatch)
 **Script**: `71_spark_export_flat_batch.sh`
