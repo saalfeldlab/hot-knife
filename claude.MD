@@ -65,6 +65,14 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
   - Gradient detection and resin band detection
   - Multi-scale Gaussian filtering and DoG
   - Processes along axis 0, 2, or both
+  - **Fly MultiSEM strategy**: Fixed costs for top and bottom layers (commit ede219a)
+    - `--topLayerCost` (default: 105) - cost for topmost z-layer
+    - `--bottomLayerCost` (default: 250) - cost for bottommost z-layer
+    - Supports multiple substrate configurations:
+      - No substrate (tissue only)
+      - 1× black substrate (single layer)
+      - 2× substrate (black + white layers)
+    - Fixed layer costs guide surface detection to avoid substrate regions
 
 - **SparkSurfaceFit**: Detect surfaces using MinCostZSurface
   - Multi-scale approach (s8 → s1)
