@@ -62,6 +62,14 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
   - Constraint-based: maxDeltaZ (slope), minDistance/maxDistance (thickness)
   - Outputs height fields (min/max) as 2D arrays
 
+- **SparkMaskedCLAHEMultiSEM** / **SparkMaskedCLAHEMultiSEMBatch**: Masked contrast enhancement
+  - Applied AFTER surface detection, BEFORE volume flattening
+  - Uses height fields to mask tissue regions (excludes resin)
+  - CLAHE applied only to voxels between min/max surfaces
+  - Parameters: blockFactorXY (context window size), blockFactorZ
+  - Essential for improving alignment quality by enhancing tissue features
+  - Output: `..._norm-layer-clahe/s0` used as input for flattening
+
 - **SparkExportFlattenedVolume** / **SparkExportFlattenedVolumeMultiSEMBatch**: Flatten volumes
   - Applies FlattenTransform using height fields
   - Warps between curved surfaces and flat space
