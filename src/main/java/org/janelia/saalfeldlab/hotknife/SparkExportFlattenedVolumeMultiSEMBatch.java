@@ -26,8 +26,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.FlatteningInfo;
 import org.janelia.saalfeldlab.hotknife.util.N5PathAndDataset;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.RawStack;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -133,7 +133,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
             if (! downsampleOutputDatasetPaths.isEmpty()) {
 
                 final int[] downsampleFactors = new int[] { 2, 2, 1 };
-                final N5WriterSupplier n5Supplier = () -> new N5FSWriter(batchOptions.n5RootPathName);
+                final N5WriterSupplier n5Supplier = () -> N5Util.createN5Writer(batchOptions.n5RootPathName);
 
                 downsample(sparkContext,
                            n5Supplier,

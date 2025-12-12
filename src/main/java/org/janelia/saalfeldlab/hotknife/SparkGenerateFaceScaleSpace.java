@@ -29,11 +29,10 @@ import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.ops.SimpleGaussRA;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -114,7 +113,7 @@ public class SparkGenerateFaceScaleSpace {
 				else
 					parseCSLongArray(minString, min);
 
-				final N5Reader n5 = new N5FSReader(n5Path);
+				final N5Reader n5 = N5Util.createN5Reader(n5Path);
 				final DatasetAttributes attributes = n5.getDatasetAttributes(inDatasetName);
 				final long[] sourceSize = attributes.getDimensions();
 
@@ -211,7 +210,7 @@ public class SparkGenerateFaceScaleSpace {
 			final boolean invert,
 			final boolean normalizeContrast ) throws IOException {
 
-		final N5Writer n5 = new N5FSWriter(n5Path);
+		final N5Writer n5 = N5Util.createN5Writer(n5Path);
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(inDatasetName);
 		final DataType inType = attributes.getDataType();
@@ -239,7 +238,7 @@ public class SparkGenerateFaceScaleSpace {
 				gridBlock -> {
 					System.out.println(Arrays.deepToString(gridBlock));
 
-					final N5Writer n5Writer = new N5FSWriter(n5Path);
+					final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
 					@SuppressWarnings("unchecked")
 					final RandomAccessibleInterval<RealType<?>> source;
 
@@ -382,7 +381,7 @@ public class SparkGenerateFaceScaleSpace {
 			final boolean normalizeContrast,
 			final int scaleIndex ) throws IOException {
 
-		final N5Writer n5 = new N5FSWriter(n5Path);
+		final N5Writer n5 = N5Util.createN5Writer(n5Path);
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(inDatasetName);
 		final DataType inType = attributes.getDataType();
@@ -418,7 +417,7 @@ public class SparkGenerateFaceScaleSpace {
 		rdd.foreach(
 				gridBlock -> {
 					System.out.println(Arrays.deepToString(gridBlock));
-					final N5Writer n5Writer = new N5FSWriter(n5Path);
+					final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
 					
 					final RandomAccessibleInterval<RealType<?>> source;
 
@@ -474,7 +473,7 @@ public class SparkGenerateFaceScaleSpace {
 									final Options options)
             throws IOException {
 
-		final N5Writer n5 = new N5FSWriter(options.getN5Path());
+		final N5Writer n5 = N5Util.createN5Writer(options.getN5Path());
 		n5.createGroup(options.getOutputGroupName());
 
 		final DatasetAttributes attributes = n5.getDatasetAttributes(options.getInputDatasetName());
@@ -554,7 +553,7 @@ public class SparkGenerateFaceScaleSpace {
 		// downsample the s1 face
 		if ( maxScaleIndex < 9 )
 		{
-			final N5WriterSupplier n5Supplier = () -> new N5FSWriter( options.getN5Path() );
+			final N5WriterSupplier n5Supplier = () -> N5Util.createN5Writer( options.getN5Path() );
 			final int[] downsamplingFactorDelta = new int[] { 2, 2 };
 			final int[] ds = new int[] { 1, 1 };
 

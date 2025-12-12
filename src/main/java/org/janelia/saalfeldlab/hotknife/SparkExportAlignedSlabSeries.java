@@ -36,12 +36,11 @@ import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
 import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -293,8 +292,8 @@ public class SparkExportAlignedSlabSeries {
 			final long[][] gridBlock,
 			final boolean normalizeContrast ) throws IOException {
 
-		final N5Reader n5Input = new N5FSReader(n5PathInput);
-		final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+		final N5Reader n5Input = N5Util.createN5Reader(n5PathInput);
+		final N5Writer n5Output = N5Util.createN5Writer(n5PathOutput);
 
 		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> sources = new ArrayList<>();
 		long zOffset = 0;
@@ -439,7 +438,7 @@ public class SparkExportAlignedSlabSeries {
         final String n5PathInput = options.getN5InputPath();
 		final String group = options.getGroup();
 
-		final N5Reader n5Input = new N5FSReader(n5PathInput);
+		final N5Reader n5Input = N5Util.createN5Reader(n5PathInput);
 		final String[] transformDatasetNames = n5Input.getAttribute(group, "transforms", String[].class);
 
 		final List<Long> topOffsets = options.getTopOffsets();
@@ -564,7 +563,7 @@ public class SparkExportAlignedSlabSeries {
 
 			/* create output dataset */
 			final String n5PathOutput = options.getN5OutputPath();
-			final N5Writer n5Output = new N5FSWriter(n5PathOutput);
+			final N5Writer n5Output = N5Util.createN5Writer(n5PathOutput);
 
 			if (n5Output.exists(datasetNameOutput)) {
 				// if dataset already exists (e.g. from prior batch run), verify consistency of attributes
