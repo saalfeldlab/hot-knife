@@ -52,6 +52,15 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 ## Key Classes by Function
 
 ### Surface Detection & Extraction
+- **SparkNormalizeLayerIntensityN5**: Layer-wise intensity normalization (MultiSEM preprocessing)
+  - Applied BEFORE cost computation for MultiSEM data
+  - Corrects intensity variations between z-planes
+  - Exported raw MultiSEM volumes are only 2D intensity-corrected
+  - Fixes different average intensity per z-plane across the 3D stack
+  - Input: Raw exported data (e.g., `/render/<slab>/s0`)
+  - Output: Normalized data (e.g., `/render/<slab>_norm-layer/s0`)
+  - Essential for consistent cost function computation across all z-planes
+
 - **SparkComputeCost** / **SparkComputeCostMultiSem**: Compute cost functions using DagmarCost algorithm
   - Gradient detection and resin band detection
   - Multi-scale Gaussian filtering and DoG
@@ -138,6 +147,11 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
   - Used to validate final alignment before running SparkExportAlignedSlabSeries
   - Enables manual tuning of top/bot offsets for optimal slab transitions
 
+### Volume Export
+- **SparkExportAlignedSlabSeries**: Export aligned slab series as unified volume
+  - Assembles multiple aligned slabs into final seamless 3D volume
+  - Applied AFTER all alignment passes complete
+
 ### Data Conversion
 - **SparkConvertTiffSeriesToN5**: TIFF series → N5
 - **SparkConvertBlockedTiffSeriestoN5**: Blocked TIFF → N5
@@ -145,19 +159,13 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - **SparkConvertCATMAIDStackToN5**: Import from CATMAID
 - **SparkDownsampleZarr**: Multi-scale pyramid generation for ZARR
 
-### Volume Export
-- **SparkExportAlignedSlabSeries**: Export aligned slab series as unified volume
-  - Assembles multiple aligned slabs into final seamless 3D volume
-  - Applied AFTER all alignment passes complete
-
 ### Additional Visualization Tools
 - **ViewN5**: General N5 dataset viewer
 - **ViewFlattenedSlab**: Visualize flattened volumes
 - **PaintHeightField**: Interactive height field editor (see dedicated section below)
 
 ### Image Processing & Contrast Enhancement
-- **SparkNormalizeLayerIntensityN5**: Layer-wise intensity normalization
-- **SparkPixelNormalizeN5**: Pixel-level normalization
+- **SparkPixelNormalizeN5**: Pixel-level normalization (not used in standard MultiSEM workflow)
 
 - **SparkMaskedCLAHEMultiSEM** / **SparkMaskedCLAHEMultiSEMBatch**: Masked contrast-limited adaptive histogram equalization
   - Applied AFTER surface detection and BEFORE volume flattening
