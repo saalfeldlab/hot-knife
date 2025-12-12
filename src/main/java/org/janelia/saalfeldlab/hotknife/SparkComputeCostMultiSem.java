@@ -1017,7 +1017,8 @@ public class SparkComputeCostMultiSem {
             if (options.surfaceN5Output != null) {
 
                 if (n5.exists(options.surfaceN5Output)) {
-                    System.out.println(options.surfaceN5Output + " already exists, skipping surface fitting");
+                    System.out.println("outputN5Path " + options.outputN5Path + " surfaceN5Output " + options.surfaceN5Output +
+                                       " already exists, skipping surface fitting");
                 } else {
                     final long[] inputDimensions = n5.getAttribute(options.inputDatasetName, "dimensions", long[].class);
                     final double maxDeltaZ = options.getSurfaceMaxDeltaZ(inputDimensions);
