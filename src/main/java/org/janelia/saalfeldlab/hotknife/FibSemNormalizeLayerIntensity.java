@@ -11,10 +11,8 @@ import java.util.stream.IntStream;
 
 import mpicbg.models.AffineModel1D;
 
-import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -44,10 +42,6 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 				usage = "Scale intensities based on the given method: 'NONE', 'FULL_RANGE', or 'GAUSS'")
 		private ScaleType scale = ScaleType.NONE;
 
-		@Option(name = "--cutoff",
-				usage = "Cut this fraction of pixels on either side when computing the layer statistics (default: 0.03)")
-		private double cutoff = 0.03;
-
 		protected Options(final String[] args) {
 			final CmdLineParser parser = new CmdLineParser(this);
 			try {
@@ -66,10 +60,6 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 		protected ScaleType scale() {
 			return scale;
 		}
-
-		protected double cutoff() {
-			return cutoff;
-		}
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -79,18 +69,7 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final DatasetAttributes attributes;
-		try (final N5Reader n5reader = N5Util.createN5Reader(options.n5Path())) {
-			if (n5reader.exists(options.n5DatasetOutput())) {
-				throw new IllegalArgumentException("Normalized data set already exists: " + options.n5DatasetOutput());
-			}
-
-			final String fullScaleInputDataset = options.n5DatasetInput() + "/s0";
-			attributes = n5reader.getDatasetAttributes(fullScaleInputDataset);
-			if (attributes == null) {
-				throw new IllegalArgumentException("no attributes found in " + options.n5Path() + fullScaleInputDataset);
-			}
-		}
+		final DatasetAttributes attributes = options.readDatasetAttributes();
 
 		if (attributes.getDataType() == DataType.UINT8) {
 			new FibSemNormalizeLayerIntensity<>(options, attributes, new ByteHelper()).run();
@@ -121,9 +100,7 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 					pixels.add((double) pixel.getInteger());
 				}
 			}
-
-			final double[] arr = pixels.stream().mapToDouble(Double::doubleValue).toArray();
-			layerStats.add(LayerStats.from(arr, fibSemOptions.cutoff()));
+			layerStats.add(LayerStats.from(pixels, fibSemOptions.cutoff()));
 		}
 
 		// Determine the target shift and scale based on the layer with the maximum scale

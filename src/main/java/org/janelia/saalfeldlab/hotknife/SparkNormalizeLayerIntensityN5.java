@@ -77,14 +77,45 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 		@Option(name = "--factors",
 				usage = "If specified, generates a scale pyramid with given factors, e.g. 2,2,1")
-		public String factors;
+		protected String factors;
+
+		@Option(name = "--cutoff",
+				usage = "Cut this fraction of pixels on either side when computing the layer statistics (default: 0.03)")
+		protected double cutoff = 0.03;
 
 		protected Options() {
 			// Default constructor for subclasses
 		}
 
+		public double cutoff() {
+			return cutoff;
+		}
+
 		public String n5Path() {
 			return n5Path;
+		}
+
+		/**
+		 * Read and validate dataset attributes from N5.
+		 * Checks that output doesn't exist and input has valid attributes.
+		 *
+		 * @return the dataset attributes for the full scale input
+		 * @throws IOException if N5 access fails
+		 * @throws IllegalArgumentException if output exists or input has no attributes
+		 */
+		public DatasetAttributes readDatasetAttributes() throws IOException {
+			try (final N5Reader n5reader = N5Util.createN5Reader(n5Path)) {
+				if (n5reader.exists(n5DatasetOutput)) {
+					throw new IllegalArgumentException("Normalized data set already exists: " + n5DatasetOutput);
+				}
+
+				final String fullScaleInputDataset = n5DatasetInput + "/s0";
+				final DatasetAttributes attributes = n5reader.getDatasetAttributes(fullScaleInputDataset);
+				if (attributes == null) {
+					throw new IllegalArgumentException("no attributes found in " + n5Path + fullScaleInputDataset);
+				}
+				return attributes;
+			}
 		}
 
 		public String n5DatasetInput() {
@@ -252,13 +283,14 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			this.max = max;
 		}
 
-		public static LayerStats from(final double[] pixels, final double cutoff) {
+		public static LayerStats from(final List<Double> pixelList, final double cutoff) {
+			// Convert to sorted array for rank statistics
+			final double[] pixels = pixelList.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+
 			// Compute histogram clipping bounds
 			final int start = (int) Math.round(pixels.length * cutoff);
 			final int end = pixels.length - start;
 
-			// Sort the pixels to compute rank statistics
-			Arrays.sort(pixels);
 			final double median = pixels[pixels.length / 2];
 			final double min = pixels[start];
 			final double max = pixels[end - 1];

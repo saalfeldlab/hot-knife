@@ -3,16 +3,13 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import mpicbg.models.AffineModel1D;
 
-import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -41,7 +38,7 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 		MEAN
 	}
 
-	@SuppressWarnings({"FieldMayBeFinal", "unused"})
+	@SuppressWarnings({"FieldMayBeFinal", "unused", "FieldCanBeLocal"})
 	public static class Options extends SparkNormalizeLayerIntensityN5.Options implements Serializable {
 
 		@Option(name = "--aggregation",
@@ -67,15 +64,15 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 			}
 		}
 
-		public AggregationType getAggregation() {
+		public AggregationType aggregation() {
 			return aggregation;
 		}
 
-		public int getLowerThreshold() {
+		public int lowerThreshold() {
 			return lowerThreshold;
 		}
 
-		public int getUpperThreshold() {
+		public int upperThreshold() {
 			return upperThreshold;
 		}
 	}
@@ -87,18 +84,7 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 			throw new IllegalArgumentException("Options were not parsed successfully");
 		}
 
-		final DatasetAttributes attributes;
-		try (final N5Reader n5reader = N5Util.createN5Reader(options.n5Path())) {
-			if (n5reader.exists(options.n5DatasetOutput())) {
-				throw new IllegalArgumentException("Normalized data set already exists: " + options.n5DatasetOutput());
-			}
-
-			final String fullScaleInputDataset = options.n5DatasetInput() + "/s0";
-			attributes = n5reader.getDatasetAttributes(fullScaleInputDataset);
-			if (attributes == null) {
-				throw new IllegalArgumentException("no attributes found in " + options.n5Path() + fullScaleInputDataset);
-			}
-		}
+		final DatasetAttributes attributes = options.readDatasetAttributes();
 
 		if (attributes.getDataType() != DataType.UINT8) {
 			throw new IllegalArgumentException("MultiSemNormalizeLayerIntensity only supports 8-bit data, found: " + attributes.getDataType());
@@ -146,7 +132,7 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 				}
 			}
 
-			// Compute median or mean of shifts
+			// Use LayerStats for robust aggregation with cutoff
 			final double layerShift = aggregateShifts(shifts);
 			cumulativeShift += layerShift;
 
@@ -160,7 +146,7 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 	}
 
 	private boolean isWithinThreshold(final int value) {
-		return value >= multiSemOptions.getLowerThreshold() && value <= multiSemOptions.getUpperThreshold();
+		return value >= multiSemOptions.lowerThreshold() && value <= multiSemOptions.upperThreshold();
 	}
 
 	private double aggregateShifts(final List<Double> shifts) {
@@ -168,13 +154,13 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 			return 0.0;
 		}
 
-		final double[] arr = shifts.stream().mapToDouble(Double::doubleValue).toArray();
-		Arrays.sort(arr);
+		// Use LayerStats for robust aggregation with cutoff (clips outliers)
+		final LayerStats stats = LayerStats.from(shifts, multiSemOptions.cutoff());
 
-		if (multiSemOptions.getAggregation() == AggregationType.MEDIAN) {
-			return arr[arr.length / 2];
+		if (multiSemOptions.aggregation() == AggregationType.MEDIAN) {
+			return stats.median;
 		} else {
-			return Arrays.stream(arr).average().orElse(0.0);
+			return stats.mean;
 		}
 	}
 }
