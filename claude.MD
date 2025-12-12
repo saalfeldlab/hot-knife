@@ -5,7 +5,7 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 
 ## Core Workflow
 
-### Five-Stage Processing Pipeline
+### Six-Stage Processing Pipeline
 
 1. **Data Import**
    - Convert TIFF series to N5/ZARR format
@@ -13,25 +13,38 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
    - Optional cropping and preprocessing
 
 2. **Preprocessing**
-   - Intensity normalization (layer-wise or CLAHE)
+   - Intensity normalization (layer-wise)
    - Multi-scale pyramid generation for efficient processing
 
-3. **Surface Detection**
+3. **Surface Detection & Volume Flattening**
    - Compute cost functions for tissue/resin boundaries
    - Fit surfaces using MinCostZSurface graph-cut algorithm
    - Multi-scale hierarchical refinement (coarse to fine)
    - Output: Height fields (top and bottom surfaces)
+   - Optional: Manual correction with PaintHeightField
+   - CLAHE contrast enhancement (masked by height fields)
+   - Flatten volumes using height fields (FlattenTransform)
 
-4. **Alignment**
-   - Global affine alignment across stacks
-   - SIFT-based pairwise alignment with feature matching
-   - Interactive manual refinement
-   - Output: Transform position fields
+4. **Face Extraction**
+   - Extract 2D surface faces (top/bottom) from flattened 3D volumes
+   - Generate multi-scale pyramids for extracted faces
+   - Run twice: once for top face, once for bottom face
 
-5. **Volume Assembly**
-   - Flatten curved tissue slabs using height fields
-   - Apply alignment transforms
+5. **Multi-Pass Alignment** (12 passes + initial global pass)
+   - **Pass 0**: Global affine alignment (SparkAlignAffineGlobal)
+   - **Passes 1-7**: SIFT-based alignment with averaging (SparkPairAlignSIFTAverage)
+     - Progressive coarse-to-fine refinement (s4 → s2)
+     - Grid-based feature matching between adjacent slab pairs
+   - **Passes 8-12**: Optical flow-based dense alignment (SparkPairAlignFlow)
+     - Dense flow field computation with smoothness regularization
+     - Finest scale refinement (s5 → s1)
+   - Output: Transform position fields for each pass
+
+6. **Volume Assembly**
+   - Apply final alignment transforms to flattened slabs
+   - Composite multiple slabs with proper spacing
    - Export unified seamless 3D volume
+   - Optional: Downsample final volume for visualization
 
 ## Key Classes by Function
 
@@ -51,11 +64,30 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
   - Warps between curved surfaces and flat space
   - Block-wise processing for memory efficiency
 
-### Alignment
-- **SparkAlignAffineGlobal**: Global affine alignment across multiple stacks
-- **SparkPairAlignSIFT**: SIFT feature matching for pairwise alignment
-  - Grid-based feature detection
+### Alignment (12-Pass Multi-Resolution Pipeline)
+- **SparkAlignAffineGlobal** (Pass 0): Global affine alignment across all slab faces
+  - Initial coarse alignment using RANSAC
+  - Creates baseline transform for all slabs
+  - Fast execution: ~5 minutes for 402 slabs
+
+- **SparkPairAlignSIFTAverage** (Passes 1-7): SIFT-based alignment with averaging
+  - Grid-based SIFT feature matching between adjacent slab pairs
+  - Computes average transform across overlapping grid cells
+  - Progressive refinement: coarse → fine scales (s4 → s2)
   - Regularized affine models (rigid + affine with lambda interpolation)
+  - Passes 1-3: Coarse alignment (scaleIndex 4→3, stepSize 512-400)
+  - Passes 4-7: Medium refinement (scaleIndex 2, stepSize 400-512)
+
+- **SparkPairAlignFlow** (Passes 8-12): Optical flow-based dense alignment
+  - Dense flow field computation for fine-scale refinement
+  - Smoothness regularization (sigma parameter)
+  - Progressive scale refinement: s5 → s1 (coarse to finest)
+  - Passes 8-10: Flow alignment (scaleIndex 5→3)
+  - Passes 11-12: Final fine alignment (scaleIndex 2→1)
+  - Computationally intensive: pass 12 can take 15+ hours for large datasets
+
+- **SparkPairAlignSIFT**: Legacy single-pass SIFT alignment (used for simpler workflows)
+  - Grid-based feature detection
   - Exports position field transforms
 
 - **SparkSeriesAlignSIFT**: Sequential alignment of slab series
@@ -263,11 +295,114 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - **maxSlope**: Maximum expected tissue slope
 - **scales**: Multi-scale pyramid levels (s0-s8)
 
+### Cost Computation Parameters (SparkComputeCostMultiSem)
+- **bandSize**: Resin band detection window size (e.g., 200)
+- **minGradient**: Minimum gradient threshold for tissue boundaries (e.g., 20)
+- **maxSlope**: Maximum expected tissue slope (e.g., 25)
+- **bottomLayerCost**: Cost value for bottom layer pixels (e.g., 250 for fly MultiSEM)
+- **surfaceInitMaxDeltaZ**: Initial max slope for surface detection (e.g., 0.1 for fly MultiSEM)
+- **surfaceMaxDeltaZ**: Max slope during surface detection (e.g., 0.1 for fly MultiSEM)
+- **finalMaxDeltaZ**: Final max slope for refinement (e.g., 0.2 for fly MultiSEM)
+- **axis**: Which surfaces to detect (0=top, 2=bottom, or both)
+
 ### Alignment Parameters
-- **sigma**: SIFT feature scale
-- **maxEpsilon**: RANSAC inlier threshold
-- **lambda**: Rigid-to-affine regularization (0=rigid, 1=affine)
-- **rod**: Ratio of distances for feature matching
+
+**12-Pass Alignment Pipeline** (used for large Multi-SEM datasets):
+
+| Pass | Class | scaleIndex | stepSize | lambdaFilter | lambdaModel | maxEpsilon | sigma | Purpose |
+|------|-------|------------|----------|--------------|-------------|------------|-------|---------|
+| 0 | SparkAlignAffineGlobal | 5 | - | - | - | 320 | - | Initial global affine (RANSAC) |
+| 1 | SparkPairAlignSIFTAverage | 4 | 512 | 0.01 | 0.01 | 100 | - | Coarse SIFT alignment |
+| 2 | SparkPairAlignSIFTAverage | 4 | 400 | 0.1 | 0.01 | 50 | - | Coarse SIFT refinement |
+| 3 | SparkPairAlignSIFTAverage | 3 | 512 | 0.1 | 0.01 | 40 | - | Medium SIFT alignment |
+| 4 | SparkPairAlignSIFTAverage | 2 | 400 | 0.1 | 0.01 | 20 | - | Fine SIFT alignment |
+| 5-7 | SparkPairAlignSIFTAverage | 2 | 512 | 0.25 | 0.01 | 20 | - | Fine SIFT refinement (3 passes) |
+| 8 | SparkPairAlignFlow | 5 | 256 | - | - | 3 | 30 | Coarse flow alignment |
+| 9 | SparkPairAlignFlow | 4 | 256 | - | - | 3 | 30 | Medium flow alignment |
+| 10 | SparkPairAlignFlow | 3 | 256 | - | - | 5 | 30 | Medium-fine flow alignment |
+| 11 | SparkPairAlignFlow | 2 | 256 | - | - | 3 | 30 | Fine flow alignment |
+| 12 | SparkPairAlignFlow | 1 | 256 | - | - | 3 | 30 | Finest flow alignment |
+
+**Parameter Descriptions:**
+- **scaleIndex**: Resolution level (4 = 1/16 resolution, 1 = 1/2 resolution, 0 = full resolution)
+- **stepSize**: Grid cell size in pixels for alignment blocks
+- **lambdaFilter**: Rigid-to-affine regularization for RANSAC filtering (0=rigid, 1=affine)
+- **lambdaModel**: Rigid-to-affine regularization for model fitting (0=rigid, 1=affine)
+- **maxEpsilon**: Maximum residual error threshold in world pixels
+- **sigma**: Smoothness constraint for optical flow (larger = smoother transforms)
+
+**Typical Runtime** (402 slabs, 7 mFOVs each):
+- Pass 0: ~5 min, Passes 1-3: 2-3 hrs each, Passes 4-7: 4-6 hrs each
+- Passes 8-11: 3-5 hrs each, Pass 12: ~15 hrs (most computationally intensive)
+
+## Batch Processing Parameters (Wafer-53-Center7 Production Run)
+
+### Volume Flattening (SparkExportFlattenedVolumeMultiSEMBatch)
+**Script**: `71_spark_export_flat_batch.sh`
+
+**Parameters**:
+```bash
+--n5RootPath=<n5_path>
+--datasetCsv=<batch_csv>
+--padding=3              # padding beyond height field min/max
+--blockSize=128,128,64   # output block size (z is smaller for efficiency)
+--downsample             # automatically generate s1-s9 downsampling pyramids
+```
+
+**Batch Configuration**:
+- 31 slabs per batch (to balance runtime ~5-7 hours per batch)
+- 402 total slabs → 13 batch CSV files
+- 20 nodes with 11 cores each (2 executors × 5 cores + 1 overhead core)
+- Runtime: ~233 hours max per batch
+
+**CSV Format** (raw_dataset, heightfield_dataset, output_dataset):
+```
+/render/<slab>_norm-layer-clahe/s0,/heightfields_fix/<slab>,/flat_clahe/<slab>/raw/s0
+```
+
+**Input/Output Structure**:
+- Input: CLAHE-filtered normalized data (`..._norm-layer-clahe/s0`)
+- Height fields: Fixed/corrected height fields (`/heightfields_fix/<slab>`)
+- Output: Flattened volume with auto-downsampling (`/flat_clahe/<slab>/raw/s0-s9`)
+
+### Face Extraction (SparkGenerateFaceScaleSpaceMultiSEMBatch)
+**Script**: `72_spark_extract_face_batch.sh`
+
+**Parameters**:
+```bash
+--n5Path=<n5_path>
+--datasetCsv=<batch_csv>
+--blockSize=1024,1024    # 2D block size for face images
+--invert                 # invert intensity (needed for old MultiSEM data)
+```
+
+**Batch Configuration**:
+- Same batch structure: 31 slabs per batch, 13 total batches
+- Surface depth: 4 pixels (extracts 4-pixel thick slice from top/bottom)
+- Face naming: `top4i` (top face, 4 pixels, inverted) and `bot4i` (bottom face)
+
+**CSV Format** (input_3d_volume, output_face, min_z, size_z):
+```
+/flat_clahe/<slab>/raw/s0,/flat_clahe/<slab>/top4i,4,<surface_size>
+/flat_clahe/<slab>/raw/s0,/flat_clahe/<slab>/bot4i,-4,-<surface_size>
+```
+
+**Surface Size Calculation**:
+- Read `avg` value from height field max attributes.json
+- `surface_size = floor(avg) - 2`
+- Ensures face is positioned at correct depth within flattened volume
+
+**Face Extraction Details**:
+- **Top face** (`top4i`): Extracts from `min_z = 4` to `max_z = surface_size`
+- **Bottom face** (`bot4i`): Extracts from `min_z = -4` to `max_z = -surface_size`
+- Negative values indicate extraction from bottom of volume
+- Both faces include multi-scale pyramids (s0-s9) for alignment
+- Output: `/flat_clahe/<slab>/{top4i,bot4i}/face/s0-s9`
+
+**Runtime Notes**:
+- Similar compute requirements to flattening (20 nodes, 11 cores each)
+- Each slab generates 2 face datasets (top + bottom)
+- Faces used as input for subsequent 12-pass alignment workflow
 
 ## Typical Workflow Example
 
