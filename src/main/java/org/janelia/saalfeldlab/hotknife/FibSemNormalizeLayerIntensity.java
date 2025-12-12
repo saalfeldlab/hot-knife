@@ -93,14 +93,19 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 		final List<LayerStats> layerStats = new ArrayList<>(stack.size());
 
 		// Compute statistics for each layer using all non-zero pixels
-		for (final IntervalView<T> layer : stack) {
+		System.out.println("Computing layer statistics...");
+		System.out.println("layer\tmedian\tmean\tstd\tmin\tmax");
+		for (int z = 0; z < stack.size(); z++) {
 			final List<Double> pixels = new ArrayList<>();
-			for (final T pixel : Views.flatIterable(layer)) {
+			for (final T pixel : Views.flatIterable(stack.get(z))) {
 				if (pixel.getInteger() > 0) {
 					pixels.add((double) pixel.getInteger());
 				}
 			}
-			layerStats.add(LayerStats.from(pixels, fibSemOptions.cutoff()));
+			final LayerStats stats = LayerStats.from(pixels, fibSemOptions.cutoff());
+			layerStats.add(stats);
+			System.out.printf("%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f%n",
+					z, stats.median, stats.mean, stats.std, stats.min, stats.max);
 		}
 
 		// Determine the target shift and scale based on the layer with the maximum scale
@@ -111,10 +116,13 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 				.orElseThrow(NoSuchElementException::new);
 		final double targetShift = fibSemOptions.shift().from(layerStats.get(maxScaleIndex));
 		final double targetScale = fibSemOptions.scale().get(layerStats.get(maxScaleIndex));
+		System.out.printf("Target layer: %d, targetShift: %.2f, targetScale: %.2f%n",
+				maxScaleIndex, targetShift, targetScale);
 
 		// Compute intensity transformations for each layer
 		final List<AffineModel1D> models = new ArrayList<>(stack.size());
-		for (final LayerStats stats : layerStats) {
+		for (int z = 0; z < layerStats.size(); z++) {
+			final LayerStats stats = layerStats.get(z);
 			final AffineModel1D model = new AffineModel1D();
 			final double scale = targetScale / fibSemOptions.scale().get(stats);
 			final double shift = targetShift - fibSemOptions.shift().from(stats) * scale;

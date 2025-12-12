@@ -112,6 +112,11 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 
 		double cumulativeShift = 0.0;
 
+		// Print header for diagnostic output
+		System.out.println("Computing layer shift statistics...");
+		System.out.println("layer\tnValid\tmedian\tmean\tstd\tmin\tmax\tlayerShift\tcumulativeShift");
+		System.out.printf("%d\t-\t-\t-\t-\t-\t-\t%.2f\t%.2f%n", 0, 0.0, 0.0);
+
 		// Compute shifts between adjacent layers
 		for (int z = 0; z < stack.size() - 1; z++) {
 			final IntervalView<UnsignedByteType> currentLayer = stack.get(z);
@@ -132,9 +137,20 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 				}
 			}
 
-			// Use LayerStats for robust aggregation with cutoff
-			final double layerShift = aggregateShifts(shifts);
-			cumulativeShift += layerShift;
+			// Compute layer shift using LayerStats for robust aggregation
+			double layerShift = 0.0;
+			if (!shifts.isEmpty()) {
+				final LayerStats stats = LayerStats.from(shifts, multiSemOptions.cutoff());
+				layerShift = (multiSemOptions.aggregation() == AggregationType.MEDIAN) ? stats.median : stats.mean;
+				cumulativeShift += layerShift;
+
+				System.out.printf("%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f%n",
+						z + 1, shifts.size(), stats.median, stats.mean, stats.std, stats.min, stats.max,
+						layerShift, cumulativeShift);
+			} else {
+				System.out.printf("%d\t0\t-\t-\t-\t-\t-\t%.2f\t%.2f%n",
+						z + 1, layerShift, cumulativeShift);
+			}
 
 			// Create model: new_val = old_val - cumulativeShift (to normalize to layer 0)
 			final AffineModel1D model = new AffineModel1D();
@@ -147,20 +163,5 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 
 	private boolean isWithinThreshold(final int value) {
 		return value >= multiSemOptions.lowerThreshold() && value <= multiSemOptions.upperThreshold();
-	}
-
-	private double aggregateShifts(final List<Double> shifts) {
-		if (shifts.isEmpty()) {
-			return 0.0;
-		}
-
-		// Use LayerStats for robust aggregation with cutoff (clips outliers)
-		final LayerStats stats = LayerStats.from(shifts, multiSemOptions.cutoff());
-
-		if (multiSemOptions.aggregation() == AggregationType.MEDIAN) {
-			return stats.median;
-		} else {
-			return stats.mean;
-		}
 	}
 }
