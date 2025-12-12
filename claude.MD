@@ -39,11 +39,14 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
      - Dense flow field computation with smoothness regularization
      - Finest scale refinement (s5 → s1)
    - Output: Transform position fields for each pass
+   - **Quality Control (after each pass)**:
+     - ViewAlignment: Visualize alignment results
+     - ViewAlignmentPlayground13: Interactively edit/correct transforms if needed
+     - Each edited pass saved to new alignment group (e.g., pass02_edit)
 
 6. **Volume Assembly**
-   - Apply final alignment transforms to flattened slabs
-   - Composite multiple slabs with proper spacing
-   - Export unified seamless 3D volume
+   - ViewAlignedSlabSeries: Virtual rendering to validate alignment and adjust slab spacing
+   - SparkExportAlignedSlabSeries: Export final unified 3D volume
    - Optional: Downsample final volume for visualization
 
 ## Key Classes by Function
@@ -92,6 +95,34 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 
 - **SparkSeriesAlignSIFT**: Sequential alignment of slab series
 
+### Interactive Visualization & Quality Control
+- **ViewAlignment**: View alignment results after each pass
+  - Visualizes aligned face pairs with applied transforms
+  - Multi-scale visualization (specify scaleIndex for performance)
+  - Options: `--noVirtual` (precompute transforms), `--ignoreTransforms` (compare without alignment)
+  - Can view multiple alignment passes simultaneously for comparison
+  - Used for quality control after each of the 12 alignment passes
+
+- **ViewAlignmentPlayground13**: Interactive alignment editor
+  - Load two adjacent face transforms from any alignment pass
+  - Apply incremental transforms interactively with keyboard shortcuts:
+    - **Enter**: Apply current incremental transform
+    - **Escape**: Cancel incremental transform
+    - **Ctrl/Cmd+Z**: Undo
+    - **Ctrl/Cmd+Shift+Z**: Redo
+  - Save edited transforms to new alignment pass output group
+  - Allows manual correction of alignment errors between passes
+  - Real-time preview of transform effects
+
+- **ViewAlignedSlabSeries**: Virtual rendering of complete aligned volume
+  - Renders entire multi-slab volume with all transforms applied
+  - Takes alignment group and per-slab top/bottom offsets as input
+  - Optional contrast normalization (`--normalizeContrast`)
+  - Optional intensity inversion (`--invert`)
+  - Interactive adjustment of slab spacing and positioning
+  - Used to validate final alignment before running SparkExportAlignedSlabSeries
+  - Enables manual tuning of top/bot offsets for optimal slab transitions
+
 ### Data Conversion
 - **SparkConvertTiffSeriesToN5**: TIFF series → N5
 - **SparkConvertBlockedTiffSeriestoN5**: Blocked TIFF → N5
@@ -116,12 +147,10 @@ Hot-knife is an Apache Spark-based pipeline for processing large-scale 3D electr
 - **SparkExportAlignedSlabSeries**: Export aligned slab series as unified volume
   - Assembles multiple aligned slabs into final seamless 3D volume
 
-### Visualization & Interactive Tools
-- **ViewAlignment**: Interactive viewer for alignment results
-- **ViewAlignedSlabSeries**: Manual tuning of slab spacing
+### Additional Visualization Tools
 - **ViewN5**: General N5 dataset viewer
 - **ViewFlattenedSlab**: Visualize flattened volumes
-- **PaintHeightField**: Interactive height field editor (see below)
+- **PaintHeightField**: Interactive height field editor (see dedicated section below)
 
 ### Image Processing
 - **SparkNormalizeLayerIntensityN5**: Layer-wise intensity normalization
