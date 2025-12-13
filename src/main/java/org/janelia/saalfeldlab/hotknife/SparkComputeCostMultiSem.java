@@ -117,8 +117,8 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--topLayerCost", usage = "value to use for top cost layer (default: 105)")
 		private Integer topLayerCost = 105;
 
-		@Option(name = "--bottomLayerCost", usage = "value to use for top cost layer (default: 230)")
-		private Integer bottomLayerCost = 230;
+		@Option(name = "--bottomLayerCost", usage = "value to use for bottom cost layer (default: 250)")
+		private Integer bottomLayerCost = 250;
 
 		@Option(name = "--median", usage = "uses median (r=3 in z) before cost computation")
 		private boolean median = false;
