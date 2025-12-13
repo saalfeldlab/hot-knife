@@ -42,7 +42,6 @@ public class N5PathAndDataset implements Serializable {
 
     @Override
     public String toString() {
-        return "N5PathAndDataset{" + getN5Path() + ", " + dataset + "}";
-
+        return "N5PathAndDataset{" + n5Path.getPath() + ", " + dataset + "}";
     }
 }
