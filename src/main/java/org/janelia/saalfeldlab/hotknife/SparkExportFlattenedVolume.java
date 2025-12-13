@@ -29,6 +29,7 @@ import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5Path;
 import org.janelia.saalfeldlab.hotknife.util.N5PathAndDataset;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -116,11 +117,14 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         final N5PathAndDataset flatPathAndDataset = flatInfo.getFlatPathAndDataset();
 
         try (N5Writer n5Writer = flatPathAndDataset.openWriter()) {
+            final Compression compression = flatInfo.getCompression();
             n5Writer.createDataset(flatPathAndDataset.getDataset(),
                                    flatInfo.getDimensions(),
                                    flatInfo.getRawBlockSize(),
                                    flatInfo.getRawDataType(),
-                                   flatInfo.getRawCompression());
+                                   compression);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
 
         /* grid block size for parallelization to minimize double loading of blocks */
@@ -151,8 +155,8 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                     final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5FieldReader, flatInfo.getMinFieldDataset());
                     final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, flatInfo.getMaxFieldDataset());
 
-                    final RealRandomAccessible<DoubleType> minFactors = Transform.scaleAndShiftHeightFieldAndValues(minField, flatInfo.getMinFactors());
-                    final RealRandomAccessible<DoubleType> maxFactors = Transform.scaleAndShiftHeightFieldAndValues(maxField, flatInfo.getMaxFactors());
+                    final RealRandomAccessible<DoubleType> minFactors = Transform.scaleAndShiftHeightFieldAndValues(minField, flatInfo.getFactors());
+                    final RealRandomAccessible<DoubleType> maxFactors = Transform.scaleAndShiftHeightFieldAndValues(maxField, flatInfo.getFactors());
 
                     final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(minFactors,
                                                                                                  maxFactors,

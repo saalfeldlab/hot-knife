@@ -17,14 +17,12 @@ public class FlatteningInfo
 
     private final N5PathAndDataset rawPathAndDataset;
     private final int[] rawBlockSize;
-    private final Compression rawCompression;
     private final DataType rawDataType;
 
     private final N5Path fieldPath;
     private final String minFieldDataset;
     private final String maxFieldDataset;
-    private final double[] minFactors;
-    private final double[] maxFactors;
+    private final double[] factors;
     private final double min;
     private final double max;
     private final long[] dimensions;
@@ -46,29 +44,32 @@ public class FlatteningInfo
 
         final N5Reader rawPathReader = rawPathAndDataset.openReader();
         this.rawBlockSize = Util.readRequiredAttribute(rawPathReader, rawDataset, DatasetAttributes.BLOCK_SIZE_KEY, int[].class);
-        this.rawCompression = Util.readRequiredAttribute(rawPathReader, rawDataset, DatasetAttributes.COMPRESSION_KEY, Compression.class);
+
+        // read compression to make sure it exists, but don't store it because it is not Serializable
+        Util.readRequiredAttribute(rawPathReader, rawDataset, DatasetAttributes.COMPRESSION_KEY, Compression.class);
+
         this.rawDataType = Util.readRequiredAttribute(rawPathReader, rawDataset, DatasetAttributes.DATA_TYPE_KEY, DataType.class);
 
         this.fieldPath = fieldPathAndDataset.getN5Path();
-        this.minFieldDataset = fieldPathAndDataset.getDataset() + "/min";
-        this.maxFieldDataset = fieldPathAndDataset.getDataset() + "/max";
+        final String fieldDataset = fieldPathAndDataset.getDataset();
+        this.minFieldDataset = fieldDataset + "/min";
+        this.maxFieldDataset = fieldDataset + "/max";
 
         final N5Reader fieldPathReader = fieldPath.openReader();
         final Double minAvg = Util.readRequiredAttribute(fieldPathReader, minFieldDataset, AVG_KEY, Double.class);
         final Double maxAvg = Util.readRequiredAttribute(fieldPathReader, maxFieldDataset, AVG_KEY, Double.class);
 
-        this.minFactors = Util.readRequiredAttribute(fieldPathReader, minFieldDataset, FACTORS_KEY, double[].class);
-        this.maxFactors = Util.readRequiredAttribute(fieldPathReader, maxFieldDataset, FACTORS_KEY, double[].class);
+        this.factors = Util.readRequiredAttribute(fieldPathReader, fieldDataset, FACTORS_KEY, double[].class);
 
-        this.min = (minAvg + 0.5) * minFactors[2] - 0.5;
-        this.max = (maxAvg + 0.5) * maxFactors[2] - 0.5;
+        this.min = (minAvg + 0.5) * factors[2] - 0.5;
+        this.max = (maxAvg + 0.5) * factors[2] - 0.5;
 
         if (this.min >= this.max) {
             throw new IllegalStateException(
                     "heightfield volume has negative dimension because scaled min " + min + " >= scaled max " + max +
-                    ", min " + AVG_KEY + " " + minAvg + " and " + FACTORS_KEY + " " + Arrays.toString(minFactors) +
+                    ", min " + AVG_KEY + " " + minAvg + " and " + FACTORS_KEY + " " + Arrays.toString(factors) +
                     " read from " + Util.getAttributesJsonPath(fieldPath.getPath(), minFieldDataset) +
-                    ", max " + AVG_KEY + " " + maxAvg + " and " + FACTORS_KEY + " " + Arrays.toString(maxFactors) +
+                    ", max " + AVG_KEY + " " + maxAvg + " and " + FACTORS_KEY + " " + Arrays.toString(factors) +
                     " read from " + Util.getAttributesJsonPath(fieldPath.getPath(), maxFieldDataset));
         }
 
@@ -104,8 +105,14 @@ public class FlatteningInfo
         return rawBlockSize;
     }
 
-    public Compression getRawCompression() {
-        return rawCompression;
+    public Compression getCompression()
+            throws IOException {
+        final N5Reader rawPathReader = rawPathAndDataset.openReader();
+        final String rawDataset = rawPathAndDataset.getDataset();
+        return Util.readRequiredAttribute(rawPathReader,
+                                          rawDataset,
+                                          DatasetAttributes.COMPRESSION_KEY,
+                                          Compression.class);
     }
 
     public DataType getRawDataType() {
@@ -124,12 +131,8 @@ public class FlatteningInfo
         return maxFieldDataset;
     }
 
-    public double[] getMinFactors() {
-        return minFactors;
-    }
-
-    public double[] getMaxFactors() {
-        return maxFactors;
+    public double[] getFactors() {
+        return factors;
     }
 
     public double getMin() {
