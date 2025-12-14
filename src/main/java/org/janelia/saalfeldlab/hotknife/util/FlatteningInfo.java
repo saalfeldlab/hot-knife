@@ -78,7 +78,7 @@ public class FlatteningInfo
             this.dimensions = new long[]{
                     rawDimensions[0],
                     rawDimensions[1],
-                    Math.round(this.max + padding) - Math.round(this.min)
+                    Math.round(this.max + padding) - Math.round(this.min - padding)
             };
         } else {
             this.dimensions = new long[]{
