@@ -171,6 +171,45 @@ public class FlatteningInfo
         return flatBlockSize;
     }
 
+    @Override
+    public String toString() {
+        return "FlatteningInfo{" +
+               "rawPathAndDataset=" + rawPathAndDataset +
+               ", rawBlockSize=" + Arrays.toString(rawBlockSize) +
+               ", rawDataType=" + rawDataType +
+               ", fieldPath=" + fieldPath +
+               ", minFieldDataset='" + minFieldDataset + '\'' +
+               ", maxFieldDataset='" + maxFieldDataset + '\'' +
+               ", factors=" + Arrays.toString(factors) +
+               ", min=" + min +
+               ", max=" + max +
+               ", dimensions=" + Arrays.toString(dimensions) +
+               ", isMultiSEMData=" + isMultiSEMData +
+               ", padding=" + padding +
+               ", flatPathAndDataset=" + flatPathAndDataset +
+               ", flatBlockSize=" + Arrays.toString(flatBlockSize) +
+               '}';
+    }
+
+    public static void main(String[] args)
+            throws IOException {
+
+        final String rawStackName = "w61_s079_r00";
+        final RawStack rawStack = new RawStack(rawStackName);
+        final String n5RootPathName = "gs://janelia-spark-test/hess_wafers_60_61_export";
+        final int padding = 3;
+        final int[] blockSizeArray = new int[]{128, 128, 64};
+        final N5PathAndDataset clahePathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getCLAHEDataset() + "/s0");
+        final N5PathAndDataset heightfieldPathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getHeightfieldsDataset() + "/s1");
+        final N5PathAndDataset flatPathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getFlatRawDataset() + "/s0");
+        final FlatteningInfo info = new FlatteningInfo(clahePathAndDataset,
+                                                       heightfieldPathAndDataset,
+                                                       true,
+                                                       padding,
+                                                       flatPathAndDataset,
+                                                       blockSizeArray);
+        System.out.println(info);
+    }
 
     public static final String AVG_KEY = "avg";
     public static final String FACTORS_KEY = "downsamplingFactors";
