@@ -88,13 +88,14 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                 final N5PathAndDataset clahePathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getCLAHEDataset() + "/s0");
                 final N5PathAndDataset heightfieldPathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getHeightfieldsDataset() + "/s1");
                 final N5PathAndDataset flatPathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getFlatRawDataset() + "/s0");
-                flatteningInfoList.add(
-                        new FlatteningInfo(clahePathAndDataset,
-                                           heightfieldPathAndDataset,
-                                           true,
-                                           padding,
-                                           flatPathAndDataset,
-                                           blockSizeArray));
+                final FlatteningInfo info = new FlatteningInfo(clahePathAndDataset,
+                                                               heightfieldPathAndDataset,
+                                                               true,
+                                                               padding,
+                                                               flatPathAndDataset,
+                                                               blockSizeArray);
+                System.out.println("buildFlatteningInfoList: adding " + info);
+                flatteningInfoList.add(info);
             }
 
             return flatteningInfoList;
