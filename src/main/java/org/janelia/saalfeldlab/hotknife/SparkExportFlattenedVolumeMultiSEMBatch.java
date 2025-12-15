@@ -173,8 +173,8 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
             final long end = System.currentTimeMillis();
             final String now = java.time.LocalDateTime.now().toString().replace("T", " ");
             System.out.println(now + " SparkExportFlattenedVolumeMultiSEMBatch: completed " + flatDataset +
-                               "(dataset " + (exporterIndex + 1) + " of " + exporterList.size() + ") in " +
-                               ((end - start) / 60000.0) + " minutes");
+                               " (dataset " + (exporterIndex + 1) + " of " + exporterList.size() + ") in " +
+                               ((end - start) / 60000) + " minutes");
         }
 
         sparkContext.close();
