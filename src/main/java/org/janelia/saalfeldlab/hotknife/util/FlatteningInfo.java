@@ -61,7 +61,7 @@ public class FlatteningInfo
 
         this.factors = Util.readRequiredAttribute(fieldPathReader, fieldDataset, FACTORS_KEY, double[].class);
 
-        System.out.println( "factors: " + Arrays.toString( this.factors ) );
+        System.out.println( "FlatteningInfo: factors: " + Arrays.toString( this.factors ) );
 
         this.min = (minAvg + 0.5) * factors[2] - 0.5;
         this.max = (maxAvg + 0.5) * factors[2] - 0.5;
