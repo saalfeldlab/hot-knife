@@ -219,9 +219,9 @@ public class Util {
                                              final boolean shouldExist) throws IOException {
         final boolean exists = n5Reader.exists(datasetPath);
         if (shouldExist && ! exists) {
-            throw new IOException("dataset " + datasetPath + " does not exist in " + n5Reader.getURI().getPath());
+            throw new IOException("dataset " + datasetPath + " does not exist in " + n5Reader.getURI());
         } else if(! shouldExist && exists) {
-            throw new IOException("dataset " + datasetPath + " already exists in " + n5Reader.getURI().getPath());
+            throw new IOException("dataset " + datasetPath + " already exists in " + n5Reader.getURI());
         }
     }
 }
