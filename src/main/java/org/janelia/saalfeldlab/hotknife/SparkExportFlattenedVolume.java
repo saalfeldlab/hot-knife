@@ -132,6 +132,25 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
     }
 
     @Override
+    public String toString() {
+        final String blockSizeStr = Arrays.toString(blockSize).replaceAll("[\\[\\] ]", "");
+        final String pMultiSem = multiSem ? "  --multiSem\n" : "";
+        final String pDebug = debugMode ? "  --debugMode\n" : "";
+        final String pDebugBlockX = debugBlockX != null ? "  --debugBlockX " + debugBlockX + "\n" : "";
+        final String pDebugBlockY = debugBlockY != null ? "  --debugBlockY " + debugBlockY + "\n" : "";
+        return "SparkExportFlattenedVolume with parameters:\n" +
+               "  --n5RawPath \"" + n5RawInputPath + "\"\n" +
+               "  --n5RawDataset \"" + rawDataset + "\"\n" +
+               "  --n5FieldPath \"" + n5FieldPath + "\"\n" +
+               "  --n5FieldGroup \"" + fieldGroup + "\"\n" +
+               "  --n5OutputPath \"" + n5OutPath + "\"\n" +
+               "  --n5OutDataset \"" + outDataset + "\"\n" +
+               "  --padding " + padding + "\n" +
+               "  --blockSize " + blockSizeStr + "\n" +
+               pMultiSem + pDebug + pDebugBlockX + pDebugBlockY;
+    }
+
+    @Override
     public Void call() throws IOException {
 
         final SparkConf conf = new SparkConf().setAppName(getClass().getCanonicalName());

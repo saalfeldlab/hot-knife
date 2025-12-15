@@ -102,8 +102,8 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                                                        blockSizeArray,
                                                        true);
 
+                System.out.println("SparkExportFlattenedVolumeMultiSEMBatch: created " + exporter);
                 exporter.buildFlatteningInfo(); // build info here to validate everything upfront
-
                 exporterList.add(exporter);
             }
 
