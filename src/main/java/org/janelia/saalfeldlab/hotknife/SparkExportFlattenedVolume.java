@@ -331,7 +331,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
     }
 
     public static void main(final String... args) {
-        CommandLine cmd = new CommandLine(new SparkExportFlattenedVolume());
+        final CommandLine cmd = new CommandLine(new SparkExportFlattenedVolume());
         cmd.execute(args);
     }
 }

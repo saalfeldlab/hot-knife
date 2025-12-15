@@ -21,7 +21,7 @@ public class SparkExportFlattenedVolumeTest {
                 "--debugMode", "INTERACTIVE"
         };
 
-        CommandLine cmd = new CommandLine(new SparkExportFlattenedVolume());
+        final CommandLine cmd = new CommandLine(new SparkExportFlattenedVolume());
         cmd.execute(testArgs);
     }
 
