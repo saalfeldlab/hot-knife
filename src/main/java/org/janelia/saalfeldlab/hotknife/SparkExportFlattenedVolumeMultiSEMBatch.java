@@ -18,6 +18,8 @@ package org.janelia.saalfeldlab.hotknife;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -80,17 +82,6 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
             try {
                 parser.parseArgument(args);
                 parsedSuccessfully = true;
-
-                if (debugMode) {
-                    // 2007-12-03T10:15:30 -> 20071203_101530
-                    final String currentTime = java.time.LocalDateTime.now()
-                            .toString()
-                            .replace("T", "_")
-                            .replace(":", "")
-                            .replace("-", "");
-                    n5RootPathName = n5RootPathName.replace("/flat/", "/flat_debug_" + currentTime +"/");
-                }
-
             } catch (final Exception e) {
                 e.printStackTrace(System.err);
                 parser.printUsage(System.err);
@@ -106,14 +97,25 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                     .mapToInt(i -> i)
                     .toArray();
 
+            String debugSuffix = "";
+            if (debugMode) {
+                // 2007-12-03T10:15:30 -> 20071203_101530
+                final ZoneId easternTimeZone = ZoneId.of("America/New_York");
+                debugSuffix = "_debug_" + java.time.LocalDateTime.now(easternTimeZone)
+                        .truncatedTo(ChronoUnit.SECONDS)
+                        .toString()
+                        .replace("T", "_")
+                        .replace(":", "")
+                        .replace("-", "");
+            }
+
             for (final String rawStackName : rawNameList) {
 
                 final RawStack rawStack = new RawStack(rawStackName);
 
                 final String rawDataset = rawStack.getCLAHEDataset() + "/s0";
                 final String fieldGroup = rawStack.getHeightfieldsDataset() + "/s1";
-                final String outDataset = rawStack.getFlatRawDataset() + "/s0";
-
+                final String outDataset = rawStack.getFlatRawDataset() + debugSuffix + "/s0";
                 final SparkExportFlattenedVolume exporter =
                         new SparkExportFlattenedVolume(n5RootPathName,
                                                        n5RootPathName,
@@ -171,7 +173,11 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                 }
             }
 
-            flattenVolume(sparkContext, info, false, null, null );
+            flattenVolume(sparkContext,
+                          info,
+                          batchOptions.debugMode,
+                          batchOptions.debugBlockX,
+                          batchOptions.debugBlockY);
 
             if (! downsampleOutputDatasetPaths.isEmpty()) {
 
