@@ -63,11 +63,34 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                 usage = "Downsample output volume by 2 in XY and 1 in Z")
         private boolean downsample = false;
 
+        @Option(name = "--debugMode",
+                usage = "enable debug mode to process only specific blocks")
+        private boolean debugMode = false;
+
+        @Option(name = "--debugBlockX",
+                usage = "X coordinate of block to process in debug mode")
+        private Long debugBlockX = null;
+
+        @Option(name = "--debugBlockY",
+                usage = "Y coordinate of block to process in debug mode")
+        private Long debugBlockY = null;
+
         public Options(final String[] args) {
             final CmdLineParser parser = new CmdLineParser(this);
             try {
                 parser.parseArgument(args);
                 parsedSuccessfully = true;
+
+                if (debugMode) {
+                    // 2007-12-03T10:15:30 -> 20071203_101530
+                    final String currentTime = java.time.LocalDateTime.now()
+                            .toString()
+                            .replace("T", "_")
+                            .replace(":", "")
+                            .replace("-", "");
+                    n5RootPathName = n5RootPathName.replace("/flat/", "/flat_debug_" + currentTime +"/");
+                }
+
             } catch (final Exception e) {
                 e.printStackTrace(System.err);
                 parser.printUsage(System.err);
@@ -100,7 +123,10 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                                                        outDataset,
                                                        padding,
                                                        blockSizeArray,
-                                                       true);
+                                                       true,
+                                                       debugMode,
+                                                       debugBlockX,
+                                                       debugBlockY);
 
                 System.out.println("SparkExportFlattenedVolumeMultiSEMBatch: created " + exporter);
                 exporter.buildFlatteningInfo(); // build info here to validate everything upfront

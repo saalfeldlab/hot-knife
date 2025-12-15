@@ -104,7 +104,10 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                                       final String outDataset,
                                       final int padding,
                                       final int[] blockSize,
-                                      final boolean multiSem) {
+                                      final boolean multiSem,
+                                      final boolean debugMode,
+                                      final Long debugBlockX,
+                                      final Long debugBlockY) {
         this.n5RawInputPath = n5RawInputPath;
         this.n5FieldPath = n5FieldPath;
         this.n5OutPath = n5OutPath;
@@ -114,6 +117,9 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         this.padding = padding;
         this.blockSize = blockSize;
         this.multiSem = multiSem;
+        this.debugMode = debugMode;
+        this.debugBlockX = debugBlockX;
+        this.debugBlockY = debugBlockY;
     }
 
     public FlatteningInfo buildFlatteningInfo()
