@@ -38,7 +38,6 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.position.FunctionRealRandomAccessible;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -211,10 +210,13 @@ public class SparkMaskedCLAHEMultiSEM
 
 					if ((options.n5FieldMax == null) || (maxFactors == null))
 					{
+                        throw new UnsupportedOperationException( "please re-compile to use this functionality, it sets an arbitrary z range.");
+                        /*
 						maxFieldScaled = new FunctionRealRandomAccessible<>(
 								2,
 								(i,o) -> o.set( 52 ),
                                 DoubleType::new);
+                         */
 					}
 					else
 					{
@@ -274,6 +276,7 @@ public class SparkMaskedCLAHEMultiSEM
 
 							rra.setPosition( c );
 
+                            // if the heightfield returns a value that is bigger than the current z we are inside
 							if ( rra.get().get() > z )
 							{
 								value.set( 255 );
