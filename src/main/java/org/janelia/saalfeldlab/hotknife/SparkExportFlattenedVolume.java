@@ -320,6 +320,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                         ImageJFunctions.show( Views.interval( maxField, min, max ), "Max Height Field");
                         ImageJFunctions.show(sourceGridBlock, "Flattened Block [" + gridBlock[2][0] + "," + gridBlock[2][1] + "]");
                         System.out.println("Debug mode: Skipping N5 write operations");
+                        //noinspection deprecation
                         SimpleMultiThreading.threadHaltUnClean();
                         return;
                     }
@@ -330,6 +331,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
     }
 
     public static void main(final String... args) {
-        CommandLine.call(new SparkExportFlattenedVolume(), args);
+        CommandLine cmd = new CommandLine(new SparkExportFlattenedVolume());
+        cmd.execute(args);
     }
 }
