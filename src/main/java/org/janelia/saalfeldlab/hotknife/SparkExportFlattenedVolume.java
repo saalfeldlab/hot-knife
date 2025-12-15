@@ -181,11 +181,6 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         if (debugMode)
         {
             System.out.println("Debug mode: Skipping N5Writer creation for output");
-            System.out.println("Debug mode: " + flatPathAndDataset.getDataset());
-            System.out.println("Debug mode: " + Arrays.toString( flatInfo.getDimensions()) );
-            System.out.println("Debug mode: " + Arrays.toString( flatInfo.getRawBlockSize() ));
-            System.out.println("Debug mode: " + flatInfo.getRawDataType());
-            //System.exit( 0 );
         } else {
             try (N5Writer n5Writer = flatPathAndDataset.openWriter()) {
                 final Compression compression = flatInfo.getCompression();
@@ -205,20 +200,30 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         final int[] gridBlockSize = new int[flatBlockSize.length];
         Arrays.setAll(gridBlockSize, i -> Math.max(rawBlockSize[i], flatBlockSize[i]));
 
+        System.out.println( "flatInfo.getDimensions(): " + Arrays.toString( flatInfo.getDimensions()) );
+        System.out.println( "rawBlockSize: " + Arrays.toString( rawBlockSize) ); //rawBlockSize: [1024, 1024, 82]
+        System.out.println( "flatBlockSize: " + Arrays.toString( flatBlockSize) ); //flatBlockSize: [128, 128, 128]
+        System.out.println( "gridBlockSize: " + Arrays.toString( gridBlockSize) ); //gridBlockSize: [1024, 1024, 128]
+
         // Create grid blocks
         final java.util.List<long[][]> gridBlocks = Grid.create(
                 flatInfo.getDimensions(),
                 gridBlockSize,
                 flatBlockSize);
 
+        System.out.println( "gridBlocks: " + gridBlocks.size() );//gridBlocks: 15080
+
         // Debug mode: filter to process only specific block
         if (debugMode) {
             System.out.println("Debug mode: === DEBUG MODE ENABLED ===");
 
-            // Calculate grid dimensions
+            // Calculate grid dimensions based on flatBlockSize (outBlockSize), not gridBlockSize
             final long[] dimensions = flatInfo.getDimensions();
-            final long gridXSize = (dimensions[0] + gridBlockSize[0] - 1) / gridBlockSize[0];
-            final long gridYSize = (dimensions[1] + gridBlockSize[1] - 1) / gridBlockSize[1];
+            final long gridXSize = (dimensions[0] + flatBlockSize[0] - 1) / flatBlockSize[0];
+            final long gridYSize = (dimensions[1] + flatBlockSize[1] - 1) / flatBlockSize[1];
+
+            System.out.println("Debug mode: gridXSize: " + gridXSize );
+            System.out.println("Debug mode: gridYSize: " + gridYSize );
 
             if (debugBlockX != null && debugBlockY != null) {
                 System.out.println("Debug mode: Processing single block: [" + debugBlockX + ", " + debugBlockY + "]");

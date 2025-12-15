@@ -145,7 +145,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                 }
             }
 
-            flattenVolume(sparkContext, info, false, 0L, 0L);
+            flattenVolume(sparkContext, info, false, null, null );
 
             if (! downsampleOutputDatasetPaths.isEmpty()) {
 
