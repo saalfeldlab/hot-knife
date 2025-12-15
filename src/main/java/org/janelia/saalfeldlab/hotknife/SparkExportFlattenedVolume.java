@@ -16,6 +16,8 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import ij.ImageJ;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -34,7 +36,6 @@ import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
-import ij.ImageJ;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
@@ -44,7 +45,6 @@ import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -93,7 +93,30 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 	@Option(names = {"--debugBlockY"}, description = "Y coordinate of block to process in debug mode")
 	private Long debugBlockY = null;
 
-    private FlatteningInfo buildFlatteningInfo()
+    public SparkExportFlattenedVolume() {
+    }
+
+    public SparkExportFlattenedVolume(final String n5RawInputPath,
+                                      final String n5FieldPath,
+                                      final String n5OutPath,
+                                      final String rawDataset,
+                                      final String fieldGroup,
+                                      final String outDataset,
+                                      final int padding,
+                                      final int[] blockSize,
+                                      final boolean multiSem) {
+        this.n5RawInputPath = n5RawInputPath;
+        this.n5FieldPath = n5FieldPath;
+        this.n5OutPath = n5OutPath;
+        this.rawDataset = rawDataset;
+        this.fieldGroup = fieldGroup;
+        this.outDataset = outDataset;
+        this.padding = padding;
+        this.blockSize = blockSize;
+        this.multiSem = multiSem;
+    }
+
+    public FlatteningInfo buildFlatteningInfo()
             throws IOException {
 
         final N5PathAndDataset clahePathAndDataset = new N5PathAndDataset(n5RawInputPath, rawDataset);
@@ -127,6 +150,9 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                                      final boolean debugMode,
                                      final Long debugBlockX,
                                      final Long debugBlockY) {
+
+        System.out.println("SparkExportFlattenedVolume: entry, flatInfo=" + flatInfo +
+                           ", debugMode=" + debugMode + ", debugBlockX=" + debugBlockX + ", debugBlockY=" + debugBlockY);
 
         final N5PathAndDataset rawPathAndDataset = flatInfo.getRawPathAndDataset();
         final N5Path fieldPath = flatInfo.getFieldPath();

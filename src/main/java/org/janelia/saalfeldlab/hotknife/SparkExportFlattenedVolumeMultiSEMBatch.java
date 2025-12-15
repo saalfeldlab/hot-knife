@@ -74,45 +74,61 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
             }
         }
 
-        public List<FlatteningInfo> buildFlatteningInfoList()
+        public List<SparkExportFlattenedVolume> buildExporters()
                 throws IOException {
 
-            final List<FlatteningInfo> flatteningInfoList = new ArrayList<>();
+            final List<SparkExportFlattenedVolume> exporterList = new ArrayList<>();
             final int[] blockSizeArray = Arrays.stream(blockSize.split(","))
                     .map(Integer::parseInt)
                     .mapToInt(i -> i)
                     .toArray();
 
             for (final String rawStackName : rawNameList) {
+
                 final RawStack rawStack = new RawStack(rawStackName);
-                final N5PathAndDataset clahePathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getCLAHEDataset() + "/s0");
-                final N5PathAndDataset heightfieldPathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getHeightfieldsDataset() + "/s1");
-                final N5PathAndDataset flatPathAndDataset = new N5PathAndDataset(n5RootPathName, rawStack.getFlatRawDataset() + "/s0");
-                final FlatteningInfo info = new FlatteningInfo(clahePathAndDataset,
-                                                               heightfieldPathAndDataset,
-                                                               true,
-                                                               padding,
-                                                               flatPathAndDataset,
-                                                               blockSizeArray);
-                System.out.println("buildFlatteningInfoList: adding " + info);
-                flatteningInfoList.add(info);
+
+                final String rawDataset = rawStack.getCLAHEDataset() + "/s0";
+                final String fieldGroup = rawStack.getHeightfieldsDataset() + "/s1";
+                final String outDataset = rawStack.getFlatRawDataset() + "/s0";
+
+                final SparkExportFlattenedVolume exporter =
+                        new SparkExportFlattenedVolume(n5RootPathName,
+                                                       n5RootPathName,
+                                                       n5RootPathName,
+                                                       rawDataset,
+                                                       fieldGroup,
+                                                       outDataset,
+                                                       padding,
+                                                       blockSizeArray,
+                                                       true);
+
+                exporter.buildFlatteningInfo(); // build info here to validate everything upfront
+
+                exporterList.add(exporter);
             }
 
-            return flatteningInfoList;
+            return exporterList;
         }
     }
 
     public static void main(final String... args) throws Exception {
 
+        System.out.println("SparkExportFlattenedVolumeMultiSEMBatch: entry, args=" +
+                            Arrays.toString(args));
+
         final Options batchOptions = new Options(args);
-        final List<FlatteningInfo> infoList = batchOptions.buildFlatteningInfoList();
+        final List<SparkExportFlattenedVolume> exporterList = batchOptions.buildExporters();
 
         final SparkConf conf = new SparkConf().setAppName("SparkExportFlattenedVolumeMultiSEMBatch");
         final JavaSparkContext sparkContext = new JavaSparkContext(conf);
         sparkContext.setLogLevel("ERROR");
 
-        for (final FlatteningInfo info : infoList) {
+        System.out.println("SparkExportFlattenedVolumeMultiSEMBatch: processing " + exporterList.size() + " datasets");
 
+        for (int exporterIndex = 0; exporterIndex < exporterList.size(); exporterIndex++) {
+            final long start = System.currentTimeMillis();
+            final SparkExportFlattenedVolume exporter = exporterList.get(exporterIndex);
+            final FlatteningInfo info = exporter.buildFlatteningInfo(); // re-build for actual usage
             final N5PathAndDataset flatPathAndDataset = info.getFlatPathAndDataset();
             final String flatDataset = flatPathAndDataset.getDataset();
 
@@ -129,7 +145,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                 }
             }
 
-            flattenVolume(sparkContext, info, false, 0l, 0l );
+            flattenVolume(sparkContext, info, false, 0L, 0L);
 
             if (! downsampleOutputDatasetPaths.isEmpty()) {
 
@@ -154,6 +170,11 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
 
             }
 
+            final long end = System.currentTimeMillis();
+            final String now = java.time.LocalDateTime.now().toString().replace("T", " ");
+            System.out.println(now + " SparkExportFlattenedVolumeMultiSEMBatch: completed " + flatDataset +
+                               "(dataset " + (exporterIndex + 1) + " of " + exporterList.size() + ") in " +
+                               ((end - start) / 60000.0) + " minutes");
         }
 
         sparkContext.close();
