@@ -98,7 +98,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                     .toArray();
 
             String debugSuffix = "";
-            if (SparkExportFlattenedVolume.DebugMode.BATCH.equals(debugMode)) {
+            if (! SparkExportFlattenedVolume.DebugMode.OFF.equals(debugMode)) {
                 // 2007-12-03T10:15:30 -> 20071203_101530
                 final ZoneId easternTimeZone = ZoneId.of("America/New_York");
                 debugSuffix = "_debug_" + java.time.LocalDateTime.now(easternTimeZone)
@@ -107,8 +107,11 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                         .replace("T", "_")
                         .replace(":", "")
                         .replace("-", "");
-            } else if (! SparkExportFlattenedVolume.DebugMode.OFF.equals(debugMode)) {
-                throw new IOException("debug mode " + debugMode + " is not supported for batch jobs");
+
+                if (SparkExportFlattenedVolume.DebugMode.INTERACTIVE.equals(debugMode)) {
+                    System.out.println("WARNING: running SparkExportFlattenedVolumeMultiSEMBatch with INTERACTIVE debug " +
+                                       "mode will only work if launched as a local job (e.g. -Dspark.master=local[1])");
+                }
             }
 
             for (final String rawStackName : rawNameList) {
