@@ -196,7 +196,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                 final Compression compression = flatInfo.getCompression();
                 n5Writer.createDataset(flatPathAndDataset.getDataset(),
                                        flatInfo.getDimensions(),
-                                       flatInfo.getRawBlockSize(),
+                                       flatInfo.getFlatBlockSize(),
                                        flatInfo.getRawDataType(),
                                        compression);
             } catch (IOException e) {
@@ -244,6 +244,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                 long midY = gridYSize / 2;
                 System.out.println("Debug mode: No specific debug blocks specified, processing middle block: [" + midX + ", " + midY + "]");
                 gridBlocks.removeIf(block -> block[2][0] != midX || block[2][1] != midY);
+                System.out.println("Debug mode: location: " + Arrays.deepToString( gridBlocks.get(0) ));
             }
 
             System.out.println("Debug mode: Processing " + gridBlocks.size() + " blocks");
