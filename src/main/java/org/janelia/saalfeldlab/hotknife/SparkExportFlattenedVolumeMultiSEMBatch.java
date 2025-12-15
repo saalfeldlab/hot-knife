@@ -67,7 +67,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
 
         @Option(name = "--debugMode",
                 usage = "enable debug mode to process only specific blocks")
-        private boolean debugMode = false;
+        private SparkExportFlattenedVolume.DebugMode debugMode = SparkExportFlattenedVolume.DebugMode.OFF;
 
         @Option(name = "--debugBlockX",
                 usage = "X coordinate of block to process in debug mode")
@@ -98,7 +98,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                     .toArray();
 
             String debugSuffix = "";
-            if (debugMode) {
+            if (SparkExportFlattenedVolume.DebugMode.BATCH.equals(debugMode)) {
                 // 2007-12-03T10:15:30 -> 20071203_101530
                 final ZoneId easternTimeZone = ZoneId.of("America/New_York");
                 debugSuffix = "_debug_" + java.time.LocalDateTime.now(easternTimeZone)
@@ -107,6 +107,8 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                         .replace("T", "_")
                         .replace(":", "")
                         .replace("-", "");
+            } else if (! SparkExportFlattenedVolume.DebugMode.OFF.equals(debugMode)) {
+                throw new IOException("debug mode " + debugMode + " is not supported for batch jobs");
             }
 
             for (final String rawStackName : rawNameList) {

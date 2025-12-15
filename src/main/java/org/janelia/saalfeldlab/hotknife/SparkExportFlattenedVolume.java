@@ -57,6 +57,10 @@ import picocli.CommandLine.Option;
 @SuppressWarnings("FieldMayBeFinal")
 public class SparkExportFlattenedVolume implements Callable<Void>, Serializable {
 
+    public enum DebugMode {
+        OFF, INTERACTIVE, BATCH
+    }
+
 	@Option(names = {"--n5RawPath"}, required = true, description = "N5 raw input path, e.g. /nrs/flyem/tmp/VNC.n5")
 	private String n5RawInputPath = null;
 
@@ -84,8 +88,8 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
 	private boolean multiSem = false;
 
-	@Option(names = {"--debugMode"}, description = "enable debug mode to process only specific blocks")
-	private boolean debugMode = false;
+	@Option(names = {"--debugMode"}, description = "enable debug mode to process a specific block")
+	private DebugMode debugMode = DebugMode.OFF;
 
 	@Option(names = {"--debugBlockX"}, description = "X coordinate of block to process in debug mode")
 	private Long debugBlockX = null;
@@ -105,7 +109,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                                       final int padding,
                                       final int[] blockSize,
                                       final boolean multiSem,
-                                      final boolean debugMode,
+                                      final DebugMode debugMode,
                                       final Long debugBlockX,
                                       final Long debugBlockY) {
         this.n5RawInputPath = n5RawInputPath;
@@ -141,7 +145,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
     public String toString() {
         final String blockSizeStr = Arrays.toString(blockSize).replaceAll("[\\[\\] ]", "");
         final String pMultiSem = multiSem ? "  --multiSem\n" : "";
-        final String pDebug = debugMode ? "  --debugMode\n" : "";
+        final String pDebug = DebugMode.OFF.equals(debugMode) ? "" : "  --debugMode " + debugMode + "\n";
         final String pDebugBlockX = debugBlockX != null ? "  --debugBlockX " + debugBlockX + "\n" : "";
         final String pDebugBlockY = debugBlockY != null ? "  --debugBlockY " + debugBlockY + "\n" : "";
         return "SparkExportFlattenedVolume with parameters:\n" +
@@ -172,7 +176,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 
     public static void flattenVolume(final JavaSparkContext sc,
                                      final FlatteningInfo flatInfo,
-                                     final boolean debugMode,
+                                     final DebugMode debugMode,
                                      final Long debugBlockX,
                                      final Long debugBlockY) {
 
@@ -184,7 +188,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         final N5PathAndDataset flatPathAndDataset = flatInfo.getFlatPathAndDataset();
 
         // Skip N5Writer creation in debug mode
-        if (debugMode)
+        if (DebugMode.INTERACTIVE.equals(debugMode))
         {
             System.out.println("Debug mode: Skipping N5Writer creation for output");
         } else {
@@ -220,8 +224,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         System.out.println( "gridBlocks: " + gridBlocks.size() );//gridBlocks: 15080
 
         // Debug mode: filter to process only specific block
-        if (debugMode) {
-            System.out.println("Debug mode: === DEBUG MODE ENABLED ===");
+        if (DebugMode.INTERACTIVE.equals(debugMode) || DebugMode.BATCH.equals(debugMode)) {
 
             // Calculate grid dimensions based on flatBlockSize (outBlockSize), not gridBlockSize
             final long[] dimensions = flatInfo.getDimensions();
@@ -249,7 +252,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         final JavaRDD<long[][]> rdd = sc.parallelize(gridBlocks);
 
         // Initialize ImageJ if in debug mode
-        if (debugMode) {
+        if (DebugMode.INTERACTIVE.equals(debugMode)) {
             System.out.println("Debug mode: Initializing ImageJ for visualization...");
             new ImageJ();
         }
@@ -303,7 +306,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                     System.out.println("Debug mode: sourceGridBlock dimensions: " + net.imglib2.util.Util.printInterval(sourceGridBlock));
 
                     // In debug mode, show results and stop without writing
-                    if (debugMode) {
+                    if (DebugMode.INTERACTIVE.equals(debugMode)) {
                     	long[] min = new long[2];
                     	long[] max = new long[ min.length ];
                     	for ( int d = 0; d < min.length; ++d )
