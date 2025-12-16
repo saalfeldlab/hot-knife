@@ -52,7 +52,7 @@ for SERIAL_NUM in "$@"; do
   ARGV="${ARGV} --raw ${RAW_STACK}"
   if [[ -z "${BATCH_NAME}" ]]; then
     NUMBER_OF_STACK_MINUS_ONE=$(( $# - 1 ))
-    BATCH_NAME=$(echo "flat-${RUN_TIMESTAMP}-${RAW_STACK}-with-${NUMBER_OF_STACK_MINUS_ONE}" | sed "s/_/-/g")
+    BATCH_NAME=$(echo "flat-face-${RUN_TIMESTAMP}-${RAW_STACK}-with-${NUMBER_OF_STACK_MINUS_ONE}" | sed "s/_/-/g")
   fi
 done
 

@@ -106,6 +106,7 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
         optionValues.add("--min=0,0," + minZ);
         optionValues.add("--size=0,0," + sizeZ);
 
+        System.out.println("SparkGenerateFaceScaleSpaceMultiSEMBatch.buildFaceOptions: " + optionValues);
         return new SparkGenerateFaceScaleSpace.Options(optionValues.toArray(new String[0]));
     }
 
@@ -129,9 +130,11 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
             commonOptions.add("--normalizeContrast");
         }
 
+        final List<RawStack> rawStackList = batchOptions.buildRawStacks();
+
         // make sure all input datasets exist and all output datasets do not exist
         try (final N5Reader n5Reader = N5Util.createN5Reader(batchOptions.n5Path) ) {
-            for (final RawStack rawStack : batchOptions.buildRawStacks()) {
+            for (final RawStack rawStack : rawStackList) {
 
                 final String flatRawDataset = rawStack.getFlatDataset();
                 Util.checkDatasetExistence(n5Reader, flatRawDataset, true);
@@ -150,7 +153,7 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
         }
 
         // generate faces ...
-        for (final RawStack rawStack : batchOptions.buildRawStacks()) {
+        for (final RawStack rawStack : rawStackList) {
 
             if (FaceEdge.TOP.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
                 generateFace(sparkContext,
