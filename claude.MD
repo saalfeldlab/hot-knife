@@ -671,6 +671,139 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 
 **Note:** Height fields are typically stored at s1 resolution (downsampled 6x6x1 or 4x4x4). Process both `min` (top surface) and `max` (bottom surface) separately.
 
+## Common Pitfalls and Troubleshooting
+
+### Empty or Incorrect Flattened Volume Output
+
+**Symptom**: SparkExportFlattenedVolume produces empty or corrupted output.
+
+**Critical Bug Pattern** (fixed in commit 0a2ad21):
+```java
+// WRONG - creates dataset with rawBlockSize but writes with flatBlockSize grid
+n5Writer.createDataset(dataset, dimensions,
+                       flatInfo.getRawBlockSize(),  // [1024, 1024, 82]
+                       dataType, compression);
+
+// CORRECT - must match the blockSize used by Grid.create
+n5Writer.createDataset(dataset, dimensions,
+                       flatInfo.getFlatBlockSize(), // [128, 128, 128]
+                       dataType, compression);
+```
+
+**Why this fails**:
+1. N5 interprets block grid positions using the blockSize from dataset attributes
+2. If dataset is created with blockSize A but Grid.create uses blockSize B:
+   - Grid position [464, 520, 0] with blockSize [1024, 1024, 82] → world position [475136, 532480, 0]
+   - Grid position [464, 520, 0] with blockSize [128, 128, 128] → world position [59392, 66560, 0]
+3. Blocks written at wrong grid positions end up outside valid bounds and are discarded
+4. Result: empty or mostly-empty volume
+
+**Rule**: Always use `flatInfo.getFlatBlockSize()` when creating output datasets for flattened volumes.
+
+### Height Field downsamplingFactors Location
+
+**Symptom**: Cannot read height field attributes, or min/max calculations are incorrect.
+
+**Issue**: `downsamplingFactors` are stored in the parent scale directory, not in min/max child datasets.
+
+**Correct locations**:
+```
+/heightfields_b250_smd_p1_p1/.../s1/attributes.json          <- downsamplingFactors HERE
+/heightfields_b250_smd_p1_p1/.../s1/min/attributes.json     <- avg HERE
+/heightfields_b250_smd_p1_p1/.../s1/max/attributes.json     <- avg HERE
+```
+
+**How to read**:
+```java
+// Read from parent scale directory (s1), not min/max child
+this.factors = Util.readRequiredAttribute(fieldPathReader,
+                                          fieldDataset,     // e.g., ".../s1"
+                                          FACTORS_KEY,
+                                          double[].class);
+
+// Read avg from child datasets
+Double minAvg = Util.readRequiredAttribute(fieldPathReader,
+                                           minFieldDataset,  // e.g., ".../s1/min"
+                                           AVG_KEY,
+                                           Double.class);
+```
+
+**Fixed in**: FlatteningInfo class (commit f4df7d0)
+
+### Surface Padding Asymmetry
+
+**Symptom**: Flattened volume shifts unexpectedly but isn't empty.
+
+**Issue**: Padding applied only to max surface, not min surface (commit b5de6e30, reverted in 8e8b7b3).
+
+**Incorrect** (creates shifted output):
+```java
+dimensions[2] = Math.round(max + padding) - Math.round(min);  // Only max padded
+```
+
+**Correct** (symmetric padding):
+```java
+dimensions[2] = Math.round(max + padding) - Math.round(min - padding);  // Both padded
+```
+
+**Impact**: Asymmetric padding shifts the data in Z but doesn't make it empty. Symmetric padding ensures tissue is centered in output with equal margins.
+
+### Grid Coordinate Calculation in Debug Mode
+
+**Symptom**: Debug mode processes 0 blocks when using different input/output block sizes.
+
+**Issue**: Grid coordinates are based on `outBlockSize` (flatBlockSize), not `gridBlockSize`.
+
+**Grid.create structure**:
+```java
+gridBlock[0] = world coordinate offset
+gridBlock[1] = size of the grid block
+gridBlock[2] = grid coordinate position (based on outBlockSize!)
+```
+
+**Incorrect**:
+```java
+// WRONG - calculates based on gridBlockSize [1024, 1024, 128]
+long gridXSize = (dimensions[0] + gridBlockSize[0] - 1) / gridBlockSize[0];  // 116
+long midX = gridXSize / 2;  // 58
+// No blocks found at grid position [58, 65] because actual grid uses flatBlockSize!
+```
+
+**Correct**:
+```java
+// RIGHT - calculates based on flatBlockSize [128, 128, 128]
+long gridXSize = (dimensions[0] + flatBlockSize[0] - 1) / flatBlockSize[0];  // 928
+long midX = gridXSize / 2;  // 464
+// Correctly finds block at grid position [464, 520]
+```
+
+**Rule**: Always calculate grid dimensions using the same blockSize passed as `outBlockSize` to Grid.create.
+
+### Debug Mode Best Practices
+
+**Available debug modes**:
+- `OFF`: Normal production mode
+- `INTERACTIVE`: Single block processing with ImageJ visualization
+- `BATCH`: Single block processing without visualization (for cluster debugging)
+
+**Usage**:
+```bash
+# Interactive debugging - shows ImageJ windows
+--debugMode INTERACTIVE --debugBlockX 464 --debugBlockY 520
+
+# Batch debugging - processes single block, logs output, no GUI
+--debugMode BATCH --debugBlockX 464 --debugBlockY 520
+```
+
+**Debug mode features**:
+- Skips N5 dataset creation
+- Processes only specified block (or middle block by default)
+- Displays height fields and flattened output (INTERACTIVE only)
+- Returns early without writing to N5
+- Prints detailed dimensional information
+
+**Implemented in**: SparkExportFlattenedVolume, SparkComputeCostMultiSem
+
 ## Current Branch: cloud-cost-debug
 - **Based on**: cloud branch
 - **Purpose**: Debug SparkComputeCostMultiSem cost function issues
