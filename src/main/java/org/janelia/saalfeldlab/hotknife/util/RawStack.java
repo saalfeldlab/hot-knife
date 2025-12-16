@@ -15,6 +15,7 @@ public class RawStack
     public static String DEFAULT_IC2D_SUFFIX = "_gc_par_align_ic2d";
     public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer";
     public static String DEFAULT_CLAHE_SUFFIX = DEFAULT_NORM_LAYER_SUFFIX + "-clahe";
+    @SuppressWarnings("unused")
     public static String DEFAULT_COST_VERSION = "b250";  // not currently used, but here in case needed later
     public static String DEFAULT_HEIGHTFIELDS_VERSION = "b250_smd_p1_p1";
 
@@ -47,7 +48,6 @@ public class RawStack
         this.heightfieldsVersion = heightfieldsVersion;
     }
 
-    /** @return the raw stack name (e.g. w61_s076_r00) */
     public String getRawStack() {
         return rawStack;
     }
@@ -63,6 +63,7 @@ public class RawStack
     }
 
     /** @return the 2D intensity corrected dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d) */
+    @SuppressWarnings("unused")
     public String getIC2DDataset() {
         return "/render/" + project + "/" + getIC2DStack();
     }
@@ -92,9 +93,26 @@ public class RawStack
         return "/heightfields_" + heightfieldsVersion + "/" + project + "/" + getNormLayerStack();
     }
 
+    /** @return the flat dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00) */
+    public String getFlatDataset() {
+        return "/flat/" + project + "/" + rawStack;
+    }
+
     /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw) */
     public String getFlatRawDataset() {
-        return "/flat/" + project + "/" + rawStack + "/raw";
+        return getFlatDataset() + "/raw";
+    }
+
+    /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0) */
+    public String getFlatRawS0Dataset() {
+        return getFlatRawDataset() + "/s0";
+    }
+
+    /** @return the flat top or bottom dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/top) */
+    public String getFlatEdgeDataset(final boolean isTop)
+            throws IllegalArgumentException {
+        final String edge = isTop ? "/top" : "/bot";
+        return getFlatDataset() + edge;
     }
 
     public static String buildProjectName(final String rawStackName)

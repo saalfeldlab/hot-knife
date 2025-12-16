@@ -13,9 +13,7 @@ Examples:
   $0  40  w61  r00  81 82
 
 Notes:
-  - with 20 max-executors, w61 r00 83    took ?? hours ?? minutes to complete
-  - with 40 max-executors, w61 r00 79    took 10 hours 50 minutes to complete
-  - with 50 max-executors, w61 r00 79    took  9 hours 44 minutes to complete
+  - with 10 max-executors, w61 r00 79    took ?? hours ?? minutes to complete
 "
   exit 1
 fi
@@ -35,11 +33,16 @@ shift 3 # all remaining args should be serial numbers
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 
+# With --padding=3, --faceEdge=BOTH, --faceSize=32:
+#   top:    min=0,0,3  and size=0,0,32
+#   bottom: min=0,0,-4 and size=0,0,-32
+
 ARGV="\
---n5RootPath=${N5_PATH} \
+--n5Path=${N5_PATH} \
 --padding=3 \
---blockSize=128,128,128 \
---downsample"
+--faceEdge=BOTH \
+--faceSize=32 \
+--blockSize=1024,1024"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 unset BATCH_NAME
@@ -49,7 +52,7 @@ for SERIAL_NUM in "$@"; do
   ARGV="${ARGV} --raw ${RAW_STACK}"
   if [[ -z "${BATCH_NAME}" ]]; then
     NUMBER_OF_STACK_MINUS_ONE=$(( $# - 1 ))
-    BATCH_NAME=$(echo "flat-${RUN_TIMESTAMP}-${RAW_STACK}-with-${NUMBER_OF_STACK_MINUS_ONE}" | sed "s/_/-/g")
+    BATCH_NAME=$(echo "flat-face-${RUN_TIMESTAMP}-${RAW_STACK}-with-${NUMBER_OF_STACK_MINUS_ONE}" | sed "s/_/-/g")
   fi
 done
 
@@ -78,7 +81,7 @@ SPARK_PROPS="${SPARK_PROPS},${DYNAMIC_ALLOCATION}"
 # see https://cloud.google.com/dataproc-serverless/docs/concepts/versions/dataproc-serverless-versions
 SPARK_VERSION="1.1"
 
-CLASS="org.janelia.saalfeldlab.hotknife.SparkExportFlattenedVolumeMultiSEMBatch"
+CLASS="org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpaceMultiSEMBatch"
 GS_JAR_URL="gs://janelia-spark-test/library/hot-knife-0.0.7-SNAPSHOT.jar"
 
 echo "
@@ -107,3 +110,4 @@ gcloud dataproc batches submit spark \
   --async \
   -- \
   ${ARGV}
+

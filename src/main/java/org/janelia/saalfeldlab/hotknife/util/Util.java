@@ -19,6 +19,9 @@ package org.janelia.saalfeldlab.hotknife.util;
 import ij.process.FloatProcessor;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -224,4 +227,24 @@ public class Util {
             throw new IOException("dataset " + datasetPath + " already exists in " + n5Reader.getURI());
         }
     }
+
+    public static LocalDateTime getEasternTime() {
+        return java.time.LocalDateTime.now(EASTERN_TIME_ZONE);
+    }
+
+    public static String getEasternTimeString() {
+        return getEasternTime()
+                .truncatedTo(ChronoUnit.SECONDS)
+                .toString()
+                .replace("T", "_")
+                .replace(":", "")
+                .replace("-", "");
+    }
+
+    public static void logMessage(final String clazz,
+                                  final String message) {
+        System.out.println(getEasternTimeString() + " " + clazz + ": " + message);
+    }
+
+    public static final ZoneId EASTERN_TIME_ZONE = ZoneId.of("America/New_York");
 }
