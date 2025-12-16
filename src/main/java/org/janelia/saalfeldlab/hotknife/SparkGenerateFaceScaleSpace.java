@@ -551,7 +551,7 @@ public class SparkGenerateFaceScaleSpace {
 		}
 
 		// downsample the s1 face
-		if ( maxScaleIndex < 9 )
+		if ( maxScaleIndex < options.maxDownsamplingLevel )
 		{
 			final N5WriterSupplier n5Supplier = () -> N5Util.createN5Writer( options.getN5Path() );
 			final int[] downsamplingFactorDelta = new int[] { 2, 2 };
