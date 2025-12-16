@@ -671,6 +671,196 @@ java -cp hot-knife.jar org.janelia.saalfeldlab.hotknife.tools.PaintHeightField \
 
 **Note:** Height fields are typically stored at s1 resolution (downsampled 6x6x1 or 4x4x4). Process both `min` (top surface) and `max` (bottom surface) separately.
 
+## Face Extraction with SparkGenerateFaceScaleSpace
+
+### Overview
+**SparkGenerateFaceScaleSpace** extracts 2D surface planes (faces) from flattened 3D volumes and generates multi-scale pyramids for efficient alignment. Essential for cross-slab alignment using SIFT feature matching.
+
+**Location**: `org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace`
+
+### What It Does
+- Extracts a 2D plane or thin slab from a flattened 3D volume at specified z-coordinate
+- Generates two parallel pyramid structures:
+  1. **3D scale space** (`/s1` to `/s9`): Downsampled 3D volumes for multi-scale processing
+  2. **2D face scale space** (`/face/s0` to `/face/s9`): 2D slices extracted from each scale level
+- Applies optional intensity inversion and contrast normalization (CLLCN)
+- Outputs float32 data for downstream alignment processing
+
+### Key Parameters
+
+**Required:**
+```bash
+--n5Path=<path>              # N5 container (local or gs://)
+--n5DatasetInput=<dataset>   # Input flattened volume dataset
+--n5GroupOutput=<group>      # Output group for scale spaces
+```
+
+**Optional:**
+```bash
+--min=x,y,z                  # Minimum coordinate for extraction (0 = full dimension)
+--size=x,y,z                 # Size of extraction region (0 = full dimension, negative = reverse)
+--blockSize=x,y              # 2D block size for output (default: 128,128)
+--maxDownsamplingLevel=N     # Maximum scale level (default: 9, use lower for thin volumes)
+--invert                     # Invert intensities (0↔255)
+--normalizeContrast          # Apply CLLCN contrast normalization
+```
+
+### Understanding min/size Parameters
+
+The `min` and `size` parameters define the 3D extraction region:
+
+- **Format**: `x,y,z` coordinates
+- **0 values**: Use full dimension (from 0 to max)
+- **Negative min values**: Relative to end (e.g., `min=-10` = 10 pixels from end)
+- **Negative size values**: Extract backwards and invert axis
+
+**Important for Flattened Volumes:**
+
+When extracting faces from flattened volumes, the z-coordinate directly corresponds to the position in the flattened space:
+
+1. **Top surface**: Use `--min=0,0,<padding>` where `<padding>` matches the padding used during flattening
+   - For padding=3: `--min=0,0,3` extracts the first layer of actual tissue
+   - Z=0 to Z=padding-1 would be in the padded region before tissue starts
+
+2. **Bottom surface**: Use `--min=0,0,-<padding+1>` to go one layer deeper than detected surface
+   - For padding=3: `--min=0,0,-4` extracts one layer below the bottom surface
+   - Negative coordinates count from the end of the flattened volume
+
+3. **Extraction thickness**: Use `--size=0,0,<thickness>` to extract a slab instead of single plane
+   - `--size=0,0,0`: Single plane (traditional usage)
+   - `--size=0,0,32`: Minimal thick slab (5 full downsample steps)
+   - `--size=0,0,512`: Maximal thick slab (9 full downsample steps, recommended)
+
+### Downsampling Behavior with size > 0
+
+**When size[z] = 0 (single plane, historical default):**
+```
+Input: 3D volume → Extract single 2D plane (hyperslice at z coordinate)
+s0: 2D face extracted from input
+s1-s9: Extract 2D face from each pre-downsampled 3D scale level
+Result: Pure 2D pyramid, no z-downsampling
+```
+
+**When size[z] > 0 (thick slab extraction, recommended for quality):**
+```
+Input: 3D volume → Extract 3D slab [x,y,thickness]
+s0: Extract 2D face by hyperslicing slab at z=0
+s1: Downsample 3D slab (2x2x2) → Extract 2D face at z=0
+s2-s9: Continue 3D downsampling → Extract 2D faces
+Result: 2D pyramid with z-information averaged during downsampling
+```
+
+**Algorithm (lines 486-517):**
+1. For each scale level 1 to maxDownsamplingLevel:
+   - Gaussian filter sigma = sqrt(max(0, (0.5/scale)² - 0.5²))
+   - Downsample by factor 2³ using `Views.subsample(filtered, 2)`
+   - Output dimensions = input dimensions / 2
+   - Stop if z-dimension reaches 1
+2. Extract 2D faces (lines 519-551):
+   - s0: Extract from original input using `Views.hyperSlice(roi, 2, 0)`
+   - s1-sN: Extract from downsampled 3D scale spaces
+3. Additional face downsampling (lines 553-582):
+   - If maxDownsamplingLevel < 9 (thin volumes), continue pure 2D downsampling
+   - Use `N5DownsamplerSpark.downsample()` with factors [2,2]
+   - Extends pyramid to s9 for consistency
+
+**Optimal thickness values:**
+- **Must be powers of 2** for full pyramid generation (algorithm stops at z-dimension = 1)
+- **size=32**: Minimal thickness for basic z-averaging (5 downsample steps: 32→16→8→4→2→1)
+- **size=512**: Recommended for high-quality alignment (9 full downsample steps: 512→256→128→64→32→16→8→4→2→1)
+- Trade-off: Larger thickness = more z-information but slower processing
+- Non-power-of-2 values will stop early (e.g., size=40 stops at 5 pixels after 3 steps: 40→20→10→5)
+
+**Why this matters for alignment:**
+- Thicker slabs include more 3D context during downsampling
+- Reduces sampling artifacts and noise in coarse pyramid levels
+- Improves SIFT feature detection quality at multiple scales
+- More robust feature matching for downstream SparkPairAlignSIFT
+
+### Dataset-Specific Parameter Selection
+
+**Multi-SEM Fly Brain (current dataset):**
+```bash
+# Top surface (first tissue layer after padding)
+--n5Path=gs://janelia-spark-test/hess_wafers_60_61_export
+--n5DatasetInput=/flat/w61_serial_070_to_079/w61_s079_r00/raw/s0
+--n5GroupOutput=/flat/w61_serial_070_to_079/w61_s079_r00/top3
+--min=0,0,3              # Top surface at z=3 (padding=3)
+--size=0,0,512           # Extract 512-pixel thick slab for optimal downsampling
+--blockSize=1024,1024    # Large blocks for Multi-SEM
+                         # NO --invert (already inverted during CLAHE)
+--normalizeContrast      # Apply CLLCN for better feature detection
+
+# Bottom surface (one layer below detected surface)
+--n5GroupOutput=/flat/w61_serial_070_to_079/w61_s079_r00/bot4
+--min=0,0,-4             # One layer below bottom surface (-(padding+1))
+--size=0,0,-512          # Extract upward (negative = invert z-axis)
+```
+
+**Rationale:**
+- **min values**: Correspond to flattening padding parameter
+  - Top: First actual tissue layer is at z=padding
+  - Bottom: Go one layer deeper than surface to ensure overlap
+- **size=±512**: Maximal z-context for highest quality downsampling
+  - Enables 9 full 2x2x2 downsampling steps
+  - Each face in pyramid includes averaged z-information
+- **No --invert**: Multi-SEM data already inverted during SparkMaskedCLAHEMultiSEM
+- **--normalizeContrast**: Recommended for SIFT feature detection
+
+**FIB-SEM datasets (reference, older workflows):**
+```bash
+--min=0,<offset>,0       # Y-axis extraction (different orientation)
+--size=0,512,0           # Extract along Y
+--invert                 # FIB-SEM typically needs inversion
+--normalizeContrast
+```
+
+### Output Structure
+
+```
+/n5GroupOutput/
+  s1/ ... s9/           # 3D downsampled volumes (3D float32)
+  face/
+    s0/                 # Full resolution 2D face (2D float32)
+    s1/ ... s9/         # Downsampled 2D faces (2D float32)
+```
+
+**Note:** The 3D scale space (`/s1`-`/s9`) is intermediate data. The final alignment uses only the 2D face pyramid (`/face/s0`-`/face/s9`).
+
+### Workflow Integration
+
+**Position in pipeline:**
+```
+5. SparkExportFlattenedVolume → Flattened 3D volumes
+6. SparkGenerateFaceScaleSpace → Extract top surface face
+   SparkGenerateFaceScaleSpace → Extract bottom surface face (separate run)
+7. SparkPairAlignSIFT → Align using extracted faces
+```
+
+**Common workflow:**
+1. Flatten two adjacent slabs using their height fields
+2. Extract bottom face of upper slab (e.g., `--min=0,0,-4 --size=0,0,-512`)
+3. Extract top face of lower slab (e.g., `--min=0,0,3 --size=0,0,512`)
+4. Run SparkPairAlignSIFT using both face pyramids for alignment
+5. Use resulting transform in SparkExportAlignedSlabSeries
+
+### Historical Usage Patterns
+
+**Multi-SEM wafer processing (wafer-52, wafer-53):**
+- Single plane extraction: `--min=0,0,±23 --size=0,0,0`
+- Block size: `1024,1024`
+- Always with `--invert --normalizeContrast`
+
+**FIB-SEM Z1217 VNC:**
+- Y-axis extraction: `--min=0,±<offset>,0 --size=0,±512,0`
+- Block size: `1024,1024`
+- With `--invert --normalizeContrast`
+
+**Current recommendation (2024+):**
+- Use thick slabs: `--size=0,0,512` for optimal quality
+- Padding-aware coordinates for flattened volumes
+- Dataset-specific inversion handling
+
 ## Common Pitfalls and Troubleshooting
 
 ### Empty or Incorrect Flattened Volume Output
