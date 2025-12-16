@@ -48,6 +48,10 @@ public class RawStack
         this.heightfieldsVersion = heightfieldsVersion;
     }
 
+    public String getRawStack() {
+        return rawStack;
+    }
+
     /** @return the render project name (e.g. w61_serial_070_to_079 for rawStack w61_s076_r00) */
     public String getProject() {
         return project;
@@ -97,6 +101,11 @@ public class RawStack
     /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw) */
     public String getFlatRawDataset() {
         return getFlatDataset() + "/raw";
+    }
+
+    /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0) */
+    public String getFlatRawS0Dataset() {
+        return getFlatRawDataset() + "/s0";
     }
 
     /** @return the flat top or bottom dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/top) */
