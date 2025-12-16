@@ -101,12 +101,12 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
         final int sizeZ = isTopFace ? batchOptions.faceSize : -batchOptions.faceSize;
 
         final List<String> optionValues = new ArrayList<>(commonOptions);
-        optionValues.add("--n5DatasetInput=" + rawStack.getFlatDataset());
+        optionValues.add("--n5DatasetInput=" + rawStack.getFlatRawS0Dataset());
         optionValues.add("--n5GroupOutput=" + flatEdgeDataset);
         optionValues.add("--min=0,0," + minZ);
         optionValues.add("--size=0,0," + sizeZ);
 
-        System.out.println("SparkGenerateFaceScaleSpaceMultiSEMBatch.buildFaceOptions: " + optionValues);
+        logMessage("buildFaceOptions: " + optionValues);
         return new SparkGenerateFaceScaleSpace.Options(optionValues.toArray(new String[0]));
     }
 
@@ -136,8 +136,8 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
         try (final N5Reader n5Reader = N5Util.createN5Reader(batchOptions.n5Path) ) {
             for (final RawStack rawStack : rawStackList) {
 
-                final String flatRawDataset = rawStack.getFlatDataset();
-                Util.checkDatasetExistence(n5Reader, flatRawDataset, true);
+                final String flatRawS0Dataset = rawStack.getFlatRawS0Dataset();
+                Util.checkDatasetExistence(n5Reader, flatRawS0Dataset, true);
 
                 if (FaceEdge.TOP.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
                     final String flatTopDataset = rawStack.getFlatEdgeDataset(true);
@@ -156,6 +156,7 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
         for (final RawStack rawStack : rawStackList) {
 
             if (FaceEdge.TOP.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
+                logMessage("main: generating TOP face for " + rawStack.getRawStack());
                 generateFace(sparkContext,
                              buildFaceOptions(commonOptions,
                                               batchOptions,
@@ -164,6 +165,7 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
             }
 
             if (FaceEdge.BOTTOM.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
+                logMessage("main: generating BOTTOM face for " + rawStack.getRawStack());
                 generateFace(sparkContext,
                              buildFaceOptions(commonOptions,
                                               batchOptions,
@@ -175,4 +177,10 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
 
         sparkContext.close();
     }
+
+    private static void logMessage(final String message) {
+        Util.logMessage(CLAZZ, message);
+    }
+
+    private static final String CLAZZ = SparkGenerateFaceScaleSpaceMultiSEMBatch.class.getSimpleName();
 }
