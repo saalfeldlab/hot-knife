@@ -55,7 +55,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
 
         @Option(name = "--padding",
                 usage = "padding beyond flattening field min and max in px, e.g. 20")
-        private int padding = 0;
+        private int padding = 3;
 
         @Option(name = "--blockSize",
                 usage = "Size of output blocks, e.g. 128,128,128")

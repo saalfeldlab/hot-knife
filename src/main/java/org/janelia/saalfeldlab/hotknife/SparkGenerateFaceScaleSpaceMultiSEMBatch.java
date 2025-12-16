@@ -17,14 +17,16 @@
 package org.janelia.saalfeldlab.hotknife;
 
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
+import org.janelia.saalfeldlab.hotknife.util.RawStack;
+import org.janelia.saalfeldlab.hotknife.util.Util;
+import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
@@ -34,105 +36,140 @@ import static org.janelia.saalfeldlab.hotknife.SparkGenerateFaceScaleSpace.gener
 public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
 
 
-	public static class BatchOptions extends AbstractOptions implements Serializable {
+    public enum FaceEdge {
+        TOP, BOTTOM, BOTH
+    }
 
-		@Option(name = "--n5Path",
-				required = true,
-				usage = "N5 path, e.g. /nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5")
-		private String n5Path = null;
+    public static class BatchOptions extends AbstractOptions implements Serializable {
 
-		// /flat_clahe/s036_m252/raw/s0,/flat_clahe/s036_m252/top4,4,34
-		// /flat_clahe/s036_m252/raw/s0,/flat_clahe/s036_m252/bot4,-4,-34
-		@Option(name = "--datasetCsv",
-				required = true,
-				usage = "File containing comma-separated n5DatasetInput,n5GroupOutput,minZ,sizeZ values")
-		private String datasetCsv = null;
+        @Option(name = "--n5Path",
+                required = true,
+                usage = "N5 path for flat raw input and face output, e.g. gs://janelia-spark-test/hess_wafers_60_61_export")
+        private String n5Path = null;
 
-		@Option(name = "--blockSize",
-				usage = "Size of output blocks, e.g. 1024,1024")
-		private String blockSize = "1024,1024";
+        @Option(name = "--raw",
+                required = true,
+                usage = "Raw names for dataset(s), repeat for multiple datasets e.g. --raw w61_s079_r00 --raw w61_s080_r00 ...")
+        private List<String> rawNameList = new ArrayList<>();
 
-		@Option(name = "--invert", usage = "MultiSem datasets might be inverted")
-		private boolean invert = false;
+        @Option(name = "--padding",
+                usage = "Padding beyond flattening field in px (should match value used for exporting flattened volume)")
+        private int padding = 3;
 
-		@Option(name = "--normalizeContrast", usage = "Perform contast normalization on the input data")
-		private boolean normalizeContrast = false;
+        @Option(name = "--faceEdge",
+                usage = "Edge of the volume to generate face scale space for (TOP, BOTTOM, or BOTH)")
+        private FaceEdge faceEdge = FaceEdge.BOTH;
 
-		public BatchOptions(final String[] args) {
-			final CmdLineParser parser = new CmdLineParser(this);
-			try {
-				parser.parseArgument(args);
-				parsedSuccessfully = true;
-			} catch (final Exception e) {
-				e.printStackTrace(System.err);
-				parser.printUsage(System.err);
-			}
-		}
-	}
+        @Option(name = "--faceSize",
+                usage = "Number of z-layers to include in the face")
+        private int faceSize = 32;
 
-	public static void main(final String... args) throws Exception {
-		final BatchOptions batchOptions = new BatchOptions(args);
-		if (! batchOptions.parsedSuccessfully) {
-			throw new IllegalArgumentException("Options were not parsed successfully");
-		}
+        @Option(name = "--blockSize",
+                usage = "Size of output blocks, e.g. 1024,1024")
+        private String blockSize = "1024,1024";
 
-		final List<String[]> datasetValuesList = new ArrayList<>();
-		final Path datasetCsvPath = Paths.get(batchOptions.datasetCsv);
-		final List<String> datasetCsvLines = Files.readAllLines(datasetCsvPath);
-		for (int i = 0; i < datasetCsvLines.size(); ++i) {
-			final String line = datasetCsvLines.get(i);
-			final String[] values = line.split(",");
-			if (values.length != 4) {
-				throw new IllegalArgumentException("Expected 4 values per line in " + datasetCsvPath +
-												   " but line " + i + " has " + values.length + " values");
-			}
-			try {
-				Integer.parseInt(values[2]);
-				Integer.parseInt(values[3]);
-			} catch (NumberFormatException e) {
-				throw new IllegalArgumentException("Failed to parse minZ,sizeZ values on line " + i +
-												   " of " + datasetCsvPath, e);
-			}
-			datasetValuesList.add(values);
-		}
+        @Option(name = "--invert", usage = "MultiSem datasets might be inverted")
+        private boolean invert = false;
 
-		final SparkConf conf = new SparkConf().setAppName("SparkExportFlattenedVolumeMultiSEMBatch");
-		final JavaSparkContext sparkContext = new JavaSparkContext(conf);
-		sparkContext.setLogLevel("ERROR");
+        @Option(name = "--normalizeContrast", usage = "Perform contrast normalization on the input data")
+        private boolean normalizeContrast = false;
 
-		final List<String> commonOptions = new ArrayList<>();
-		commonOptions.add("--n5Path=" + batchOptions.n5Path);
-		commonOptions.add("--blockSize=" + batchOptions.blockSize);
-		if (batchOptions.invert) {
-			commonOptions.add("--invert");
-		}
-		if (batchOptions.normalizeContrast) {
-			commonOptions.add("--normalizeContrast");
-		}
+        public BatchOptions(final String[] args) {
+            final CmdLineParser parser = new CmdLineParser(this);
+            try {
+                parser.parseArgument(args);
+                parsedSuccessfully = true;
+            } catch (final Exception e) {
+                e.printStackTrace(System.err);
+                parser.printUsage(System.err);
+            }
+        }
 
-		for (final String[] datasetValues : datasetValuesList) {
+        public List<RawStack> buildRawStacks() {
+            return rawNameList.stream().map(RawStack::new).collect(Collectors.toList());
+        }
 
-			final List<String> optionValues = new ArrayList<>(commonOptions);
-			optionValues.add("--n5DatasetInput=" + datasetValues[0]);
-			optionValues.add("--n5GroupOutput=" + datasetValues[1]);
-			optionValues.add("--min=0,0," + datasetValues[2]);
-			optionValues.add("--size=0,0," + datasetValues[3]);
+    }
 
-			// --n5Path=/nrs/hess/data/hess_wafer_53/export/hess_wafer_53_center7.n5
-			// --n5DatasetInput=/flat_clahe/s036_m252/raw/s0
-			// --n5GroupOutput=/flat_clahe/s036_m252/bot4
-			// --min=0,0,-4
-			// --size=0,0,-34
-			// --blockSize=1024,1024
-			// --invert
+    private static SparkGenerateFaceScaleSpace.Options buildFaceOptions(final List<String> commonOptions,
+                                                                        final BatchOptions batchOptions,
+                                                                        final RawStack rawStack,
+                                                                        final boolean isTopFace) {
 
-			final SparkGenerateFaceScaleSpace.Options options =
-					new SparkGenerateFaceScaleSpace.Options(optionValues.toArray(new String[0]));
+        final String flatEdgeDataset = rawStack.getFlatEdgeDataset(isTopFace);
+        final int minZ = isTopFace ? batchOptions.padding : -batchOptions.padding - 1; // 3 or -4
+        final int sizeZ = isTopFace ? batchOptions.faceSize : -batchOptions.faceSize;
 
-			generateFace(sparkContext, options);
-		}
+        final List<String> optionValues = new ArrayList<>(commonOptions);
+        optionValues.add("--n5DatasetInput=" + rawStack.getFlatDataset());
+        optionValues.add("--n5GroupOutput=" + flatEdgeDataset);
+        optionValues.add("--min=0,0," + minZ);
+        optionValues.add("--size=0,0," + sizeZ);
 
-		sparkContext.close();
-	}
+        return new SparkGenerateFaceScaleSpace.Options(optionValues.toArray(new String[0]));
+    }
 
+    public static void main(final String... args) throws Exception {
+        final BatchOptions batchOptions = new BatchOptions(args);
+        if (! batchOptions.parsedSuccessfully) {
+            throw new IllegalArgumentException("Options were not parsed successfully");
+        }
+
+        final SparkConf conf = new SparkConf().setAppName("SparkExportFlattenedVolumeMultiSEMBatch");
+        final JavaSparkContext sparkContext = new JavaSparkContext(conf);
+        sparkContext.setLogLevel("ERROR");
+
+        final List<String> commonOptions = new ArrayList<>();
+        commonOptions.add("--n5Path=" + batchOptions.n5Path);
+        commonOptions.add("--blockSize=" + batchOptions.blockSize);
+        if (batchOptions.invert) {
+            commonOptions.add("--invert");
+        }
+        if (batchOptions.normalizeContrast) {
+            commonOptions.add("--normalizeContrast");
+        }
+
+        // make sure all input datasets exist and all output datasets do not exist
+        try (final N5Reader n5Reader = N5Util.createN5Reader(batchOptions.n5Path) ) {
+            for (final RawStack rawStack : batchOptions.buildRawStacks()) {
+
+                final String flatRawDataset = rawStack.getFlatDataset();
+                Util.checkDatasetExistence(n5Reader, flatRawDataset, true);
+
+                if (FaceEdge.TOP.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
+                    final String flatTopDataset = rawStack.getFlatEdgeDataset(true);
+                    Util.checkDatasetExistence(n5Reader, flatTopDataset, false);
+                }
+
+                if (FaceEdge.BOTTOM.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
+                    final String flatBottomDataset = rawStack.getFlatEdgeDataset(false);
+                    Util.checkDatasetExistence(n5Reader, flatBottomDataset, false);
+                }
+
+            }
+        }
+
+        // generate faces ...
+        for (final RawStack rawStack : batchOptions.buildRawStacks()) {
+
+            if (FaceEdge.TOP.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
+                generateFace(sparkContext,
+                             buildFaceOptions(commonOptions,
+                                              batchOptions,
+                                              rawStack,
+                                              true));
+            }
+
+            if (FaceEdge.BOTTOM.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
+                generateFace(sparkContext,
+                             buildFaceOptions(commonOptions,
+                                              batchOptions,
+                                              rawStack,
+                                              false));
+            }
+
+        }
+
+        sparkContext.close();
+    }
 }
