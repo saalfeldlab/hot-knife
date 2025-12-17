@@ -294,7 +294,7 @@ public class SparkGenerateFaceScaleSpace {
 					final RandomAccessibleInterval<FloatType> filtered = Lazy.process(
 							Views.extendMirrorSingle(zeroMin),
 							zeroMin,
-							new int[] { 33, 33, 7 }, // small blocksize to make sure we do not compute things for nothing, specifically if normalize constrast is on
+							outBlockSize,// new int[] { 33, 33, 7 }, // small blocksize to make sure we do not compute things for nothing, specifically if normalize constrast is on
 							new FloatType(),
 							AccessFlags.setOf(),
 							gauss);
