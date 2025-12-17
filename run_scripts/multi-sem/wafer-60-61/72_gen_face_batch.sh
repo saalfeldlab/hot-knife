@@ -2,18 +2,19 @@
 
 set -e
 
-if (( $# < 4 )); then
+if (( $# < 5 )); then
   echo "
-Usage:    $0 <max-executors> <wafer> <region> <serial-num> [serial-num] ...
+Usage:    $0 <max-executors> <wafer> <region> <top | bot | both> <serial-num> [serial-num] ...
 
           max-executors must be at least 2
 
 Examples:
-  $0  40  w61  r00  79
-  $0  40  w61  r00  81 82
+  $0  40  w61  r00  both  79
+  $0  40  w61  r00  top   81 82
 
 Notes:
-  - with 10 max-executors, w61 r00 79    took ?? hours ?? minutes to complete
+  - with 20 max-executors, w61  r00  top   80  took ?? hours ?? minutes to complete
+  - with 20 max-executors, w61  r00  bot   80  took ?? hours ?? minutes to complete
 "
   exit 1
 fi
@@ -29,7 +30,14 @@ fi
 
 WAFER="${2}"
 REGION="${3}"
-shift 3 # all remaining args should be serial numbers
+
+FACE_EDGE="${4^^}" # convert to upper case
+if [[ "${FACE_EDGE}" != "TOP" && "${FACE_EDGE}" != "BOT" && "${FACE_EDGE}" != "BOTH" ]]; then
+  echo "ERROR: face-edge must be top, bot, or both"
+  exit 1
+fi
+
+shift 4 # all remaining args should be serial numbers
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 
@@ -40,7 +48,7 @@ N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 ARGV="\
 --n5Path=${N5_PATH} \
 --padding=3 \
---faceEdge=BOTH \
+--faceEdge=${FACE_EDGE} \
 --faceSize=32 \
 --blockSize=1024,1024"
 
