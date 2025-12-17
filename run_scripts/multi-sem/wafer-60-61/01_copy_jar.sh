@@ -8,6 +8,10 @@
 
 set -e
 
+echo "
+running $0 at $(date)
+"
+
 BASE_GIT_DIR="${1:-/Users/trautmane/projects/git}"
 
 HOTKNIFE_JAR_FILE_NAME="hot-knife-0.0.7-SNAPSHOT.jar"
