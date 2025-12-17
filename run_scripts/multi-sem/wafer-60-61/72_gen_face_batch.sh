@@ -4,7 +4,7 @@ set -e
 
 if (( $# < 5 )); then
   echo "
-Usage:    $0 <max-executors> <wafer> <region> <top | bot | both> <serial-num> [serial-num] ...
+Usage:    $0 <max-executors> <wafer> <region> <top | bottom | both> <serial-num> [serial-num] ...
 
           max-executors must be at least 2
 
@@ -32,8 +32,8 @@ WAFER="${2}"
 REGION="${3}"
 
 FACE_EDGE="${4^^}" # convert to upper case
-if [[ "${FACE_EDGE}" != "TOP" && "${FACE_EDGE}" != "BOT" && "${FACE_EDGE}" != "BOTH" ]]; then
-  echo "ERROR: face-edge must be top, bot, or both"
+if [[ "${FACE_EDGE}" != "TOP" && "${FACE_EDGE}" != "BOTTOM" && "${FACE_EDGE}" != "BOTH" ]]; then
+  echo "ERROR: face-edge must be top, bottom, or both"
   exit 1
 fi
 
