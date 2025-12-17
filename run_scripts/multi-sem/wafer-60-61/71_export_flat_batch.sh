@@ -13,7 +13,7 @@ Examples:
   $0  40  w61  r00  81 82
 
 Notes:
-  - with 20 max-executors, w61 r00 83    took ?? hours ?? minutes to complete
+  - with 20 max-executors, w61 r00 83    took 15 hours  5 minutes to complete
   - with 40 max-executors, w61 r00 79    took 10 hours 50 minutes to complete
   - with 50 max-executors, w61 r00 79    took  9 hours 44 minutes to complete
 "

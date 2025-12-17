@@ -488,9 +488,8 @@ public class SparkGenerateFaceScaleSpace {
 		int maxScaleIndex = options.maxDownsamplingLevel; //options.multiSem ? 0 : 9;
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
-			System.out.println("Scale level " + scaleIndex);
-			System.out.println("min " + Util.printCoordinates( min ));
-			System.out.println("size " + Util.printCoordinates( size ));
+			logMessage("generateFace: scale level " + scaleIndex + ", min " + Util.printCoordinates( min ) +
+                       ", size " + Util.printCoordinates( size ));
 
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
 
@@ -520,6 +519,8 @@ public class SparkGenerateFaceScaleSpace {
 		final String faceGroupName = options.getOutputGroupName() + "/face";
 		n5.createGroup(faceGroupName);
 
+        logMessage("generateFace: extract face, scaleIndex 0");
+
 		/* face 0 */
 		extractFace(
 				sc,
@@ -534,7 +535,7 @@ public class SparkGenerateFaceScaleSpace {
 				0 );
 
 		for (int scaleIndex = 1; scaleIndex <= maxScaleIndex; ++scaleIndex) {
-			System.out.println("Scale level " + scaleIndex);
+            logMessage("generateFace: extract face, scaleIndex " + scaleIndex);
 			final String scaleSpaceDataSetName = options.getOutputGroupName() + "/s" + scaleIndex;
 			final DatasetAttributes scaleSpaceAttributes = n5.getDatasetAttributes(scaleSpaceDataSetName);
 			extractFace(
@@ -570,6 +571,7 @@ public class SparkGenerateFaceScaleSpace {
 			}
 
 			for (int scaleIndex = maxScaleIndex+1; scaleIndex <= 9; ++scaleIndex) {
+                logMessage("generateFace: downsample, scaleIndex " + scaleIndex);
 				N5DownsamplerSpark.downsample(
 						sc,
 						n5Supplier,
@@ -582,4 +584,11 @@ public class SparkGenerateFaceScaleSpace {
 		}
 
 	}
+
+    private static void logMessage(final String message) {
+        org.janelia.saalfeldlab.hotknife.util.Util.logMessage(CLAZZ, message);
+    }
+
+    private static final String CLAZZ = SparkGenerateFaceScaleSpace.class.getSimpleName();
+
 }
