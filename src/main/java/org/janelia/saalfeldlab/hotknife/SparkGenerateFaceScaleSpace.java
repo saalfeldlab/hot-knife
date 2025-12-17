@@ -206,7 +206,7 @@ public class SparkGenerateFaceScaleSpace {
 			final long[] size,
 			final int scaleIndex,
 			final String outDatasetName,
-			final int[] outBlockSize,
+			final int[] outBlockSizeIn,
 			final boolean invert,
 			final boolean normalizeContrast ) throws IOException {
 
@@ -220,6 +220,9 @@ public class SparkGenerateFaceScaleSpace {
 		final double[] sigmas = new double[] { sigma, sigma, sigma };
 
 		final long[] outDimensions = Arrays.stream(size).map(x -> Math.abs(x) / sampleStepSize).toArray();
+
+		final int[] outBlockSize = outBlockSizeIn.clone();
+		outBlockSize[ 2 ] = Math.min( outBlockSize[ 2 ], (int)outDimensions[ 2 ] );
 
 		n5.createDataset(
 				outDatasetName,
