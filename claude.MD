@@ -861,6 +861,185 @@ Result: 2D pyramid with z-information averaged during downsampling
 - Padding-aware coordinates for flattened volumes
 - Dataset-specific inversion handling
 
+## Global Affine Alignment with SparkAlignAffineGlobal
+
+### Overview
+**SparkAlignAffineGlobal** performs initial coarse alignment across multiple slab faces using SIFT feature matching and RANSAC-based outlier filtering. Typically used as Pass 0 in multi-pass alignment workflows to establish baseline transforms before fine-scale refinement.
+
+**Location**: `org.janelia.saalfeldlab.hotknife.SparkAlignAffineGlobal`
+
+### What It Does
+- Extracts SIFT features from face scale-space pyramids at specified scale
+- Matches features between adjacent bottom/top face pairs
+- Filters matches using RANSAC or Multi-Consensus-RANSAC
+- Performs global tile optimization with regularized affine models
+- Outputs 2D affine transforms for each slab face
+
+### Key Parameters
+
+**Required:**
+```bash
+--n5Path=<path>                    # N5 container path
+-d/--n5Dataset <dataset>           # Face datasets (alternating top/bot)
+-o/--n5GroupOutput <group>         # Output group for transforms
+--scaleIndex <N>                   # Scale level for feature extraction
+```
+
+**Optional:**
+```bash
+--maxError <pixels>                # RANSAC error threshold (default: 200)
+--iterations <N>                   # RANSAC iterations (default: 10000)
+--filter <type>                    # RANSAC or MULTI_CONSENSUS_RANSAC (default)
+-f/--fixDatasets <dataset>         # Fix specific faces (no optimization)
+-fm/--fixedModels <matrix>         # Affine transform for fixed faces
+-bmin/--boundsMin <x,y,z>          # Override computed bounds min
+-bmax/--boundsMax <x,y,z>          # Override computed bounds max
+```
+
+### Critical: maxError is at Full Resolution
+
+**The maxError parameter specifies the error threshold in full-resolution pixels, NOT at the downsampled scale.**
+
+**Algorithm flow (lines 424-450):**
+1. **Extract features at downsampled scale** (line 221):
+   ```java
+   source = N5Utils.open(n5Reader, dataset + "/s" + scaleIndex);
+   ```
+   - Features extracted from downsampled images (e.g., s5 = 1/32 resolution)
+   - Feature coordinates in downsampled space
+
+2. **Match features at downsampled scale** (lines 262-265):
+   - Feature matching happens in downsampled coordinate space
+   - Correspondence coordinates still at 1/32 resolution (for scaleIndex=5)
+
+3. **Unscale matches to full resolution** (lines 435-439):
+   ```java
+   Align.unScalePointMatches(entry._2(), options.getScaleIndex());
+   ```
+   - Multiplies all coordinates by `scale = 1 << scaleIndex` (line 69 in Align.java)
+   - scaleIndex=5 → scale=32 → all coordinates × 32
+   - Match coordinates now in full-resolution space
+
+4. **Filter with RANSAC at full resolution** (lines 441-450):
+   ```java
+   filterBlockFaceMatches(scaledMatches, ..., options.getMaxError(), ...);
+   ```
+   - RANSAC filtering operates on full-resolution coordinates
+   - maxError threshold applied to full-resolution pixel distances
+
+**Example:**
+```bash
+--scaleIndex=5 --maxError=200
+```
+- Features extracted from s5 (1/32 resolution, 32× downsampled)
+- Feature at downsampled position (100, 200) → unscaled to (3200, 6400)
+- RANSAC allows up to 200 pixels error in full-resolution space
+- At s5 scale, this corresponds to ~6.25 pixels error tolerance
+
+**Why this matters:**
+- maxError is **independent of scaleIndex** - same full-resolution threshold regardless of matching scale
+- Lower scaleIndex (finer scale) → more precise features but slower, same error threshold
+- Higher scaleIndex (coarser scale) → faster matching, same error threshold in world coordinates
+- Typical values: maxError=200-400 for Multi-SEM, maxError=100-200 for FIB-SEM
+
+### Typical Parameters
+
+**Multi-SEM wafer datasets:**
+```bash
+--scaleIndex=5               # Match at 1/32 resolution for speed
+--maxError=320               # Allow 320 pixels full-resolution error
+--iterations=100000          # More iterations for larger datasets
+--filter=MULTI_CONSENSUS_RANSAC
+```
+
+**FIB-SEM datasets:**
+```bash
+--scaleIndex=4               # Match at 1/16 resolution
+--maxError=200               # Tighter tolerance (200 pixels)
+--iterations=10000
+--filter=RANSAC
+```
+
+### Workflow Integration
+
+**Position in pipeline:**
+```
+6. SparkGenerateFaceScaleSpace → Extract face pyramids for all slabs
+7. SparkAlignAffineGlobal → Initial global alignment (Pass 0)
+8. SparkPairAlignSIFTAverage → Refinement passes (Passes 1-7)
+9. SparkPairAlignFlow → Dense flow alignment (Passes 8-12)
+```
+
+**Output structure:**
+```
+/align-0/                           # Output group
+  attributes.json                   # Contains: datasets, transforms, scaleIndex, boundsMin, boundsMax
+  /slab-24_top/
+    attributes.json                 # AffineTransform2D with scale, boundsMin, boundsMax
+  /slab-24_bot/
+    attributes.json
+  ...
+```
+
+### Algorithm Details
+
+**1. Feature Extraction** (lines 207-236):
+- SIFT features with sigma=2.0, threshold=0.05, descriptor size=8
+- Extracted independently for each face dataset
+- Parallelized across all faces using Spark RDD
+
+**2. Feature Matching** (lines 239-275):
+- Matches adjacent bottom/top face pairs only
+- Ratio test threshold: 0.92 (ratio of best to second-best match)
+- Creates initial candidate matches
+
+**3. Outlier Filtering** (lines 278-317):
+- **RANSAC**: Standard random sampling with single model
+- **MULTI_CONSENSUS_RANSAC** (default): Multiple consensus models for robustness
+  - Better handling of repetitive structures
+  - More robust to local symmetries
+- Minimum inlier ratio: 0.05 (5%)
+- Minimum inliers: 7 matches
+
+**4. Global Optimization** (lines 456-501):
+- **Tile Configuration**: Connected tiles representing slab stack
+- **Model**: InterpolatedAffineModel2D (rigid ↔ affine with lambda parameter)
+- **Three-pass optimization**:
+  - Pass 1: Regularizer only (lambda=1.0, pure rigid, 5000 iterations)
+  - Pass 2: Low regularization (lambda=0.1, 5000 iterations)
+  - Pass 3 (commented): Very low regularization (lambda=0.01)
+- **Fixed tiles**: Optionally fix specific faces to known transforms
+
+**5. Transform Export** (lines 550-580):
+- Inverted transforms saved (for applying to images)
+- Stored with scale factor and bounds for downstream processing
+- Joint bounding box computed across all aligned faces
+
+### Common Issues
+
+**Insufficient matches:**
+- Reduce maxError to be more permissive
+- Lower scaleIndex for better feature quality (slower)
+- Check face extraction quality (contrast, resolution)
+
+**Poor global alignment:**
+- Increase iterations for more thorough RANSAC search
+- Try MULTI_CONSENSUS_RANSAC for repetitive structures
+- Verify face order (must alternate top/bot correctly)
+
+**Fixed tiles not working:**
+- Ensure dataset names match exactly (including path separators)
+- Verify affine matrix format: `[[a, b, tx], [c, d, ty]]`
+- Fixed tiles skip optimization but still connect to neighbors
+
+**GCS rate limit errors (GCS429):**
+- Error: `StorageException: The object exceeded the rate limit for object mutation operations`
+- Cause: Parallel transform writes create too many concurrent mutations on cloud storage bucket
+- Solution: Code automatically detects `gs://` paths and uses sequential write mode
+- Sequential mode: transforms collected and written one-by-one to avoid rate limits
+- Local filesystem: uses parallel writes (original behavior) for better performance
+- Implementation: `saveAffines()` with `sequentialWrite` boolean parameter (commit 19bbba8)
+
 ## Common Pitfalls and Troubleshooting
 
 ### Empty or Incorrect Flattened Volume Output
