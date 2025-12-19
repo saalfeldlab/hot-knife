@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
@@ -395,7 +396,7 @@ public class SparkPairAlignSIFTAverage {
 		for (int i = 1; i < datasetNames.length - 2; i += 2) {
 
 			System.out.printf(
-					"Aligning dataset %d : %s, %d : %s, %d grid cells",
+					"(" + new Date( System.currentTimeMillis()) + "): Aligning dataset %d : %s, %d : %s, %d grid cells",
 					i,
 					datasetNames[i],
 					i + 1,

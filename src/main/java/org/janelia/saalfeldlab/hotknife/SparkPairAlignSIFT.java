@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
@@ -340,7 +341,7 @@ public class SparkPairAlignSIFT {
 
 		final boolean sequentialWrite = n5Path.startsWith("gs://");
 		if (sequentialWrite) {
-			System.out.println("Using sequential write mode for cloud storage to avoid GCS rate limits (grid cells)");
+			System.out.println( "(" + new Date( System.currentTimeMillis()) + "): Using sequential write mode for cloud storage to avoid GCS rate limits (grid cells)");
 			// For cloud storage: collect affines and write sequentially
 			// This is slower but avoids GCS rate limits
 			try {
