@@ -30,9 +30,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5FSWriter;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -109,7 +108,7 @@ public class SparkPairAlignSIFTAverage {
 		final JavaPairRDD<long[], Tuple2<double[], double[]>> affines =
 				offsets.mapToPair(offset -> {
 
-					final N5Reader n5Reader = new N5FSReader(n5Path);
+					final N5Reader n5Reader = N5Util.createN5Reader(n5Path);
 					final RandomAccessibleInterval<FloatType> a = N5Utils.open(n5Reader, datasetA + "/s" + scaleIndex);
 					final RandomAccessibleInterval<FloatType> b = N5Utils.open(n5Reader, datasetB + "/s" + scaleIndex);
 
@@ -349,7 +348,7 @@ public class SparkPairAlignSIFTAverage {
 		if (!options.parsedSuccessfully)
 			return;
 
-		final N5Writer n5 = new N5FSWriter(options.getN5Path());
+		final N5Writer n5 = N5Util.createN5Writer(options.getN5Path());
 		final String[] datasetNames = n5.getAttribute(options.getInGroup(), "datasets", String[].class);
 		final String[] transformDatasetNames = n5.getAttribute(options.getInGroup(), "transforms", String[].class);
 		final double[] boundsMin = n5.getAttribute(options.getInGroup(), "boundsMin", double[].class);
