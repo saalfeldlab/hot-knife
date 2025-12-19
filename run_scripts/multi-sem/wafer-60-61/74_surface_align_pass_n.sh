@@ -31,7 +31,7 @@ ERROR: ${PRIOR_PASS_PATH} not found
   exit 1
 fi
 
-CURRENT_PASS_PATH="${N5_PATH}/${N5_GROUP_OUPUT}"
+CURRENT_PASS_PATH="${N5_PATH}/${N5_GROUP_OUTPUT}"
 if gcloud storage ls "${CURRENT_PASS_PATH}" 2>/dev/null | grep -q .; then
   echo "
 ERROR: ${CURRENT_PASS_PATH} already exists
