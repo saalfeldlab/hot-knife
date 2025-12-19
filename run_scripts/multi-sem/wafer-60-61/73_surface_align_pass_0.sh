@@ -64,7 +64,7 @@ for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
 
   if [[ -z "${BATCH_NAME}" ]]; then
     LAST_SERIAL=$(printf "s%03d" "${LAST_SERIAL_NUM}")
-    BATCH_NAME=$(echo "surface-pass00-${RUN_TIMESTAMP}-${RAW_STACK}-to-${LAST_SERIAL}" | sed "s/_/-/g")
+    BATCH_NAME=$(echo "surface-pass-00-${RUN_TIMESTAMP}-${RAW_STACK}-to-${LAST_SERIAL}" | sed "s/_/-/g")
   fi
 
 done
