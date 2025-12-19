@@ -46,7 +46,10 @@ RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 unset BATCH_NAME
 
 # TODO: make serial number range a parameter or argument, note that face dataset order is important
-for SERIAL_NUM in 79 80 81 82 83; do
+FIRST_SERIAL_NUM=79
+LAST_SERIAL_NUM=83
+
+for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
 
   SERIAL_NUM_PADDED=$(printf "%03d" "${SERIAL_NUM}")
   RAW_STACK="${WAFER}_s${SERIAL_NUM_PADDED}_${REGION}"
@@ -54,12 +57,14 @@ for SERIAL_NUM in 79 80 81 82 83; do
   # convert w61_s079_r00 to w61_serial_070_to_079
   RENDER_PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${RAW_STACK}")
 
-  #                /flat/w61_serial_070_to_079/w61_s079_r00/top/face
-  ARGV="${ARGV} -d /flat/${RENDER_PROJECT}/${RAW_STACK}/top/face -d /flat/${RENDER_PROJECT}/${RAW_STACK}/bot/face"
+  # /flat/w61_serial_070_to_079/w61_s079_r00
+  FLAT_DATASET="/flat/${RENDER_PROJECT}/${RAW_STACK}"
+
+  ARGV="${ARGV} -d ${FLAT_DATASET}/top/face -d ${FLAT_DATASET}/bot/face"
 
   if [[ -z "${BATCH_NAME}" ]]; then
-    NUMBER_OF_STACK_MINUS_ONE=$(( $# - 1 ))
-    BATCH_NAME=$(echo "surface-pass00-${RUN_TIMESTAMP}-${RAW_STACK}-with-${NUMBER_OF_STACK_MINUS_ONE}" | sed "s/_/-/g")
+    LAST_SERIAL=$(printf "s%03d" "${LAST_SERIAL_NUM}")
+    BATCH_NAME=$(echo "surface-pass00-${RUN_TIMESTAMP}-${RAW_STACK}-to-${LAST_SERIAL}" | sed "s/_/-/g")
   fi
 
 done
