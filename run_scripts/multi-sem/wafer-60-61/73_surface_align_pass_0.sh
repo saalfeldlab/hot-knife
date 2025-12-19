@@ -12,7 +12,7 @@ Examples:
   $0  2  w61  r00
 
 Notes:
-  - with 2 max-executors and 5 w61 r00 slabs (79 to 83), pass 0 took ?? minutes to complete
+  - with 2 max-executors and 5 w61 r00 slabs (79 to 83), pass 0 took 4 minutes to complete
 "
   exit 1
 fi
@@ -30,7 +30,7 @@ WAFER="${2}"
 REGION="${3}"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-N5_SURFACE_ROOT="surface-align/run_20251218_210000"
+N5_SURFACE_ROOT="surface-align/run_20251219_110000"
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 # need scaleIndex=5 for larger wafer 53 slabs
