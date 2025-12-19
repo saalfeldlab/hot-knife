@@ -290,6 +290,44 @@ public class SparkPairAlignSIFT {
 	 * @param stepSize
 	 * @param transformScale
 	 */
+	private static long[] saveAccumulatedAffineGridCell(
+			final N5Writer n5,
+			final String priorTransformDatasetName,
+			final String datasetBaseName,
+			final double[] boundsMin,
+			final double[] boundsMax,
+			final int stepSize,
+			final double transformScale,
+			final long[] offset,
+			final double[] affine) throws IOException {
+
+		final RealTransform priorTransform = Transform.loadScaledTransform(n5, priorTransformDatasetName);
+		final long[] gridOffset = Grid.gridCell(
+				offset,
+				Grid.floorScaled(boundsMin, transformScale),
+				new int[]{stepSize, stepSize});
+		final String datasetName = datasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1];
+		final RealTransformSequence transformSequence = new RealTransformSequence();
+		if (affine != null) {
+			final AffineTransform2D transform = new AffineTransform2D();
+			transform.set(affine);
+			transformSequence.add(transform);
+		}
+		transformSequence.add(priorTransform);
+		Transform.saveScaledTransformBlock(
+				n5,
+				datasetName,
+				transformSequence,
+				transformScale,
+				boundsMin,
+				boundsMax,
+				gridOffset,
+				new int[] {stepSize, stepSize});
+
+		return offset;
+	}
+
+	@SuppressWarnings("resource")
 	public static JavaRDD<long[]> saveAccumulatedAffineGridCells(
 			final JavaPairRDD<long[], double[]> affines,
 			final String n5Path,
@@ -300,38 +338,41 @@ public class SparkPairAlignSIFT {
 			final int stepSize,
 			final double transformScale) {
 
-		final JavaRDD<long[]> gridCells = affines.map(
-				t -> {
-					final N5Writer n5 = N5Util.createN5Writer(n5Path);
-					final RealTransform priorTransform = Transform.loadScaledTransform(
-							n5,
-							priorTransformDatasetName);
-					final long[] gridOffset = Grid.gridCell(
-							t._1(),
-							Grid.floorScaled(boundsMin, transformScale),
-							new int[]{stepSize, stepSize});
-					final String datasetName = datasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1];
-					final RealTransformSequence transformSequence = new RealTransformSequence();
-					if (t._2() != null) {
-						final AffineTransform2D transform = new AffineTransform2D();
-						transform.set(t._2());
-						transformSequence.add(transform);
-					}
-					transformSequence.add(priorTransform);
-					Transform.saveScaledTransformBlock(
-							n5,
-							datasetName,
-							transformSequence,
-							transformScale,
-							boundsMin,
-							boundsMax,
-							gridOffset,
-							new int[] {stepSize, stepSize});
+		final boolean sequentialWrite = n5Path.startsWith("gs://");
+		if (sequentialWrite) {
+			System.out.println("Using sequential write mode for cloud storage to avoid GCS rate limits (grid cells)");
+			// For cloud storage: collect affines and write sequentially
+			// This is slower but avoids GCS rate limits
+			try {
+				final N5Writer n5 = N5Util.createN5Writer(n5Path);
+				final List<Tuple2<long[], double[]>> affineList = affines.collect();
+				final ArrayList<long[]> resultCells = new ArrayList<>();
 
-					return t._1();
-				});
+				for (final Tuple2<long[], double[]> t : affineList) {
+					resultCells.add(saveAccumulatedAffineGridCell(
+							n5, priorTransformDatasetName, datasetBaseName,
+							boundsMin, boundsMax, stepSize, transformScale,
+							t._1(), t._2()));
+				}
 
-		return gridCells;
+				// Wrap existing context - don't close it since we don't own it
+				return new JavaSparkContext(affines.context()).parallelize(resultCells);
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		} else {
+			// For local filesystem: use parallel writes (original behavior)
+			final JavaRDD<long[]> gridCells = affines.map(
+					t -> {
+						final N5Writer n5 = N5Util.createN5Writer(n5Path);
+						return saveAccumulatedAffineGridCell(
+								n5, priorTransformDatasetName, datasetBaseName,
+								boundsMin, boundsMax, stepSize, transformScale,
+								t._1(), t._2());
+					});
+
+			return gridCells;
+		}
 	}
 
 
@@ -459,6 +500,23 @@ public class SparkPairAlignSIFT {
 	}
 
 
+	private static void reSaveTransform(
+			final N5Writer n5,
+			final String inDatasetName,
+			final String outDatasetName) throws IOException {
+		final RealTransform transform = Transform.loadScaledTransform(n5, inDatasetName);
+		final double[] boundsMin = n5.getAttribute(inDatasetName, "boundsMin", double[].class);
+		final double[] boundsMax = n5.getAttribute(inDatasetName, "boundsMax", double[].class);
+		final double scale = n5.getAttribute(inDatasetName, "scale", double.class);
+		Transform.saveScaledTransform(
+				n5,
+				outDatasetName,
+				transform,
+				scale,
+				boundsMin,
+				boundsMax);
+	}
+
 	public static void reSaveTransforms(
 			final JavaSparkContext sc,
 			final String n5Path,
@@ -469,23 +527,27 @@ public class SparkPairAlignSIFT {
 		for (int i = 0; i < inDatasetNames.size(); ++i)
 			datasetNames.add(new Tuple2<String, String>(inDatasetNames.get(i), outDatasetNames.get(i)));
 
-		final JavaPairRDD<String, String> rddDatasetNames = sc.parallelizePairs(datasetNames);
-
-		rddDatasetNames.foreach(
-				tuple -> {
-					final N5Writer n5 = N5Util.createN5Writer(n5Path);
-					final RealTransform transform = Transform.loadScaledTransform(n5, tuple._1());
-					final double[] boundsMin = n5.getAttribute(tuple._1(), "boundsMin", double[].class);
-					final double[] boundsMax = n5.getAttribute(tuple._1(), "boundsMax", double[].class);
-					final double scale = n5.getAttribute(tuple._1(), "scale", double.class);
-					Transform.saveScaledTransform(
-							n5,
-							tuple._2(),
-							transform,
-							scale,
-							boundsMin,
-							boundsMax);
-				});
+		final boolean sequentialWrite = n5Path.startsWith("gs://");
+		if (sequentialWrite) {
+			System.out.println("Using sequential write mode for cloud storage to avoid GCS rate limits");
+			// Sequential write to avoid GCS rate limits
+			try {
+				final N5Writer n5 = N5Util.createN5Writer(n5Path);
+				for (final Tuple2<String, String> tuple : datasetNames) {
+					reSaveTransform(n5, tuple._1(), tuple._2());
+				}
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		} else {
+			// Parallel write for local filesystem
+			final JavaPairRDD<String, String> rddDatasetNames = sc.parallelizePairs(datasetNames);
+			rddDatasetNames.foreach(
+					tuple -> {
+						final N5Writer n5 = N5Util.createN5Writer(n5Path);
+						reSaveTransform(n5, tuple._1(), tuple._2());
+					});
+		}
 	}
 
 
