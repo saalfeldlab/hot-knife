@@ -27,7 +27,6 @@ import net.imglib2.RandomAccessible;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.GzipCompression;
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -345,10 +344,6 @@ public class Transform {
 	/**
 	 * Creates an affine transform from a world scale affine transform to be
 	 * used in downscaled space.
-	 *
-	 * @param affine
-	 * @param scaleIndex
-	 * @return
 	 */
 	static public AffineTransform2D createScaledAffine2D(
 			final AffineTransform2D affine,
@@ -365,10 +360,6 @@ public class Transform {
 
 	/**
 	 * Creates a scaled RealTransform.
-	 *
-	 * @param affine
-	 * @param scaleFactor
-	 * @return
 	 */
 	static public RealTransform createScaledRealTransform(
 			final RealTransform transform,
@@ -407,10 +398,6 @@ public class Transform {
 
 	/**
 	 * Creates a scaled RealTransform.
-	 *
-	 * @param affine
-	 * @param scaleIndex
-	 * @return
 	 */
 	static public RealTransform createScaledRealTransform(
 			final RealTransform transform,
@@ -491,12 +478,6 @@ public class Transform {
 
 	/**
 	 * 2D boundaries approximated by only testing transformed corner coordinates.
-	 *
-	 * @param min
-	 * @param max
-	 * @param scaleIndex
-	 * @param transform
-	 * @return
 	 */
 	public static double[][] bounds(
 			final double[] max,
@@ -549,7 +530,7 @@ public class Transform {
 			final int scaleIndex,
 			final List<? extends InvertibleRealTransform> transforms) throws IOException {
 
-		final N5Reader n5Reader = new N5FSReader(n5Path);
+		final N5Reader n5Reader = N5Util.createN5Reader(n5Path);
 
 		final double[] min = new double[2];
 		final double[] max = new double[2];
@@ -806,7 +787,7 @@ public class Transform {
 			final Interval targetInterval) throws IOException {
 
 		final ArrayList<RandomAccessibleInterval<FloatType>> transformedIntervals = new ArrayList<>();
-		final N5Reader n5Reader = new N5FSReader(n5Path);
+		final N5Reader n5Reader = N5Util.createN5Reader(n5Path);
 
 		for (int i = 0; i < transforms.size(); ++i) {
 
@@ -831,7 +812,7 @@ public class Transform {
 			final Interval targetInterval) throws IOException {
 
 		final ArrayList<RandomAccessibleInterval<UnsignedByteType>> transformedIntervals = new ArrayList<>();
-		final N5Reader n5Reader = new N5FSReader(n5Path);
+		final N5Reader n5Reader = N5Util.createN5Reader(n5Path);
 
 		for (int i = 0; i < transforms.size(); ++i) {
 
