@@ -12,7 +12,7 @@ Examples:
   $0  2  w61  r00
 
 Notes:
-  - with 2 max-executors and 5 w61 r00 slabs (79 to 83), pass 0 took ?? minutes to complete
+  - with 2 max-executors and 5 w61 r00 slabs (79 to 83), pass 0 took 4 minutes to complete
 "
   exit 1
 fi
