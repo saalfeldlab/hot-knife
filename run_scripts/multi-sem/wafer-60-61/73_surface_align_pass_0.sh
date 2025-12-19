@@ -30,7 +30,7 @@ WAFER="${2}"
 REGION="${3}"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-N5_SURFACE_ROOT="surface-align/run_20251218_210000"
+N5_SURFACE_ROOT="surface-align/run_20251219_110000"
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 # need scaleIndex=5 for larger wafer 53 slabs
