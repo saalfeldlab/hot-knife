@@ -358,23 +358,43 @@ public class SparkAlignAffineGlobal {
 			final double[] min,
 			final double[] max,
 			final int scaleIndex,
-			final JavaPairRDD<String, double[]> transforms) {
+			final JavaPairRDD<String, double[]> transforms,
+			final boolean sequentialWrite) throws IOException {
 
 		final double scale = 1.0 / (1 << scaleIndex);
 
-		transforms.foreach(
-				tuple -> {
-					final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
-					final AffineTransform2D affine = new AffineTransform2D();
-					affine.set(tuple._2());
-					Transform.saveScaledTransform(
-							n5Writer,
-							outGroup + "/" + tuple._1(),
-							affine,
-							scale,
-							min,
-							max);
-				});
+		if (sequentialWrite) {
+			// Sequential write to avoid GCS rate limits (GCS429 errors)
+			// Use this for cloud storage (gs://) with many transforms
+			final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
+			for (final scala.Tuple2<String, double[]> tuple : transforms.collect()) {
+				final AffineTransform2D affine = new AffineTransform2D();
+				affine.set(tuple._2());
+				Transform.saveScaledTransform(
+						n5Writer,
+						outGroup + "/" + tuple._1(),
+						affine,
+						scale,
+						min,
+						max);
+			}
+		} else {
+			// Parallel write (original behavior)
+			// Use this for local filesystem storage
+			transforms.foreach(
+					tuple -> {
+						final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
+						final AffineTransform2D affine = new AffineTransform2D();
+						affine.set(tuple._2());
+						Transform.saveScaledTransform(
+								n5Writer,
+								outGroup + "/" + tuple._1(),
+								affine,
+								scale,
+								min,
+								max);
+					});
+		}
 	}
 
 
@@ -569,13 +589,20 @@ public class SparkAlignAffineGlobal {
 
 		System.out.println("saving affines to " + options.getN5Path() + "/" + options.getOutGroup() );
 
+		// Use sequential write for cloud storage (gs://) to avoid GCS rate limits
+		final boolean sequentialWrite = options.getN5Path().startsWith("gs://");
+		if (sequentialWrite) {
+			System.out.println("Using sequential write mode for cloud storage to avoid GCS rate limits");
+		}
+
 		saveAffines(
 				options.getN5Path(),
 				options.getOutGroup(),
 				bounds[0],
 				bounds[1],
 				options.getScaleIndex(),
-				sc.parallelizePairs(transformTuples));
+				sc.parallelizePairs(transformTuples),
+				sequentialWrite);
 
 		n5.close();
 
