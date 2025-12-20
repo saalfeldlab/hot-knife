@@ -244,14 +244,14 @@ public class SparkPairAlignSIFT {
 					// Add jitter: randomize delay between 50% and 150% of calculated value
 					// This prevents thundering herd where all workers retry at similar intervals
 					long jitteredDelay = (long)(delayMs * (0.5 + Math.random()));
-					System.err.println(String.format(
+					System.out.println(String.format(
 						"GCS rate limit hit for %s (attempt %d/%d), retrying in %dms (jittered from %dms)",
 						operationDescription, attempt + 1, maxRetries + 1, jitteredDelay, delayMs));
 					Thread.sleep(jitteredDelay);
 					delayMs = (long)(delayMs * backoffMultiplier);
 				} else if (attempt < maxRetries) {
 					// For non-rate-limit errors, retry without delay
-					System.err.println(String.format(
+					System.out.println(String.format(
 						"Error in %s (attempt %d/%d): %s",
 						operationDescription, attempt + 1, maxRetries + 1, e.getMessage()));
 				}
