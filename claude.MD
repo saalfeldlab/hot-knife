@@ -1047,6 +1047,11 @@ Result: 2D pyramid with z-information averaged during downsampling
   - Use aggressive retry settings: `--maxRetries 10 --retryDelayMs 5000 --retryBackoff 2.0`
   - Maximum delay per operation: ~85 minutes with jitter
   - Recommended when writing 100s of grid cells simultaneously
+- **Fail-fast behavior:**
+  - SparkPairAlignSIFTAverage validates that ALL grid cells are saved successfully
+  - If any grid cells fail after exhausting retries, job fails immediately with clear error
+  - Prevents processing subsequent alignments with incomplete/corrupted data
+  - Recommended Spark configuration: `--conf spark.task.maxFailures=1` for immediate failure on task errors
 - Implementation: `SparkAlignAffineGlobal` and `SparkPairAlignSIFT` with retry utilities
 - Rate limit errors trigger exponential backoff delays with jitter, other errors retry immediately
 - Fails fast after all retries exhausted with clear error message

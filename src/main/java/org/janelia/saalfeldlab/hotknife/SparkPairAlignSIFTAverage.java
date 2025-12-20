@@ -273,7 +273,7 @@ public class SparkPairAlignSIFTAverage {
 				maxFilterEpsilon);
 
 		affines.cache();
-		affines.count();
+		final long expected = affines.count();
 
 		final JavaPairRDD<long[], double[]> affinesA = affines.mapToPair(
 				a -> new Tuple2<>(a._1(), a._2()._1()));
@@ -307,9 +307,24 @@ public class SparkPairAlignSIFTAverage {
 				retryBackoff);
 
 		gridCellsA.cache();
-		gridCellsA.count();
+		long countA = gridCellsA.count();
 		gridCellsB.cache();
-		gridCellsB.count();
+		long countB = gridCellsB.count();
+
+		// Validate that all grid cells were successfully saved
+		// If any tasks failed after exhausting retries, the counts will be less than expected
+		if (countA < expected) {
+			throw new RuntimeException(String.format(
+				"Failed to save all grid cells for dataset A (%s): expected %d, got %d. " +
+				"This indicates %d grid cells failed after exhausting all retries.",
+				transformDatasetNameA, expected, countA, expected - countA));
+		}
+		if (countB < expected) {
+			throw new RuntimeException(String.format(
+				"Failed to save all grid cells for dataset B (%s): expected %d, got %d. " +
+				"This indicates %d grid cells failed after exhausting all retries.",
+				transformDatasetNameB, expected, countB, expected - countB));
+		}
 
 		final JavaRDD<long[]> composedGridCellsA = SparkPairAlignSIFT.composeOverlappingTransformGridCells(
 				gridCellsA,
