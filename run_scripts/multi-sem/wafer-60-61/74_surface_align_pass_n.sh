@@ -78,13 +78,13 @@ elif (( MAX_EXECUTORS > 500 )); then
 fi
 
 ARGV="
-  --n5Path=${N5_PATH} \
-  --n5GroupInput=${N5_GROUP_INPUT} \
-  --n5GroupOutput=${N5_GROUP_OUTPUT} \
-  --maxRetries=5 \
-  --retryDelayMs=2000 \
-  --retryBackoff=2.0 \
-  ${PASS_ARGS}"
+--n5Path=${N5_PATH} \
+--n5GroupInput=${N5_GROUP_INPUT} \
+--n5GroupOutput=${N5_GROUP_OUTPUT} \
+--maxRetries=8 \
+--retryDelayMs=5000 \
+--retryBackoff=2.0 \
+${PASS_ARGS}"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 BATCH_NAME=$(echo "surface-pass-${PADDED_PASS}-${RUN_TIMESTAMP}" | sed "s/_/-/g")
