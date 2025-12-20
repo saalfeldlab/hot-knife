@@ -1045,8 +1045,14 @@ Result: 2D pyramid with z-information averaged during downsampling
   - `--retryBackoff`: Exponential backoff multiplier (default: 2.0)
 - **For high-parallelism workloads (100+ parallel writes):**
   - Use aggressive retry settings: `--maxRetries 10 --retryDelayMs 5000 --retryBackoff 2.0`
-  - Maximum delay per operation: ~85 minutes with jitter
-  - Recommended when writing 100s of grid cells simultaneously
+  - **Initial jitter** (new): `--initialDelayMs <milliseconds>` (default: 10000)
+    - Adds random 0-10s delay before FIRST write attempt (not retries)
+    - Spreads task execution over time, reducing initial thundering herd
+    - Proactively prevents rate limits vs reactively retrying
+    - Tradeoff: Increases minimum execution time by max delay value
+    - Disable with `--initialDelayMs 0` if not needed
+  - Maximum delay per operation: ~85 minutes with retry jitter
+  - Recommended when writing 100s-1000s of grid cells simultaneously
 - **Fail-fast behavior:**
   - SparkPairAlignSIFTAverage validates that ALL grid cells are saved successfully
   - If any grid cells fail after exhausting retries, job fails immediately with clear error

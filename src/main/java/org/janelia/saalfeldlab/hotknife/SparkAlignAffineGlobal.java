@@ -112,6 +112,9 @@ public class SparkAlignAffineGlobal {
 		@Option(name = "--retryBackoff", required = false, usage = "Exponential backoff multiplier (default: 2.0)")
 		private double retryBackoff = 2.0;
 
+		@Option(name = "--initialDelayMs", required = false, usage = "Maximum random delay in milliseconds before first attempt (default: 60_000)")
+		private long initialDelayMs = 60_000;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -218,6 +221,13 @@ public class SparkAlignAffineGlobal {
 			return retryBackoff;
 		}
 
+		/**
+		 * @return the initialDelayMs
+		 */
+		public long getInitialDelayMs() {
+			return initialDelayMs;
+		}
+
 		public enum OutlierFilter {
 			RANSAC,
 			MULTI_CONSENSUS_RANSAC;
@@ -248,8 +258,9 @@ public class SparkAlignAffineGlobal {
 	 *
 	 * @param operation The operation to execute
 	 * @param maxRetries Maximum number of retry attempts (beyond initial attempt)
-	 * @param initialDelayMs Initial delay in milliseconds before first retry
+	 * @param retryDelayMs Initial delay in milliseconds before first retry
 	 * @param backoffMultiplier Exponential backoff multiplier for delays
+	 * @param startupJitterMs Maximum random delay in milliseconds before first attempt
 	 * @param operationDescription Description of operation for logging
 	 * @return Result of the operation
 	 * @throws Exception if all retries are exhausted
@@ -257,12 +268,22 @@ public class SparkAlignAffineGlobal {
 	private static <T> T executeWithRetry(
 			final Supplier<T> operation,
 			final int maxRetries,
-			final long initialDelayMs,
+			final long retryDelayMs,
 			final double backoffMultiplier,
+			final long startupJitterMs,
 			final String operationDescription) throws Exception {
 
+		// Add initial random delay to space out task execution (0 to startupJitterMs)
+		if (startupJitterMs > 0) {
+			long initialDelay = (long)(Math.random() * startupJitterMs);
+			System.err.println(String.format(
+				"Initial jitter for %s: delaying first attempt by %dms (max: %dms)",
+				operationDescription, initialDelay, startupJitterMs));
+			Thread.sleep(initialDelay);
+		}
+
 		Exception lastException = null;
-		long delayMs = initialDelayMs;
+		long delayMs = retryDelayMs;
 
 		for (int attempt = 0; attempt <= maxRetries; attempt++) {
 			try {
@@ -306,16 +327,18 @@ public class SparkAlignAffineGlobal {
 	 *
 	 * @param operation The operation to execute
 	 * @param maxRetries Maximum number of retry attempts
-	 * @param initialDelayMs Initial delay in milliseconds
+	 * @param retryDelayMs Initial delay in milliseconds
 	 * @param backoffMultiplier Exponential backoff multiplier
+	 * @param startupJitterMs Maximum random delay in milliseconds before first attempt
 	 * @param operationDescription Description of operation for logging
 	 * @throws Exception if all retries are exhausted
 	 */
 	private static void executeWithRetryVoid(
 			final RunnableWithException operation,
 			final int maxRetries,
-			final long initialDelayMs,
+			final long retryDelayMs,
 			final double backoffMultiplier,
+			final long startupJitterMs,
 			final String operationDescription) throws Exception {
 
 		executeWithRetry((Supplier<Void> & Serializable) () -> {
@@ -325,7 +348,7 @@ public class SparkAlignAffineGlobal {
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
-		}, maxRetries, initialDelayMs, backoffMultiplier, operationDescription);
+		}, maxRetries, retryDelayMs, backoffMultiplier, startupJitterMs, operationDescription);
 	}
 
 
@@ -487,7 +510,8 @@ public class SparkAlignAffineGlobal {
 			final JavaPairRDD<String, double[]> transforms,
 			final int maxRetries,
 			final long retryDelayMs,
-			final double retryBackoff) throws IOException {
+			final double retryBackoff,
+			final long startupJitterMs) throws IOException {
 
 		final double scale = 1.0 / (1 << scaleIndex);
 
@@ -512,6 +536,7 @@ public class SparkAlignAffineGlobal {
 							maxRetries,
 							retryDelayMs,
 							retryBackoff,
+							startupJitterMs,
 							"save affine " + tuple._1());
 					} catch (Exception e) {
 						throw new RuntimeException(e);
@@ -722,7 +747,8 @@ public class SparkAlignAffineGlobal {
 				sc.parallelizePairs(transformTuples),
 				options.getMaxRetries(),
 				options.getRetryDelayMs(),
-				options.getRetryBackoff());
+				options.getRetryBackoff(),
+				options.getInitialDelayMs());
 
 		n5.close();
 

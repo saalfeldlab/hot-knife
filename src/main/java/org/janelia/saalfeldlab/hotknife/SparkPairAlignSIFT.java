@@ -104,6 +104,9 @@ public class SparkPairAlignSIFT {
 		@Option(name = "--retryBackoff", required = false, usage = "Exponential backoff multiplier (default: 2.0)")
 		private double retryBackoff = 2.0;
 
+		@Option(name = "--initialDelayMs", required = false, usage = "Maximum random delay in milliseconds before first attempt (default: 60_000)")
+		private long initialDelayMs = 60_000;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -194,6 +197,13 @@ public class SparkPairAlignSIFT {
 		public double getRetryBackoff() {
 			return retryBackoff;
 		}
+
+		/**
+		 * @return the initialDelayMs
+		 */
+		public long getInitialDelayMs() {
+			return initialDelayMs;
+		}
 	}
 
 
@@ -212,8 +222,9 @@ public class SparkPairAlignSIFT {
 	 *
 	 * @param operation The operation to execute
 	 * @param maxRetries Maximum number of retry attempts (beyond initial attempt)
-	 * @param initialDelayMs Initial delay in milliseconds before first retry
+	 * @param retryDelayMs Initial delay in milliseconds before first retry
 	 * @param backoffMultiplier Exponential backoff multiplier for delays
+	 * @param startupJitterMs Maximum random delay in milliseconds before first attempt
 	 * @param operationDescription Description of operation for logging
 	 * @return Result of the operation
 	 * @throws Exception if all retries are exhausted
@@ -221,12 +232,22 @@ public class SparkPairAlignSIFT {
 	private static <T> T executeWithRetry(
 			final Supplier<T> operation,
 			final int maxRetries,
-			final long initialDelayMs,
+			final long retryDelayMs,
 			final double backoffMultiplier,
+			final long startupJitterMs,
 			final String operationDescription) throws Exception {
 
+		// Add initial random delay to space out task execution (0 to startupJitterMs)
+		if (startupJitterMs > 0) {
+			long initialDelay = (long)(Math.random() * startupJitterMs);
+			System.out.println(String.format(
+				"Initial jitter for %s: delaying first attempt by %dms (max: %dms)",
+				operationDescription, initialDelay, startupJitterMs));
+			Thread.sleep(initialDelay);
+		}
+
 		Exception lastException = null;
-		long delayMs = initialDelayMs;
+		long delayMs = retryDelayMs;
 
 		for (int attempt = 0; attempt <= maxRetries; attempt++) {
 			try {
@@ -270,16 +291,18 @@ public class SparkPairAlignSIFT {
 	 *
 	 * @param operation The operation to execute
 	 * @param maxRetries Maximum number of retry attempts
-	 * @param initialDelayMs Initial delay in milliseconds
+	 * @param retryDelayMs Initial delay in milliseconds
 	 * @param backoffMultiplier Exponential backoff multiplier
+	 * @param startupJitterMs Maximum random delay in milliseconds before first attempt
 	 * @param operationDescription Description of operation for logging
 	 * @throws Exception if all retries are exhausted
 	 */
 	private static void executeWithRetryVoid(
 			final RunnableWithException operation,
 			final int maxRetries,
-			final long initialDelayMs,
+			final long retryDelayMs,
 			final double backoffMultiplier,
+			final long startupJitterMs,
 			final String operationDescription) throws Exception {
 
 		executeWithRetry((Supplier<Void> & Serializable) () -> {
@@ -289,7 +312,7 @@ public class SparkPairAlignSIFT {
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
-		}, maxRetries, initialDelayMs, backoffMultiplier, operationDescription);
+		}, maxRetries, retryDelayMs, backoffMultiplier, startupJitterMs, operationDescription);
 	}
 
 
@@ -416,7 +439,8 @@ public class SparkPairAlignSIFT {
 			final double transformScale,
 			final int maxRetries,
 			final long retryDelayMs,
-			final double retryBackoff) {
+			final double retryBackoff,
+			final long startupJitterMs) {
 
 		// Parallel write with retry logic for all storage types
 		final JavaRDD<long[]> gridCells = affines.map(
@@ -459,6 +483,7 @@ public class SparkPairAlignSIFT {
 							maxRetries,
 							retryDelayMs,
 							retryBackoff,
+							startupJitterMs,
 							"saveAccumulatedAffineGridCell");
 					} catch (Exception e) {
 						throw new RuntimeException(e);
@@ -600,7 +625,8 @@ public class SparkPairAlignSIFT {
 			final List<String> outDatasetNames,
 			final int maxRetries,
 			final long retryDelayMs,
-			final double retryBackoff) {
+			final double retryBackoff,
+			final long startupJitterMs) {
 
 		final ArrayList<Tuple2<String, String>> datasetNames = new ArrayList<>();
 		for (int i = 0; i < inDatasetNames.size(); ++i)
@@ -630,6 +656,7 @@ public class SparkPairAlignSIFT {
 							maxRetries,
 							retryDelayMs,
 							retryBackoff,
+							startupJitterMs,
 							"reSaveTransform " + tuple._1() + " -> " + tuple._2());
 					} catch (Exception e) {
 						throw new RuntimeException(e);
@@ -681,7 +708,8 @@ public class SparkPairAlignSIFT {
 			final double maxFilterEpsilon,
 			final int maxRetries,
 			final long retryDelayMs,
-			final double retryBackoff) throws IOException {
+			final double retryBackoff,
+			final long startupJitterMs) throws IOException {
 
 		final double scale = 1.0 / (1 << transformScaleIndex);
 
@@ -720,7 +748,8 @@ public class SparkPairAlignSIFT {
 				scale,
 				maxRetries,
 				retryDelayMs,
-				retryBackoff);
+				retryBackoff,
+				startupJitterMs);
 
 		gridCells.cache();
 		gridCells.count();
@@ -799,7 +828,8 @@ public class SparkPairAlignSIFT {
 				outPriorTransformDatasetNames,
 				options.getMaxRetries(),
 				options.getRetryDelayMs(),
-				options.getRetryBackoff());
+				options.getRetryBackoff(),
+				options.getInitialDelayMs());
 
 		for (int i = 1; i < datasetNames.length - 2; i += 2) {
 
@@ -836,7 +866,8 @@ public class SparkPairAlignSIFT {
 					options.getMaxFilterEpsilon(),
 					options.getMaxRetries(),
 					options.getRetryDelayMs(),
-					options.getRetryBackoff());
+					options.getRetryBackoff(),
+					options.getInitialDelayMs());
 		}
 
 		sc.close();
