@@ -40,6 +40,9 @@ ARGV="
 --scaleIndex=7 \
 --iterations 100000 \
 --maxError 320 \
+--maxRetries 5 \
+--retryDelayMs 2000 \
+--retryBackoff 2.0 \
 --filter RANSAC"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")

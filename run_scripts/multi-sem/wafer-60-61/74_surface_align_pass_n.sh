@@ -81,6 +81,9 @@ ARGV="
   --n5Path=${N5_PATH} \
   --n5GroupInput=${N5_GROUP_INPUT} \
   --n5GroupOutput=${N5_GROUP_OUTPUT} \
+  --maxRetries=5 \
+  --retryDelayMs=2000 \
+  --retryBackoff=2.0 \
   ${PASS_ARGS}"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
