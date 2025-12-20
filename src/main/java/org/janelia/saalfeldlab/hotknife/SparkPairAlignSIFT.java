@@ -471,8 +471,7 @@ public class SparkPairAlignSIFT {
 					try {
 						return executeWithRetry(
 							(Supplier<long[]> & Serializable) () -> {
-								try {
-									final N5Writer n5 = N5Util.createN5Writer(n5Path);
+								try (final N5Writer n5 = N5Util.createN5Writer(n5Path)) {
 									return saveAccumulatedAffineGridCell(
 											n5, priorTransformDatasetName, datasetBaseName,
 											boundsMin, boundsMax, stepSize, transformScale,
@@ -655,8 +654,9 @@ public class SparkPairAlignSIFT {
 					try {
 						executeWithRetryVoid(
 							() -> {
-								final N5Writer n5 = N5Util.createN5Writer(n5Path);
-								reSaveTransform(n5, tuple._1(), tuple._2());
+								try (final N5Writer n5 = N5Util.createN5Writer(n5Path)) {
+									reSaveTransform(n5, tuple._1(), tuple._2());
+								}
 							},
 							maxRetries,
 							retryDelayMs,

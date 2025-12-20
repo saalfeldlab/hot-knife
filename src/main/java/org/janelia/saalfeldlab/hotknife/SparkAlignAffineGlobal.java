@@ -494,16 +494,17 @@ public class SparkAlignAffineGlobal {
 					try {
 						executeWithRetryVoid(
 							() -> {
-								final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
-								final AffineTransform2D affine = new AffineTransform2D();
-								affine.set(tuple._2());
-								Transform.saveScaledTransform(
-										n5Writer,
-										outGroup + "/" + tuple._1(),
-										affine,
-										scale,
-										min,
-										max);
+								try (final N5Writer n5Writer = N5Util.createN5Writer(n5Path)) {
+									final AffineTransform2D affine = new AffineTransform2D();
+									affine.set(tuple._2());
+									Transform.saveScaledTransform(
+											n5Writer,
+											outGroup + "/" + tuple._1(),
+											affine,
+											scale,
+											min,
+											max);
+								}
 							},
 							maxRetries,
 							retryDelayMs,
