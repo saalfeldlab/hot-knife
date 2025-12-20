@@ -95,6 +95,15 @@ public class SparkPairAlignSIFT {
 		@Option(name = "--maxEpsilon", required = true, usage = "residual threshold for filter in world pixels")
 		private double maxFilterEpsilon = 50.0;
 
+		@Option(name = "--maxRetries", required = false, usage = "Maximum retry attempts for N5 writes (default: 5)")
+		private int maxRetries = 5;
+
+		@Option(name = "--retryDelayMs", required = false, usage = "Initial retry delay in milliseconds (default: 2000)")
+		private long retryDelayMs = 2000;
+
+		@Option(name = "--retryBackoff", required = false, usage = "Exponential backoff multiplier (default: 2.0)")
+		private double retryBackoff = 2.0;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -164,7 +173,122 @@ public class SparkPairAlignSIFT {
 
 			return maxFilterEpsilon;
 		}
+
+		/**
+		 * @return the maxRetries
+		 */
+		public int getMaxRetries() {
+			return maxRetries;
+		}
+
+		/**
+		 * @return the retryDelayMs
+		 */
+		public long getRetryDelayMs() {
+			return retryDelayMs;
+		}
+
+		/**
+		 * @return the retryBackoff
+		 */
+		public double getRetryBackoff() {
+			return retryBackoff;
+		}
 	}
+
+
+	/**
+	 * Functional interface for operations that can throw exceptions.
+	 */
+	@FunctionalInterface
+	private interface RunnableWithException {
+		void run() throws Exception;
+	}
+
+
+	/**
+	 * Execute an operation with exponential backoff retry logic.
+	 * Specifically handles GCS rate limit errors with delays, and retries other errors without delay.
+	 *
+	 * @param operation The operation to execute
+	 * @param maxRetries Maximum number of retry attempts (beyond initial attempt)
+	 * @param initialDelayMs Initial delay in milliseconds before first retry
+	 * @param backoffMultiplier Exponential backoff multiplier for delays
+	 * @param operationDescription Description of operation for logging
+	 * @return Result of the operation
+	 * @throws Exception if all retries are exhausted
+	 */
+	private static <T> T executeWithRetry(
+			final Supplier<T> operation,
+			final int maxRetries,
+			final long initialDelayMs,
+			final double backoffMultiplier,
+			final String operationDescription) throws Exception {
+
+		Exception lastException = null;
+		long delayMs = initialDelayMs;
+
+		for (int attempt = 0; attempt <= maxRetries; attempt++) {
+			try {
+				return operation.get();
+			} catch (final Exception e) {
+				lastException = e;
+
+				// Check if it's a GCS rate limit error
+				final boolean isRateLimitError = e.getMessage() != null &&
+					(e.getMessage().contains("GCS429") ||
+					 e.getMessage().contains("rate limit") ||
+					 e.getMessage().contains("StorageException"));
+
+				if (isRateLimitError && attempt < maxRetries) {
+					System.err.println(String.format(
+						"GCS rate limit hit for %s (attempt %d/%d), retrying in %dms",
+						operationDescription, attempt + 1, maxRetries + 1, delayMs));
+					Thread.sleep(delayMs);
+					delayMs = (long)(delayMs * backoffMultiplier);
+				} else if (attempt < maxRetries) {
+					// For non-rate-limit errors, retry without delay
+					System.err.println(String.format(
+						"Error in %s (attempt %d/%d): %s",
+						operationDescription, attempt + 1, maxRetries + 1, e.getMessage()));
+				}
+			}
+		}
+
+		// All retries exhausted - fail fast
+		throw new RuntimeException(
+			String.format("Failed %s after %d attempts", operationDescription, maxRetries + 1),
+			lastException);
+	}
+
+
+	/**
+	 * Execute a void operation with exponential backoff retry logic.
+	 *
+	 * @param operation The operation to execute
+	 * @param maxRetries Maximum number of retry attempts
+	 * @param initialDelayMs Initial delay in milliseconds
+	 * @param backoffMultiplier Exponential backoff multiplier
+	 * @param operationDescription Description of operation for logging
+	 * @throws Exception if all retries are exhausted
+	 */
+	private static void executeWithRetryVoid(
+			final RunnableWithException operation,
+			final int maxRetries,
+			final long initialDelayMs,
+			final double backoffMultiplier,
+			final String operationDescription) throws Exception {
+
+		executeWithRetry((Supplier<Void> & Serializable) () -> {
+			try {
+				operation.run();
+				return null;
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		}, maxRetries, initialDelayMs, backoffMultiplier, operationDescription);
+	}
+
 
 	/**
 	 *
@@ -328,7 +452,6 @@ public class SparkPairAlignSIFT {
 		return offset;
 	}
 
-	@SuppressWarnings("resource")
 	public static JavaRDD<long[]> saveAccumulatedAffineGridCells(
 			final JavaPairRDD<long[], double[]> affines,
 			final String n5Path,
@@ -337,43 +460,37 @@ public class SparkPairAlignSIFT {
 			final double[] boundsMin,
 			final double[] boundsMax,
 			final int stepSize,
-			final double transformScale) {
+			final double transformScale,
+			final int maxRetries,
+			final long retryDelayMs,
+			final double retryBackoff) {
 
-		final boolean sequentialWrite = n5Path.startsWith("gs://");
-		if (sequentialWrite) {
-			System.out.println( "(" + new Date( System.currentTimeMillis()) + "): Using sequential write mode for cloud storage to avoid GCS rate limits (grid cells)");
-			// For cloud storage: collect affines and write sequentially
-			// This is slower but avoids GCS rate limits
-			try {
-				final N5Writer n5 = N5Util.createN5Writer(n5Path);
-				final List<Tuple2<long[], double[]>> affineList = affines.collect();
-				final ArrayList<long[]> resultCells = new ArrayList<>();
+		// Parallel write with retry logic for all storage types
+		final JavaRDD<long[]> gridCells = affines.map(
+				t -> {
+					try {
+						return executeWithRetry(
+							(Supplier<long[]> & Serializable) () -> {
+								try {
+									final N5Writer n5 = N5Util.createN5Writer(n5Path);
+									return saveAccumulatedAffineGridCell(
+											n5, priorTransformDatasetName, datasetBaseName,
+											boundsMin, boundsMax, stepSize, transformScale,
+											t._1(), t._2());
+								} catch (IOException e) {
+									throw new RuntimeException(e);
+								}
+							},
+							maxRetries,
+							retryDelayMs,
+							retryBackoff,
+							"saveAccumulatedAffineGridCell");
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				});
 
-				for (final Tuple2<long[], double[]> t : affineList) {
-					resultCells.add(saveAccumulatedAffineGridCell(
-							n5, priorTransformDatasetName, datasetBaseName,
-							boundsMin, boundsMax, stepSize, transformScale,
-							t._1(), t._2()));
-				}
-
-				// Wrap existing context - don't close it since we don't own it
-				return new JavaSparkContext(affines.context()).parallelize(resultCells);
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-		} else {
-			// For local filesystem: use parallel writes (original behavior)
-			final JavaRDD<long[]> gridCells = affines.map(
-					t -> {
-						final N5Writer n5 = N5Util.createN5Writer(n5Path);
-						return saveAccumulatedAffineGridCell(
-								n5, priorTransformDatasetName, datasetBaseName,
-								boundsMin, boundsMax, stepSize, transformScale,
-								t._1(), t._2());
-					});
-
-			return gridCells;
-		}
+		return gridCells;
 	}
 
 
@@ -522,33 +639,33 @@ public class SparkPairAlignSIFT {
 			final JavaSparkContext sc,
 			final String n5Path,
 			final List<String> inDatasetNames,
-			final List<String> outDatasetNames) {
+			final List<String> outDatasetNames,
+			final int maxRetries,
+			final long retryDelayMs,
+			final double retryBackoff) {
 
 		final ArrayList<Tuple2<String, String>> datasetNames = new ArrayList<>();
 		for (int i = 0; i < inDatasetNames.size(); ++i)
 			datasetNames.add(new Tuple2<String, String>(inDatasetNames.get(i), outDatasetNames.get(i)));
 
-		final boolean sequentialWrite = n5Path.startsWith("gs://");
-		if (sequentialWrite) {
-			System.out.println("Using sequential write mode for cloud storage to avoid GCS rate limits");
-			// Sequential write to avoid GCS rate limits
-			try {
-				final N5Writer n5 = N5Util.createN5Writer(n5Path);
-				for (final Tuple2<String, String> tuple : datasetNames) {
-					reSaveTransform(n5, tuple._1(), tuple._2());
-				}
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-		} else {
-			// Parallel write for local filesystem
-			final JavaPairRDD<String, String> rddDatasetNames = sc.parallelizePairs(datasetNames);
-			rddDatasetNames.foreach(
-					tuple -> {
-						final N5Writer n5 = N5Util.createN5Writer(n5Path);
-						reSaveTransform(n5, tuple._1(), tuple._2());
-					});
-		}
+		// Parallel write with retry logic for all storage types
+		final JavaPairRDD<String, String> rddDatasetNames = sc.parallelizePairs(datasetNames);
+		rddDatasetNames.foreach(
+				tuple -> {
+					try {
+						executeWithRetryVoid(
+							() -> {
+								final N5Writer n5 = N5Util.createN5Writer(n5Path);
+								reSaveTransform(n5, tuple._1(), tuple._2());
+							},
+							maxRetries,
+							retryDelayMs,
+							retryBackoff,
+							"reSaveTransform " + tuple._1() + " -> " + tuple._2());
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				});
 	}
 
 
@@ -592,7 +709,10 @@ public class SparkPairAlignSIFT {
 			final List<long[]> gridOffsets,
 			final double lambdaModel,
 			final double lambdaFilter,
-			final double maxFilterEpsilon) throws IOException {
+			final double maxFilterEpsilon,
+			final int maxRetries,
+			final long retryDelayMs,
+			final double retryBackoff) throws IOException {
 
 		final double scale = 1.0 / (1 << transformScaleIndex);
 
@@ -628,7 +748,10 @@ public class SparkPairAlignSIFT {
 				boundsMin,
 				boundsMax,
 				stepSize,
-				scale);
+				scale,
+				maxRetries,
+				retryDelayMs,
+				retryBackoff);
 
 		gridCells.cache();
 		gridCells.count();
@@ -704,7 +827,10 @@ public class SparkPairAlignSIFT {
 				sc,
 				options.getN5Path(),
 				inPriorTransformDatasetNames,
-				outPriorTransformDatasetNames);
+				outPriorTransformDatasetNames,
+				options.getMaxRetries(),
+				options.getRetryDelayMs(),
+				options.getRetryBackoff());
 
 		for (int i = 1; i < datasetNames.length - 2; i += 2) {
 
@@ -738,7 +864,10 @@ public class SparkPairAlignSIFT {
 					gridOffsets,
 					options.getLambdaModel(),
 					options.getLambdaFilter(),
-					options.getMaxFilterEpsilon());
+					options.getMaxFilterEpsilon(),
+					options.getMaxRetries(),
+					options.getRetryDelayMs(),
+					options.getRetryBackoff());
 		}
 
 		sc.close();

@@ -1034,11 +1034,17 @@ Result: 2D pyramid with z-information averaged during downsampling
 
 **GCS rate limit errors (GCS429):**
 - Error: `StorageException: The object exceeded the rate limit for object mutation operations`
-- Cause: Parallel transform writes create too many concurrent mutations on cloud storage bucket
-- Solution: Code automatically detects `gs://` paths and uses sequential write mode
-- Sequential mode: transforms collected and written one-by-one to avoid rate limits
-- Local filesystem: uses parallel writes (original behavior) for better performance
-- Implementation: `saveAffines()` with `sequentialWrite` boolean parameter (commit 19bbba8)
+- Cause: Parallel transform writes can trigger GCS object mutation rate limits
+- Solution: Parallel writes with exponential backoff retry logic
+- Default settings: 5 retries, 2s initial delay, 2x exponential backoff (max ~62s per operation)
+- Maintains full parallelism across Spark workers while handling transient rate limits
+- Configurable via CLI parameters:
+  - `--maxRetries`: Maximum retry attempts (default: 5)
+  - `--retryDelayMs`: Initial retry delay in milliseconds (default: 2000)
+  - `--retryBackoff`: Exponential backoff multiplier (default: 2.0)
+- Implementation: `SparkAlignAffineGlobal` and `SparkPairAlignSIFT` with retry utilities
+- Rate limit errors trigger exponential backoff delays, other errors retry immediately
+- Fails fast after all retries exhausted with clear error message
 
 ## Common Pitfalls and Troubleshooting
 

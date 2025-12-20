@@ -103,6 +103,15 @@ public class SparkAlignAffineGlobal {
 		@Option(name = "--filter", required = false, usage = "Outlier filter (RANSAC or MULTI_CONSENSUS_RANSAC (default))")
 		private OutlierFilter filter = OutlierFilter.MULTI_CONSENSUS_RANSAC;
 
+		@Option(name = "--maxRetries", required = false, usage = "Maximum retry attempts for N5 writes (default: 5)")
+		private int maxRetries = 5;
+
+		@Option(name = "--retryDelayMs", required = false, usage = "Initial retry delay in milliseconds (default: 2000)")
+		private long retryDelayMs = 2000;
+
+		@Option(name = "--retryBackoff", required = false, usage = "Exponential backoff multiplier (default: 2.0)")
+		private double retryBackoff = 2.0;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -188,6 +197,27 @@ public class SparkAlignAffineGlobal {
 			return maxError;
 		}
 
+		/**
+		 * @return the maxRetries
+		 */
+		public int getMaxRetries() {
+			return maxRetries;
+		}
+
+		/**
+		 * @return the retryDelayMs
+		 */
+		public long getRetryDelayMs() {
+			return retryDelayMs;
+		}
+
+		/**
+		 * @return the retryBackoff
+		 */
+		public double getRetryBackoff() {
+			return retryBackoff;
+		}
+
 		public enum OutlierFilter {
 			RANSAC,
 			MULTI_CONSENSUS_RANSAC;
@@ -201,6 +231,99 @@ public class SparkAlignAffineGlobal {
 	public static final double MIN_INLIER_RATIO = 0.05;
 	// minimal absolute number of inliers for RANSAC
 	public static final int MIN_NUM_INLIERS = 7;
+
+
+	/**
+	 * Functional interface for operations that can throw exceptions.
+	 */
+	@FunctionalInterface
+	private interface RunnableWithException {
+		void run() throws Exception;
+	}
+
+
+	/**
+	 * Execute an operation with exponential backoff retry logic.
+	 * Specifically handles GCS rate limit errors with delays, and retries other errors without delay.
+	 *
+	 * @param operation The operation to execute
+	 * @param maxRetries Maximum number of retry attempts (beyond initial attempt)
+	 * @param initialDelayMs Initial delay in milliseconds before first retry
+	 * @param backoffMultiplier Exponential backoff multiplier for delays
+	 * @param operationDescription Description of operation for logging
+	 * @return Result of the operation
+	 * @throws Exception if all retries are exhausted
+	 */
+	private static <T> T executeWithRetry(
+			final Supplier<T> operation,
+			final int maxRetries,
+			final long initialDelayMs,
+			final double backoffMultiplier,
+			final String operationDescription) throws Exception {
+
+		Exception lastException = null;
+		long delayMs = initialDelayMs;
+
+		for (int attempt = 0; attempt <= maxRetries; attempt++) {
+			try {
+				return operation.get();
+			} catch (final Exception e) {
+				lastException = e;
+
+				// Check if it's a GCS rate limit error
+				final boolean isRateLimitError = e.getMessage() != null &&
+					(e.getMessage().contains("GCS429") ||
+					 e.getMessage().contains("rate limit") ||
+					 e.getMessage().contains("StorageException"));
+
+				if (isRateLimitError && attempt < maxRetries) {
+					System.err.println(String.format(
+						"GCS rate limit hit for %s (attempt %d/%d), retrying in %dms",
+						operationDescription, attempt + 1, maxRetries + 1, delayMs));
+					Thread.sleep(delayMs);
+					delayMs = (long)(delayMs * backoffMultiplier);
+				} else if (attempt < maxRetries) {
+					// For non-rate-limit errors, retry without delay
+					System.err.println(String.format(
+						"Error in %s (attempt %d/%d): %s",
+						operationDescription, attempt + 1, maxRetries + 1, e.getMessage()));
+				}
+			}
+		}
+
+		// All retries exhausted - fail fast
+		throw new RuntimeException(
+			String.format("Failed %s after %d attempts", operationDescription, maxRetries + 1),
+			lastException);
+	}
+
+
+	/**
+	 * Execute a void operation with exponential backoff retry logic.
+	 *
+	 * @param operation The operation to execute
+	 * @param maxRetries Maximum number of retry attempts
+	 * @param initialDelayMs Initial delay in milliseconds
+	 * @param backoffMultiplier Exponential backoff multiplier
+	 * @param operationDescription Description of operation for logging
+	 * @throws Exception if all retries are exhausted
+	 */
+	private static void executeWithRetryVoid(
+			final RunnableWithException operation,
+			final int maxRetries,
+			final long initialDelayMs,
+			final double backoffMultiplier,
+			final String operationDescription) throws Exception {
+
+		executeWithRetry((Supplier<Void> & Serializable) () -> {
+			try {
+				operation.run();
+				return null;
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		}, maxRetries, initialDelayMs, backoffMultiplier, operationDescription);
+	}
 
 
 	static public JavaPairRDD<String, ArrayList<Feature>> extractFeatures(
@@ -359,42 +482,37 @@ public class SparkAlignAffineGlobal {
 			final double[] max,
 			final int scaleIndex,
 			final JavaPairRDD<String, double[]> transforms,
-			final boolean sequentialWrite) throws IOException {
+			final int maxRetries,
+			final long retryDelayMs,
+			final double retryBackoff) throws IOException {
 
 		final double scale = 1.0 / (1 << scaleIndex);
 
-		if (sequentialWrite) {
-			// Sequential write to avoid GCS rate limits (GCS429 errors)
-			// Use this for cloud storage (gs://) with many transforms
-			final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
-			for (final scala.Tuple2<String, double[]> tuple : transforms.collect()) {
-				final AffineTransform2D affine = new AffineTransform2D();
-				affine.set(tuple._2());
-				Transform.saveScaledTransform(
-						n5Writer,
-						outGroup + "/" + tuple._1(),
-						affine,
-						scale,
-						min,
-						max);
-			}
-		} else {
-			// Parallel write (original behavior)
-			// Use this for local filesystem storage
-			transforms.foreach(
-					tuple -> {
-						final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
-						final AffineTransform2D affine = new AffineTransform2D();
-						affine.set(tuple._2());
-						Transform.saveScaledTransform(
-								n5Writer,
-								outGroup + "/" + tuple._1(),
-								affine,
-								scale,
-								min,
-								max);
-					});
-		}
+		// Parallel write with retry logic for all storage types
+		transforms.foreach(
+				tuple -> {
+					try {
+						executeWithRetryVoid(
+							() -> {
+								final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
+								final AffineTransform2D affine = new AffineTransform2D();
+								affine.set(tuple._2());
+								Transform.saveScaledTransform(
+										n5Writer,
+										outGroup + "/" + tuple._1(),
+										affine,
+										scale,
+										min,
+										max);
+							},
+							maxRetries,
+							retryDelayMs,
+							retryBackoff,
+							"save affine " + tuple._1());
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				});
 	}
 
 
@@ -588,12 +706,8 @@ public class SparkAlignAffineGlobal {
 		}
 
 		System.out.println("saving affines to " + options.getN5Path() + "/" + options.getOutGroup() );
-
-		// Use sequential write for cloud storage (gs://) to avoid GCS rate limits
-		final boolean sequentialWrite = options.getN5Path().startsWith("gs://");
-		if (sequentialWrite) {
-			System.out.println("Using sequential write mode for cloud storage to avoid GCS rate limits");
-		}
+		System.out.println(String.format("Using retry logic: maxRetries=%d, retryDelayMs=%d, retryBackoff=%.1f",
+			options.getMaxRetries(), options.getRetryDelayMs(), options.getRetryBackoff()));
 
 		saveAffines(
 				options.getN5Path(),
@@ -602,7 +716,9 @@ public class SparkAlignAffineGlobal {
 				bounds[1],
 				options.getScaleIndex(),
 				sc.parallelizePairs(transformTuples),
-				sequentialWrite);
+				options.getMaxRetries(),
+				options.getRetryDelayMs(),
+				options.getRetryBackoff());
 
 		n5.close();
 

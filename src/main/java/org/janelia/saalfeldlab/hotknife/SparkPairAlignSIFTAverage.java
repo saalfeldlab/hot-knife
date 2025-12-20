@@ -244,7 +244,10 @@ public class SparkPairAlignSIFTAverage {
 			final List<long[]> gridOffsets,
 			final double lambdaModel,
 			final double lambdaFilter,
-			final double maxFilterEpsilon) throws IOException {
+			final double maxFilterEpsilon,
+			final int maxRetries,
+			final long retryDelayMs,
+			final double retryBackoff) throws IOException {
 
 		final double scale = 1.0 / (1 << transformScaleIndex);
 
@@ -285,7 +288,10 @@ public class SparkPairAlignSIFTAverage {
 				boundsMin,
 				boundsMax,
 				stepSize,
-				scale);
+				scale,
+				maxRetries,
+				retryDelayMs,
+				retryBackoff);
 
 		final JavaRDD<long[]> gridCellsB = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesB,
@@ -295,7 +301,10 @@ public class SparkPairAlignSIFTAverage {
 				boundsMin,
 				boundsMax,
 				stepSize,
-				scale);
+				scale,
+				maxRetries,
+				retryDelayMs,
+				retryBackoff);
 
 		gridCellsA.cache();
 		gridCellsA.count();
@@ -391,7 +400,10 @@ public class SparkPairAlignSIFTAverage {
 				sc,
 				options.getN5Path(),
 				inPriorTransformDatasetNames,
-				outPriorTransformDatasetNames);
+				outPriorTransformDatasetNames,
+				options.getMaxRetries(),
+				options.getRetryDelayMs(),
+				options.getRetryBackoff());
 
 		for (int i = 1; i < datasetNames.length - 2; i += 2) {
 
@@ -425,7 +437,10 @@ public class SparkPairAlignSIFTAverage {
 					gridOffsets,
 					options.getLambdaModel(),
 					options.getLambdaFilter(),
-					options.getMaxFilterEpsilon());
+					options.getMaxFilterEpsilon(),
+					options.getMaxRetries(),
+					options.getRetryDelayMs(),
+					options.getRetryBackoff());
 		}
 
 		sc.close();
