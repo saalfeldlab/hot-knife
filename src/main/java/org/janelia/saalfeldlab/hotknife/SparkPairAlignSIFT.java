@@ -402,56 +402,6 @@ public class SparkPairAlignSIFT {
 		return affines;
 	}
 
-	/**
-	 * This is for 2D affine transforms only.
-	 *
-	 * @param affines
-	 * @param n5Path
-	 * @param priorTransformDatasetName
-	 * @param priorTransformScaleIndex
-	 * @param datasetBaseName
-	 * @param boundsMin
-	 * @param boundsMax
-	 * @param stepSize
-	 * @param transformScale
-	 */
-	private static long[] saveAccumulatedAffineGridCell(
-			final N5Writer n5,
-			final String priorTransformDatasetName,
-			final String datasetBaseName,
-			final double[] boundsMin,
-			final double[] boundsMax,
-			final int stepSize,
-			final double transformScale,
-			final long[] offset,
-			final double[] affine) throws IOException {
-
-		final RealTransform priorTransform = Transform.loadScaledTransform(n5, priorTransformDatasetName);
-		final long[] gridOffset = Grid.gridCell(
-				offset,
-				Grid.floorScaled(boundsMin, transformScale),
-				new int[]{stepSize, stepSize});
-		final String datasetName = datasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1];
-		final RealTransformSequence transformSequence = new RealTransformSequence();
-		if (affine != null) {
-			final AffineTransform2D transform = new AffineTransform2D();
-			transform.set(affine);
-			transformSequence.add(transform);
-		}
-		transformSequence.add(priorTransform);
-		Transform.saveScaledTransformBlock(
-				n5,
-				datasetName,
-				transformSequence,
-				transformScale,
-				boundsMin,
-				boundsMax,
-				gridOffset,
-				new int[] {stepSize, stepSize});
-
-		return offset;
-	}
-
 	public static JavaRDD<long[]> saveAccumulatedAffineGridCells(
 			final JavaPairRDD<long[], double[]> affines,
 			final String n5Path,
@@ -470,12 +420,35 @@ public class SparkPairAlignSIFT {
 				t -> {
 					try {
 						return executeWithRetry(
-							(Supplier<long[]> & Serializable) () -> {
+							() -> {
 								try (final N5Writer n5 = N5Util.createN5Writer(n5Path)) {
-									return saveAccumulatedAffineGridCell(
-											n5, priorTransformDatasetName, datasetBaseName,
-											boundsMin, boundsMax, stepSize, transformScale,
-											t._1(), t._2());
+									final long[] offset = t._1();
+									final double[] affine = t._2();
+
+									final RealTransform priorTransform = Transform.loadScaledTransform(n5, priorTransformDatasetName);
+									final long[] gridOffset = Grid.gridCell(
+											offset,
+											Grid.floorScaled(boundsMin, transformScale),
+											new int[]{stepSize, stepSize});
+									final String datasetName = datasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1];
+									final RealTransformSequence transformSequence = new RealTransformSequence();
+									if (affine != null) {
+										final AffineTransform2D transform = new AffineTransform2D();
+										transform.set(affine);
+										transformSequence.add(transform);
+									}
+									transformSequence.add(priorTransform);
+									Transform.saveScaledTransformBlock(
+											n5,
+											datasetName,
+											transformSequence,
+											transformScale,
+											boundsMin,
+											boundsMax,
+											gridOffset,
+											new int[] {stepSize, stepSize});
+
+									return offset;
 								} catch (IOException e) {
 									throw new RuntimeException(e);
 								}
@@ -617,23 +590,6 @@ public class SparkPairAlignSIFT {
 	}
 
 
-	private static void reSaveTransform(
-			final N5Writer n5,
-			final String inDatasetName,
-			final String outDatasetName) throws IOException {
-		final RealTransform transform = Transform.loadScaledTransform(n5, inDatasetName);
-		final double[] boundsMin = n5.getAttribute(inDatasetName, "boundsMin", double[].class);
-		final double[] boundsMax = n5.getAttribute(inDatasetName, "boundsMax", double[].class);
-		final double scale = n5.getAttribute(inDatasetName, "scale", double.class);
-		Transform.saveScaledTransform(
-				n5,
-				outDatasetName,
-				transform,
-				scale,
-				boundsMin,
-				boundsMax);
-	}
-
 	public static void reSaveTransforms(
 			final JavaSparkContext sc,
 			final String n5Path,
@@ -655,7 +611,17 @@ public class SparkPairAlignSIFT {
 						executeWithRetryVoid(
 							() -> {
 								try (final N5Writer n5 = N5Util.createN5Writer(n5Path)) {
-									reSaveTransform(n5, tuple._1(), tuple._2());
+									final RealTransform transform = Transform.loadScaledTransform(n5, tuple._1());
+									final double[] boundsMin = n5.getAttribute(tuple._1(), "boundsMin", double[].class);
+									final double[] boundsMax = n5.getAttribute(tuple._1(), "boundsMax", double[].class);
+									final double scale = n5.getAttribute(tuple._1(), "scale", double.class);
+									Transform.saveScaledTransform(
+											n5,
+											tuple._2(),
+											transform,
+											scale,
+											boundsMin,
+											boundsMax);
 								}
 							},
 							maxRetries,
