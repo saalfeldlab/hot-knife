@@ -1035,15 +1035,20 @@ Result: 2D pyramid with z-information averaged during downsampling
 **GCS rate limit errors (GCS429):**
 - Error: `StorageException: The object exceeded the rate limit for object mutation operations`
 - Cause: Parallel transform writes can trigger GCS object mutation rate limits
-- Solution: Parallel writes with exponential backoff retry logic
+- Solution: Parallel writes with exponential backoff retry logic with jitter
 - Default settings: 5 retries, 2s initial delay, 2x exponential backoff (max ~62s per operation)
+- Jitter: Retry delays randomized between 50%-150% of calculated value to prevent thundering herd
 - Maintains full parallelism across Spark workers while handling transient rate limits
 - Configurable via CLI parameters:
   - `--maxRetries`: Maximum retry attempts (default: 5)
   - `--retryDelayMs`: Initial retry delay in milliseconds (default: 2000)
   - `--retryBackoff`: Exponential backoff multiplier (default: 2.0)
+- **For high-parallelism workloads (100+ parallel writes):**
+  - Use aggressive retry settings: `--maxRetries 10 --retryDelayMs 5000 --retryBackoff 2.0`
+  - Maximum delay per operation: ~85 minutes with jitter
+  - Recommended when writing 100s of grid cells simultaneously
 - Implementation: `SparkAlignAffineGlobal` and `SparkPairAlignSIFT` with retry utilities
-- Rate limit errors trigger exponential backoff delays, other errors retry immediately
+- Rate limit errors trigger exponential backoff delays with jitter, other errors retry immediately
 - Fails fast after all retries exhausted with clear error message
 
 ## Common Pitfalls and Troubleshooting
