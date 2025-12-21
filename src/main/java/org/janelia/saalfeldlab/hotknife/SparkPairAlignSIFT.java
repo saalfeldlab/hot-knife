@@ -32,6 +32,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5RetryUtil;
+import org.janelia.saalfeldlab.hotknife.util.RetryStats;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -47,6 +48,7 @@ import org.kohsuke.args4j.Option;
 import mpicbg.models.AffineModel2D;
 import mpicbg.models.InterpolatedAffineModel2D;
 import mpicbg.models.RigidModel2D;
+import scala.Tuple2;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
@@ -321,7 +323,7 @@ public class SparkPairAlignSIFT {
 		return affines;
 	}
 
-	public static JavaRDD<long[]> saveAccumulatedAffineGridCells(
+	public static JavaRDD<Tuple2<long[], RetryStats>> saveAccumulatedAffineGridCells(
 			final JavaPairRDD<long[], double[]> affines,
 			final String n5Path,
 			final String priorTransformDatasetName,
@@ -336,7 +338,7 @@ public class SparkPairAlignSIFT {
 			final long startupJitterMs) {
 
 		// Parallel write with retry logic for all storage types
-		final JavaRDD<long[]> gridCells = affines.map(
+		final JavaRDD<Tuple2<long[], RetryStats>> gridCells = affines.map(
 				t -> {
 					try {
 						return N5RetryUtil.executeWithRetry(
@@ -635,7 +637,7 @@ public class SparkPairAlignSIFT {
 		affines.cache();
 		affines.count();
 
-		final JavaRDD<long[]> gridCells = saveAccumulatedAffineGridCells(
+		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStats = saveAccumulatedAffineGridCells(
 				affines,
 				n5Path,
 				inGroupName + "/" + transformDatasetNameB,
@@ -649,8 +651,11 @@ public class SparkPairAlignSIFT {
 				retryBackoff,
 				startupJitterMs);
 
-		gridCells.cache();
-		gridCells.count();
+		gridCellsWithStats.cache();
+		gridCellsWithStats.count();
+
+		// Extract just the grid cells for downstream processing (statistics ignored in this class)
+		final JavaRDD<long[]> gridCells = gridCellsWithStats.map(tuple -> tuple._1());
 
 		final JavaRDD<long[]> composedGridCells = composeOverlappingTransformGridCells(
 				gridCells,

@@ -32,6 +32,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
+import org.janelia.saalfeldlab.hotknife.util.RetryStats;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -285,7 +286,7 @@ public class SparkPairAlignSIFTAverage {
 
 		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): saveAccumulatedAffineGridCellsA ..." );
 
-		final JavaRDD<long[]> gridCellsA = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
+		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStatsA = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesA,
 				n5Path,
 				inGroupName + "/" + transformDatasetNameA,
@@ -301,7 +302,7 @@ public class SparkPairAlignSIFTAverage {
 
 		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): saveAccumulatedAffineGridCellsB ..." );
 
-		final JavaRDD<long[]> gridCellsB = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
+		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStatsB = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesB,
 				n5Path,
 				inGroupName + "/" + transformDatasetNameB,
@@ -315,10 +316,26 @@ public class SparkPairAlignSIFTAverage {
 				retryBackoff,
 				startupJitterMs);
 
-		gridCellsA.cache();
+		gridCellsWithStatsA.cache();
+		gridCellsWithStatsB.cache();
+
+		// Extract grid cells for downstream processing
+		final JavaRDD<long[]> gridCellsA = gridCellsWithStatsA.map(tuple -> tuple._1());
+		final JavaRDD<long[]> gridCellsB = gridCellsWithStatsB.map(tuple -> tuple._1());
+
 		long countA = gridCellsA.count();
-		gridCellsB.cache();
 		long countB = gridCellsB.count();
+
+		// Collect and report retry statistics
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): Collecting retry statistics ..." );
+		List<RetryStats> statsA = gridCellsWithStatsA.map(tuple -> tuple._2()).collect();
+		List<RetryStats> statsB = gridCellsWithStatsB.map(tuple -> tuple._2()).collect();
+
+		System.out.println("\n=== Retry Statistics for Dataset A (" + transformDatasetNameA + ") ===");
+		RetryStats.reportRetryStatisticsWithDynamicBuckets(statsA);
+
+		System.out.println("\n=== Retry Statistics for Dataset B (" + transformDatasetNameB + ") ===");
+		RetryStats.reportRetryStatisticsWithDynamicBuckets(statsB);
 
 		// Validate that all grid cells were successfully saved
 		// If any tasks failed after exhausting retries, the counts will be less than expected
