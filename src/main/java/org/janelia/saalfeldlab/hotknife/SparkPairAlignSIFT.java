@@ -254,67 +254,68 @@ public class SparkPairAlignSIFT {
 		final JavaPairRDD<long[], double[]> affines =
 				offsets.mapToPair(offset -> {
 
-					final N5Reader n5Reader = N5Util.createN5Reader(n5Path);
-					final RandomAccessibleInterval<FloatType> a = N5Utils.open(n5Reader, datasetA + "/s" + scaleIndex);
-					final RandomAccessibleInterval<FloatType> b = N5Utils.open(n5Reader, datasetB + "/s" + scaleIndex);
+					try (final N5Reader n5Reader = N5Util.createN5Reader(n5Path)) {
+						final RandomAccessibleInterval<FloatType> a = N5Utils.open(n5Reader, datasetA + "/s" + scaleIndex);
+						final RandomAccessibleInterval<FloatType> b = N5Utils.open(n5Reader, datasetB + "/s" + scaleIndex);
 
-					final RealTransform transformA = Transform.loadScaledTransform(
-							n5Reader,
-							transformADataset);
-					final RealTransform transformB = Transform.loadScaledTransform(
-							n5Reader,
-							transformBDataset);
+						final RealTransform transformA = Transform.loadScaledTransform(
+								n5Reader,
+								transformADataset);
+						final RealTransform transformB = Transform.loadScaledTransform(
+								n5Reader,
+								transformBDataset);
 
-					final RandomAccessibleInterval<FloatType> transformedA = Transform.createTransformedInterval(
-							a,
-							new FinalInterval(scaledFloorMin, scaledCeilMax),
-							Transform.createScaledRealTransform(transformA, scaleIndex),
-							new FloatType(0));
+						final RandomAccessibleInterval<FloatType> transformedA = Transform.createTransformedInterval(
+								a,
+								new FinalInterval(scaledFloorMin, scaledCeilMax),
+								Transform.createScaledRealTransform(transformA, scaleIndex),
+								new FloatType(0));
 
-					final RandomAccessibleInterval<FloatType> transformedB = Transform.createTransformedInterval(
-							b,
-							new FinalInterval(scaledFloorMin, scaledCeilMax),
-							Transform.createScaledRealTransform(transformB, scaleIndex),
-							new FloatType(0));
+						final RandomAccessibleInterval<FloatType> transformedB = Transform.createTransformedInterval(
+								b,
+								new FinalInterval(scaledFloorMin, scaledCeilMax),
+								Transform.createScaledRealTransform(transformB, scaleIndex),
+								new FloatType(0));
 
-					final FinalInterval gridBlockInterval =
-							new FinalInterval(offset, new long[]{offset[0] + gridCellWidth - 1, offset[1] + gridCellWidth - 1});
+						final FinalInterval gridBlockInterval =
+								new FinalInterval(offset, new long[]{offset[0] + gridCellWidth - 1, offset[1] + gridCellWidth - 1});
 
-					final IntervalView<FloatType> gridBlockA = Views.interval(transformedA, gridBlockInterval);
-					final IntervalView<FloatType> gridBlockB = Views.interval(transformedB, gridBlockInterval);
+						final IntervalView<FloatType> gridBlockA = Views.interval(transformedA, gridBlockInterval);
+						final IntervalView<FloatType> gridBlockB = Views.interval(transformedB, gridBlockInterval);
 
-					final Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D> modelSupplier =
-							new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
-								(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-								(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-								lambdaModel);
+						final Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D> modelSupplier =
+								new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
+									(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+									(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+									lambdaModel);
 
-					final Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D> filterModelSupplier =
-							new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
-								(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-								(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-								lambdaFilter);
+						final Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D> filterModelSupplier =
+								new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
+									(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
+									(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
+									lambdaFilter);
 
-					final MultiConsensusFilter<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>> filter = new MultiConsensusFilter<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>>(
-							filterModelSupplier,
-							10000,
-							maxFilterEpsilon,
-							0.0,
-							7);
+						final MultiConsensusFilter<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>> filter = new MultiConsensusFilter<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>>(
+								filterModelSupplier,
+								10000,
+								maxFilterEpsilon,
+								0.0,
+								7);
 
-					final AffineTransform2D transform = Align.<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>, AffineTransform2D>alignSIFT(
-							gridBlockB,
-							gridBlockA,
-							1.0,
-							0.5,
-							4,
-							0.92,
-							1.0 / scale,
-							filter,
-							modelSupplier,
-							Transform::convertAndInvertAffine2DtoAffineTransform2D);
+						final AffineTransform2D transform = Align.<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>, AffineTransform2D>alignSIFT(
+								gridBlockB,
+								gridBlockA,
+								1.0,
+								0.5,
+								4,
+								0.92,
+								1.0 / scale,
+								filter,
+								modelSupplier,
+								Transform::convertAndInvertAffine2DtoAffineTransform2D);
 
-					return new Tuple2<long[], double[]>(offset, transform == null ? null : transform.getRowPackedCopy());
+						return new Tuple2<long[], double[]>(offset, transform == null ? null : transform.getRowPackedCopy());
+					}
 				});
 
 		return affines;
@@ -407,82 +408,86 @@ public class SparkPairAlignSIFT {
 			final double[] boundsMax,
 			final int stepSize) throws IOException {
 
-		final DatasetAttributes attributes = Transform.createScaledTransformDataset(
-				N5Util.createN5Writer(n5Path),
-				transformDatasetBaseName,
-				boundsMin,
-				boundsMax,
-				transformScale,
-				new int[] {stepSize, stepSize});
+		final DatasetAttributes attributes;
+		try (final N5Writer n5 = N5Util.createN5Writer(n5Path)) {
+			attributes = Transform.createScaledTransformDataset(
+					n5,
+					transformDatasetBaseName,
+					boundsMin,
+					boundsMax,
+					transformScale,
+					new int[] {stepSize, stepSize});
+		}
 
 		final long[] dimensions = attributes.getDimensions();
 
 		final JavaRDD<long[]> mappedGridCells = gridCells.map(
 				cell -> {
-					final N5Writer n5 = N5Util.createN5Writer(n5Path);
-					final long[] gridOffset = Grid.gridCell(
-							cell,
-							Grid.floorScaled(boundsMin, transformScale),
-							new int[]{stepSize, stepSize});
+					try (final N5Writer n5 = N5Util.createN5Writer(n5Path)) {
+						final long[] gridOffset = Grid.gridCell(
+								cell,
+								Grid.floorScaled(boundsMin, transformScale),
+								new int[]{stepSize, stepSize});
 
-					final long[] intervalMin = new long[]{gridOffset[0] * stepSize, gridOffset[1] * stepSize, 0};
-					final long[] intervalMax = new long[]{
-							Math.min(dimensions[0], intervalMin[0] + stepSize) - 1,
-							Math.min(dimensions[1], intervalMin[1] + stepSize) - 1,
-							1};
+						final long[] intervalMin = new long[]{gridOffset[0] * stepSize, gridOffset[1] * stepSize, 0};
+						final long[] intervalMax = new long[]{
+								Math.min(dimensions[0], intervalMin[0] + stepSize) - 1,
+								Math.min(dimensions[1], intervalMin[1] + stepSize) - 1,
+								1};
 
-					System.out.println(Arrays.toString(gridOffset) + " : " + Arrays.toString(intervalMin) + " > " + Arrays.toString(intervalMax) + " : " + transformDatasetBaseName + "." + Math.max(0, gridOffset[0] - 1) + "-" + Math.max(0, gridOffset[1] - 1));
+						System.out.println(Arrays.toString(gridOffset) + " : " + Arrays.toString(intervalMin) + " > " + Arrays.toString(intervalMax) + " : " + transformDatasetBaseName + "." + Math.max(0, gridOffset[0] - 1) + "-" + Math.max(0, gridOffset[1] - 1));
 
-					final IntervalView<DoubleType> t00 =
-							Views.interval(
-									N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + Math.max(0, gridOffset[0] - 1) + "-" + Math.max(0, gridOffset[1] - 1)),
-									intervalMin,
-									intervalMax);
-					final IntervalView<DoubleType> t01 =
-							Views.interval(
-									N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + Math.max(0, gridOffset[0] - 1) + "-" + gridOffset[1]),
-									intervalMin,
-									intervalMax);
-					final IntervalView<DoubleType> t10 =
-							Views.interval(
-									N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + gridOffset[0] + "-" + Math.max(0, gridOffset[1] - 1)),
-									intervalMin,
-									intervalMax);
-					final IntervalView<DoubleType> t11 =
-							Views.interval(
-									N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1]),
-									intervalMin,
-									intervalMax);
+						final IntervalView<DoubleType> t00 =
+								Views.interval(
+										N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + Math.max(0, gridOffset[0] - 1) + "-" + Math.max(0, gridOffset[1] - 1)),
+										intervalMin,
+										intervalMax);
+						final IntervalView<DoubleType> t01 =
+								Views.interval(
+										N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + Math.max(0, gridOffset[0] - 1) + "-" + gridOffset[1]),
+										intervalMin,
+										intervalMax);
+						final IntervalView<DoubleType> t10 =
+								Views.interval(
+										N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + gridOffset[0] + "-" + Math.max(0, gridOffset[1] - 1)),
+										intervalMin,
+										intervalMax);
+						final IntervalView<DoubleType> t11 =
+								Views.interval(
+										N5Utils.<DoubleType>open(n5, transformDatasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1]),
+										intervalMin,
+										intervalMax);
 
-					final Cursor<DoubleType> c00 = t00.cursor();
-					final Cursor<DoubleType> c01 = t01.cursor();
-					final Cursor<DoubleType> c10 = t10.cursor();
-					final Cursor<DoubleType> c11 = t11.cursor();
+						final Cursor<DoubleType> c00 = t00.cursor();
+						final Cursor<DoubleType> c01 = t01.cursor();
+						final Cursor<DoubleType> c10 = t10.cursor();
+						final Cursor<DoubleType> c11 = t11.cursor();
 
-					final ArrayImg<DoubleType, ?> tt = ArrayImgs.doubles(t00.dimension(0), t00.dimension(1), 2);
-					final ArrayLocalizingCursor<DoubleType> c = tt.localizingCursor();
+						final ArrayImg<DoubleType, ?> tt = ArrayImgs.doubles(t00.dimension(0), t00.dimension(1), 2);
+						final ArrayLocalizingCursor<DoubleType> c = tt.localizingCursor();
 
-					while (c.hasNext()) {
-						final DoubleType v = c.next();
-						final DoubleType v00 = c00.next();
-						final DoubleType v01 = c01.next();
-						final DoubleType v10 = c10.next();
-						final DoubleType v11 = c11.next();
-						final double lambdaX = c.getDoublePosition(0) / stepSize;
-						final double lambdaY = c.getDoublePosition(1) / stepSize;
-						final double d0 = (v10.get() - v00.get()) * lambdaX + v00.get();
-						final double d1 = (v11.get() - v01.get()) * lambdaX + v01.get();
-						v.set((d1 - d0) * lambdaY + d0);
+						while (c.hasNext()) {
+							final DoubleType v = c.next();
+							final DoubleType v00 = c00.next();
+							final DoubleType v01 = c01.next();
+							final DoubleType v10 = c10.next();
+							final DoubleType v11 = c11.next();
+							final double lambdaX = c.getDoublePosition(0) / stepSize;
+							final double lambdaY = c.getDoublePosition(1) / stepSize;
+							final double d0 = (v10.get() - v00.get()) * lambdaX + v00.get();
+							final double d1 = (v11.get() - v01.get()) * lambdaX + v01.get();
+							v.set((d1 - d0) * lambdaY + d0);
+						}
+
+						final DatasetAttributes targetAttributes = new DatasetAttributes(
+								dimensions,
+								new int[]{stepSize, stepSize, 2},
+								DataType.FLOAT64,
+								new GzipCompression());
+						N5Utils.saveBlock(tt, n5, transformDatasetBaseName, targetAttributes, Arrays.copyOf(gridOffset, 3));
+
+						return cell;
 					}
-
-					final DatasetAttributes targetAttributes = new DatasetAttributes(
-							dimensions,
-							new int[]{stepSize, stepSize, 2},
-							DataType.FLOAT64,
-							new GzipCompression());
-					N5Utils.saveBlock(tt, n5, transformDatasetBaseName, targetAttributes, Arrays.copyOf(gridOffset, 3));
-
-					return cell;
 				});
 
 		return mappedGridCells;
@@ -500,12 +505,13 @@ public class SparkPairAlignSIFT {
 
 		gridCells.foreach(
 				cell -> {
-					final N5Writer n5 = N5Util.createN5Writer(n5Path);
-					final long[] gridOffset = Grid.gridCell(
-							cell,
-							Grid.floorScaled(boundsMin, transformScale),
-							new int[]{stepSize, stepSize});
-					n5.remove(transformDatasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1]);
+					try (final N5Writer n5 = N5Util.createN5Writer(n5Path)) {
+						final long[] gridOffset = Grid.gridCell(
+								cell,
+								Grid.floorScaled(boundsMin, transformScale),
+								new int[]{stepSize, stepSize});
+						n5.remove(transformDatasetBaseName + "." + gridOffset[0] + "-" + gridOffset[1]);
+					}
 				});
 	}
 

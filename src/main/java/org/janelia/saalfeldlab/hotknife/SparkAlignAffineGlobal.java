@@ -255,21 +255,22 @@ public class SparkAlignAffineGlobal {
 		final JavaPairRDD<String, ArrayList<Feature>> features =
 				rdd.mapToPair(inDatasetName -> {
 
-					final N5Reader n5Reader = N5Util.createN5Reader(n5Path);
-					final RandomAccessibleInterval<FloatType> source;
-					try {
-						source = N5Utils.open(n5Reader, inDatasetName + "/s" + scaleIndex);
-					} catch (Exception e) {
-						throw new RuntimeException("failed to open " + inDatasetName + "/s" + scaleIndex, e);
+					try (final N5Reader n5Reader = N5Util.createN5Reader(n5Path)) {
+						final RandomAccessibleInterval<FloatType> source;
+						try {
+							source = N5Utils.open(n5Reader, inDatasetName + "/s" + scaleIndex);
+						} catch (Exception e) {
+							throw new RuntimeException("failed to open " + inDatasetName + "/s" + scaleIndex, e);
+						}
+
+						System.out.println(inDatasetName + " : " + Arrays.toString(Intervals.dimensionsAsLongArray(source)) + " extracting features...");
+
+						final ArrayList<Feature> fs = Align.extractFeatures(source, 2.0, 0.05, FD_SIZE);
+
+						System.out.println(inDatasetName + " : " + fs.size() + " features extracted.");
+
+						return new Tuple2<>(inDatasetName, fs);
 					}
-
-					System.out.println(inDatasetName + " : " + Arrays.toString(Intervals.dimensionsAsLongArray(source)) + " extracting features...");
-
-					final ArrayList<Feature> fs = Align.extractFeatures(source, 2.0, 0.05, FD_SIZE);
-
-					System.out.println(inDatasetName + " : " + fs.size() + " features extracted.");
-
-					return new Tuple2<>(inDatasetName, fs);
 				});
 
 		return features;
