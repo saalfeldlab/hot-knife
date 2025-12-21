@@ -255,6 +255,8 @@ public class SparkPairAlignSIFTAverage {
 		final long[] floorScaledMin = Grid.floorScaled(boundsMin, scale);
 		final long[] ceilScaledMax = Grid.ceilScaled(boundsMax, scale);
 
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): alignSIFTAverage ..." );
+
 		final JavaPairRDD<long[], Tuple2<double[], double[]>> affines = alignSIFTAverage(
 				sc,
 				n5Path,
@@ -281,6 +283,8 @@ public class SparkPairAlignSIFTAverage {
 		final JavaPairRDD<long[], double[]> affinesB = affines.mapToPair(
 				a -> new Tuple2<>(a._1(), a._2()._2()));
 
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): saveAccumulatedAffineGridCellsA ..." );
+
 		final JavaRDD<long[]> gridCellsA = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesA,
 				n5Path,
@@ -294,6 +298,8 @@ public class SparkPairAlignSIFTAverage {
 				retryDelayMs,
 				retryBackoff,
 				startupJitterMs);
+
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): saveAccumulatedAffineGridCellsB ..." );
 
 		final JavaRDD<long[]> gridCellsB = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesB,
@@ -329,6 +335,8 @@ public class SparkPairAlignSIFTAverage {
 				transformDatasetNameB, expected, countB, expected - countB));
 		}
 
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): composeOverlappingTransformGridCellsA ..." );
+
 		final JavaRDD<long[]> composedGridCellsA = SparkPairAlignSIFT.composeOverlappingTransformGridCells(
 				gridCellsA,
 				n5Path,
@@ -337,6 +345,9 @@ public class SparkPairAlignSIFTAverage {
 				boundsMin,
 				boundsMax,
 				stepSize);
+
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): composeOverlappingTransformGridCellsB ..." );
+
 		final JavaRDD<long[]> composedGridCellsB = SparkPairAlignSIFT.composeOverlappingTransformGridCells(
 				gridCellsB,
 				n5Path,
@@ -351,6 +362,8 @@ public class SparkPairAlignSIFTAverage {
 		composedGridCellsB.cache();
 		composedGridCellsB.count();
 
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): deleteGridCellsA ..." );
+
 		SparkPairAlignSIFT.deleteGridCells(
 				composedGridCellsA,
 				n5Path,
@@ -359,6 +372,9 @@ public class SparkPairAlignSIFTAverage {
 				boundsMin,
 				boundsMax,
 				stepSize);
+
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): deleteGridCellsB ..." );
+
 		SparkPairAlignSIFT.deleteGridCells(
 				composedGridCellsB,
 				n5Path,
@@ -414,6 +430,7 @@ public class SparkPairAlignSIFTAverage {
 			outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + transformDatasetNames[i]);
 		}
 
+		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): Resaving transforms ... " );
 		SparkPairAlignSIFT.reSaveTransforms(
 				sc,
 				options.getN5Path(),
