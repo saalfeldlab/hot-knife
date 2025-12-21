@@ -41,12 +41,19 @@ public class N5RetryUtil {
 			final String operationDescription) throws Exception {
 
 		// Add initial random delay to space out task execution (0 to startupJitterMs)
-		if (startupJitterMs > 0) {
-			long initialDelay = (long)(Math.random() * startupJitterMs);
+		if (startupJitterMs > 0)
+		{
+			final long initialDelay = (long)(Math.random() * startupJitterMs);
 			System.out.println(String.format(
 				"Initial jitter for %s: delaying first attempt by %dms (max: %dms)",
 				operationDescription, initialDelay, startupJitterMs));
 			Thread.sleep(initialDelay);
+		}
+		else
+		{
+			System.out.println(String.format(
+					"NO initial jitter for %s: delaying first attempt",
+					operationDescription ));
 		}
 
 		Exception lastException = null;
