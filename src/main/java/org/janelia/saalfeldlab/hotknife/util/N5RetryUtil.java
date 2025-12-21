@@ -3,6 +3,8 @@ package org.janelia.saalfeldlab.hotknife.util;
 import java.io.Serializable;
 import java.util.function.Supplier;
 
+import scala.Tuple2;
+
 /**
  * Utility class for retry logic with exponential backoff and jitter.
  * Specifically designed for handling GCS rate limits and other transient failures.
@@ -29,10 +31,10 @@ public class N5RetryUtil {
 	 * @param backoffMultiplier Exponential backoff multiplier for delays
 	 * @param startupJitterMs Maximum random delay in milliseconds before first attempt
 	 * @param operationDescription Description of operation for logging
-	 * @return Result of the operation
+	 * @return Tuple2 containing the result and retry statistics
 	 * @throws Exception if all retries are exhausted
 	 */
-	public static <T> T executeWithRetry(
+	public static <T> Tuple2<T, RetryStats> executeWithRetry(
 			final Supplier<T> operation,
 			final int maxRetries,
 			final long retryDelayMs,
@@ -40,21 +42,40 @@ public class N5RetryUtil {
 			final long startupJitterMs,
 			final String operationDescription) throws Exception {
 
+		// Track statistics
+		long initialJitterMs = 0;
+		long totalWaitTimeMs = 0;
+
 		// Add initial random delay to space out task execution (0 to startupJitterMs)
-		if (startupJitterMs > 0) {
-			long initialDelay = (long)(Math.random() * startupJitterMs);
+		if (startupJitterMs > 0)
+		{
+			initialJitterMs = (long)(Math.random() * startupJitterMs);
 			System.out.println(String.format(
 				"Initial jitter for %s: delaying first attempt by %dms (max: %dms)",
-				operationDescription, initialDelay, startupJitterMs));
-			Thread.sleep(initialDelay);
+				operationDescription, initialJitterMs, startupJitterMs));
+			Thread.sleep(initialJitterMs);
+			totalWaitTimeMs += initialJitterMs;
+		}
+		else
+		{
+			System.out.println(String.format(
+					"NO initial jitter for %s: delaying first attempt",
+					operationDescription ));
 		}
 
 		Exception lastException = null;
 		long delayMs = retryDelayMs;
+		int actualRetries = 0;
 
 		for (int attempt = 0; attempt <= maxRetries; attempt++) {
 			try {
-				return operation.get();
+				final T result = operation.get();
+				final RetryStats stats = new RetryStats(
+					operationDescription,
+					actualRetries,
+					totalWaitTimeMs,
+					initialJitterMs);
+				return new Tuple2<>(result, stats);
 			} catch (final Exception e) {
 				lastException = e;
 
@@ -72,12 +93,15 @@ public class N5RetryUtil {
 						"GCS rate limit hit for %s (attempt %d/%d), retrying in %dms (jittered from %dms)",
 						operationDescription, attempt + 1, maxRetries + 1, jitteredDelay, delayMs));
 					Thread.sleep(jitteredDelay);
+					totalWaitTimeMs += jitteredDelay;
 					delayMs = (long)(delayMs * backoffMultiplier);
+					actualRetries++;
 				} else if (attempt < maxRetries) {
 					// For non-rate-limit errors, retry without delay
 					System.out.println(String.format(
 						"Error in %s (attempt %d/%d): %s",
 						operationDescription, attempt + 1, maxRetries + 1, e.getMessage()));
+					actualRetries++;
 				}
 			}
 		}
@@ -100,7 +124,7 @@ public class N5RetryUtil {
 	 * @param operationDescription Description of operation for logging
 	 * @throws Exception if all retries are exhausted
 	 */
-	public static void executeWithRetryVoid(
+	public static RetryStats executeWithRetryVoid(
 			final RunnableWithException operation,
 			final int maxRetries,
 			final long retryDelayMs,
@@ -108,7 +132,7 @@ public class N5RetryUtil {
 			final long startupJitterMs,
 			final String operationDescription) throws Exception {
 
-		executeWithRetry(() -> {
+		Tuple2<Void, RetryStats> result = executeWithRetry(() -> {
 			try {
 				operation.run();
 				return null;
@@ -116,5 +140,6 @@ public class N5RetryUtil {
 				throw new RuntimeException(e);
 			}
 		}, maxRetries, retryDelayMs, backoffMultiplier, startupJitterMs, operationDescription);
+		return result._2();
 	}
 }
