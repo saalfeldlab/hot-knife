@@ -41,13 +41,12 @@ fi
 
 # setup pass specific run class
 case "${PASS}" in
-  1|2|3)        MAX_EXECUTORS=${2:-10}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-# TODO: uncomment and update default max executors for passes 4-12 as needed (don't forget to update error message below)
-#  4)            MAX_EXECUTORS=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-#  5)            MAX_EXECUTORS=${2:-200}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-#  6|7)          MAX_EXECUTORS=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
-#  8|9|10)       MAX_EXECUTORS=${2:-150}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
-#  11|12)        MAX_EXECUTORS=${2:-210}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
+  1|2|3)        MAX_EXECUTORS=${2:-20}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  4)            MAX_EXECUTORS=${2:-50}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  5)            MAX_EXECUTORS=${2:-70}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  6|7)          MAX_EXECUTORS=${2:-50}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignSIFTAverage" ;;
+  8|9|10)       MAX_EXECUTORS=${2:-50}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
+  11|12)        MAX_EXECUTORS=${2:-70}; CLASS="org.janelia.saalfeldlab.hotknife.SparkPairAlignFlow" ;;
   *)
     echo "ERROR: 'pass parameter ${PASS} must be between 1 and 3'"
     exit 1
@@ -59,14 +58,13 @@ case "${PASS}" in
   1)     PASS_ARGS="--scaleIndex=4 --stepSize=512 --lambdaFilter=0.01 --lambdaModel=0.01 --maxEpsilon=100" ;;
   2)     PASS_ARGS="--scaleIndex=4 --stepSize=400 --lambdaFilter=0.1  --lambdaModel=0.01 --maxEpsilon=50" ;;
   3)     PASS_ARGS="--scaleIndex=3 --stepSize=512 --lambdaFilter=0.1  --lambdaModel=0.01 --maxEpsilon=40" ;;
-# TODO: uncomment and update pass args for passes 4-12 as needed
-#  4)     PASS_ARGS="--scaleIndex=2 --stepSize=400 --lambdaFilter=0.1  --lambdaModel=0.01 --maxEpsilon=20" ;;
-#  5|6|7) PASS_ARGS="--scaleIndex=2 --stepSize=512 --lambdaFilter=0.25 --lambdaModel=0.01 --maxEpsilon=20" ;;
-#  8)     PASS_ARGS="--scaleIndex=5 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
-#  9)     PASS_ARGS="--scaleIndex=4 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
-#  10)    PASS_ARGS="--scaleIndex=3 --stepSize=256 --maxEpsilon=5 --sigma 30" ;;
-#  11)    PASS_ARGS="--scaleIndex=2 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
-#  12)    PASS_ARGS="--scaleIndex=1 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
+  4)     PASS_ARGS="--scaleIndex=2 --stepSize=400 --lambdaFilter=0.1  --lambdaModel=0.01 --maxEpsilon=20" ;;
+  5|6|7) PASS_ARGS="--scaleIndex=2 --stepSize=512 --lambdaFilter=0.25 --lambdaModel=0.01 --maxEpsilon=20" ;;
+  8)     PASS_ARGS="--scaleIndex=5 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
+  9)     PASS_ARGS="--scaleIndex=4 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
+  10)    PASS_ARGS="--scaleIndex=3 --stepSize=256 --maxEpsilon=5 --sigma 30" ;;
+  11)    PASS_ARGS="--scaleIndex=2 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
+  12)    PASS_ARGS="--scaleIndex=1 --stepSize=256 --maxEpsilon=3 --sigma 30" ;;
 esac
 
 if (( MAX_EXECUTORS < 2 )); then
