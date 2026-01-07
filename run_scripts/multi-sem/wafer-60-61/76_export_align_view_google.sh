@@ -15,7 +15,6 @@ MAX_EXECUTORS="10"
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 N5_SURFACE_ROOT="surface-align/run_20251219_110000"
 
-
 PADDED_PASS=$(printf "%02d" "${PASS}")
 N5_GROUP_INPUT="${N5_SURFACE_ROOT}/pass${PADDED_PASS}"
 ZARR_OUTPUT="${N5_PATH}/${N5_SURFACE_ROOT}/zarr-export/pass${PADDED_PASS}"
