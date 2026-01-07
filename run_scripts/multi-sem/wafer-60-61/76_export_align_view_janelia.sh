@@ -68,6 +68,6 @@ mkdir -p ${LOG_DIR}
 ${ARGV}
 "
   # shellcheck disable=SC2086
-  /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $JAR $CLASS ARGV
+  /groups/flyTEM/flyTEM/render/spark/spark-janelia/flintstone.sh $N_NODES $JAR $CLASS $ARGV
 
 } 2>&1 | tee -a "${LOG_FILE}"
