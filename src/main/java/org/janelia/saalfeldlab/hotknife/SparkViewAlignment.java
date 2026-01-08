@@ -28,12 +28,9 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.ImageJ;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.img.display.imagej.ImageJFunctions;
-import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.util.Intervals;
@@ -48,13 +45,12 @@ import net.imglib2.view.Views;
  */
 public class SparkViewAlignment
 {
-	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
 
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
 		private String n5Path;
 
-		@Option(name = "-i", aliases = {"--n5Group"}, required = false, usage = "N5 group, e.g. /align-0")
+		@Option(name = "-i", aliases = {"--n5Group"}, usage = "N5 group, e.g. /align-0")
 		private String group = "/";
 
 		@Option(name = "--scaleIndex", required = true, usage = "scale index for visualization, e.g. 4 (means scale = 1.0 / 2^4)")
@@ -69,10 +65,13 @@ public class SparkViewAlignment
 		@Option(name = "-o", aliases = {"--zarrFolder"}, required = true, usage = "ZARR container for saving images (will be created or appended)")
 		private String zarrOut;
 
-		@Option(name = "--ignoreTransforms", required = false, usage = "do not load transforms, instead use identity transforms")
-		private boolean ignoreTransforms = false;
+        @Option(name = "--outputBlockSizeX", usage = "block size in X for output ZARR")
+        private Integer outputBlockSizeX = 512;
 
-		@Option(name = "--localSparkBindAddress", required = false, usage = "specify Spark bind address as localhost")
+        @Option(name = "--outputBlockSizeY", usage = "block size in Y for output ZARR")
+        private Integer outputBlockSizeY = 512;
+
+		@Option(name = "--localSparkBindAddress", usage = "specify Spark bind address as localhost")
 		private boolean localSparkBindAddress = false;
 
 		public Options(final String[] args) {
@@ -94,8 +93,6 @@ public class SparkViewAlignment
 		public String zarrOut() { return zarrOut; }
 		public String getGroup() { return group; }
 	}
-
-	final static int[] blockSize = new int[] { 512, 512 };
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException
 	{
@@ -127,8 +124,9 @@ public class SparkViewAlignment
 
 		final int zFrom, zTo;
 		final String zarrPath = options.zarrOut();
+        final int[] outputBlockSize = new int[] { options.outputBlockSizeX, options.outputBlockSizeY };
 
-		try
+        try
 		{
 			if (options.zFrom == null) zFrom = 0; else zFrom = options.zFrom;
 			if (options.zTo == null) zTo = datasetNames.length; else zTo = options.zTo;
@@ -140,7 +138,7 @@ public class SparkViewAlignment
 				System.out.println( "Creating dataset '" + datasetName( datasetNames[ i ] ) + "' ...");
 				zarrWriterGlobal.createDataset(
 						datasetName( datasetNames[ i ] ),
-						new DatasetAttributes( interval.dimensionsAsLongArray(), blockSize, DataType.UINT8, new ZstandardCompression() ) );
+						new DatasetAttributes( interval.dimensionsAsLongArray(), outputBlockSize, DataType.UINT8, new ZstandardCompression() ) );
 			}
 
 			zarrWriterGlobal.close();
@@ -150,7 +148,7 @@ public class SparkViewAlignment
 			throw new RuntimeException( "Could create/open zarr " + options.zarrOut() );
 		}
 
-		final List<long[][]> grid = Grid.create( interval.dimensionsAsLongArray(), blockSize );
+		final List<long[][]> grid = Grid.create( interval.dimensionsAsLongArray(), outputBlockSize );
 		final List<Integer> zIndices = IntStream.range( zFrom, zTo ).boxed().collect(Collectors.toList());
 
 		System.out.println( "Grid size: " + grid.size() );
