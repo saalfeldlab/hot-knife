@@ -47,7 +47,7 @@ export RUNTIME="233:59"
 #-----------------------------------------------------------
 RUN_TIME=$(date +"%Y%m%d_%H%M%S")
 
-JAR="/groups/hess/hesslab/render/lib/hot-knife-0.0.7-SNAPSHOT.jar"
+JAR="/groups/hess/hesslab/render/lib/hot-knife-0.0.7-SNAPSHOT.cloud-cost-debug.jar"
 CLASS="org.janelia.saalfeldlab.hotknife.SparkViewAlignment"
 
 ARGV="
