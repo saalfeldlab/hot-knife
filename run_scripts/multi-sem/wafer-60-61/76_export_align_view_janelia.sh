@@ -12,7 +12,7 @@ fi
 PASS="${1}"
 SCALE_INDEX="${2:-2}"
 
-N_NODES="2"
+N_NODES="10"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 N5_SURFACE_ROOT="surface-align/run_20251219_110000"
