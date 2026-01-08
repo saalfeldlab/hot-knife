@@ -42,7 +42,8 @@ export N_CORES_DRIVER=1
 
 # need this to avoid java.lang.NoSuchMethodError ... com.google.common.collect.ImmutableList.toImmutableList() ...
 GUAVA_JAR="/groups/hess/hesslab/render/lib/guava-33.0.0-jre.jar"
-export SUBMIT_ARGS="--conf spark.driver.extraClassPath=${GUAVA_JAR} --conf spark.executor.extraClassPath=${GUAVA_JAR}"
+GUAVA_FA_JAR="/groups/hess/hesslab/render/lib/failureaccess-1.0.2.jar"
+export SUBMIT_ARGS="--conf spark.driver.extraClassPath=${GUAVA_JAR}:${GUAVA_FA_JAR} --conf spark.executor.extraClassPath=${GUAVA_JAR}:${GUAVA_FA_JAR}"
 
 export SPARK_JANELIA_ARGS="--consolidate_logs --run_parent_dir /groups/hess/hesslab/render/spark_output/${USER}"
 export LSF_PROJECT="hess"
