@@ -19,7 +19,7 @@ N5_SURFACE_ROOT="surface-align/run_20251219_110000"
 
 PADDED_PASS=$(printf "%02d" "${PASS}")
 N5_GROUP_INPUT="${N5_SURFACE_ROOT}/pass${PADDED_PASS}"
-ZARR_OUTPUT="/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.zarr/${N5_SURFACE_ROOT}/zarr-export/pass${PADDED_PASS}"
+ZARR_OUTPUT="/nrs/hess/data/hess_wafers_60_61/export/zarr_datasets/${N5_SURFACE_ROOT}/pass${PADDED_PASS}-scale${SCALE_INDEX}"
 
 if [[ -d "${ZARR_OUTPUT}" ]]; then
   echo "ERROR: ${ZARR_OUTPUT} already exists"
