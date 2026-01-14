@@ -34,6 +34,7 @@ import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.RetryStats;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
@@ -111,8 +112,15 @@ public class SparkPairAlignSIFTAverage {
 				offsets.mapToPair(offset -> {
 
 					final N5Reader n5Reader = N5Util.createN5Reader(n5Path);
-					final RandomAccessibleInterval<FloatType> a = N5Utils.open(n5Reader, datasetA + "/s" + scaleIndex);
-					final RandomAccessibleInterval<FloatType> b = N5Utils.open(n5Reader, datasetB + "/s" + scaleIndex);
+
+                    final String scaledDatasetA = datasetA + "/s" + scaleIndex;
+                    N5Util.verifyDatasetAndAttributesExist(n5Reader, scaledDatasetA);
+
+                    final String scaledDatasetB = datasetB + "/s" + scaleIndex;
+                    N5Util.verifyDatasetAndAttributesExist(n5Reader, scaledDatasetB);
+
+					final RandomAccessibleInterval<FloatType> a = N5Utils.open(n5Reader, scaledDatasetA);
+					final RandomAccessibleInterval<FloatType> b = N5Utils.open(n5Reader, scaledDatasetB);
 
 					final RealTransform transformA = Transform.loadScaledTransform(
 							n5Reader,
@@ -208,26 +216,8 @@ public class SparkPairAlignSIFTAverage {
 	 * composition of the prior transform and the interpolant over the grid.
 	 * For grid cells, that do not return an alignment model, the prior
 	 * transformation is used.
-	 * Other than by {@link SparkPairAlignSIFT#alignPairSIFT(JavaSparkContext, String, String, String, String, String, String, String, int, double[], double[], int, List, double, double, double)},
+	 * Other than by SparkPairAlignSIFT#alignPairSIFT,
 	 * both N5 sections are transformed, B by affine/2 and A by affine<sup>-1</sup>/2.
-	 *
-	 * @param sc
-	 * @param n5Path
-	 * @param inGroupName
-	 * @param outGroupName
-	 * @param datasetNameA
-	 * @parrm datasetNameB
-	 * @param transformDatasetNameA
-	 * @parrm transformDatasetNameB
-	 * @param transformScaleIndex
-	 * @param boundsMin
-	 * @param boundsMax
-	 * @param stepSize
-	 * @param gridOffsets
-	 * @param lambdaModel
-	 * @param lambdaFilter
-	 * @param maxFilterEpsilon
-	 * @throws IOException
 	 */
 	public static void alignPairSIFTAverage(
 			final JavaSparkContext sc,
@@ -251,12 +241,31 @@ public class SparkPairAlignSIFTAverage {
 			final double retryBackoff,
 			final long startupJitterMs) throws IOException {
 
+        Util.logMessage(SparkPairAlignSIFTAverage.class.getName(),
+                        "alignPairSIFTAverage: entry, n5Path=" + n5Path +
+                        ", inGroupName=" + inGroupName +
+                        ", outGroupName=" + outGroupName +
+                        ", datasetNameA=" + datasetNameA +
+                        ", datasetNameB=" + datasetNameB +
+                        ", transformDatasetNameA=" + transformDatasetNameA +
+                        ", transformDatasetNameB=" + transformDatasetNameB +
+                        ", transformScaleIndex=" + transformScaleIndex +
+                        ", boundsMin=" + Arrays.toString(boundsMin) +
+                        ", boundsMax=" + Arrays.toString(boundsMax) +
+                        ", stepSize=" + stepSize +
+                        ", gridOffsets.size=" + gridOffsets.size() +
+                        ", lambdaModel=" + lambdaModel +
+                        ", lambdaFilter=" + lambdaFilter +
+                        ", maxFilterEpsilon=" + maxFilterEpsilon +
+                        ", maxRetries=" + maxRetries +
+                        ", retryDelayMs=" + retryDelayMs +
+                        ", retryBackoff=" + retryBackoff +
+                        ", startupJitterMs=" + startupJitterMs);
+
 		final double scale = 1.0 / (1 << transformScaleIndex);
 
 		final long[] floorScaledMin = Grid.floorScaled(boundsMin, scale);
 		final long[] ceilScaledMax = Grid.ceilScaled(boundsMax, scale);
-
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): alignSIFTAverage ..." );
 
 		final JavaPairRDD<long[], Tuple2<double[], double[]>> affines = alignSIFTAverage(
 				sc,
@@ -284,7 +293,8 @@ public class SparkPairAlignSIFTAverage {
 		final JavaPairRDD<long[], double[]> affinesB = affines.mapToPair(
 				a -> new Tuple2<>(a._1(), a._2()._2()));
 
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): saveAccumulatedAffineGridCellsA ..." );
+        Util.logMessage(SparkPairAlignSIFTAverage.class.toString(),
+                        "alignPairSIFTAverage: saveAccumulatedAffineGridCellsA ..." );
 
 		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStatsA = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesA,
@@ -447,7 +457,9 @@ public class SparkPairAlignSIFTAverage {
 			outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + transformDatasetNames[i]);
 		}
 
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): Resaving transforms ... " );
+        Util.logMessage(SparkPairAlignSIFTAverage.class.getName(),
+                        "main: resaving transforms ... " );
+
 		SparkPairAlignSIFT.reSaveTransforms(
 				sc,
 				options.getN5Path(),
@@ -460,14 +472,10 @@ public class SparkPairAlignSIFTAverage {
 
 		for (int i = 1; i < datasetNames.length - 2; i += 2) {
 
-			System.out.printf(
-					"(" + new Date( System.currentTimeMillis()) + "): Aligning dataset %d : %s, %d : %s, %d grid cells",
-					i,
-					datasetNames[i],
-					i + 1,
-					datasetNames[i + 1],
-					gridOffsets.size());
-			System.out.println();
+            Util.logMessage(SparkPairAlignSIFTAverage.class.getName(),
+                            "main: aligning dataset " + i + ": " + datasetNames[i] +
+                            ", " + (i + 1) + ": " + datasetNames[i + 1] + ", " +
+                            gridOffsets.size() + " grid cells");
 
 			final String datasetNameA = datasetNames[i];
 			final String datasetNameB = datasetNames[i + 1];
