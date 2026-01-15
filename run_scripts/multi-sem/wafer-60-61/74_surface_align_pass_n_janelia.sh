@@ -7,7 +7,7 @@ if (( $# < 1 )); then
 Usage:    $0 <pass (1-12)> [n-nodes (overrides default)]
 
 Notes:
-  - with 150 nodes and 5 w61 r00 slabs (79 to 83), pass 4 took ?? minutes to complete
+  - with 150 nodes and 5 w61 r00 slabs (79 to 83), pass 4 took 48 minutes to complete
 "
   exit 1
 fi
