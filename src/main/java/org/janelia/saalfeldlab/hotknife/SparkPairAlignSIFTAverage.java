@@ -1,15 +1,15 @@
 /**
  * License: GPL
- *
+ * -
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License 2
  * as published by the Free Software Foundation.
- *
+ * -
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
+ * -
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
@@ -63,6 +62,7 @@ import scala.Tuple2;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
+@SuppressWarnings("JavadocDeclaration")
 public class SparkPairAlignSIFTAverage {
 
 	/**
@@ -102,7 +102,7 @@ public class SparkPairAlignSIFTAverage {
 			final List<long[]> gridOffsets,
 			final double lambdaModel,
 			final double lambdaFilter,
-			final double maxFilterEpsilon) throws IOException {
+			final double maxFilterEpsilon) {
 
 		final double scale = 1.0 / (1 << scaleIndex);
 
@@ -148,23 +148,24 @@ public class SparkPairAlignSIFTAverage {
 					final IntervalView<FloatType> gridBlockB = Views.interval(transformedB, gridBlockInterval);
 
 					final Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D> modelSupplier =
-							new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
-								(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-								(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-								lambdaModel);
+                            new Transform.InterpolatedAffineModel2DSupplier<>(
+                                    (Supplier<AffineModel2D> & Serializable) AffineModel2D::new,
+                                    (Supplier<RigidModel2D> & Serializable) RigidModel2D::new,
+                                    lambdaModel);
 
 					final Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D> filterModelSupplier =
-							new Transform.InterpolatedAffineModel2DSupplier<AffineModel2D, RigidModel2D>(
-								(Supplier<AffineModel2D> & Serializable)AffineModel2D::new,
-								(Supplier<RigidModel2D> & Serializable)RigidModel2D::new,
-								lambdaFilter);
+                            new Transform.InterpolatedAffineModel2DSupplier<>(
+                                    (Supplier<AffineModel2D> & Serializable) AffineModel2D::new,
+                                    (Supplier<RigidModel2D> & Serializable) RigidModel2D::new,
+                                    lambdaFilter);
 
-					final MultiConsensusFilter<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>> filter = new MultiConsensusFilter<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>>(
-							filterModelSupplier,
-							2000,
-							maxFilterEpsilon,
-							0.0,
-							10);
+					final MultiConsensusFilter<InterpolatedAffineModel2D<AffineModel2D, RigidModel2D>> filter =
+                            new MultiConsensusFilter<>(
+                                    filterModelSupplier,
+                                    2000,
+                                    maxFilterEpsilon,
+                                    0.0,
+                                    10);
 
 					final ArrayList<PointMatch> matches = Align.filterMatchSIFT(
 							gridBlockB,
@@ -241,26 +242,25 @@ public class SparkPairAlignSIFTAverage {
 			final double retryBackoff,
 			final long startupJitterMs) throws IOException {
 
-        Util.logMessage(SparkPairAlignSIFTAverage.class.getName(),
-                        "alignPairSIFTAverage: entry, n5Path=" + n5Path +
-                        ", inGroupName=" + inGroupName +
-                        ", outGroupName=" + outGroupName +
-                        ", datasetNameA=" + datasetNameA +
-                        ", datasetNameB=" + datasetNameB +
-                        ", transformDatasetNameA=" + transformDatasetNameA +
-                        ", transformDatasetNameB=" + transformDatasetNameB +
-                        ", transformScaleIndex=" + transformScaleIndex +
-                        ", boundsMin=" + Arrays.toString(boundsMin) +
-                        ", boundsMax=" + Arrays.toString(boundsMax) +
-                        ", stepSize=" + stepSize +
-                        ", gridOffsets.size=" + gridOffsets.size() +
-                        ", lambdaModel=" + lambdaModel +
-                        ", lambdaFilter=" + lambdaFilter +
-                        ", maxFilterEpsilon=" + maxFilterEpsilon +
-                        ", maxRetries=" + maxRetries +
-                        ", retryDelayMs=" + retryDelayMs +
-                        ", retryBackoff=" + retryBackoff +
-                        ", startupJitterMs=" + startupJitterMs);
+        logMessage("alignPairSIFTAverage: entry, n5Path=" + n5Path +
+                   ", inGroupName=" + inGroupName +
+                   ", outGroupName=" + outGroupName +
+                   ", datasetNameA=" + datasetNameA +
+                   ", datasetNameB=" + datasetNameB +
+                   ", transformDatasetNameA=" + transformDatasetNameA +
+                   ", transformDatasetNameB=" + transformDatasetNameB +
+                   ", transformScaleIndex=" + transformScaleIndex +
+                   ", boundsMin=" + Arrays.toString(boundsMin) +
+                   ", boundsMax=" + Arrays.toString(boundsMax) +
+                   ", stepSize=" + stepSize +
+                   ", gridOffsets.size=" + gridOffsets.size() +
+                   ", lambdaModel=" + lambdaModel +
+                   ", lambdaFilter=" + lambdaFilter +
+                   ", maxFilterEpsilon=" + maxFilterEpsilon +
+                   ", maxRetries=" + maxRetries +
+                   ", retryDelayMs=" + retryDelayMs +
+                   ", retryBackoff=" + retryBackoff +
+                   ", startupJitterMs=" + startupJitterMs);
 
 		final double scale = 1.0 / (1 << transformScaleIndex);
 
@@ -279,7 +279,7 @@ public class SparkPairAlignSIFTAverage {
 				boundsMax,
 				floorScaledMin,
 				ceilScaledMax,
-				stepSize * 2,
+				stepSize * 2L,
 				gridOffsets,
 				lambdaModel,
 				lambdaFilter,
@@ -293,8 +293,7 @@ public class SparkPairAlignSIFTAverage {
 		final JavaPairRDD<long[], double[]> affinesB = affines.mapToPair(
 				a -> new Tuple2<>(a._1(), a._2()._2()));
 
-        Util.logMessage(SparkPairAlignSIFTAverage.class.toString(),
-                        "alignPairSIFTAverage: saveAccumulatedAffineGridCellsA ..." );
+        logMessage("alignPairSIFTAverage: saveAccumulatedAffineGridCellsA ..." );
 
 		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStatsA = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesA,
@@ -310,7 +309,7 @@ public class SparkPairAlignSIFTAverage {
 				retryBackoff,
 				startupJitterMs);
 
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): saveAccumulatedAffineGridCellsB ..." );
+        logMessage("alignPairSIFTAverage: saveAccumulatedAffineGridCellsB ..." );
 
 		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStatsB = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesB,
@@ -337,14 +336,14 @@ public class SparkPairAlignSIFTAverage {
 		long countB = gridCellsB.count();
 
 		// Collect and report retry statistics
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): Collecting retry statistics ..." );
+        logMessage("alignPairSIFTAverage: collecting retry statistics ..." );
 		List<RetryStats> statsA = gridCellsWithStatsA.map(tuple -> tuple._2()).collect();
 		List<RetryStats> statsB = gridCellsWithStatsB.map(tuple -> tuple._2()).collect();
 
-		System.out.println("\n=== Retry Statistics for Dataset A (" + transformDatasetNameA + ") ===");
+        logMessage("alignPairSIFTAverage:\n=== Retry Statistics for Dataset A (" + transformDatasetNameA + ") ===");
 		RetryStats.reportRetryStatisticsWithDynamicBuckets(statsA);
 
-		System.out.println("\n=== Retry Statistics for Dataset B (" + transformDatasetNameB + ") ===");
+        logMessage("alignPairSIFTAverage:\n=== Retry Statistics for Dataset B (" + transformDatasetNameB + ") ===");
 		RetryStats.reportRetryStatisticsWithDynamicBuckets(statsB);
 
 		// Validate that all grid cells were successfully saved
@@ -362,7 +361,7 @@ public class SparkPairAlignSIFTAverage {
 				transformDatasetNameB, expected, countB, expected - countB));
 		}
 
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): composeOverlappingTransformGridCellsA ..." );
+        logMessage("alignPairSIFTAverage: composeOverlappingTransformGridCellsA ...");
 
 		final JavaRDD<long[]> composedGridCellsA = SparkPairAlignSIFT.composeOverlappingTransformGridCells(
 				gridCellsA,
@@ -373,7 +372,7 @@ public class SparkPairAlignSIFTAverage {
 				boundsMax,
 				stepSize);
 
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): composeOverlappingTransformGridCellsB ..." );
+        logMessage("alignPairSIFTAverage: composeOverlappingTransformGridCellsB ...");
 
 		final JavaRDD<long[]> composedGridCellsB = SparkPairAlignSIFT.composeOverlappingTransformGridCells(
 				gridCellsB,
@@ -389,7 +388,7 @@ public class SparkPairAlignSIFTAverage {
 		composedGridCellsB.cache();
 		composedGridCellsB.count();
 
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): deleteGridCellsA ..." );
+        logMessage("alignPairSIFTAverage: deleteGridCellsA ...");
 
 		SparkPairAlignSIFT.deleteGridCells(
 				composedGridCellsA,
@@ -400,7 +399,7 @@ public class SparkPairAlignSIFTAverage {
 				boundsMax,
 				stepSize);
 
-		System.out.println( "(" + new Date( System.currentTimeMillis()) + "): deleteGridCellsB ..." );
+        logMessage("alignPairSIFTAverage: deleteGridCellsB ...");
 
 		SparkPairAlignSIFT.deleteGridCells(
 				composedGridCellsB,
@@ -412,7 +411,7 @@ public class SparkPairAlignSIFTAverage {
 				stepSize);
 	}
 
-	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
+	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final SparkPairAlignSIFT.Options options = new SparkPairAlignSIFT.Options(args);
 
@@ -441,7 +440,7 @@ public class SparkPairAlignSIFTAverage {
 				new FinalInterval(floorScaledMin, ceilScaledMax),
 				new int[]{options.getStepSize(), options.getStepSize()});
 
-		System.out.println(Arrays.deepToString(gridOffsets.toArray()));
+        logMessage("main: gridOffsets=" + Arrays.deepToString(gridOffsets.toArray()));
 
 		final SparkConf conf = new SparkConf().setAppName("SparkPairAlignSIFT");
 		final JavaSparkContext sc = new JavaSparkContext(conf);
@@ -457,8 +456,7 @@ public class SparkPairAlignSIFTAverage {
 			outPriorTransformDatasetNames.add(options.getOutGroup() + "/" + transformDatasetNames[i]);
 		}
 
-        Util.logMessage(SparkPairAlignSIFTAverage.class.getName(),
-                        "main: resaving transforms ... " );
+        logMessage("main: resaving transforms ... " );
 
 		SparkPairAlignSIFT.reSaveTransforms(
 				sc,
@@ -472,10 +470,9 @@ public class SparkPairAlignSIFTAverage {
 
 		for (int i = 1; i < datasetNames.length - 2; i += 2) {
 
-            Util.logMessage(SparkPairAlignSIFTAverage.class.getName(),
-                            "main: aligning dataset " + i + ": " + datasetNames[i] +
-                            ", " + (i + 1) + ": " + datasetNames[i + 1] + ", " +
-                            gridOffsets.size() + " grid cells");
+            logMessage("main: aligning dataset " + i + ": " + datasetNames[i] +
+                       ", " + (i + 1) + ": " + datasetNames[i + 1] + ", " +
+                       gridOffsets.size() + " grid cells");
 
 			final String datasetNameA = datasetNames[i];
 			final String datasetNameB = datasetNames[i + 1];
@@ -507,4 +504,8 @@ public class SparkPairAlignSIFTAverage {
 
 		sc.close();
 	}
+
+    private static void logMessage(final String message) {
+        Util.logMessage(SparkPairAlignSIFTAverage.class.getName(), message);
+    }
 }
