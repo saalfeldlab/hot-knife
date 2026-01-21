@@ -73,6 +73,8 @@ ARGV="--n5PathInput ${N5_SAMPLE_PATH} \
 # TODO: make serial number range a parameter or argument, note that face dataset order is important
 FIRST_SERIAL_NUM=79
 LAST_SERIAL_NUM=83
+WAFER="w61"
+REGION="r00"
 
 for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
 
