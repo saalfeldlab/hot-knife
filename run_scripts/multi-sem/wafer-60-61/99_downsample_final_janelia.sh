@@ -115,3 +115,15 @@ add or subtract scales if you get more or less downsample levels than s8
   ls -1d ${N5_SAMPLE_PATH}${INPUT_DATASET_ROOT}/s*
 "
 fi
+
+NG_START_LINK='http://renderer.int.janelia.org:8080/ng/#!%7B%22layers%22:%5B%7B%22type%22:%22new%22%2C%22source%22:%22n5://http://renderer.int.janelia.org:8080/n5_sources/hess/hess_wafers_60_61.n5/%22%2C%22tab%22:%22source%22%2C%22name%22:%22hess_wafers_60_61.n5%22%7D%5D%2C%22selectedLayer%22:%7B%22visible%22:true%2C%22layer%22:%22hess_wafers_60_61.n5%22%7D%2C%22layout%22:%224panel-alt%22%7D'
+echo "
+When the job completes, view the volume in neuroglancer using this link:
+
+${NG_START_LINK}
+
+and add the following to the source URL:
+
+${INPUT_DATASET_ROOT}
+
+"
