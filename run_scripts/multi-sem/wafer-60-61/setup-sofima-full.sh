@@ -40,3 +40,9 @@ for SOFIMA_PATH in "${SOFIMA_DIR}"/*; do
         ln -sfn "${SOFIMA_PATH}" "${SOFIMA_FULL_DIR}/${NAME}"
     fi
 done
+
+echo "
+${SOFIMA_FULL_DIR}:
+"
+ls -l "${SOFIMA_FULL_DIR}"
+echo
