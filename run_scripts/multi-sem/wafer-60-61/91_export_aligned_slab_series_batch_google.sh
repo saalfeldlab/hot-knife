@@ -3,11 +3,11 @@
 set -e
 
 if (( $# < 1 )); then
-  echo "USAGE $0 [max-executors (default 400)]"
+  echo "USAGE $0 <max-executors>"
   exit 1
 fi
 
-MAX_EXECUTORS="${1:-400}"
+MAX_EXECUTORS="${1}"
 
 Z_BATCH="1:1"
 TOP_PIXELS="3"
@@ -59,7 +59,7 @@ for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
   FLAT_DATASET="/flat/${RENDER_PROJECT}/${RAW_STACK}/raw"
 
   FULL_FLAT_DATASET="${N5_SAMPLE_PATH}${FLAT_DATASET}"
-  if [[ ! -d "${FULL_FLAT_DATASET}" ]]; then
+  if ! gcloud storage ls "${FULL_FLAT_DATASET}" 2>/dev/null | grep -q .; then
     echo "ERROR: ${FULL_FLAT_DATASET} does not exist"
     exit 1
   fi
