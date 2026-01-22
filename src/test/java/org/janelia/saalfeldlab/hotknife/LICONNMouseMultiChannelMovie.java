@@ -185,7 +185,6 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 				return new double[]{scale, scale, scale / 2 * 4 };
 		};
 
-		//final RandomAccessibleIntervalMipmapSource<?> mipmapSource = VNCMovie.createMipmapSource( n5Path, n5Group, true, false, false );
 		final RandomAccessibleIntervalMipmapSource<?> mipmapSource0 = VNCMovie.createMipmapSource( n5Path, n5GroupCh0, Normalization.CLAHE, false, false, 100, 3000, vx, computeScales );
 		final RandomAccessibleIntervalMipmapSource<?> mipmapSource1 = VNCMovie.createMipmapSource( n5Path, n5GroupCh1, Normalization.NONE, false, false, 10, 450, vx, computeScales );
 		final RandomAccessibleIntervalMipmapSource<?> mipmapSource2 = VNCMovie.createMipmapSource( n5Path, n5GroupCh2, Normalization.NONE, false, false, 10, 125, vx, computeScales );
@@ -209,7 +208,7 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 		bdv.setColor( color1 );
 		bdv = BdvFunctions.show((Source)mipmapSource2.asVolatile(queue), BdvOptions.options().addTo(bdv));
 		bdv.setColor( color2 );
-		 */
+		*/
 		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
 		bdv.getBdvHandle().getViewerPanel().setCanvasSize(screenWidth, screenHeight);
 
@@ -243,7 +242,7 @@ public class LICONNMouseMultiChannelMovie implements Callable<Void> {
 		accel[2] = 0;
 
 		transforms[3] = new AffineTransform3D();
-		transforms[3].set(3.532102186204135E-18,0.012129996424740786,4.040100395810416E-18,-469.1933403624089,-0.012129996424740786,2.1192613117224814E-18,6.274273875924292E-34,332.98377239214165,0.0,-4.0401003958104174E-18,0.012129996424740792,-100);
+		transforms[3].set(3.532102186204135E-18,0.012129996424740786,4.040100395810416E-18,-469.1933403624089,-0.012129996424740786,2.1192613117224814E-18,6.274273875924292E-34,332.98377239214165,0.0,-4.0401003958104174E-18,0.012129996424740792,-130);
 		frames[3] = 120;
 		accel[3] = 0;
 
