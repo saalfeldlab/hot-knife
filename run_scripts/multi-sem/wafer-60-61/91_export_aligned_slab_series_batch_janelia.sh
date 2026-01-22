@@ -70,7 +70,7 @@ ARGV="--n5PathInput ${N5_SAMPLE_PATH} \
 # --normalizeContrast
 # --explainPlan        # use --explainPlan option to output debug info without running export
 
-# TODO: make serial number range a parameter or argument, note that face dataset order is important
+# TODO: make serial number range a parameter or argument
 FIRST_SERIAL_NUM=79
 LAST_SERIAL_NUM=83
 WAFER="w61"
@@ -98,7 +98,7 @@ for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
 done
 
 LOG_DIR="logs"
-LOG_FILE="${LOG_DIR}/slab-export-janelia.${RUN_TIME}.out"
+LOG_FILE="${LOG_DIR}/export-slab-series-janelia.${RUN_TIME}.out"
 
 mkdir -p ${LOG_DIR}
 
