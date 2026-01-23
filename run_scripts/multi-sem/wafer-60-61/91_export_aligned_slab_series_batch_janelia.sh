@@ -17,7 +17,7 @@ TOP_PIXELS="3"
 BOTTOM_PIXELS="-4"
 
 N5_SAMPLE_PATH="/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5"
-RUN_AND_PASS="run_20251219_110000/pass03-sofima-full"
+RUN_AND_PASS="run_20251219_110000/pass03-sofima-full-fix1"
 TRANSFORM_GROUP="/surface-align/${RUN_AND_PASS}"
 
 FULL_TRANSFORM_GROUP_PATH="${N5_SAMPLE_PATH}${TRANSFORM_GROUP}"
