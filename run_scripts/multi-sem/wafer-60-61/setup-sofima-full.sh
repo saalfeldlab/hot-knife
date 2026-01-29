@@ -9,7 +9,7 @@ usage() {
 Usage: $0 <original dir> <sofima dir> <sofima-full dir>
 
 Example:
-  $0  pass03  pass03-sofima  pass03-sofima-full
+  $0  pass03  pass03-sofima-fix2  pass03-sofima-fix2-full
 "
   exit 1
 }
