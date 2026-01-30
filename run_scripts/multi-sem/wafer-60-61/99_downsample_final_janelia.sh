@@ -20,7 +20,6 @@ RUN_AND_PASS="${2:-run_20251219_110000/pass03-sofima-fix2-full}"
 export RUNTIME=${3:-240:59} # default is 10+ days, must export for flintstone
 
 N5_SAMPLE_PATH="/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5"
-RUN_AND_PASS="run_20251219_110000/pass03-sofima-fix2-full"
 INPUT_DATASET_ROOT="/slab-align/${RUN_AND_PASS}"
 
 FULL_INPUT_PATH="${N5_SAMPLE_PATH}${INPUT_DATASET_ROOT}/s0"
