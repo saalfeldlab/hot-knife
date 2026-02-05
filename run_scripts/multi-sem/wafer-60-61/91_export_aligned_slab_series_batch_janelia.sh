@@ -5,19 +5,25 @@ set -e
 umask 0002
 
 if (( $# < 1 )); then
-  echo "USAGE $0 <number of nodes> [hard runtime minutes]"
+  echo "
+  USAGE $0 <number of nodes> [run and pass] [hard runtime minutes]
+
+  Examples:
+    200                                                (took 66 minutes for run_20251219_110000/pass03-sofima-fix2-full)
+    100  run_20251219_110000/pass03-sofima-switchXY
+  "
   exit 1
 fi
 
 N_NODES="${1}"
-export RUNTIME=${2:-240:59} # default is 10+ days, must export for flintstone
+RUN_AND_PASS="${2:-run_20251219_110000/pass03-sofima-fix2-full}"
+export RUNTIME=${3:-240:59} # default is 10+ days, must export for flintstone
 
 Z_BATCH="1:1"
-TOP_PIXELS="3"
-BOTTOM_PIXELS="-4"
+TOP_PIXELS="3"      # TODO: verify top pixels value
+BOTTOM_PIXELS="-4"  # TODO: verify bottom pixels value
 
 N5_SAMPLE_PATH="/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5"
-RUN_AND_PASS="run_20251219_110000/pass03"
 TRANSFORM_GROUP="/surface-align/${RUN_AND_PASS}"
 
 FULL_TRANSFORM_GROUP_PATH="${N5_SAMPLE_PATH}${TRANSFORM_GROUP}"
