@@ -69,6 +69,8 @@ public class Util {
 		final long numPixels = Views.iterable( target ).size();
 		final ArrayList<Pair<Long,Long>> portions = divideIntoPortions( numPixels );
 
+		System.out.println( "Portions: " + portions.size() );
+
 		// maximize the probability to fetch different blocks of the N%
 		if ( shuffle )
 			Collections.shuffle( portions );

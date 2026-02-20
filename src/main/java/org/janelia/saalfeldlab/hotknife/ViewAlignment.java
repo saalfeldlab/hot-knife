@@ -153,8 +153,8 @@ public class ViewAlignment {
 			final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
 			final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
-			final int zFrom = 1; // 0 is everything
-			final int zTo = 2; //datasetNames.length is everything
+			final int zFrom = 0;//1; // 0 is everything
+			final int zTo = datasetNames.length;//3; //datasetNames.length is everything
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = zFrom; i < zTo /*datasetNames.length*/; ++i) {
@@ -190,14 +190,14 @@ public class ViewAlignment {
 
 			if ( options.noVirtual )
 			{
-				System.out.println( "copying entire stack ... " );
+				System.out.println( "copying entire stack ... " + net.imglib2.util.Util.printInterval( stack ) );
 				long t = System.currentTimeMillis();
 				final long[] min = new long[ stack.numDimensions() ];
 				stack.min( min );
 
 				final RandomAccessibleInterval<UnsignedByteType> copy = Views.translate( new CellImgFactory<>( new UnsignedByteType(), stack.numDimensions() > 2 ? (int)stack.dimension( 2 ) : 16 ).create( stack.dimensionsAsLongArray() ), min );
-				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() / 2 );
-				Util.copy(stack, copy, service, false);
+				final ExecutorService service = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+				Util.copy(stack, copy, service, true);
 				service.shutdown();
 
 				System.out.println( "took " + (( System.currentTimeMillis() - t )/1000) + " secs.");

@@ -30,6 +30,7 @@ import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale;
 import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
 import picocli.CommandLine.Option;
@@ -62,8 +63,11 @@ public class ImportSOFIMA implements Callable<Void>
 	@Option(names = "--scaleIndexSOFIMAinput", required = true, description = "The scale index at which the deformed images were fed to SOFIMA, needed for vector size adjustment (the same as --scaleIndex that was used in SparkViewAlignment)")
 	private int scaleIndexSOFIMAinput;
 
-	@Option(names = "--z", required = true, description = "surface slice index to apply it to")
+	@Option(names = "--z", required = true, description = "surface slice index to apply the SOFIMA field to (if --zSplit is selected, only 50% will be applied to this surface)")
 	private int z;
+
+	@Option(names = "--zSplit", required = false, description = "second surface slice index to apply half of the deformation field to (i.e. the corresponding bot/top surface)")
+	private Integer zSplit = null;
 
 	@Override
 	public final Void call()// throws IOException, InterruptedException, ExecutionException
@@ -72,8 +76,7 @@ public class ImportSOFIMA implements Callable<Void>
 		System.out.println( "sofima: " + sofimaField );
 		System.out.println( "hot-knife out: " + n5Path + Path.SEPARATOR + groupOut );
 
-		final N5Writer n5 = new N5Factory().openWriter( StorageFormat.N5, n5Path );
-		final N5Reader zarr = new N5Factory().openReader( StorageFormat.ZARR, sofimaField );
+		final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, n5Path );
 
 		//
 		// load metadata
@@ -90,10 +93,58 @@ public class ImportSOFIMA implements Callable<Void>
 		final DataType dataType = n5.getAttribute( datasetName, "dataType", DataType.class);
 
 		System.out.println( Arrays.toString( boundsMin ) + " >> " + Arrays.toString( boundsMax ));
-		System.out.println( "dataset: " + datasetNames[ z ] );
-		System.out.println( "transformDatasetName: " + transformDatasetNames[ z ] );
-		System.out.println( "N5 transform datasetName: " + datasetName );
-		System.out.println( "dataset: " + datasetNames[ z ] );
+
+		System.out.println( "z (target): " + z );
+		System.out.println( " dataset: " + datasetNames[ z ] );
+		System.out.println( " transformDatasetName: " + transformDatasetNames[ z ] );
+		System.out.println( " N5 transform datasetName: " + datasetName );
+
+		final double amount = ( zSplit == null ) ? 1.0 : 0.5;
+
+		process( sofimaField, scaleIndexSOFIMAinput, n5Path, groupOut, datasetName, z, transformScaleDataset, blockSize, dataType, transformScaleIndexPass, datasetNames, transformDatasetNames, boundsMin, boundsMax, amount, -1.0, overwrite );
+
+		System.out.println( "z (split): " + (zSplit == null ? "not active" : zSplit ) );
+
+		if ( zSplit != null )
+		{
+			final String datasetName_ZSplit = groupIn + Path.SEPARATOR + transformDatasetNames[ zSplit ];
+			final double transformScaleDataset_ZSplit = n5.getAttribute(datasetName_ZSplit, "scale", double.class);
+			final int[] blockSize_ZSplit = n5.getAttribute( datasetName_ZSplit, "blockSize", int[].class);
+			final DataType dataType_ZSplit = n5.getAttribute( datasetName_ZSplit, "dataType", DataType.class);
+
+			System.out.println( " dataset zSplit: " + datasetNames[ zSplit ] );
+			System.out.println( " transformDatasetName zSplit: " + transformDatasetNames[ zSplit ] );
+			System.out.println( " N5 transform datasetName zSplit: " + datasetName_ZSplit );
+
+			process( sofimaField, scaleIndexSOFIMAinput, n5Path, groupOut, datasetName_ZSplit, zSplit, transformScaleDataset_ZSplit, blockSize_ZSplit, dataType_ZSplit, transformScaleIndexPass, datasetNames, transformDatasetNames, boundsMin, boundsMax, amount, 1.0, overwrite );
+		}
+
+		n5.close();
+
+		return null;
+	}
+
+	public static void process(
+			final String sofimaField,
+			final int scaleIndexSOFIMAinput,
+			final String n5Path,
+			final String groupOut,
+			final String datasetName,
+			final int z,
+			final double transformScaleDataset,
+			final int[] blockSize,
+			final DataType dataType,
+			final int transformScaleIndexPass,
+			final String[] datasetNames,
+			final String[] transformDatasetNames,
+			final double[] boundsMin,
+			final double[] boundsMax,
+			final double amount, // for splitting
+			final double direction, // for splitting
+			final boolean overwrite )
+	{
+		final N5Writer n5 = new N5Factory().openWriter( StorageFormat.N5, n5Path );
+		final N5Reader zarr = new N5Factory().openReader( StorageFormat.ZARR, sofimaField );
 
 		//
 		// load the hot-knife position field
@@ -114,6 +165,8 @@ public class ImportSOFIMA implements Callable<Void>
 		System.out.println( "scale: " + transformScaleDataset);
 		System.out.println( "blockSize: " + Arrays.toString( blockSize ));
 		System.out.println( "dataType: " + dataType);
+		System.out.println( "amount: " + amount);
+		System.out.println( "direction: " + direction);
 
 		//
 		// load the SOFIMA relative deformation field and scale it
@@ -123,11 +176,14 @@ public class ImportSOFIMA implements Callable<Void>
 		// still, first slice are X vectors, 2nd slice are Y vectors
 		final RandomAccessibleInterval< DoubleType > sofimaRaw = N5Utils.open( zarr, "/" );
 
+		System.out.println( Util.printInterval( sofimaRaw ));
+		//System.exit( 0 );
+
 		// Note: the SOFIMA field can contain NaN's
 		final RandomAccessibleInterval< DoubleType > sofima;
 		if ( sofimaRaw.numDimensions() == 4 )
 			sofima = Converters.convertRAI(
-					Views.hyperSlice(sofimaRaw, 2, 1),
+					Views.hyperSlice(sofimaRaw, 2, 0),
 					(i, o) -> o.set(Double.isNaN(i.get()) ? 0 : i.get()),
 					new DoubleType());
 		else
@@ -156,7 +212,20 @@ public class ImportSOFIMA implements Callable<Void>
 
 		final RandomAccessibleInterval< DoubleType > sofimaScaled;
 
-		if ( scalingFactorSofima[ 0 ] > 1 )
+		if ( scalingFactorSofima[ 0 ] < 1 || scalingFactorSofima[ 1 ] < 1 )
+		{
+			System.out.println( "WARNING: SOFIMA field is higher resolved than hot-knife field (e.g. SOFIMA used pass00 rendered at s2 as input), increasing scale of hot-knife field."  );
+			//adjust scale of the hot-knife field, *2 until it's bigger, update transformScaleIndexPass accordingly
+
+			// now the size of the sofima field is <= size hot-knife field
+			System.out.println( "new transformScaleIndexPass: " + transformScaleDataset  );
+			System.out.println( "updated scalingFactor (SOFIMA relative to hot-knife): " + Arrays.toString( scalingFactorSofima ) );
+			System.exit( 0 );
+
+			// scale positionFieldHotKnife
+		}
+
+		//if ( scalingFactorSofima[ 0 ] > 1 )
 		{
 			// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
 			final AffineRandomAccessible<DoubleType, AffineGet> transformedX = RealViews.affine(
@@ -177,10 +246,10 @@ public class ImportSOFIMA implements Callable<Void>
 
 			sofimaScaled = Views.stack( sofimaScaledX, sofimaScaledY );
 		}
-		else
-		{
-			throw new RuntimeException( "not supported yet." );
-		}
+		//else
+		//{
+		//	throw new RuntimeException( "this is a bug, this cannot happen ." );
+		//}
 
 		//
 		// create a new positionfield for the ZARR SOFIMA import
@@ -210,7 +279,7 @@ public class ImportSOFIMA implements Callable<Void>
 			// SOFIMA imports e.g. 343, 516 X=1.3092;Y=7.3169 (positive means move up)
 			// SOFIMA x positive means move left
 
-			o.get().set( identity + ( i.next().get() / sofimaBaseScale ) * transformScaleDataset );
+			o.get().set( identity + ( direction * ( ( i.next().get() / sofimaBaseScale ) * transformScaleDataset ) ) * amount );
 		}
 
 		final PositionFieldTransform<DoubleType> positionFieldSofimaTransform = Transform.createPositionFieldTransform( positionFieldSofima );
@@ -258,7 +327,7 @@ public class ImportSOFIMA implements Callable<Void>
 			if ( n5.exists( datasetNameOut ) )
 			{
 				System.out.println( "Output group dataset " + datasetNameOut + " exists. Stopping.");
-				return null;
+				return;
 			}
 
 			Transform.saveScaledTransform( n5, datasetNameOut, transformSequence, transformScaleDataset, boundsMin, boundsMax );
@@ -274,7 +343,7 @@ public class ImportSOFIMA implements Callable<Void>
 
 		System.out.println( "Done.");
 
-		return null;
+		return;
 	}
 
 	public static double[] scalingFactor( final Interval a, Interval b )
