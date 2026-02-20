@@ -6,7 +6,7 @@ umask 0002
 
 if (( $# < 3 )); then
   echo """
-USAGE: $0 <number of nodes> <render project> <raw stack>
+USAGE: $0 <number of executors> <render project> <raw stack>
 
 Examples:
   $0 40 w61_serial_070_to_079 w61_s079_r00
@@ -15,7 +15,7 @@ Examples:
   exit 1
 fi
 
-N_NODES="${1}" # 2 11-slot nodes took 228 minutes for w60_s360_r00_d20_gc_align_small_block
+EXECUTORS="${1}"
 RENDER_PROJECT="${2}"
 RAW_STACK="${3}"
 
@@ -62,7 +62,7 @@ DYNAMIC_ALLOCATION="spark.dynamicAllocation.enabled=false"
 SPARK_EXEC_MEMORY_MB=$(( SPARK_EXEC_CORES * SINGLE_CORE_MB ))
 
 SPARK_PROPS="spark.dataproc.driver.compute.tier=${COMPUTE_TIER},spark.dataproc.executor.compute.tier=${COMPUTE_TIER}"
-SPARK_PROPS="${SPARK_PROPS},spark.default.parallelism=240,spark.executor.instances=${N_NODES}"
+SPARK_PROPS="${SPARK_PROPS},spark.default.parallelism=240,spark.executor.instances=${EXECUTORS}"
 SPARK_PROPS="${SPARK_PROPS},spark.executor.cores=${SPARK_EXEC_CORES},spark.executor.memory=${SPARK_EXEC_MEMORY_MB}mb"
 SPARK_PROPS="${SPARK_PROPS},${DYNAMIC_ALLOCATION}"
 #SPARK_PROPS="${SPARK_PROPS},spark.log.level.org.janelia.alignment.match=WARN"
