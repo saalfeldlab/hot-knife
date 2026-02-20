@@ -20,7 +20,7 @@ RENDER_PROJECT="${2}"
 RAW_STACK="${3}"
 
 #-----------------------------------------------------------
-CLASS="org.janelia.saalfeldlab.hotknife.SparkNormalizeLayerIntensityN5"
+CLASS="org.janelia.saalfeldlab.hotknife.MultiSemNormalizeLayerIntensity"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 IC2D_DATASET_PREFIX="/render/${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d"
@@ -43,6 +43,10 @@ ARGV="\
 --n5Path=${N5_PATH} \
 --n5DatasetInput=${SOURCE_DATASET} \
 --n5DatasetOutput=${NORMALIZED_DATASET} \
+--downsampleLevel 4 \
+--aggregation MEDIAN \
+--lowerThreshold 90 \
+--upperThreshold 200 \
 --factors 2,2,1"
 # --invert"
 
