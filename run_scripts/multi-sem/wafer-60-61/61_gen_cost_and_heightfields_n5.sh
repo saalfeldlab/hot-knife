@@ -39,7 +39,7 @@ HF_VERSION=$(
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 IC2D_PATH="${N5_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d"
 
-SOURCE_PATH="${IC2D_PATH}___norm-layer"
+SOURCE_PATH="${IC2D_PATH}___norm-layer-v2"
 if ! gcloud storage ls "${SOURCE_PATH}" 2>/dev/null | grep -q .; then
   echo "ERROR: source path ${SOURCE_PATH} not found"
   exit 1
