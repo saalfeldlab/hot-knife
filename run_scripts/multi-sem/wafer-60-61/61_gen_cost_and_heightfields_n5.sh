@@ -8,11 +8,12 @@ USAGE: $0 <number of executors> <raw stack> [BOTTOM_LAYER_COST] [SURFACE_INIT_MA
 
 Examples:
   $0  60  w61_s079_r00
-  $0  60  w61_s079_r00  250  0.1  0.1
+  $0   4  w61_s079_r00  250  0.1  0.1
 
 Notes:
   - Dataproc dynamic allocation is disabled so that SparkComputeCostMultiSem works
-  - with 60 executors, w61_s079_r00 took 90 minutes to complete
+  - with 60 executors, w61_s079_r00 took  1 hour  30 minutes to complete
+  - with  4 executors, w61_s079_r00 took 12 hours 40 minutes to complete
 "
   exit 1
 fi
