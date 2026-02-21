@@ -16,6 +16,11 @@ Examples:
 fi
 
 EXECUTORS="${1}"
+if ! [[ ${EXECUTORS} =~ ^[0-9]+$ ]] || (( EXECUTORS < 2 || EXECUTORS > 500 )); then
+  echo "ERROR: executors argument must be an integer between 2 and 500"
+  exit 1
+fi
+
 RENDER_PROJECT="${2}"
 RAW_STACK="${3}"
 
