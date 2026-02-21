@@ -32,10 +32,15 @@ RAW_STACK="${2}"
 RENDER_PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${RAW_STACK}")
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
+
+COST_VERSION="b250"      # see 61_gen_cost_and_heightfields_n5.sh for details on how cost version is setup
+HF_VERSION="smd_p01_p01" # see 61_gen_cost_and_heightfields_n5.sh for details on how HF version is setup
+BASE_HF="/heightfields_${COST_VERSION}_${HF_VERSION}"
+
 PROJECT_AND_NORM_LAYER_STACK="${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d___norm-layer-v2"
 
-N5_DATASET="/render/${PROJECT_AND_NORM_LAYER_STACK}/s0"                 #          /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2/s0
-N5_FIELD_MAX="/heightfields_v3/${PROJECT_AND_NORM_LAYER_STACK}/s1/max"  # /heightfields_v3/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2/s1/max
+N5_DATASET="/render/${PROJECT_AND_NORM_LAYER_STACK}/s0"           #                      /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2/s0
+N5_FIELD_MAX="${BASE_HF}/${PROJECT_AND_NORM_LAYER_STACK}/s1/max"  # /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2/s1/max
 
 for DATASET in "${N5_DATASET}" "${N5_FIELD_MAX}"; do
   GS_PATH="${N5_PATH}${DATASET}"
