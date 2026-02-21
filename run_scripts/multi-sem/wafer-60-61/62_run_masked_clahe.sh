@@ -12,7 +12,7 @@ Examples:
   $0  100  w61_s079_r00
 
 Notes:
-  - with 100 max-executors (and blockFactorXY 4), w61_s079_r00 took 79 minutes to complete
+  - with 100 max-executors w61_s079_r00 took 73 minutes to complete
 "
   exit 1
 fi
