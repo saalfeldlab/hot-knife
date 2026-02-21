@@ -34,7 +34,7 @@ RENDER_PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 
 COST_VERSION="b250"      # see 61_gen_cost_and_heightfields_n5.sh for details on how cost version is setup
-HF_VERSION="smd_p01_p01" # see 61_gen_cost_and_heightfields_n5.sh for details on how HF version is setup
+HF_VERSION="smd_p1_p1"   # see 61_gen_cost_and_heightfields_n5.sh for details on how HF version is setup
 BASE_HF="/heightfields_${COST_VERSION}_${HF_VERSION}"
 
 PROJECT_AND_NORM_LAYER_STACK="${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d___norm-layer-v2"
