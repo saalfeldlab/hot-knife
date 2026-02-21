@@ -2,14 +2,14 @@
 
 set -e
 
-if (( $# < 3 )); then
+if (( $# < 5 )); then
   echo """
-USAGE: $0 <number of executors> <launch jobs y|n> <stack number> [stack number] ...
+USAGE: $0 <executors> <wafer> <region> <launch jobs y|n> <serial-num> [serial-num] ...
 
 Examples:
-  $0  10  n  70 71
-  $0  40  y  79
-  $0  10  y  80 81 82 83 84 85 86 87 88 89
+  $0  10 w61 r00 n 70 71
+  $0  40 w61 r00 y 79
+  $0  10 w61 r00 y 80 81 82 83 84 85 86 87 88 89
 
 With 40 max-executors, s079 took 61 minutes.
 """
@@ -17,14 +17,25 @@ With 40 max-executors, s079 took 61 minutes.
 fi
 
 EXECUTORS="${1}"
-[[ "${EXECUTORS}" =~ ^[0-9]+$ && ${EXECUTORS} -le 500 ]] || { echo "Error: '${EXECUTORS}' is not a valid number of executors."; exit 1; }
+if ! [[ ${EXECUTORS} =~ ^[0-9]+$ ]] || (( EXECUTORS < 2 || EXECUTORS > 500 )); then
+  echo "ERROR: executors argument must be an integer between 2 and 500"
+  exit 1
+fi
 
-LAUNCH_JOBS="${2}"
-shift 2
+WAFER="${2}"
+if [[ "$WAFER" != "w60" && "$WAFER" != "w61" ]]; then
+  echo "ERROR: wafer must be 'w60' or 'w61'"
+  exit 1
+fi
 
+REGION="${3}"
+if [[ ! "$REGION" =~ ^r[0-9]{2}$ ]]; then
+  echo "ERROR: REGION must be in the form rNN (e.g. r00, r11)"
+  exit 1
+fi
 
-WAFER="w61"
-REGION="r00"
+LAUNCH_JOBS="${4}"
+shift 4
 
 for STACK_NUMBER in "$@"; do
 
@@ -37,12 +48,12 @@ for STACK_NUMBER in "$@"; do
   PADDED_STACK_NUMBER=$(printf "%03d" "${STACK_NUMBER}")
 
   # 079 -> w61_s079_r00
-  STACK="${WAFER}_s${PADDED_STACK_NUMBER}_${REGION}"
+  RAW_STACK="${WAFER}_s${PADDED_STACK_NUMBER}_${REGION}"
 
   # w61_s079_r00 -> w61_serial_070_to_079
-  PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${STACK}")
+  PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${RAW_STACK}")
 
-  CMD="./13_normalize_layer_intensity.sh ${EXECUTORS} ${PROJECT} ${STACK}"
+  CMD="./13_normalize_layer_intensity.sh ${EXECUTORS} ${PROJECT} ${RAW_STACK}"
 
   if [[ "${LAUNCH_JOBS}" == "y" ]]; then
     echo
