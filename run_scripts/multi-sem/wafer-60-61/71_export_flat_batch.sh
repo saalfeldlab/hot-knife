@@ -15,7 +15,7 @@ Examples:
 Notes:
   - with 20 max-executors, w61 r00 83    took 15 hours  5 minutes to complete
   - with 40 max-executors, w61 r00 79    took 10 hours 50 minutes to complete
-  - with 50 max-executors, w61 r00 79    took  9 hours 44 minutes to complete
+  - with 50 max-executors, w61 r00 79    took  9 hours 44 minutes to complete (80 max-executors took similar time)
 "
   exit 1
 fi
@@ -30,7 +30,17 @@ elif (( MAX_EXECUTORS > 500 )); then
 fi
 
 WAFER="${2}"
+if [[ "$WAFER" != "w60" && "$WAFER" != "w61" ]]; then
+  echo "ERROR: wafer must be 'w60' or 'w61'"
+  exit 1
+fi
+
 REGION="${3}"
+if [[ ! "$REGION" =~ ^r[0-9]{2}$ ]]; then
+  echo "ERROR: REGION must be in the form rNN (e.g. r00, r11)"
+  exit 1
+fi
+
 shift 3 # all remaining args should be serial numbers
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
