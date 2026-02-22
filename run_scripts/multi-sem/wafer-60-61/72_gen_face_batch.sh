@@ -9,12 +9,12 @@ Usage:    $0 <max-executors> <wafer> <region> <top | bottom | both> <serial-num>
           max-executors must be at least 2
 
 Examples:
-  $0  40  w61  r00  both  79
-  $0  40  w61  r00  top   81 82
+  $0  20  w61  r00  both  79
+  $0  20  w61  r00  top   81 82
 
 Notes:
-  - with 20 max-executors, w61  r00  top   80  took ?? hours ?? minutes to complete
-  - with 20 max-executors, w61  r00  bot   80  took ?? hours ?? minutes to complete
+  - with 20 max-executors, w61  r00  both  79  took 9 hours 18 minutes to complete
+      (top or bot in isolation should take half of that time)
 "
   exit 1
 fi
