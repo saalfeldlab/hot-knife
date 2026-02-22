@@ -14,7 +14,7 @@ Examples:
 
 Notes:
   - with 20 max-executors, w61  r00  both  79  took 9 hours 18 minutes to complete
-      (top or bot in isolation should take half of that time)
+      (top or bottom in isolation should take half of that time)
 "
   exit 1
 fi
