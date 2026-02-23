@@ -87,8 +87,8 @@ for SERIAL_NUM in "$@"; do
 
   ARGV="\
 --inputN5Path=${N5_PATH} \
---inputDatasetPath=${SOURCE_DATASET} \
---outputDatasetPath=${BIG_BLOCK_DATASET} \
+--inputDatasetPath=${SOURCE_DATASET}/s0 \
+--outputDatasetPath=${BIG_BLOCK_DATASET}/s0 \
 --blockSize 2048,2048,100"
 
   RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
