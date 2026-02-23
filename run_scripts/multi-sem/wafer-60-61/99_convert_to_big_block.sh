@@ -15,7 +15,7 @@ Examples:
   $0  40  w61  r00  71 72
 
 Notes:
-  - with 40 max-executors, w61 r00 70    took ? hours ?? minutes to complete
+  - with 40 max-executors, w61 r00 70    took 24 minutes to complete
 
 """
   exit 1
