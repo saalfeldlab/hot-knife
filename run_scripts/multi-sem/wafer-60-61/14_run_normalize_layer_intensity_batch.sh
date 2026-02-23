@@ -11,7 +11,10 @@ Examples:
   $0  40 w61 r00 y 79
   $0  10 w61 r00 y 80 81 82 83 84 85 86 87 88 89
 
-With 40 max-executors, s079 took 61 minutes.
+With 40 executors, w61_s079_r00 took 1 hour   1 minute.
+With 20 executors, w61_s124_r00 took 1 hour  45 minutes.
+With 15 executors, w61_s134_r00 took 2 hours  4 minutes.
+With 10 executors, w61_s102_r00 took 3 hours 56 minutes.
 """
   exit 1
 fi
