@@ -13,7 +13,7 @@ public class RawStack
     public static final Pattern RAW_STACK_PATTERN = Pattern.compile("^w(\\d+)_s(\\d+)_r(\\d+)$");
 
     public static String DEFAULT_IC2D_SUFFIX = "_gc_par_align_ic2d";
-    public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer-v2";
+    public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer-v2-bb";
     public static String DEFAULT_CLAHE_SUFFIX = DEFAULT_NORM_LAYER_SUFFIX + "_clahe";
     @SuppressWarnings("unused")
     public static String DEFAULT_COST_VERSION = "b250";  // not currently used, but here in case needed later
@@ -93,9 +93,9 @@ public class RawStack
         return "/heightfields_" + heightfieldsVersion + "/" + project + "/" + getNormLayerStack();
     }
 
-    /** @return the flat dataset (e.g. /flat_v2/w61_serial_070_to_079/w61_s076_r00) */
+    /** @return the flat dataset (e.g. /flat_v2_bb/w61_serial_070_to_079/w61_s076_r00) */
     public String getFlatDataset() {
-        return "/flat_v2/" + project + "/" + rawStack;
+        return "/flat_v2_bb/" + project + "/" + rawStack;
     }
 
     /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw) */
