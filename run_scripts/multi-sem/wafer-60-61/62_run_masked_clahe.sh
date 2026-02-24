@@ -37,10 +37,10 @@ COST_VERSION="b250"      # see 61_gen_cost_and_heightfields_n5.sh for details on
 HF_VERSION="smd_p1_p1"   # see 61_gen_cost_and_heightfields_n5.sh for details on how HF version is setup
 BASE_HF="/heightfields_${COST_VERSION}_${HF_VERSION}"
 
-PROJECT_AND_NORM_LAYER_STACK="${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d___norm-layer-v2-bb"
+PROJECT_AND_NORM_LAYER_STACK="${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d___norm-layer-v2-mb"
 
-N5_DATASET="/render/${PROJECT_AND_NORM_LAYER_STACK}/s0"           #                      /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-bb/s0
-N5_FIELD_MAX="${BASE_HF}/${PROJECT_AND_NORM_LAYER_STACK}/s1/max"  # /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-bb/s1/max
+N5_DATASET="/render/${PROJECT_AND_NORM_LAYER_STACK}/s0"           #                      /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-mb/s0
+N5_FIELD_MAX="${BASE_HF}/${PROJECT_AND_NORM_LAYER_STACK}/s1/max"  # /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-mb/s1/max
 
 for DATASET in "${N5_DATASET}" "${N5_FIELD_MAX}"; do
   GS_PATH="${N5_PATH}${DATASET}"

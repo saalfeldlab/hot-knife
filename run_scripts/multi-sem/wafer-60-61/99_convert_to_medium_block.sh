@@ -78,21 +78,21 @@ for SERIAL_NUM in "$@"; do
     exit 1
   fi
 
-  BIG_BLOCK_DATASET="${SOURCE_DATASET}-bb"
-  BIG_BLOCK_PATH="${N5_PATH}${BIG_BLOCK_DATASET}"
-  if gcloud storage ls "${BIG_BLOCK_PATH}" 2>/dev/null | grep -q .; then
-    echo "ERROR: big block dataset path ${BIG_BLOCK_PATH} already exists"
+  MEDIUM_BLOCK_DATASET="${SOURCE_DATASET}-mb"
+  MEDIUM_BLOCK_PATH="${N5_PATH}${MEDIUM_BLOCK_DATASET}"
+  if gcloud storage ls "${MEDIUM_BLOCK_PATH}" 2>/dev/null | grep -q .; then
+    echo "ERROR: medium block dataset path ${MEDIUM_BLOCK_PATH} already exists"
     exit 1
   fi
 
   ARGV="\
 --inputN5Path=${N5_PATH} \
 --inputDatasetPath=${SOURCE_DATASET}/s0 \
---outputDatasetPath=${BIG_BLOCK_DATASET}/s0 \
---blockSize 2048,2048,100"
+--outputDatasetPath=${MEDIUM_BLOCK_DATASET}/s0 \
+--blockSize 1024,1024,100"
 
   RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-  BATCH_NAME=$(echo "big-block-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
+  BATCH_NAME=$(echo "medium-block-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
 
   echo "
 In 10 seconds, running gcloud dataproc batches submit spark with:

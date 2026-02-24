@@ -40,7 +40,7 @@ HF_VERSION=$(
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 IC2D_PATH="${N5_PATH}/render/${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d"
 
-SOURCE_PATH="${IC2D_PATH}___norm-layer-v2-bb"
+SOURCE_PATH="${IC2D_PATH}___norm-layer-v2-mb"
 if ! gcloud storage ls "${SOURCE_PATH}" 2>/dev/null | grep -q .; then
   echo "ERROR: source path ${SOURCE_PATH} not found"
   exit 1
@@ -64,13 +64,13 @@ export RUNTIME="233:59"
 #-----------------------------------------------------------
 CLASS="org.janelia.saalfeldlab.hotknife.SparkComputeCostMultiSem"
 
-# /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-bb
+# /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-mb
 SOURCE_DATASET=${SOURCE_PATH/*\/render/\/render}
 
-# /cost_b250/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-bb
+# /cost_b250/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-mb
 COST_DATASET=${SOURCE_DATASET/\/render\//\/cost_${COST_VERSION}\/}
 
-# /heightfields_b250_sd_p01_p01/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-bb
+# /heightfields_b250_sd_p01_p01/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-mb
 HEIGHTFIELDS_DATASET=${SOURCE_DATASET/\/render\//\/heightfields_${COST_VERSION}_${HF_VERSION}\/}
 
 # zero surfaceMaxDistance means use last z layer of slab - this is needed for the wafer 60 and 61 data
