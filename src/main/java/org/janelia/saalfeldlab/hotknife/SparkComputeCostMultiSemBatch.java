@@ -68,7 +68,7 @@ public class SparkComputeCostMultiSemBatch
             final RawStack rawStack = rawStacks.get(i);
             final String[] rawStackArgs = listOfArgsForEachRawStack.get(i);
 
-            logMessage(SparkComputeCostMultiSem.class.getName(),
+            logMessage(SparkComputeCostMultiSemBatch.class.getName(),
                        "process " + rawStack.getRawStack() + " with args " + Arrays.toString(rawStackArgs));
 
             final SparkComputeCostMultiSem.Options stackOptions = new SparkComputeCostMultiSem.Options(rawStackArgs);
@@ -76,7 +76,7 @@ public class SparkComputeCostMultiSemBatch
             if (stackOptions.parsedSuccessfully) {
                 SparkComputeCostMultiSem.computeCostAndSurfaceFit(stackOptions, sparkContext);
             } else {
-                logMessage(SparkComputeCostMultiSem.class.getName(),
+                logMessage(SparkComputeCostMultiSemBatch.class.getName(),
                            "failed to parse args");
             }
 

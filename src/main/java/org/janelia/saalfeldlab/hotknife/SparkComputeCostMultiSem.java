@@ -202,6 +202,8 @@ public class SparkComputeCostMultiSem {
 			final JavaSparkContext sparkContext,
 			final Options options) throws IOException {
 
+		logMessage("computeCost: entry");
+
 		String n5Path = options.n5Path;
 		String costN5Path = options.outputN5Path;
 		String zcorrDataset = options.inputDatasetName;
@@ -317,7 +319,7 @@ public class SparkComputeCostMultiSem {
 			}
 		}
 
-		System.out.println("Processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridYSize);
+		logMessage("computeCost: processing " + gridCoords.size() + " grid pairs. " + gridXSize + " by " + gridYSize);
 		//System.exit(0);
 
 		// Grids are w.r.t cost blocks
@@ -381,6 +383,7 @@ public class SparkComputeCostMultiSem {
 			return;
 		}
 
+		logMessage("computeCost: downsampling cost steps");
 		final N5PathSupplier n5PathSupplier = new N5PathSupplier(costN5Path);
 		for (int i = 1; i < options.costStepsStrings.length; i++) {
 			N5DownsamplerSpark.downsample(
@@ -393,12 +396,16 @@ public class SparkComputeCostMultiSem {
 			);
 		}
 
+		logMessage("computeCost: exit");
 	}
 
     private static void computeSurfaceFit(final JavaSparkContext sparkContext,
                                           final Options options,
                                           final double maxDeltaZ)
             throws IOException {
+
+        logMessage("computeSurfaceFit: entry, n5Path=" + options.outputN5Path +
+                   ", outGroup=" + options.surfaceN5Output);
 
         SparkSurfaceFit sparkSurfaceFit = new SparkSurfaceFit(options.outputN5Path,
                                                               options.outputN5Path,
@@ -416,6 +423,8 @@ public class SparkComputeCostMultiSem {
                                                               false);
         sparkSurfaceFit.callWithSparkContext(sparkContext,
                                              options.getSurfaceBlockSize());
+
+        logMessage("computeSurfaceFit: exit");
     }
 
 	private static IterableInterval<UnsignedByteType> getLastLayer(final N5Reader n5Reader, final String dataset) {
@@ -1018,8 +1027,8 @@ public class SparkComputeCostMultiSem {
 
 			final String firstCostDataset = options.getCostDatasetName(0);
 			if (n5.exists(firstCostDataset)) {
-				System.out.println("outputN5Path " + options.outputN5Path + " firstCostDataset " + firstCostDataset +
-								   " already exists, skipping cost computation");
+				logMessage("computeCostAndSurfaceFit: outputN5Path " + options.outputN5Path +
+						   " firstCostDataset " + firstCostDataset + " already exists, skipping cost computation");
 			} else {
 				computeCost(sc, options);
 			}
@@ -1027,8 +1036,8 @@ public class SparkComputeCostMultiSem {
 			if (options.surfaceN5Output != null) {
 
 				if (n5.exists(options.surfaceN5Output)) {
-					System.out.println("outputN5Path " + options.outputN5Path + " surfaceN5Output " + options.surfaceN5Output +
-									   " already exists, skipping surface fitting");
+					logMessage("computeCostAndSurfaceFit: outputN5Path " + options.outputN5Path +
+							   " surfaceN5Output " + options.surfaceN5Output + " already exists, skipping surface fitting");
 				} else {
 					final long[] inputDimensions = n5.getAttribute(options.inputDatasetName, "dimensions", long[].class);
 					final double maxDeltaZ = options.getSurfaceMaxDeltaZ(inputDimensions);
@@ -1037,5 +1046,9 @@ public class SparkComputeCostMultiSem {
 
 			}
 		}
+	}
+
+	private static void logMessage(final String message) {
+		org.janelia.saalfeldlab.hotknife.util.Util.logMessage(SparkComputeCostMultiSem.class.getName(), message);
 	}
 }
