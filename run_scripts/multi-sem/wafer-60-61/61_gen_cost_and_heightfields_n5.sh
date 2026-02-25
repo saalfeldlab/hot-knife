@@ -12,8 +12,11 @@ Examples:
 
 Notes:
   - Dataproc dynamic allocation is disabled so that SparkComputeCostMultiSem works
-  - with 60 executors, w61 s079 r00 took  1 hour  30 minutes to complete
-  - with  4 executors, w61 s079 r00 took 12 hours 40 minutes to complete
+  - when running 9 concurrent jobs with 50 executors, 2 eventually failed with rateLimitExceeded errors
+
+  - with 60 executors, w61 s079 r00 with 82 z-layers took  1 hour  30 minutes to complete
+  - with  6 executors, w61 s085 r00 with 89 z-layers took  8 hours 44 minutes to complete
+  - with  4 executors, w61 s079 r00 with 82 z-layers took 12 hours 40 minutes to complete
 "
   exit 1
 fi
