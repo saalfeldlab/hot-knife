@@ -1004,31 +1004,38 @@ public class SparkComputeCostMultiSem {
 
 		//final JavaSparkContext sc = null;
 
-        try (final N5Reader n5 = new N5Path(options.outputN5Path).openReader()) {
-
-            final String firstCostDataset = options.getCostDatasetName(0);
-            if (n5.exists(firstCostDataset)) {
-                System.out.println("outputN5Path " + options.outputN5Path + " firstCostDataset " + firstCostDataset +
-                                   " already exists, skipping cost computation");
-            } else {
-                computeCost(sc, options);
-            }
-
-            if (options.surfaceN5Output != null) {
-
-                if (n5.exists(options.surfaceN5Output)) {
-                    System.out.println("outputN5Path " + options.outputN5Path + " surfaceN5Output " + options.surfaceN5Output +
-                                       " already exists, skipping surface fitting");
-                } else {
-                    final long[] inputDimensions = n5.getAttribute(options.inputDatasetName, "dimensions", long[].class);
-                    final double maxDeltaZ = options.getSurfaceMaxDeltaZ(inputDimensions);
-                    computeSurfaceFit(sc, options, maxDeltaZ);
-                }
-
-            }
-        }
+		computeCostAndSurfaceFit(options, sc);
 
 		sc.close();
 
+	}
+
+	public static void computeCostAndSurfaceFit(final Options options,
+												final JavaSparkContext sc)
+			throws IOException {
+
+		try (final N5Reader n5 = new N5Path(options.outputN5Path).openReader()) {
+
+			final String firstCostDataset = options.getCostDatasetName(0);
+			if (n5.exists(firstCostDataset)) {
+				System.out.println("outputN5Path " + options.outputN5Path + " firstCostDataset " + firstCostDataset +
+								   " already exists, skipping cost computation");
+			} else {
+				computeCost(sc, options);
+			}
+
+			if (options.surfaceN5Output != null) {
+
+				if (n5.exists(options.surfaceN5Output)) {
+					System.out.println("outputN5Path " + options.outputN5Path + " surfaceN5Output " + options.surfaceN5Output +
+									   " already exists, skipping surface fitting");
+				} else {
+					final long[] inputDimensions = n5.getAttribute(options.inputDatasetName, "dimensions", long[].class);
+					final double maxDeltaZ = options.getSurfaceMaxDeltaZ(inputDimensions);
+					computeSurfaceFit(sc, options, maxDeltaZ);
+				}
+
+			}
+		}
 	}
 }
