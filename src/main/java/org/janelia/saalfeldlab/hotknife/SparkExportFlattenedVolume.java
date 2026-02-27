@@ -21,6 +21,7 @@ import ij.ImageJ;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.concurrent.Callable;
 
 import org.apache.spark.SparkConf;
@@ -188,8 +189,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         final N5PathAndDataset flatPathAndDataset = flatInfo.getFlatPathAndDataset();
 
         // Skip N5Writer creation in debug mode
-        if (DebugMode.INTERACTIVE.equals(debugMode))
-        {
+        if (DebugMode.INTERACTIVE.equals(debugMode)) {
             System.out.println("Debug mode: Skipping N5Writer creation for output");
         } else {
             try (N5Writer n5Writer = flatPathAndDataset.openWriter()) {
@@ -258,77 +258,86 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
             new ImageJ();
         }
 
-        // TODO: make sure no longer need to call N5Utils.open(setupRawReader, rawDataset); to prime attributes
-        rdd.foreach(
-                gridBlock -> {
-                    System.out.println("Processing grid block: [" + gridBlock[2][0] + ", " + gridBlock[2][1] + "]");
+        rdd.foreachPartition(
+                gridBlockIterator -> processPartition(gridBlockIterator, flatInfo, rawPathAndDataset, fieldPath, flatPathAndDataset, debugMode));
+    }
 
-                    final N5Reader n5RawReader = rawPathAndDataset.openReader();
-                    final N5Reader n5FieldReader = fieldPath.openReader();
+    private static void processPartition(final Iterator<long[][]> gridBlockIterator,
+                                         final FlatteningInfo flatInfo,
+                                         final N5PathAndDataset rawPathAndDataset,
+                                         final N5Path fieldPath,
+                                         final N5PathAndDataset flatPathAndDataset,
+                                         final DebugMode debugMode) {
 
-                    /* raw */
-                    final CachedCellImg<UnsignedByteType, ?> rawCellImg = N5Utils.open(n5RawReader, rawPathAndDataset.getDataset());
-                    final RandomAccessibleInterval<UnsignedByteType> rawVolume =
-                            flatInfo.isMultiSEMData() ? rawCellImg : Views.permute(rawCellImg, 1, 2);
+        if (!gridBlockIterator.hasNext())
+            return;
 
-                    System.out.println("Debug mode: rawVolume dimensions: " + net.imglib2.util.Util.printInterval(rawVolume));
+        // Open N5 connections once per partition
+        final N5Reader n5RawReader = rawPathAndDataset.openReader();
+        final N5Reader n5FieldReader = fieldPath.openReader();
 
-                    final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5FieldReader, flatInfo.getMinFieldDataset());
-                    final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, flatInfo.getMaxFieldDataset());
+        // Open datasets (share cache across blocks in this partition)
+        final RandomAccessibleInterval<UnsignedByteType> rawData = N5Utils.open(n5RawReader, rawPathAndDataset.getDataset());
+        final RandomAccessibleInterval<UnsignedByteType> rawVolume =
+                flatInfo.isMultiSEMData() ? rawData : Views.permute(rawData, 1, 2);
 
-                    System.out.println("Debug mode: minField dimensions: " + net.imglib2.util.Util.printInterval(minField));
-                    System.out.println("Debug mode: maxField dimensions: " + net.imglib2.util.Util.printInterval(maxField));
+        final RandomAccessibleInterval<FloatType> minField = N5Utils.open(n5FieldReader, flatInfo.getMinFieldDataset());
+        final RandomAccessibleInterval<FloatType> maxField = N5Utils.open(n5FieldReader, flatInfo.getMaxFieldDataset());
 
-                    final RealRandomAccessible<DoubleType> minFactors = Transform.scaleAndShiftHeightFieldAndValues(minField, flatInfo.getFactors());
-                    final RealRandomAccessible<DoubleType> maxFactors = Transform.scaleAndShiftHeightFieldAndValues(maxField, flatInfo.getFactors());
+        System.out.println("Partition: rawVolume dimensions: " + net.imglib2.util.Util.printInterval(rawVolume));
+        System.out.println("Partition: minField dimensions: " + net.imglib2.util.Util.printInterval(minField));
+        System.out.println("Partition: maxField dimensions: " + net.imglib2.util.Util.printInterval(maxField));
 
-                    final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(minFactors,
-                                                                                                 maxFactors,
-                                                                                                 flatInfo.getMin(),
-                                                                                                 flatInfo.getMax());
+        // Set up transform
+        final RealRandomAccessible<DoubleType> minFactors = Transform.scaleAndShiftHeightFieldAndValues(minField, flatInfo.getFactors());
+        final RealRandomAccessible<DoubleType> maxFactors = Transform.scaleAndShiftHeightFieldAndValues(maxField, flatInfo.getFactors());
 
-                    System.out.println("Debug mode: Creating flattened transform with min=" + flatInfo.getMin() + ", max=" + flatInfo.getMax());
-                    System.out.println("Debug mode: Padding: minWithPadding=" + flatInfo.getMinWithPadding() + ", maxWithPadding=" + flatInfo.getMaxWithPadding());
+        final FlattenTransform<DoubleType> flattenTransform = new FlattenTransform<>(minFactors, maxFactors, flatInfo.getMin(), flatInfo.getMax());
 
-                    final RandomAccessibleInterval<UnsignedByteType> flattened =
-                            Views.zeroMin(
-                                    Transform.createTransformedInterval(
-                                            rawVolume,
-                                            new FinalInterval(
-                                                    new long[] {rawVolume.min(0), rawVolume.min(1), flatInfo.getMinWithPadding()},
-                                                    new long[] {rawVolume.max(0), rawVolume.max(1), flatInfo.getMaxWithPadding()}),
-                                            flattenTransform.inverse(),
-                                            new UnsignedByteType()));
+        System.out.println("Partition: FlattenTransform with min=" + flatInfo.getMin() + ", max=" + flatInfo.getMax() +
+                           ", minWithPadding=" + flatInfo.getMinWithPadding() + ", maxWithPadding=" + flatInfo.getMaxWithPadding());
 
-                    System.out.println("Debug mode: flattened dimensions: " + net.imglib2.util.Util.printInterval(flattened));
+        final RandomAccessibleInterval<UnsignedByteType> flattened =
+                Views.zeroMin(
+                        Transform.createTransformedInterval(
+                                rawVolume,
+                                new FinalInterval(
+                                        new long[] {rawVolume.min(0), rawVolume.min(1), flatInfo.getMinWithPadding()},
+                                        new long[] {rawVolume.max(0), rawVolume.max(1), flatInfo.getMaxWithPadding()}),
+                                flattenTransform.inverse(),
+                                new UnsignedByteType()));
 
-                    final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
+        System.out.println("Partition: flattened dimensions: " + net.imglib2.util.Util.printInterval(flattened));
 
-                    System.out.println("Debug mode: sourceGridBlock dimensions: " + net.imglib2.util.Util.printInterval(sourceGridBlock));
+        // Only open writer if we're going to write
+        final N5Writer n5Writer = DebugMode.INTERACTIVE.equals(debugMode) ? null : flatPathAndDataset.openWriter();
 
-                    // In debug mode, show results and stop without writing
-                    if (DebugMode.INTERACTIVE.equals(debugMode)) {
-                    	long[] min = new long[2];
-                    	long[] max = new long[ min.length ];
-                    	for ( int d = 0; d < min.length; ++d )
-                    	{
-                    		min[ d ] = gridBlock[0][d] / 2;
-                    		max[ d ] = min[ d ] + gridBlock[1][d]/2 - 1;
-                    	}
+        while (gridBlockIterator.hasNext()) {
+            final long[][] gridBlock = gridBlockIterator.next();
+            System.out.println("Processing grid block: [" + gridBlock[2][0] + ", " + gridBlock[2][1] + "]");
 
-                        System.out.println("Debug mode: Displaying results... for interval " + Arrays.toString( min ) + " >> " + Arrays.toString( max ));
-                        ImageJFunctions.show( Views.interval( minField, min, max ), "Min Height Field");
-                        ImageJFunctions.show( Views.interval( maxField, min, max ), "Max Height Field");
-                        ImageJFunctions.show(sourceGridBlock, "Flattened Block [" + gridBlock[2][0] + "," + gridBlock[2][1] + "]");
-                        System.out.println("Debug mode: Skipping N5 write operations");
-                        //noinspection deprecation
-                        SimpleMultiThreading.threadHaltUnClean();
-                        return;
-                    }
+            final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
 
-                    final N5Writer n5Writer = flatPathAndDataset.openWriter();
-                    N5Utils.saveBlock(sourceGridBlock, n5Writer, flatPathAndDataset.getDataset(), gridBlock[2]);
-                });
+            if (DebugMode.INTERACTIVE.equals(debugMode)) {
+                long[] min = new long[2];
+                long[] max = new long[min.length];
+                for (int d = 0; d < min.length; ++d) {
+                    min[d] = gridBlock[0][d] / 2;
+                    max[d] = min[d] + gridBlock[1][d] / 2 - 1;
+                }
+
+                System.out.println("Debug mode: Displaying results... for interval " + Arrays.toString(min) + " >> " + Arrays.toString(max));
+                ImageJFunctions.show(Views.interval(minField, min, max), "Min Height Field");
+                ImageJFunctions.show(Views.interval(maxField, min, max), "Max Height Field");
+                ImageJFunctions.show(sourceGridBlock, "Flattened Block [" + gridBlock[2][0] + "," + gridBlock[2][1] + "]");
+                System.out.println("Debug mode: Skipping N5 write operations");
+                //noinspection deprecation
+                SimpleMultiThreading.threadHaltUnClean();
+                return;
+            }
+
+            N5Utils.saveBlock(sourceGridBlock, n5Writer, flatPathAndDataset.getDataset(), gridBlock[2]);
+        }
     }
 
     public static void main(final String... args) {
