@@ -314,21 +314,6 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         // Only open writer if we're going to write
         final N5Writer n5Writer = DebugMode.INTERACTIVE.equals(debugMode) ? null : flatPathAndDataset.openWriter();
 
-        // Pre-allocate reusable state for direct column computation.
-        // Since output x,y are integers that pass through the FlattenTransform unchanged,
-        // the NLinear trilinear interpolation degenerates to linear interpolation in z only
-        // (6 of 8 neighbor weights are zero). We exploit this by pre-fetching each raw
-        // z-column into a local array and doing manual 1D linear interpolation, bypassing
-        // the entire imglib2 view chain and CachedCellImg per-access overhead.
-        final long rawMinZ = rawVolume.min(2);
-        final int rawZSize = (int) (rawVolume.max(2) - rawMinZ + 1);
-        final byte[] rawColumn = new byte[rawZSize];
-        final double transformMin = flatInfo.getMin();
-        final double invTransformNorm = 1.0 / (flatInfo.getMax() - flatInfo.getMin());
-        final RandomAccess<UnsignedByteType> rawAccess = rawVolume.randomAccess();
-        final RealRandomAccess<DoubleType> minHAccess = minFactors.realRandomAccess();
-        final RealRandomAccess<DoubleType> maxHAccess = maxFactors.realRandomAccess();
-
         while (gridBlockIterator.hasNext()) {
             final long[][] gridBlock = gridBlockIterator.next();
             System.out.println("Processing grid block: [" + gridBlock[2][0] + ", " + gridBlock[2][1] + "]");
@@ -352,63 +337,108 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                 return;
             }
 
-            final RandomAccessibleInterval<UnsignedByteType> blockImg = ArrayImgs.unsignedBytes(gridBlock[1]);
-            final RandomAccess<UnsignedByteType> dst = blockImg.randomAccess();
-
-            final int sizeX = (int) gridBlock[1][0];
-            final int sizeY = (int) gridBlock[1][1];
-            final int sizeZ = (int) gridBlock[1][2];
-            final long flatZBase = flatInfo.getMinWithPadding() + gridBlock[0][2];
-
-            for (int y = 0; y < sizeY; y++) {
-                final long rawY = rawVolume.min(1) + gridBlock[0][1] + y;
-                rawAccess.setPosition(rawY, 1);
-                minHAccess.setPosition((double) rawY, 1);
-                maxHAccess.setPosition((double) rawY, 1);
-                dst.setPosition(y, 1);
-
-                for (int x = 0; x < sizeX; x++) {
-                    final long rawX = rawVolume.min(0) + gridBlock[0][0] + x;
-                    rawAccess.setPosition(rawX, 0);
-                    dst.setPosition(x, 0);
-
-                    // Height field lookup (once per column)
-                    minHAccess.setPosition((double) rawX, 0);
-                    maxHAccess.setPosition((double) rawX, 0);
-                    final double minH = minHAccess.get().getRealDouble();
-                    final double maxH = maxHAccess.get().getRealDouble();
-                    final double hScale = maxH - minH;
-
-                    // Pre-fetch raw z-column into local array
-                    for (int rz = 0; rz < rawZSize; rz++) {
-                        rawAccess.setPosition(rawMinZ + rz, 2);
-                        rawColumn[rz] = (byte) rawAccess.get().get();
-                    }
-
-                    // Linear z-interpolation from pre-fetched column
-                    final double zStep = hScale * invTransformNorm;
-                    double srcZ = (flatZBase - transformMin) * invTransformNorm * hScale + minH;
-
-                    for (int z = 0; z < sizeZ; z++) {
-                        final int zFloor = (int) Math.floor(srcZ);
-                        final double frac = srcZ - zFloor;
-                        final int idx0 = zFloor - (int) rawMinZ;
-                        final int idx1 = idx0 + 1;
-
-                        final int v0 = (idx0 >= 0 && idx0 < rawZSize) ? (rawColumn[idx0] & 0xFF) : 0;
-                        final int v1 = (idx1 >= 0 && idx1 < rawZSize) ? (rawColumn[idx1] & 0xFF) : 0;
-                        final int value = (int) Math.round(v0 + frac * (v1 - v0));
-
-                        dst.setPosition(z, 2);
-                        dst.get().set(value);
-
-                        srcZ += zStep;
-                    }
-                }
-            }
+            final RandomAccessibleInterval<UnsignedByteType> blockImg = computeFlattenedBlock(
+                    rawVolume, minFactors, maxFactors,
+                    flatInfo.getMin(), flatInfo.getMax(), flatInfo.getMinWithPadding(),
+                    gridBlock[0], gridBlock[1]);
 
             N5Utils.saveBlock(blockImg, n5Writer, flatPathAndDataset.getDataset(), gridBlock[2]);
         }
+    }
+
+    /**
+     * Computes a single flattened output block by direct column-wise processing.
+     * <p>
+     * Since output x,y are integer positions that pass through the flatten transform unchanged,
+     * the trilinear interpolation degenerates to linear interpolation in z only. This method
+     * exploits that by pre-fetching each raw z-column and doing manual 1D linear interpolation,
+     * bypassing the imglib2 view chain and CachedCellImg per-access overhead.
+     *
+     * @param rawVolume       the raw 3D volume to sample from
+     * @param minHeightField  the scaled min surface height field
+     * @param maxHeightField  the scaled max surface height field
+     * @param flatMin         minimum surface position in raw z-coordinates
+     * @param flatMax         maximum surface position in raw z-coordinates
+     * @param minWithPadding  padded min z in flat output space
+     * @param blockOffset     block offset in the output (0-based) coordinate system
+     * @param blockSize       block dimensions
+     * @return a concrete ArrayImg containing the flattened block
+     */
+    public static RandomAccessibleInterval<UnsignedByteType> computeFlattenedBlock(
+            final RandomAccessibleInterval<UnsignedByteType> rawVolume,
+            final RealRandomAccessible<DoubleType> minHeightField,
+            final RealRandomAccessible<DoubleType> maxHeightField,
+            final double flatMin,
+            final double flatMax,
+            final int minWithPadding,
+            final long[] blockOffset,
+            final long[] blockSize) {
+
+        final long rawMinZ = rawVolume.min(2);
+        final int rawZSize = (int) (rawVolume.max(2) - rawMinZ + 1);
+        final byte[] rawColumn = new byte[rawZSize];
+        final double invNorm = 1.0 / (flatMax - flatMin);
+
+        final RandomAccess<UnsignedByteType> rawAccess = rawVolume.randomAccess();
+        final RealRandomAccess<DoubleType> minHAccess = minHeightField.realRandomAccess();
+        final RealRandomAccess<DoubleType> maxHAccess = maxHeightField.realRandomAccess();
+
+        final RandomAccessibleInterval<UnsignedByteType> blockImg = ArrayImgs.unsignedBytes(blockSize);
+        final RandomAccess<UnsignedByteType> dst = blockImg.randomAccess();
+
+        final int sizeX = (int) blockSize[0];
+        final int sizeY = (int) blockSize[1];
+        final int sizeZ = (int) blockSize[2];
+        final long flatZBase = minWithPadding + blockOffset[2];
+
+        for (int y = 0; y < sizeY; y++) {
+            final long rawY = rawVolume.min(1) + blockOffset[1] + y;
+            rawAccess.setPosition(rawY, 1);
+            minHAccess.setPosition((double) rawY, 1);
+            maxHAccess.setPosition((double) rawY, 1);
+            dst.setPosition(y, 1);
+
+            for (int x = 0; x < sizeX; x++) {
+                final long rawX = rawVolume.min(0) + blockOffset[0] + x;
+                rawAccess.setPosition(rawX, 0);
+                dst.setPosition(x, 0);
+
+                // Height field lookup (once per column)
+                minHAccess.setPosition((double) rawX, 0);
+                maxHAccess.setPosition((double) rawX, 0);
+                final double minH = minHAccess.get().getRealDouble();
+                final double maxH = maxHAccess.get().getRealDouble();
+                final double hScale = maxH - minH;
+
+                // Pre-fetch raw z-column into local array
+                for (int rz = 0; rz < rawZSize; rz++) {
+                    rawAccess.setPosition(rawMinZ + rz, 2);
+                    rawColumn[rz] = (byte) rawAccess.get().get();
+                }
+
+                // Linear z-interpolation from pre-fetched column
+                final double zStep = hScale * invNorm;
+                double srcZ = (flatZBase - flatMin) * invNorm * hScale + minH;
+
+                for (int z = 0; z < sizeZ; z++) {
+                    final int zFloor = (int) Math.floor(srcZ);
+                    final double frac = srcZ - zFloor;
+                    final int idx0 = zFloor - (int) rawMinZ;
+                    final int idx1 = idx0 + 1;
+
+                    final int v0 = (idx0 >= 0 && idx0 < rawZSize) ? (rawColumn[idx0] & 0xFF) : 0;
+                    final int v1 = (idx1 >= 0 && idx1 < rawZSize) ? (rawColumn[idx1] & 0xFF) : 0;
+                    final int value = (int) Math.round(v0 + frac * (v1 - v0));
+
+                    dst.setPosition(z, 2);
+                    dst.get().set(value);
+
+                    srcZ += zStep;
+                }
+            }
+        }
+
+        return blockImg;
     }
 
     public static void main(final String... args) {
