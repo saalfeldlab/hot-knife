@@ -38,8 +38,10 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import net.imglib2.FinalInterval;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
@@ -336,7 +338,32 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                 return;
             }
 
-            N5Utils.saveBlock(sourceGridBlock, n5Writer, flatPathAndDataset.getDataset(), gridBlock[2]);
+            // Copy from lazy view into concrete block using z-first iteration order.
+            // This maximizes cache hits in FlattenTransform's height field cache:
+            // for each (x,y) column, all z values reuse the same cached height field lookup.
+            final RandomAccessibleInterval<UnsignedByteType> blockImg = ArrayImgs.unsignedBytes(gridBlock[1]);
+            final RandomAccess<UnsignedByteType> src = sourceGridBlock.randomAccess();
+            final RandomAccess<UnsignedByteType> dst = blockImg.randomAccess();
+
+            final int sizeX = (int) gridBlock[1][0];
+            final int sizeY = (int) gridBlock[1][1];
+            final int sizeZ = (int) gridBlock[1][2];
+
+            for (int y = 0; y < sizeY; y++) {
+                src.setPosition(y, 1);
+                dst.setPosition(y, 1);
+                for (int x = 0; x < sizeX; x++) {
+                    src.setPosition(x, 0);
+                    dst.setPosition(x, 0);
+                    for (int z = 0; z < sizeZ; z++) {
+                        src.setPosition(z, 2);
+                        dst.setPosition(z, 2);
+                        dst.get().set(src.get());
+                    }
+                }
+            }
+
+            N5Utils.saveBlock(blockImg, n5Writer, flatPathAndDataset.getDataset(), gridBlock[2]);
         }
     }
 
