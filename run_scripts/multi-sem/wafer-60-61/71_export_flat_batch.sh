@@ -48,7 +48,7 @@ N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 ARGV="\
 --n5RootPath=${N5_PATH} \
 --padding=3 \
---blockSize=128,128,128 \
+--blockSize=1024,1024,100 \
 --downsample"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
