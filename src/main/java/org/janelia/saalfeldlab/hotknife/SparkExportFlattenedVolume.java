@@ -40,9 +40,9 @@ import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -314,13 +314,27 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         // Only open writer if we're going to write
         final N5Writer n5Writer = DebugMode.INTERACTIVE.equals(debugMode) ? null : flatPathAndDataset.openWriter();
 
+        // Pre-allocate reusable state for direct column computation.
+        // Since output x,y are integers that pass through the FlattenTransform unchanged,
+        // the NLinear trilinear interpolation degenerates to linear interpolation in z only
+        // (6 of 8 neighbor weights are zero). We exploit this by pre-fetching each raw
+        // z-column into a local array and doing manual 1D linear interpolation, bypassing
+        // the entire imglib2 view chain and CachedCellImg per-access overhead.
+        final long rawMinZ = rawVolume.min(2);
+        final int rawZSize = (int) (rawVolume.max(2) - rawMinZ + 1);
+        final byte[] rawColumn = new byte[rawZSize];
+        final double transformMin = flatInfo.getMin();
+        final double invTransformNorm = 1.0 / (flatInfo.getMax() - flatInfo.getMin());
+        final RandomAccess<UnsignedByteType> rawAccess = rawVolume.randomAccess();
+        final RealRandomAccess<DoubleType> minHAccess = minFactors.realRandomAccess();
+        final RealRandomAccess<DoubleType> maxHAccess = maxFactors.realRandomAccess();
+
         while (gridBlockIterator.hasNext()) {
             final long[][] gridBlock = gridBlockIterator.next();
             System.out.println("Processing grid block: [" + gridBlock[2][0] + ", " + gridBlock[2][1] + "]");
 
-            final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
-
             if (DebugMode.INTERACTIVE.equals(debugMode)) {
+                final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
                 long[] min = new long[2];
                 long[] max = new long[min.length];
                 for (int d = 0; d < min.length; ++d) {
@@ -338,27 +352,57 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                 return;
             }
 
-            // Copy from lazy view into concrete block using z-first iteration order.
-            // This maximizes cache hits in FlattenTransform's height field cache:
-            // for each (x,y) column, all z values reuse the same cached height field lookup.
             final RandomAccessibleInterval<UnsignedByteType> blockImg = ArrayImgs.unsignedBytes(gridBlock[1]);
-            final RandomAccess<UnsignedByteType> src = sourceGridBlock.randomAccess();
             final RandomAccess<UnsignedByteType> dst = blockImg.randomAccess();
 
             final int sizeX = (int) gridBlock[1][0];
             final int sizeY = (int) gridBlock[1][1];
             final int sizeZ = (int) gridBlock[1][2];
+            final long flatZBase = flatInfo.getMinWithPadding() + gridBlock[0][2];
 
             for (int y = 0; y < sizeY; y++) {
-                src.setPosition(y, 1);
+                final long rawY = rawVolume.min(1) + gridBlock[0][1] + y;
+                rawAccess.setPosition(rawY, 1);
+                minHAccess.setPosition((double) rawY, 1);
+                maxHAccess.setPosition((double) rawY, 1);
                 dst.setPosition(y, 1);
+
                 for (int x = 0; x < sizeX; x++) {
-                    src.setPosition(x, 0);
+                    final long rawX = rawVolume.min(0) + gridBlock[0][0] + x;
+                    rawAccess.setPosition(rawX, 0);
                     dst.setPosition(x, 0);
+
+                    // Height field lookup (once per column)
+                    minHAccess.setPosition((double) rawX, 0);
+                    maxHAccess.setPosition((double) rawX, 0);
+                    final double minH = minHAccess.get().getRealDouble();
+                    final double maxH = maxHAccess.get().getRealDouble();
+                    final double hScale = maxH - minH;
+
+                    // Pre-fetch raw z-column into local array
+                    for (int rz = 0; rz < rawZSize; rz++) {
+                        rawAccess.setPosition(rawMinZ + rz, 2);
+                        rawColumn[rz] = (byte) rawAccess.get().get();
+                    }
+
+                    // Linear z-interpolation from pre-fetched column
+                    final double zStep = hScale * invTransformNorm;
+                    double srcZ = (flatZBase - transformMin) * invTransformNorm * hScale + minH;
+
                     for (int z = 0; z < sizeZ; z++) {
-                        src.setPosition(z, 2);
+                        final int zFloor = (int) Math.floor(srcZ);
+                        final double frac = srcZ - zFloor;
+                        final int idx0 = zFloor - (int) rawMinZ;
+                        final int idx1 = idx0 + 1;
+
+                        final int v0 = (idx0 >= 0 && idx0 < rawZSize) ? (rawColumn[idx0] & 0xFF) : 0;
+                        final int v1 = (idx1 >= 0 && idx1 < rawZSize) ? (rawColumn[idx1] & 0xFF) : 0;
+                        final int value = (int) Math.round(v0 + frac * (v1 - v0));
+
                         dst.setPosition(z, 2);
-                        dst.get().set(src.get());
+                        dst.get().set(value);
+
+                        srcZ += zStep;
                     }
                 }
             }
