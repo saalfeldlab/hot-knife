@@ -131,15 +131,17 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 		return n + 1;
 	}
 
+	@SuppressWarnings("ManualArrayCopy")
 	@Override
 	public void apply(final double[] source, final double[] target) {
 
 		assert source.length <= target.length : "Target vector is too small.";
 
-		System.arraycopy(source, 0, target, 0, source.length);
 		updateHeightCache(source[0], source[1]);
 		final double scale = cachedMaxHeight - cachedMinHeight;
 
+		for (int d = 0; d < n; d++)
+			target[d] = source[d];
 		target[n] = (source[n] - cachedMinHeight) / scale * norm + min;
 	}
 
@@ -148,22 +150,25 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 
 		assert source.numDimensions() <= target.numDimensions() : "Target vector is too small.";
 
-		target.setPosition(source);
 		updateHeightCache(source.getDoublePosition(0), source.getDoublePosition(1));
 		final double scale = cachedMaxHeight - cachedMinHeight;
 
+		for (int d = 0; d < n; d++)
+			target.setPosition(source.getDoublePosition(d), d);
 		target.setPosition((source.getDoublePosition(n) - cachedMinHeight) / scale * norm + min, n);
 	}
 
+	@SuppressWarnings("ManualArrayCopy")
 	@Override
 	public void applyInverse(final double[] source, final double[] target) {
 
 		assert source.length <= target.length : "Target vector is too small.";
 
-		System.arraycopy(target, 0, source, 0, target.length);
 		updateHeightCache(target[0], target[1]);
 		final double scale = cachedMaxHeight - cachedMinHeight;
 
+		for (int d = 0; d < n; d++)
+			source[d] = target[d];
 		source[n] = (target[n] - min) / norm * scale + cachedMinHeight;
 	}
 
@@ -172,10 +177,11 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 
 		assert source.numDimensions() <= target.numDimensions() : "Target vector is too small.";
 
-		source.setPosition(target);
 		updateHeightCache(target.getDoublePosition(0), target.getDoublePosition(1));
 		final double scale = cachedMaxHeight - cachedMinHeight;
 
+		for (int d = 0; d < n; d++)
+			source.setPosition(target.getDoublePosition(d), d);
 		source.setPosition((target.getDoublePosition(n) - min) / norm * scale + cachedMinHeight, n);
 	}
 
