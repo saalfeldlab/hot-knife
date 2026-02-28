@@ -146,8 +146,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
 
     public static void main(final String... args) throws Exception {
 
-        System.out.println("SparkExportFlattenedVolumeMultiSEMBatch: entry, args=" +
-                            Arrays.toString(args));
+        logMessage("main: entry, args=" + Arrays.toString(args));
 
         final Options batchOptions = new Options(args);
         final List<SparkExportFlattenedVolume> exporterList = batchOptions.buildExporters();
@@ -156,14 +155,18 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
         final JavaSparkContext sparkContext = new JavaSparkContext(conf);
         sparkContext.setLogLevel("ERROR");
 
-        System.out.println("SparkExportFlattenedVolumeMultiSEMBatch: processing " + exporterList.size() + " datasets");
+        logMessage("main: processing " + exporterList.size() + " datasets");
 
         for (int exporterIndex = 0; exporterIndex < exporterList.size(); exporterIndex++) {
+
             final long start = System.currentTimeMillis();
+
             final SparkExportFlattenedVolume exporter = exporterList.get(exporterIndex);
             final FlatteningInfo info = exporter.buildFlatteningInfo(); // re-build for actual usage
             final N5PathAndDataset flatPathAndDataset = info.getFlatPathAndDataset();
             final String flatDataset = flatPathAndDataset.getDataset();
+
+            logMessage("main: building " + flatDataset);
 
             final int numberOfDownsampleLevels = 9; // s1 ... s9
             final List<String> downsampleOutputDatasetPaths = new ArrayList<>();
@@ -174,7 +177,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                         downsampleOutputDatasetPaths.add(datasetWithSPrefix + sLevel);
                     }
                 } else {
-                    System.out.println("WARNING: will skip downsample for " + flatDataset + " because it does not end with /s0");
+                    logMessage("main: WARNING: will skip downsample for " + flatDataset + " because it does not end with /s0");
                 }
             }
 
@@ -185,6 +188,8 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                           batchOptions.debugBlockY);
 
             if (! downsampleOutputDatasetPaths.isEmpty()) {
+
+                logMessage("main: downsampling " + flatDataset);
 
                 final int[] downsampleFactors = new int[] { 2, 2, 1 };
                 final N5WriterSupplier n5Supplier = () -> N5Util.createN5Writer(batchOptions.n5RootPathName);
@@ -208,8 +213,8 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
             }
 
             final long end = System.currentTimeMillis();
-            final String now = java.time.LocalDateTime.now().toString().replace("T", " ");
-            System.out.println(now + " SparkExportFlattenedVolumeMultiSEMBatch: completed " + flatDataset +
+
+            logMessage("main: completed " + flatDataset +
                                " (dataset " + (exporterIndex + 1) + " of " + exporterList.size() + ") in " +
                                ((end - start) / 60000) + " minutes");
         }
@@ -217,4 +222,8 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
         sparkContext.close();
     }
 
+    private static void logMessage(final String message) {
+        org.janelia.saalfeldlab.hotknife.util.Util.logMessage(SparkExportFlattenedVolumeMultiSEMBatch.class.getName(),
+                                                              message);
+    }
 }
