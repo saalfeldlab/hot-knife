@@ -61,7 +61,6 @@ import net.imglib2.view.Views;
  */
 public class SparkGenerateFaceScaleSpace {
 
-	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
 
 		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
@@ -91,7 +90,7 @@ public class SparkGenerateFaceScaleSpace {
 		@Option(name = "--invert", usage = "MultiSem datasets might be inverted")
 		private boolean invert = false;
 
-		@Option(name = "--normalizeContrast", usage = "Perform contast normalization on the input data")
+		@Option(name = "--normalizeContrast", usage = "Perform contrast normalization on the input data")
 		private boolean normalizeContrast = false;
 
 		public Options(final String[] args) {
@@ -191,13 +190,6 @@ public class SparkGenerateFaceScaleSpace {
 		}
 	}
 
-	static public double sigmaDiff(final double sourceSigma, final double targetSigma, final double scale) {
-
-		final double s = targetSigma / scale;
-		final double v = Math.max(0, s * s - sourceSigma * sourceSigma);
-		return Math.sqrt(v);
-	}
-
 	static public long[] downsample(
 			final JavaSparkContext sc,
 			final String n5Path,
@@ -216,7 +208,8 @@ public class SparkGenerateFaceScaleSpace {
 		final DataType inType = attributes.getDataType();
 
 		final int sampleStepSize = net.imglib2.util.Util.pow(2, scaleIndex);
-		final double sigma = sigmaDiff(0.5, 0.5, 1.0 / sampleStepSize);
+
+		final double sigma = GenerateFaceScaleSpace.sigmaDiff(0.5, 0.5, 1.0 / sampleStepSize);
 		final double[] sigmas = new double[] { sigma, sigma, sigma };
 
 		final long[] outDimensions = Arrays.stream(size).map(x -> Math.abs(x) / sampleStepSize).toArray();
@@ -372,7 +365,7 @@ public class SparkGenerateFaceScaleSpace {
 		}
 	}
 
-	public static final void extractFace(
+	public static void extractFace(
 			final JavaSparkContext sc,
 			final String n5Path,
 			final String inDatasetName,
@@ -382,7 +375,7 @@ public class SparkGenerateFaceScaleSpace {
 			final int[] outBlockSize,
 			final boolean invert,
 			final boolean normalizeContrast,
-			final int scaleIndex ) throws IOException {
+			final int scaleIndex) {
 
 		final N5Writer n5 = N5Util.createN5Writer(n5Path);
 
@@ -505,8 +498,8 @@ public class SparkGenerateFaceScaleSpace {
 					1,
 					scaleSpaceDataSetName,
 					attributes.getBlockSize(),
-					scaleIndex == 1 ? options.invert : false, // only when downsampling to s1 we need filtering
-					scaleIndex == 1 ? options.normalizeContrast : false ); // only when downsampling to s1 we need filtering
+                    scaleIndex == 1 && options.invert, // only when downsampling to s1 we need filtering
+                    scaleIndex == 1 && options.normalizeContrast); // only when downsampling to s1 we need filtering
 
 			sourceDatasetName = scaleSpaceDataSetName;
 			Arrays.fill(min, 0);
