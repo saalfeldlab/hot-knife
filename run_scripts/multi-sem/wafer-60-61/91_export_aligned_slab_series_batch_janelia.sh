@@ -16,7 +16,7 @@ if (( $# < 1 )); then
 fi
 
 N_NODES="${1}"
-RUN_AND_PASS="${2:-run_20251219_110000/pass03-sofima-fix2-full}"
+RUN_AND_PASS="${2:-run_20251219_110000/pass03-sofima-fix2-full}" # TODO: update this to run_20260303_130000 if necessary
 export RUNTIME=${3:-240:59} # default is 10+ days, must export for flintstone
 
 Z_BATCH="1:1"

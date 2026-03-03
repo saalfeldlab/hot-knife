@@ -14,7 +14,7 @@ TOP_PIXELS="3"
 BOTTOM_PIXELS="-4"
 
 N5_SAMPLE_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-RUN_AND_PASS="run_20251219_110000/pass03"
+RUN_AND_PASS="run_20251219_110000/pass03" # TODO: update this to run_20260303_130000 if necessary
 TRANSFORM_GROUP="/surface-align/${RUN_AND_PASS}"
 
 FULL_TRANSFORM_GROUP_PATH="${N5_SAMPLE_PATH}${TRANSFORM_GROUP}"
