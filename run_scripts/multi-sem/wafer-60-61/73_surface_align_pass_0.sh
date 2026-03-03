@@ -13,7 +13,7 @@ Examples:
 
 Notes:
   - with  2 max-executors and  5 w61 r00 slabs (79 to  83), pass 0 took  4 minutes to complete
-  - with 10 max-executors and 90 w61 r00 slabs (70 to 159), pass 0 took ?? minutes to complete
+  - with 10 max-executors and 90 w61 r00 slabs (70 to 159), pass 0 took  7 minutes to complete
 "
   exit 1
 fi
