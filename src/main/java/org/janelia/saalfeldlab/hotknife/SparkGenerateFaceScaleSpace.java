@@ -235,77 +235,143 @@ public class SparkGenerateFaceScaleSpace {
 					final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
 
 					while (blocks.hasNext()) {
-						final long[][] gridBlock = blocks.next();
-						System.out.println(Arrays.deepToString(gridBlock));
-
-						@SuppressWarnings("unchecked")
-						final RandomAccessibleInterval<RealType<?>> source;
-
-						// only s0 is UnsignedByteType, the rest is FloatType and already inverted and normalized (if asked for)
-						if ( invert || normalizeContrast )
-						{
-							// we choose a non-power-of-2 blocksize on purpose since the grids do not align here typically
-							// a size of 1 in z makes sense since it is a 2d filter and we do not want to do cllcn and not need it
-							final int[] blockSize_cllcn = new int[] { (int)gridBlock[1][0] + 1, (int)gridBlock[1][1] + 1, 1 };
-
-							source = (RandomAccessibleInterval<RealType<?>>)(Object) filter(
-									(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5Writer, inDatasetName),
-									invert,
-									normalizeContrast,
-									0, // here scaleIndex is the result of the downsampling, not the input
-									blockSize_cllcn );
-						}
-						else
-						{
-							source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
-						}
-
-						@SuppressWarnings({ "rawtypes", "unchecked" })
-						final RandomAccessibleInterval<FloatType> floatSource =
-								inType == DataType.FLOAT32 ? (RandomAccessibleInterval)source : Converters.convert(
-										source,
-										(a, b) -> b.set(a.getRealFloat()),
-										new FloatType());
-
-						final long[] absMin = new long[min.length];
-						final long[] absSize = new long[size.length];
-						for (int d = 0; d < min.length; ++d) {
-							if (size[d] < 0) {
-								absMin[d] = min[d] + size[d];
-								absSize[d] = -size[d];
-							}
-							else {
-								absMin[d] = min[d];
-								absSize[d] = size[d];
-							}
-						}
-
-						//System.out.println("abs min: " + Arrays.toString(absMin) + " size " + Arrays.toString(absSize));
-
-						IntervalView<FloatType> roi = Views.offsetInterval(floatSource, absMin, absSize);
-						for (int d = 0; d < roi.numDimensions(); ++d)
-							if (size[d] < 0)
-								roi = Views.invertAxis(roi, d);
-
-						final RandomAccessibleInterval<FloatType> zeroMin = Views.zeroMin(roi);
-
-						final SimpleGaussRA<FloatType> gauss = new SimpleGaussRA<>(sigmas);
-						final RandomAccessibleInterval<FloatType> filtered = Lazy.process(
-								Views.extendMirrorSingle(zeroMin),
-								zeroMin,
-								outBlockSize,// new int[] { 33, 33, 7 }, // small blocksize to make sure we do not compute things for nothing, specifically if normalize constrast is on
-								new FloatType(),
-								AccessFlags.setOf(),
-								gauss);
-						final SubsampleIntervalView<FloatType> subsampled = Views.subsample(filtered, sampleStepSize);
-
-						final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(subsampled, gridBlock[0], gridBlock[1]);
-
-						N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
+						downsampleBlock(blocks.next(),
+										n5Writer,
+										inDatasetName,
+										invert,
+										normalizeContrast,
+										inType,
+										min,
+										size,
+										sigmas,
+										outBlockSize,
+										sampleStepSize,
+										outDatasetName);
 					}
 				});
 
 		return outDimensions;
+	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private static void downsampleBlock(
+			final long[][] gridBlock,
+			final N5Writer n5Writer,
+			final String inDatasetName,
+			final boolean invert,
+			final boolean normalizeContrast,
+			final DataType inType,
+			final long[] min,
+			final long[] size,
+			final double[] sigmas,
+			final int[] outBlockSize,
+			final int sampleStepSize,
+			final String outDatasetName) throws IOException {
+
+		System.out.println(Arrays.deepToString(gridBlock));
+
+		final RandomAccessibleInterval<RealType<?>> source;
+
+		// only s0 is UnsignedByteType, the rest is FloatType and already inverted and normalized (if asked for)
+		if (invert || normalizeContrast) {
+			// we choose a non-power-of-2 blocksize on purpose since the grids do not align here typically
+			// a size of 1 in z makes sense since it is a 2d filter and we do not want to do cllcn and not need it
+			final int[] blockSize_cllcn = new int[] { (int)gridBlock[1][0] + 1, (int)gridBlock[1][1] + 1, 1 };
+
+			source = (RandomAccessibleInterval<RealType<?>>)(Object) filter(
+					(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5Writer, inDatasetName),
+					invert,
+					normalizeContrast,
+					0, // here scaleIndex is the result of the downsampling, not the input
+					blockSize_cllcn );
+		} else {
+			source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
+		}
+
+		final RandomAccessibleInterval<FloatType> floatSource =
+				inType == DataType.FLOAT32 ? (RandomAccessibleInterval)source : Converters.convert(
+						source,
+						(a, b) -> b.set(a.getRealFloat()),
+						new FloatType());
+
+		final long[] absMin = new long[min.length];
+		final long[] absSize = new long[size.length];
+		for (int d = 0; d < min.length; ++d) {
+			if (size[d] < 0) {
+				absMin[d] = min[d] + size[d];
+				absSize[d] = -size[d];
+			} else {
+				absMin[d] = min[d];
+				absSize[d] = size[d];
+			}
+		}
+
+		IntervalView<FloatType> roi = Views.offsetInterval(floatSource, absMin, absSize);
+		for (int d = 0; d < roi.numDimensions(); ++d)
+			if (size[d] < 0)
+				roi = Views.invertAxis(roi, d);
+
+		final RandomAccessibleInterval<FloatType> zeroMin = Views.zeroMin(roi);
+
+		final SimpleGaussRA<FloatType> gauss = new SimpleGaussRA<>(sigmas);
+		final RandomAccessibleInterval<FloatType> filtered = Lazy.process(
+				Views.extendMirrorSingle(zeroMin),
+				zeroMin,
+				outBlockSize,
+				new FloatType(),
+				AccessFlags.setOf(),
+				gauss);
+		final SubsampleIntervalView<FloatType> subsampled = Views.subsample(filtered, sampleStepSize);
+
+		final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(subsampled, gridBlock[0], gridBlock[1]);
+
+		N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
+	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private static void extractFaceBlock(
+			final long[][] gridBlock,
+			final N5Writer n5Writer,
+			final String inDatasetName,
+			final boolean invert,
+			final boolean normalizeContrast,
+			final int scaleIndex,
+			final DataType inType,
+			final long[] absMin,
+			final long[] absSize,
+			final long[] size,
+			final String outDatasetName) throws IOException {
+
+		System.out.println(Arrays.deepToString(gridBlock));
+
+		final RandomAccessibleInterval<RealType<?>> source;
+
+		// only s0 is UnsignedByteType, the rest is FloatType and already inverted and normalized (if asked for)
+		if (invert || normalizeContrast) {
+			source = (RandomAccessibleInterval<RealType<?>>)(Object) filter(
+					(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5Writer, inDatasetName),
+					invert,
+					normalizeContrast,
+					scaleIndex );
+		} else {
+			source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
+		}
+
+		final RandomAccessibleInterval<FloatType> floatSource =
+				inType == DataType.FLOAT32 ? (RandomAccessibleInterval)source : Converters.convert(
+						source,
+						(a, b) -> b.set(a.getRealFloat()),
+						new FloatType());
+
+		IntervalView<FloatType> roi = Views.offsetInterval(Views.extendZero(floatSource), absMin, absSize);
+		for (int d = 0; d < roi.numDimensions(); ++d)
+			if (size[d] < 0)
+				roi = Views.invertAxis(roi, d);
+
+		final IntervalView<FloatType> zeroMin = Views.zeroMin(roi);
+		final IntervalView<FloatType> face = Views.hyperSlice(zeroMin, 2, 0);
+		final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(face, gridBlock[0], gridBlock[1]);
+		N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
 	}
 
 	protected static RandomAccessibleInterval<UnsignedByteType> filter(
@@ -419,41 +485,17 @@ public class SparkGenerateFaceScaleSpace {
 					final N5Writer n5Writer = N5Util.createN5Writer(n5Path);
 
 					while (blocks.hasNext()) {
-						final long[][] gridBlock = blocks.next();
-						System.out.println(Arrays.deepToString(gridBlock));
-
-						final RandomAccessibleInterval<RealType<?>> source;
-
-						// only s0 is UnsignedByteType, the rest is FloatType and already inverted and normalized (if asked for)
-						if ( invert || normalizeContrast )
-						{
-							source = (RandomAccessibleInterval<RealType<?>>)(Object) filter(
-									(RandomAccessibleInterval<UnsignedByteType>)N5Utils.open(n5Writer, inDatasetName),
-									invert,
-									normalizeContrast,
-									scaleIndex );
-						}
-						else
-						{
-							source = (RandomAccessibleInterval)N5Utils.open(n5Writer, inDatasetName);
-						}
-
-						@SuppressWarnings({ "rawtypes", "unchecked" })
-						final RandomAccessibleInterval<FloatType> floatSource =
-								inType == DataType.FLOAT32 ? (RandomAccessibleInterval)source : Converters.convert(
-										source,
-										(a, b) -> b.set(a.getRealFloat()),
-										new FloatType());
-
-						IntervalView<FloatType> roi = Views.offsetInterval(Views.extendZero( floatSource ), absMin, absSize);
-						for (int d = 0; d < roi.numDimensions(); ++d)
-							if (size[d] < 0)
-								roi = Views.invertAxis(roi, d);
-
-						final IntervalView<FloatType> zeroMin = Views.zeroMin(roi);
-						final IntervalView<FloatType> face = Views.hyperSlice(zeroMin, 2, 0);
-						final RandomAccessibleInterval<FloatType> sourceGridBlock = Views.offsetInterval(face, gridBlock[0], gridBlock[1]);
-						N5Utils.saveBlock(sourceGridBlock, n5Writer, outDatasetName, gridBlock[2]);
+						extractFaceBlock(blocks.next(),
+										 n5Writer,
+										 inDatasetName,
+										 invert,
+										 normalizeContrast,
+										 scaleIndex,
+										 inType,
+										 absMin,
+										 absSize,
+										 size,
+										 outDatasetName);
 					}
 				});
 	}
