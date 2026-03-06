@@ -17,6 +17,4 @@ RUN_AND_PASS="run_20260303_130000/pass00-scale1"
 FULL_NRS="${NRS_SURFACE_ALIGN}/${RUN_AND_PASS}"
 FULL_GOOGLE="${GOOGLE_SURFACE_ALIGN}/${RUN_AND_PASS}"
 
-PARALLELISM=56
-
-gcloud storage rsync ${FULL_NRS} ${FULL_GOOGLE} --recursive --parallelism-level=${PARALLELISM}
+gcloud storage rsync ${FULL_NRS} ${FULL_GOOGLE} --recursive
