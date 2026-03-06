@@ -2,6 +2,9 @@
 
 # ----------------------------------------------------------------------------
 # Copy the surface zarr volumes from /nrs to Google cloud storage.
+#
+# The w61 run_20260303_130000/pass00-scale1 data with > 6 million blocks took 4.5 hours to rsync
+# when run on trautmane-dev with 64 cores.
 
 set -e
 
