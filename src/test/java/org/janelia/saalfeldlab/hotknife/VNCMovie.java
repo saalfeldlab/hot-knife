@@ -21,6 +21,7 @@ import java.awt.Window;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -67,6 +68,7 @@ import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
@@ -258,6 +260,18 @@ public class VNCMovie implements Callable<Void> {
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		new CommandLine(new VNCMovie()).execute(args);
+	}
+
+	private static final void clipToUnsignedByte( final int min, final int max, final UnsignedShortType in, final UnsignedByteType out )
+	{
+		final int i = in.get();
+
+		if ( i < min )
+			out.set( 0 );
+		else if ( i > max )
+			out.set( 255 );
+		else
+			out.set( (int)Math.round( 255.0 * ( ( i - min ) / (double)( max - min ) ) ) );
 	}
 
 	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
