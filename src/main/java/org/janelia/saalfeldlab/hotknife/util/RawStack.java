@@ -13,11 +13,10 @@ public class RawStack
     public static final Pattern RAW_STACK_PATTERN = Pattern.compile("^w(\\d+)_s(\\d+)_r(\\d+)$");
 
     public static String DEFAULT_IC2D_SUFFIX = "_gc_par_align_ic2d";
-    public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer";
-    public static String DEFAULT_CLAHE_SUFFIX = DEFAULT_NORM_LAYER_SUFFIX + "-clahe";
-    @SuppressWarnings("unused")
-    public static String DEFAULT_COST_VERSION = "b250";  // not currently used, but here in case needed later
-    public static String DEFAULT_HEIGHTFIELDS_VERSION = "b250_smd_p1_p1";
+    public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer-v2-mb";
+    public static String DEFAULT_CLAHE_SUFFIX = DEFAULT_NORM_LAYER_SUFFIX + "_clahe";
+    public static String DEFAULT_COST_VERSION = "b250";
+    public static String DEFAULT_HEIGHTFIELDS_VERSION = DEFAULT_COST_VERSION + "_smd_p1_p1";
 
     private final String rawStack;
 
@@ -25,6 +24,7 @@ public class RawStack
     private final String ic2dSuffix;
     private final String normLayerSuffix;
     private final String claheSuffix;
+    private final String costVersion;
     private final String heightfieldsVersion;
 
     public RawStack(final String rawStack) {
@@ -32,6 +32,7 @@ public class RawStack
              DEFAULT_IC2D_SUFFIX,
              DEFAULT_NORM_LAYER_SUFFIX,
              DEFAULT_CLAHE_SUFFIX,
+             DEFAULT_COST_VERSION,
              DEFAULT_HEIGHTFIELDS_VERSION);
     }
 
@@ -39,12 +40,14 @@ public class RawStack
                     final String ic2dSuffix,
                     final String normLayerSuffix,
                     final String claheSuffix,
+                    final String costVersion,
                     final String heightfieldsVersion) {
         this.rawStack = rawStack;
         this.project = buildProjectName(rawStack);
         this.ic2dSuffix = ic2dSuffix;
         this.normLayerSuffix = normLayerSuffix;
         this.claheSuffix = claheSuffix;
+        this.costVersion = costVersion;
         this.heightfieldsVersion = heightfieldsVersion;
     }
 
@@ -68,34 +71,39 @@ public class RawStack
         return "/render/" + project + "/" + getIC2DStack();
     }
 
-    /** @return the normalized layer stack name (e.g. w61_s076_r00_gc_par_align_ic2d___norm-layer) */
+    /** @return the normalized layer stack name (e.g. w61_s076_r00_gc_par_align_ic2d___norm-layer-v2-mb) */
     public String getNormLayerStack() {
         return rawStack + normLayerSuffix;
     }
 
-    /** @return the normalized layer dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer) */
+    /** @return the normalized layer dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer-v2-mb) */
     public String getNormLayerDataset() {
         return "/render/" + project + "/" + getNormLayerStack();
     }
 
-    /** @return the CLAHE stack name (e.g. w61_s076_r00_gc_par_align_ic2d___norm-layer-clahe) */
+    /** @return the CLAHE stack name (e.g. w61_s076_r00_gc_par_align_ic2d___norm-layer-v2-mb_clahe) */
     public String getCLAHEStack() {
         return rawStack + claheSuffix;
     }
 
-    /** @return the CLAHE dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer-clahe) */
+    /** @return the CLAHE dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer-v2-mb_clahe) */
     public String getCLAHEDataset() {
         return "/render/" + project + "/" + getCLAHEStack();
     }
 
-    /** @return the heightfields dataset (e.g. /heightfields_v4/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer) */
+    /** @return the cost dataset (e.g. /cost_b250/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer-v2-mb) */
+    public String getCostDataset() {
+        return "/cost_" + costVersion + "/" + project + "/" + getNormLayerStack();
+    }
+
+    /** @return the heightfields dataset (e.g. /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer-v2-mb) */
     public String getHeightfieldsDataset() {
         return "/heightfields_" + heightfieldsVersion + "/" + project + "/" + getNormLayerStack();
     }
 
-    /** @return the flat dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00) */
+    /** @return the flat dataset (e.g. /flat_v2_mb/w61_serial_070_to_079/w61_s076_r00) */
     public String getFlatDataset() {
-        return "/flat/" + project + "/" + rawStack;
+        return "/flat_v2_mb/" + project + "/" + rawStack;
     }
 
     /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw) */

@@ -12,7 +12,8 @@ Examples:
   $0  2  w61  r00
 
 Notes:
-  - with 2 max-executors and 5 w61 r00 slabs (79 to 83), pass 0 took 4 minutes to complete
+  - with  2 max-executors and  5 w61 r00 slabs (79 to  83), pass 0 took  4 minutes to complete
+  - with 10 max-executors and 90 w61 r00 slabs (70 to 159), pass 0 took  7 minutes to complete
 "
   exit 1
 fi
@@ -30,7 +31,7 @@ WAFER="${2}"
 REGION="${3}"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-N5_SURFACE_ROOT="surface-align/run_20251219_110000"
+N5_SURFACE_ROOT="surface-align/run_20260303_130000"
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 # need scaleIndex=5 for larger wafer 53 slabs
@@ -49,8 +50,8 @@ RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 unset BATCH_NAME
 
 # TODO: make serial number range a parameter or argument, note that face dataset order is important
-FIRST_SERIAL_NUM=79
-LAST_SERIAL_NUM=83
+FIRST_SERIAL_NUM=70
+LAST_SERIAL_NUM=159
 
 for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
 
@@ -60,8 +61,8 @@ for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
   # convert w61_s079_r00 to w61_serial_070_to_079
   RENDER_PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${RAW_STACK}")
 
-  # /flat/w61_serial_070_to_079/w61_s079_r00
-  FLAT_DATASET="/flat/${RENDER_PROJECT}/${RAW_STACK}"
+  # /flat_v2_mb/w61_serial_070_to_079/w61_s079_r00
+  FLAT_DATASET="/flat_v2_mb/${RENDER_PROJECT}/${RAW_STACK}"
 
   ARGV="${ARGV} -d ${FLAT_DATASET}/top/face -d ${FLAT_DATASET}/bot/face"
 

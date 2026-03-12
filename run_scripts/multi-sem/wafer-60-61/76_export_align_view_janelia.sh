@@ -5,17 +5,25 @@ set -e
 umask 0002
 
 if (( $# < 1 )); then
-  echo "USAGE $0 <pass (1-12)> [scaleIndex (default 2)]"
+  echo "
+Usage:    $0 <pass> <scaleIndex> [number of nodes]
+
+          pass should be a number 0 to 12
+          default number of nodes is 10
+
+Notes:
+  - with 90 slabs (180 faces), scale index 4, and  10 nodes, pass 0 took 20 minutes to complete
+  - with 90 slabs (180 faces), scale index 1, and 100 nodes, pass 0 took ?? minutes to complete
+"
   exit 1
 fi
 
 PASS="${1}"
-SCALE_INDEX="${2:-2}"
-
-N_NODES="10"
+SCALE_INDEX="${2}"
+N_NODES="${3:-10}"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-N5_SURFACE_ROOT="surface-align/run_20251219_110000"
+N5_SURFACE_ROOT="surface-align/run_20260303_130000"
 
 PADDED_PASS=$(printf "%02d" "${PASS}")
 N5_GROUP_INPUT="${N5_SURFACE_ROOT}/pass${PADDED_PASS}"

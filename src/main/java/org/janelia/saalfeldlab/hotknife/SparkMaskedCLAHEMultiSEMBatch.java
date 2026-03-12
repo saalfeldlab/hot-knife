@@ -9,6 +9,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.RawStack;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -74,6 +75,10 @@ public class SparkMaskedCLAHEMultiSEMBatch
         sparkContext.setLogLevel("ERROR");
 
         for (final RawStack rawStack : rawStackList) {
+
+            final long start = System.currentTimeMillis();
+            logMessage("main: start processing " + rawStack.getRawStack());
+
             final SparkMaskedCLAHEMultiSEM.Options claheOptions =
                     new SparkMaskedCLAHEMultiSEM.Options(batchOptions.n5PathInput,
                                                          rawStack,
@@ -81,8 +86,15 @@ public class SparkMaskedCLAHEMultiSEMBatch
                                                          batchOptions.blockFactorZ,
                                                          batchOptions.overwrite);
             SparkMaskedCLAHEMultiSEM.process(sparkContext, claheOptions);
+
+            final long elapsedMillis = System.currentTimeMillis() - start;
+            logMessage("main: processed " + rawStack.getRawStack() + " in " + (elapsedMillis / 60000) + " minutes");
         }
 
         sparkContext.close();
+    }
+
+    private static void logMessage(final String message) {
+        Util.logMessage(SparkMaskedCLAHEMultiSEMBatch.class.getName(), message);
     }
 }

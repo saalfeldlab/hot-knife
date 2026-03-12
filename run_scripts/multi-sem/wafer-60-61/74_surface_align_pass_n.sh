@@ -18,7 +18,7 @@ PADDED_PASS=$(printf "%02d" "${PASS}")
 PADDED_PRIOR_PASS=$(printf "%02d" "$(( PASS - 1 ))")
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-N5_SURFACE_ROOT="surface-align/run_20251219_110000"
+N5_SURFACE_ROOT="surface-align/run_20260303_130000"
 
 N5_GROUP_INPUT="${N5_SURFACE_ROOT}/pass${PADDED_PRIOR_PASS}"
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass${PADDED_PASS}"
