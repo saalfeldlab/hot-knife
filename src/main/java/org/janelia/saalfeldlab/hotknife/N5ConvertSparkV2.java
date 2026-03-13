@@ -11,6 +11,7 @@ import java.util.stream.LongStream;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -39,6 +40,9 @@ import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
+
+import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
+import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
 
 public class N5ConvertSparkV2
 {
@@ -366,18 +370,37 @@ public class N5ConvertSparkV2
 				.set( "spark.serializer", "org.apache.spark.serializer.KryoSerializer" )
 			) )
 		{
+			final String inputN5Path = parsedArgs.getInputN5Path();
+			final String outputDatasetPath = parsedArgs.getOutputDatasetPath();
 			convert(
 					sparkContext,
-					() -> N5Util.createN5Reader( parsedArgs.getInputN5Path() ),
+					() -> N5Util.createN5Reader( inputN5Path ),
 					parsedArgs.getInputDatasetPath(),
 					() -> N5Util.createN5Writer( parsedArgs.getOutputN5Path() ),
-					parsedArgs.getOutputDatasetPath(),
+					outputDatasetPath,
 					Optional.ofNullable( parsedArgs.getBlockSize() ),
 					Optional.ofNullable( parsedArgs.getCompression() ),
 					Optional.ofNullable( parsedArgs.getDataType() ),
 					Optional.ofNullable( parsedArgs.getValueRange() ),
 					parsedArgs.force
 				);
+
+			final int[] downsampleFactors = parseCSIntArray(parsedArgs.factors);
+			if (downsampleFactors != null) {
+
+				if (outputDatasetPath.endsWith("/s0")) {
+					final String outputGroupPath = outputDatasetPath.substring(0, outputDatasetPath.length() - 3);
+					downsampleScalePyramid(sparkContext,
+										   new N5PathSupplier(inputN5Path),
+										   outputDatasetPath, // s0 output is input for downsample
+										   outputGroupPath,
+										   downsampleFactors);
+				} else {
+					System.out.println("skipping downsample because outputDatasetPath " + outputDatasetPath +
+									   " does not end with '/s0'");
+				}
+			}
+
 		}
 
 		System.out.println( System.lineSeparator() + "Done" );
@@ -426,6 +449,10 @@ public class N5ConvertSparkV2
 
 		@Option(name = "-f", aliases = { "--force" }, required = false, usage = "Will overwrite existing output dataset if specified.")
 		private Boolean force;
+
+		@Option(name = "--factors",
+				usage = "If specified, generates a scale pyramid with given factors, e.g. 2,2,2")
+		protected String factors;
 
 		private int[] blockSize;
 		private boolean parsedSuccessfully = false;
