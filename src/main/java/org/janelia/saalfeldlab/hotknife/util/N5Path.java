@@ -7,6 +7,7 @@ import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5ReaderSupplier;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.janelia.saalfeldlab.n5.universe.N5Factory;
+import org.janelia.saalfeldlab.n5.universe.StorageFormat;
 
 /**
  * An n5 path string with convenience methods for reading and writing data that can be accessed
@@ -31,7 +32,7 @@ public class N5Path
     }
 
     public N5Reader openReader() {
-        return new N5Factory().openReader(N5Factory.StorageFormat.N5, path);
+        return new N5Factory().openReader(StorageFormat.N5, path);
     }
 
     public N5ReaderSupplier buildReaderSupplier() {
@@ -39,7 +40,7 @@ public class N5Path
     }
 
     public N5Writer openWriter() {
-        return new N5Factory().openWriter(N5Factory.StorageFormat.N5, path);
+        return new N5Factory().openWriter(StorageFormat.N5, path);
     }
 
     public N5WriterSupplier buildWriterSupplier() {

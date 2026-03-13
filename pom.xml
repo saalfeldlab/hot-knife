@@ -17,8 +17,18 @@
 
 		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>
 
+		<!-- N5 alpha versions for Zarr v3 shard support -->
+		<!-- See: https://imglib.github.io/imglib2-blog/posts/2025-12-22-n5-shard-dev/ -->
 		<!-- note: when upgrading to newer n5 versions, please also update render's n5 version to keep in sync -->
-		<n5-version>3.2.0</n5-version>
+		<imglib2.version>8.0.0</imglib2.version>
+		<imglib2-cache.version>1.0.0-beta-20</imglib2-cache.version>
+		<n5.version>4.0.0-alpha-10</n5.version>
+		<n5-zarr.version>2.0.0-alpha-7</n5-zarr.version>
+		<n5-imglib2.version>7.1.0-alpha-7</n5-imglib2.version>
+		<n5-universe.version>2.4.0-alpha-7</n5-universe.version>
+		<n5-hdf5.version>2.3.0-alpha-6</n5-hdf5.version>
+		<n5-blosc.version>2.0.0-alpha-4</n5-blosc.version>
+		<n5-zstandard.version>2.0.0-alpha-4</n5-zstandard.version>
 		<!-- <guava.version>33.1.0-jre</guava.version> -->
 	</properties>
 
@@ -45,6 +55,7 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-universe</artifactId>
+			<version>${n5-universe.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>net.imagej</groupId>
@@ -75,6 +86,7 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-imglib2</artifactId>
+			<version>${n5-imglib2.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
@@ -153,10 +165,17 @@
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-hdf5</artifactId>
+			<version>${n5-hdf5.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-zarr</artifactId>
+			<version>${n5-zarr.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia</groupId>
+			<artifactId>n5-zstandard</artifactId>
+			<version>${n5-zstandard.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>info.picocli</groupId>
@@ -185,10 +204,11 @@
 			<artifactId>n5-jpeg</artifactId>
 			<version>${n5-jpeg.version}</version>
 		</dependency>
-		<!-- <dependency>
+		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-blosc</artifactId>
-		</dependency> -->
+			<version>${n5-blosc.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>Stitching_</artifactId>

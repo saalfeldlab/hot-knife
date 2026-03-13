@@ -19,6 +19,9 @@ public class NonRigidRealRandomAccessible< T > implements RealRandomAccessible<T
 	}
 
 	@Override
+	public T getType() { return imageData.getType(); }
+
+	@Override
 	public int numDimensions() { return grid.numDimensions(); }
 
 	@Override

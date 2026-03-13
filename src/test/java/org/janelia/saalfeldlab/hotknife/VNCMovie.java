@@ -33,10 +33,9 @@ import javax.swing.SwingUtilities;
 import org.janelia.saalfeldlab.hotknife.ops.CLLCN;
 import org.janelia.saalfeldlab.hotknife.ops.ImageJStackOp;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.zarr.N5ZarrReader;
+import org.janelia.saalfeldlab.n5.universe.N5Factory;
 
 import bdv.cache.CacheControl;
 import bdv.util.BdvFunctions;
@@ -309,10 +308,25 @@ public class VNCMovie implements Callable<Void> {
 			final VoxelDimensions voxelDimensions,
 			final BiFunction<Integer, Integer, double[]> computeScales ) throws IOException {
 
-		System.out.println( n5Path );
-		final N5Reader n5 = n5Path.toLowerCase().endsWith( ".zarr" ) ? new N5ZarrReader( n5Path ) : new N5FSReader(n5Path);
+		return createMipmapSource( n5Path, n5Group, normalization, invert, mSem, min, max, voxelDimensions, computeScales, "s" );
+	}
 
-		final int numScales = 7;
+	public static RandomAccessibleIntervalMipmapSource<UnsignedByteType> createMipmapSource(
+			final String n5Path,
+			final String n5Group,
+			final Normalization normalization,
+			final boolean invert,
+			final boolean mSem,
+			final int min, // only for 16 bit sources
+			final int max,
+			final VoxelDimensions voxelDimensions,
+			final BiFunction<Integer, Integer, double[]> computeScales,
+			final String scalePrefix ) throws IOException {
+
+		System.out.println( n5Path );
+		final N5Reader n5 = new N5Factory().openReader( n5Path );
+
+		final int numScales = 8;
 		final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = (RandomAccessibleInterval<UnsignedByteType>[])new RandomAccessibleInterval[numScales];
 		final double[][] scales = new double[numScales][3];
 
@@ -320,7 +334,11 @@ public class VNCMovie implements Callable<Void> {
 
 			final int scale = 1 << scaleIndex;
 			final double inverseScale = 1.0 / scale;
-			RandomAccessibleInterval imgRaw = N5Utils.openVolatile(n5, n5Group + "/s" + scaleIndex);
+			RandomAccessibleInterval imgRawND = N5Utils.openVolatile(n5, n5Group + "/" + scalePrefix + scaleIndex);
+			// n5-zarr presents OME-Zarr as (X,Y,Z,C,T) in imglib2 order; strip trailing singleton dimensions to get 3D
+			while (imgRawND.numDimensions() > 3)
+				imgRawND = Views.hyperSlice(imgRawND, imgRawND.numDimensions() - 1, 0);
+			final RandomAccessibleInterval imgRaw = imgRawND;
 			RandomAccessibleInterval<UnsignedByteType> img;
 
 			if ( UnsignedByteType.class.isInstance( Views.iterable( imgRaw ).firstElement() ) )

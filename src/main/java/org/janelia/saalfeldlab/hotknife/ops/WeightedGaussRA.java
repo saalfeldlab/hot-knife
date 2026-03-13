@@ -139,6 +139,9 @@ public class WeightedGaussRA<T extends RealType<T> & NativeType<T>> implements C
 		}
 
 		@Override
+		public T getType() { return type; }
+
+		@Override
 		public int numDimensions()
 		{
 			return source.numDimensions();

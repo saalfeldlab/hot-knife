@@ -36,6 +36,7 @@ import net.imglib2.RealRandomAccessible;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.imageplus.ImagePlusImg;
 import net.imglib2.img.imageplus.ImagePlusImgs;
+import net.imglib2.interpolation.InterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.interpolation.randomaccess.NearestNeighborInterpolatorFactory;
 import net.imglib2.realtransform.AffineGet;
@@ -174,9 +175,10 @@ public class SparkWarpPhaseOutImageSeries implements Callable<Void>, Serializabl
 			final String inputPath = String.format(formatInput, tuple._2());
 			final ImagePlus imp = IJ.openImage(inputPath);
 			final ImagePlusImg img = ImagePlusImgs.from(imp);
+			final InterpolatorFactory factory = interpolation == 0 ? new NearestNeighborInterpolatorFactory<>() : new NLinearInterpolatorFactory<>();
 			final RealRandomAccessible<?> imgReal = Views.interpolate(
 					Views.extendValue(img, ((Type)Util.getTypeFromInterval(img)).createVariable()),
-					interpolation == 0 ? new NearestNeighborInterpolatorFactory<>() : new NLinearInterpolatorFactory());
+					factory);
 
 			final RandomAccessibleInterval warped = Views.interval(
 					new RealTransformRandomAccessible<>(

@@ -10,8 +10,10 @@ import net.imglib2.neighborsearch.NearestNeighborSearchOnKDTree;
 
 public class NearestNeighborMaxDistanceSearchOnKDTree< T > extends NearestNeighborSearchOnKDTree< T >
 {
+	final KDTree< T > kdTree;
 	final T outofbounds;
 	final SimpleSampler< T > oobsSampler;
+	final double[] localPos;
 	final SimpleRealLocalizable position;
 	final double maxSqDistance, maxDistance;
 
@@ -23,8 +25,10 @@ public class NearestNeighborMaxDistanceSearchOnKDTree< T > extends NearestNeighb
 	{
 		super( tree );
 
+		this.kdTree = tree;
 		this.oobsSampler = new SimpleSampler< T >( outofbounds );
-		this.position = new SimpleRealLocalizable( pos );
+		this.localPos = new double[ tree.numDimensions() ];
+		this.position = new SimpleRealLocalizable( localPos );
 		this.maxDistance = maxDistance;
 		this.maxSqDistance = maxDistance * maxDistance;
 		this.outofbounds = outofbounds;
@@ -33,9 +37,10 @@ public class NearestNeighborMaxDistanceSearchOnKDTree< T > extends NearestNeighb
 	@Override
 	public void search( final RealLocalizable p )
 	{
+		p.localize( localPos );
 		super.search( p );
 
-		if ( bestSquDistance > maxSqDistance )
+		if ( super.getSquareDistance() > maxSqDistance )
 		{
 			value = oobsSampler;
 			point = position;
@@ -43,9 +48,9 @@ public class NearestNeighborMaxDistanceSearchOnKDTree< T > extends NearestNeighb
 		}
 		else
 		{
-			value = bestPoint;
-			point = bestPoint;
-			newbestSquDistance = bestSquDistance;
+			value = super.getSampler();
+			point = super.getPosition();
+			newbestSquDistance = super.getSquareDistance();
 		}
 	}
 
@@ -76,10 +81,8 @@ public class NearestNeighborMaxDistanceSearchOnKDTree< T > extends NearestNeighb
 	@Override
 	public NearestNeighborMaxDistanceSearchOnKDTree< T > copy()
 	{
-		final NearestNeighborMaxDistanceSearchOnKDTree< T > copy = new NearestNeighborMaxDistanceSearchOnKDTree< T >( tree, outofbounds, maxDistance );
-		System.arraycopy( pos, 0, copy.pos, 0, pos.length );
-		copy.bestPoint = bestPoint;
-		copy.bestSquDistance = bestSquDistance;
+		final NearestNeighborMaxDistanceSearchOnKDTree< T > copy = new NearestNeighborMaxDistanceSearchOnKDTree< T >( kdTree, outofbounds, maxDistance );
+		System.arraycopy( localPos, 0, copy.localPos, 0, localPos.length );
 		copy.newbestSquDistance = newbestSquDistance;
 		copy.point = point;
 		copy.value = value;
