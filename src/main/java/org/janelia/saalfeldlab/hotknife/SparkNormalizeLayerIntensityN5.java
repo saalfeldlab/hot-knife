@@ -28,7 +28,6 @@ import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -354,9 +353,8 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 */
 	protected interface TypeHelper<T extends NativeType<T> & IntegerType<T>> extends Serializable {
 		T getType();
-		Img<T> createImg(final long[] dimensions);
+
 		int clip(final int value);
-		boolean isOutsideThreshold(final int value);
 	}
 
 	protected static class ByteHelper implements TypeHelper<UnsignedByteType> {
@@ -366,19 +364,10 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		}
 
 		@Override
-		public Img<UnsignedByteType> createImg(final long[] dimensions) {
-			return ArrayImgs.unsignedBytes(dimensions);
-		}
-
-		@Override
 		public int clip(final int value) {
 			return UnsignedByteType.getCodedSignedByteChecked(value);
 		}
 
-		@Override
-		public boolean isOutsideThreshold(final int value) {
-			return (value < 20 || value > 200);
-		}
 	}
 
 	protected static class ShortHelper implements TypeHelper<UnsignedShortType> {
@@ -388,19 +377,10 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		}
 
 		@Override
-		public Img<UnsignedShortType> createImg(final long[] dimensions) {
-			return ArrayImgs.unsignedShorts(dimensions);
-		}
-
-		@Override
 		public int clip(final int value) {
 			return UnsignedShortType.getCodedSignedShortChecked(value);
 		}
 
-		@Override
-		public boolean isOutsideThreshold(final int value) {
-			return (value < 5000 || value > 60000);
-		}
 	}
 
 	/**

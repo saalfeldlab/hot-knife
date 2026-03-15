@@ -121,8 +121,7 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 
 		// Compute intensity transformations for each layer
 		final List<AffineModel1D> models = new ArrayList<>(stack.size());
-		for (int z = 0; z < layerStats.size(); z++) {
-			final LayerStats stats = layerStats.get(z);
+		for (final LayerStats stats : layerStats) {
 			final AffineModel1D model = new AffineModel1D();
 			final double scale = targetScale / fibSemOptions.scale().get(stats);
 			final double shift = targetShift - fibSemOptions.shift().from(stats) * scale;
