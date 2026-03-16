@@ -197,9 +197,9 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 
 		// TODO: adjust min/max clipping range (100–3000) to match this dataset's intensity range
 		// scalePrefix "" means scale levels are named 0, 1, 2, ... (OME-Zarr convention)
-		final RandomAccessibleIntervalMipmapSource<?> mipmapSource0 = VNCMovie.createMipmapSource( n5Path, n5GroupCh0, Normalization.CLAHE, false, false, 100, 1500, vx, computeScales, "" );
+		final RandomAccessibleIntervalMipmapSource<?> mipmapSource0 = VNCMovie.createMipmapSource( n5Path, n5GroupCh0, Normalization.CLAHE, false, false, 100, 2000, vx, computeScales, "" );
 
-		BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource0, BdvOptions.options().numRenderingThreads(Runtime.getRuntime().availableProcessors() - 1));
+		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource0, BdvOptions.options().numRenderingThreads(Runtime.getRuntime().availableProcessors() - 1));
 		bdv.setColor( color0 );
 
 		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
@@ -217,16 +217,12 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 			System.out.println(String.format("Current transform: [%s]", transform.toString().replace("AffineTransform3D: (", "").replace(")", "")));
 		}, "print-transform", "P");
 
-
-		// Uncomment to navigate interactively and set up keyframe transforms.
-		// Press T in BDV to print the current transform to stdout, then paste
-//		// the 12 values into the transforms[] array below.
-//         SimpleMultiThreading.threadHaltUnClean();
-
+        // uncomment to use interactive
+//        SimpleMultiThreading.threadHaltUnClean();
 		Thread.sleep(3000);
 
 		/* animate */
-		final AffineTransform3D[] transforms = new AffineTransform3D[7];
+		final AffineTransform3D[] transforms = new AffineTransform3D[10];
 		final int[] frames = new int[transforms.length];
 		final int[] accel  = new int[transforms.length];
 
@@ -239,45 +235,61 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 		transforms[0] = new AffineTransform3D();
 //		transforms[0].set(0.05168960392840988,0.0,0.0,-26.474155198035874,0.0,0.05168960392840988,0.0,-4.363410221618949,0.0,0.0,0.05168960392840988,-7934.018448990874);
         transforms[0].set(0.06461200491051237, 0.0, 0.0, -0.5926939975447567 - 500, 0.0, 0.06461200491051237, 0.0, -28.954262777023985 - 340, 0.0, 0.0, 0.06461200491051237, -1557.9323706144676);
-
         frames[0] = 0;
 		accel[0] = 0;
 
-		transforms[1] = new AffineTransform3D();
-//		transforms[1].set(0.05168960392840988,0.0,0.0,-26.474155198035874,0.0,0.05168960392840988,0.0,-4.363410221618949,0.0,0.0,0.05168960392840988,-3483.0184489908743 / 5.0);
-		transforms[1].set(0.06461200491051235,0.0,0.0,-500.5926939975448,0.0,0.06461200491051235,0.0,-358.954262777024,0.0,0.0,0.06461200491051235,-696.6036897981749);
-		frames[1] = 240;
+		// hold at first transform
+		transforms[1] = transforms[0].copy();
+		frames[1] = 0;
 		accel[1] = 0;
 
 		transforms[2] = new AffineTransform3D();
-//		transforms[2].set(0.18379131293890835,0.0,0.0,-1205.8510498298524,0.0,0.18379131293890835,0.0,-884.4435724523892,0.0,0.0,0.18379131293890835,-12384.473570683173 / 5.0);
-		transforms[2].set(0.22973914117363544,0.0,0.0,-1974.8138122873155,0.0,0.22973914117363544,0.0,-1459.054465565487,0.0,0.0,0.22973914117363544,-2476.8947141366346);
+//		transforms[2].set(0.05168960392840988,0.0,0.0,-26.474155198035874,0.0,0.05168960392840988,0.0,-4.363410221618949,0.0,0.0,0.05168960392840988,-3483.0184489908743);
+		transforms[2].set(0.06461200491051235,0.0,0.0,-500.5926939975448,0.0,0.06461200491051235,0.0,-358.954262777024,0.0,0.0,0.06461200491051235,-683.9323706144589);
 		frames[2] = 240;
-		accel[2] = 3;
+		accel[2] = 0;
 
 		transforms[3] = new AffineTransform3D();
-//		transforms[3].set(0.18379131293890835,0.0,0.0,-1205.8510498298524,0.0,0.18379131293890835,0.0,-884.4435724523892,0.0,0.0,0.18379131293890835,-10498.473570683173 / 5.0);
-		transforms[3].set(0.22973914117363544,0.0,0.0,-1974.8138122873155,0.0,0.22973914117363544,0.0,-1459.054465565487,0.0,0.0,0.22973914117363544,-2099.6947141366346);
+//		transforms[3].set(0.18379131293890835,0.0,0.0,-1205.8510498298524,0.0,0.18379131293890835,0.0,-884.4435724523892,0.0,0.0,0.18379131293890835,-12384.473570683173); -2476.8947141366346
+        // transforms[0].set(0.22973914117363503, 0.0, 0.0, -1923.8137503213775, 0.0, 0.22973914117363503, 0.0, -1397.2587875389204, 0.0, 0.0, 0.2297391411736351, -2420.748996276919);
+		transforms[3].set(0.22973914117363544,0.0,0.0,-1974.8138122873155,0.0,0.22973914117363544,0.0,-1459.054465565487,0.0,0.0,0.22973914117363544,-2420.748996276919);
 		frames[3] = 240;
-		accel[3] = 0;
+		accel[3] = 3;
 
 		transforms[4] = new AffineTransform3D();
-//		transforms[4].set(0.18379131293890835,0.0,0.0,-1900.8510498298524,0.0,0.18379131293890835,0.0,-524.4435724523892,0.0,0.0,0.18379131293890835,-10498.473570683173 / 5.0);
-		transforms[4].set(0.22973914117363544,0.0,0.0,-2843.5638122873155,0.0,0.22973914117363544,0.0,-1009.054465565487,0.0,0.0,0.22973914117363544,-2099.6947141366346);
+//		transforms[4].set(0.18379131293890835,0.0,0.0,-1205.8510498298524,0.0,0.18379131293890835,0.0,-884.4435724523892,0.0,0.0,0.18379131293890835,-10498.473570683173);
+		transforms[4].set(0.22973914117363544,0.0,0.0,-1974.8138122873155,0.0,0.22973914117363544,0.0,-1459.054465565487,0.0,0.0,0.22973914117363544,-2058.6947141366346);
 		frames[4] = 240;
-		accel[4] = 3;
+		accel[4] = 0;
 
 		transforms[5] = new AffineTransform3D();
-//		transforms[5].set(0.2715434758227295,0.0,0.0,-2983.6488792738564,0.0,0.2715434758227295,0.0,-921.8982877669971,0.0,0.0,0.2715434758227295,-12349.849017771183 / 5.0);
-		transforms[5].set(0.33942934477841188,0.0,0.0,-4197.0610990923205,0.0,0.33942934477841188,0.0,-1505.8728597087464,0.0,0.0,0.33942934477841188,-2469.9698035542366);
+//		transforms[5].set(0.18379131293890835,0.0,0.0,-1900.8510498298524,0.0,0.18379131293890835,0.0,-524.4435724523892,0.0,0.0,0.18379131293890835,-10498.473570683173);
+		transforms[5].set(0.22973914117363544,0.0,0.0,-2843.5638122873155,0.0,0.22973914117363544,0.0,-1009.054465565487,0.0,0.0,0.22973914117363544,-2058.6947141366346);
 		frames[5] = 240;
 		accel[5] = 3;
 
 		transforms[6] = new AffineTransform3D();
-//		transforms[6].set(0.04465142332656071,0.0,0.0,-78.14666013441797,0.0,0.04465142332656071,0.0,42.263853808723866,0.0,0.0,0.04465142332656071,-1230.7552403564432 / 5.0);
-		transforms[6].set(0.05581427915820089,0.0,0.0,-565.1833251680225,0.0,0.05581427915820089,0.0,-300.67018273909517,0.0,0.0,0.05581427915820089,-246.15104807128864);
+//		transforms[6].set(0.2715434758227295,0.0,0.0,-2983.6488792738564,0.0,0.2715434758227295,0.0,-921.8982877669971,0.0,0.0,0.2715434758227295,-12349.849017771183);
+		transforms[6].set(0.33942934477841188,0.0,0.0,-4197.0610990923205,0.0,0.33942934477841188,0.0,-1505.8728597087464,0.0,0.0,0.33942934477841188,-2421.9698035542366);
 		frames[6] = 240;
 		accel[6] = 3;
+
+		transforms[7] = new AffineTransform3D();
+//		transforms[7].set(0.04465142332656071,0.0,0.0,-78.14666013441797,0.0,0.04465142332656071,0.0,42.263853808723866,0.0,0.0,0.04465142332656071,-1230.7552403564432); 4.22
+		transforms[7].set(0.05581427915820089,0.0,0.0,-565.1833251680225,0.0,0.05581427915820089,0.0,-300.67018273909517,0.0,0.0,0.05581427915820089,-241.3323706144608);
+		frames[7] = 240;
+		accel[7] = 3;
+
+//        transforms[8] = new AffineTransform3D();
+////		transforms[7].set(0.04465142332656071,0.0,0.0,-78.14666013441797,0.0,0.04465142332656071,0.0,42.263853808723866,0.0,0.0,0.04465142332656071,-1230.7552403564432); 4.22
+//        transforms[8].set(0.022087605549306763, 0.0, 0.0, 308.8504675596406 - 500, 0.0, 0.0, 0.022087605549306763, -4.169998622078651 - 340, 0.0, -0.022087605549306763, 0.0, 117.23092560508468);
+//        frames[8] = 240;
+//        accel[8] = 3;
+
+		// go back to first transform + hold
+		transforms[8] = transforms[0].copy();
+		frames[8] = 60;
+		accel[8] = 0;
 
 		// play at 60 FPS
 		for ( int i = 0; i < frames.length; ++i )

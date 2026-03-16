@@ -392,7 +392,7 @@ public class VNCMovie implements Callable<Void> {
 								Views.extendZero( img ),
 								normalization == Normalization.CLLCN ?
 										(fp) -> new CLLCN(fp).run(blockRadius, blockRadius, 3f, 10, 0.5f, true, true, true) :
-										(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 5f, null, false),
+										(fp) -> Flat.getFastInstance().run(new ImagePlus("", fp), blockRadius, 256, 2f, null, false),
 								blockRadius,
 								0,
 								255,
