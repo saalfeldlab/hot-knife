@@ -182,16 +182,21 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 		final int zStart = (int) gridBlock[0][2];
 		final int zSize = (int) gridBlock[1][2];
 
+		// Extend one layer before to capture the cross-block boundary pair
+		final int extendedZStart = Math.max(0, zStart - 1);
+		final int extendedZSize = zSize + (zStart - extendedZStart);
+
 		final FinalInterval interval = Intervals.createMinSize(
-				gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
-				gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
+				gridBlock[0][0], gridBlock[0][1], extendedZStart,
+				gridBlock[1][0], gridBlock[1][1], extendedZSize);
 		final RandomAccessibleInterval<UnsignedByteType> chunk = Views.interval(img, interval);
+		final long zMin = chunk.min(2);
 
-		for (int z = 0; z < zSize - 1; z++) {
-			final int globalZ = zStart + z;
+		for (int z = 0; z < extendedZSize - 1; z++) {
+			final int globalZ = extendedZStart + z;
 
-			final Cursor<UnsignedByteType> currentLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, z)).cursor();
-			final Cursor<UnsignedByteType> nextLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, z + 1)).cursor();
+			final Cursor<UnsignedByteType> currentLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, zMin + z)).cursor();
+			final Cursor<UnsignedByteType> nextLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, zMin + z + 1)).cursor();
 
 			final List<Double> shifts = new ArrayList<>();
 

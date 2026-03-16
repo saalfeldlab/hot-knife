@@ -168,11 +168,12 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 				gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
 				gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
 		final RandomAccessibleInterval<T> chunk = Views.interval(img, interval);
+		final long zMin = chunk.min(2);
 
 		for (int z = 0; z < zSize; z++) {
 			final int globalZ = zStart + z;
 
-			final RandomAccessibleInterval<T> layer = Views.hyperSlice(chunk, 2, z);
+			final RandomAccessibleInterval<T> layer = Views.hyperSlice(chunk, 2, zMin + z);
 
 			final List<Double> pixels = new ArrayList<>();
 			final Cursor<T> cursor = Views.flatIterable(layer).cursor();
