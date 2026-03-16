@@ -137,15 +137,15 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 				}
 			}
 
-			// Compute layer shift using LayerStats for robust aggregation
+			// Compute layer shift using LayerHistogram for robust aggregation
 			double layerShift = 0.0;
 			if (!shifts.isEmpty()) {
-				final LayerStats stats = LayerStats.from(shifts, multiSemOptions.cutoff());
-				layerShift = (multiSemOptions.aggregation() == AggregationType.MEDIAN) ? stats.median : stats.mean;
+				final LayerHistogram histogram = LayerHistogram.from(shifts, multiSemOptions.cutoff());
+				layerShift = (multiSemOptions.aggregation() == AggregationType.MEDIAN) ? histogram.median() : histogram.mean();
 				cumulativeShift += layerShift;
 
 				System.out.printf("%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f%n",
-						z + 1, shifts.size(), stats.median, stats.mean, stats.std, stats.min, stats.max,
+						z + 1, shifts.size(), histogram.median(), histogram.mean(), histogram.std(), histogram.min(), histogram.max(),
 						layerShift, cumulativeShift);
 			} else {
 				System.out.printf("%d\t0\t-\t-\t-\t-\t-\t%.2f\t%.2f%n",

@@ -3,7 +3,6 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -259,48 +258,151 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 
 	/**
-	 * Helper class to hold the median, mean, min and max (discarding some cutoff pixels on either side) of a layer.
+	 * Histogram-based statistics for a layer. Holds an integer histogram and computes
+	 * rank and accumulated statistics on demand, applying a cutoff to discard outliers.
+	 * Can be merged with other instances for parallel computation.
 	 */
-	protected static class LayerStats {
-		public final double median;
-		public final double mean;
-		public final double std;
-		public final double min;
-		public final double max;
+	protected static class LayerHistogram {
+		private final long[] counts;
+		private final int offset;  // value v is stored at index v + offset
+		private final long totalCount;
+		private final double cutoff;
 
-		private LayerStats(
-				final double median,
-				final double mean,
-				final double std,
-				final double min,
-				final double max
-		) {
-			this.median = median;
-			this.mean = mean;
-			this.std = std;
-			this.min = min;
-			this.max = max;
+		private LayerHistogram(final long[] counts, final int offset, final long totalCount, final double cutoff) {
+			this.counts = counts;
+			this.offset = offset;
+			this.totalCount = totalCount;
+			this.cutoff = cutoff;
 		}
 
-		public static LayerStats from(final List<Double> pixelList, final double cutoff) {
-			// Convert to sorted array for rank statistics
-			final double[] pixels = pixelList.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+		/**
+		 * Build a histogram from a list of integer-valued doubles.
+		 */
+		public static LayerHistogram from(final List<Double> values, final double cutoff) {
+			if (values.isEmpty()) {
+				return new LayerHistogram(new long[0], 0, 0, cutoff);
+			}
 
-			// Compute histogram clipping bounds
-			final int start = (int) Math.round(pixels.length * cutoff);
-			final int end = pixels.length - start;
+			int minVal = Integer.MAX_VALUE;
+			int maxVal = Integer.MIN_VALUE;
+			for (final double v : values) {
+				final int iv = (int) v;
+				if (iv < minVal) minVal = iv;
+				if (iv > maxVal) maxVal = iv;
+			}
 
-			final double median = pixels[pixels.length / 2];
-			final double min = pixels[start];
-			final double max = pixels[end - 1];
+			final int offset = -minVal;
+			final long[] counts = new long[maxVal - minVal + 1];
+			for (final double v : values) {
+				counts[(int) v + offset]++;
+			}
 
-			// Compute accumulated statistics over clipped pixels
-			final double mean = Arrays.stream(pixels, start, end).average().orElse(0.0);
-			final double std = Math.sqrt(Arrays.stream(pixels, start, end)
-					.map(v -> (v - mean) * (v - mean))
-					.average().orElse(0.0));
+			return new LayerHistogram(counts, offset, values.size(), cutoff);
+		}
 
-			return new LayerStats(median, mean, std, min, max);
+		public LayerHistogram merge(final LayerHistogram other) {
+			if (totalCount == 0) return other;
+			if (other.totalCount == 0) return this;
+
+			final int thisMin = -offset;
+			final int thisMax = counts.length - 1 - offset;
+			final int otherMin = -other.offset;
+			final int otherMax = other.counts.length - 1 - other.offset;
+
+			final int newMin = Math.min(thisMin, otherMin);
+			final int newMax = Math.max(thisMax, otherMax);
+			final int newOffset = -newMin;
+			final long[] newCounts = new long[newMax - newMin + 1];
+
+			for (int i = 0; i < counts.length; i++) {
+				newCounts[i - offset + newOffset] += counts[i];
+			}
+			for (int i = 0; i < other.counts.length; i++) {
+				newCounts[i - other.offset + newOffset] += other.counts[i];
+			}
+
+			return new LayerHistogram(newCounts, newOffset, totalCount + other.totalCount, cutoff);
+		}
+
+		public double median() {
+			return valueAtRank(totalCount / 2);
+		}
+
+		public double min() {
+			final long start = Math.round(totalCount * cutoff);
+			return valueAtRank(start);
+		}
+
+		public double max() {
+			final long start = Math.round(totalCount * cutoff);
+			final long end = totalCount - start;
+			return valueAtRank(end - 1);
+		}
+
+		public double mean() {
+			final long start = Math.round(totalCount * cutoff);
+			final long end = totalCount - start;
+
+			double sum = 0;
+			long cumulative = 0;
+			long clippedCount = 0;
+
+			for (int i = 0; i < counts.length; i++) {
+				if (counts[i] == 0) continue;
+				final long prevCumulative = cumulative;
+				cumulative += counts[i];
+				final double value = i - offset;
+
+				// How many of this bin's entries fall within [start, end)?
+				final long binStart = Math.max(start, prevCumulative);
+				final long binEnd = Math.min(end, cumulative);
+				if (binEnd > binStart) {
+					final long n = binEnd - binStart;
+					sum += value * n;
+					clippedCount += n;
+				}
+			}
+
+			return clippedCount > 0 ? sum / clippedCount : 0.0;
+		}
+
+		public double std() {
+			final double m = mean();
+			final long start = Math.round(totalCount * cutoff);
+			final long end = totalCount - start;
+
+			double sumSqDiff = 0;
+			long cumulative = 0;
+			long clippedCount = 0;
+
+			for (int i = 0; i < counts.length; i++) {
+				if (counts[i] == 0) continue;
+				final long prevCumulative = cumulative;
+				cumulative += counts[i];
+				final double value = i - offset;
+
+				final long binStart = Math.max(start, prevCumulative);
+				final long binEnd = Math.min(end, cumulative);
+				if (binEnd > binStart) {
+					final long n = binEnd - binStart;
+					sumSqDiff += (value - m) * (value - m) * n;
+					clippedCount += n;
+				}
+			}
+
+			return clippedCount > 0 ? Math.sqrt(sumSqDiff / clippedCount) : 0.0;
+		}
+
+		private double valueAtRank(final long rank) {
+			long cumulative = 0;
+			for (int i = 0; i < counts.length; i++) {
+				cumulative += counts[i];
+				if (cumulative > rank) {
+					return i - offset;
+				}
+			}
+			// Return the last non-empty bin
+			return counts.length - 1 - offset;
 		}
 	}
 
@@ -308,18 +410,18 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 * Small helper enum to represent the type of mean used for normalization.
 	 */
 	protected enum ShiftType {
-		NONE(stats -> 0.0),
-		MEDIAN(stats -> stats.median),
-		MEAN(stats -> stats.mean);
+		NONE(h -> 0.0),
+		MEDIAN(h -> h.median()),
+		MEAN(h -> h.mean());
 
-		private final Function<LayerStats, Double> function;
+		private final Function<LayerHistogram, Double> function;
 
-		ShiftType(final Function<LayerStats, Double> function) {
+		ShiftType(final Function<LayerHistogram, Double> function) {
 			this.function = function;
 		}
 
-		public double from(final LayerStats stats) {
-			return function.apply(stats);
+		public double from(final LayerHistogram histogram) {
+			return function.apply(histogram);
 		}
 	}
 
@@ -329,18 +431,18 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 * 'GAUSS' scaling is what is used to normalize 8bit FIB-SEM data.
 	 */
 	protected enum ScaleType {
-		NONE(stats -> 1.0),
-		FULL_RANGE(stats -> stats.max - stats.min),
-		GAUSS(stats -> 4 * stats.std);
+		NONE(h -> 1.0),
+		FULL_RANGE(h -> h.max() - h.min()),
+		GAUSS(h -> 4 * h.std());
 
-		private final Function<LayerStats, Double> function;
+		private final Function<LayerHistogram, Double> function;
 
-		ScaleType(final Function<LayerStats, Double> function) {
+		ScaleType(final Function<LayerHistogram, Double> function) {
 			this.function = function;
 		}
 
-		public double get(final LayerStats stats) {
-			return function.apply(stats);
+		public double get(final LayerHistogram histogram) {
+			return function.apply(histogram);
 		}
 	}
 
