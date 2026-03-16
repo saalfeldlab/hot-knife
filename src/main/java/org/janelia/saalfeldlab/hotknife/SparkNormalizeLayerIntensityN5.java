@@ -26,7 +26,6 @@ import org.kohsuke.args4j.Option;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -149,40 +148,48 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	}
 
 	protected void run() throws IOException {
-		// Compute transformations based on downsampled input
-		final List<AffineModel1D> transformations;
+		// Read downscaled dataset attributes for grid creation and z-dimension validation
+		final DatasetAttributes downscaledAttributes;
 		try (final N5Reader n5reader = N5Util.createN5Reader(options.n5Path)) {
-			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
-			transformations = computeTransformations(downScaledImg);
+			downscaledAttributes = n5reader.getDatasetAttributes(downScaledInputDataset);
 		}
 
-		if (transformations.size() != attributes.getDimensions()[2]) {
-			throw new IllegalArgumentException("Number of transformations does not match number of layers: " + transformations.size()
-					+ " vs. " + attributes.getDimensions()[2] + ". Is the z-dimension downsampled?");
+		final int nLayers = (int) downscaledAttributes.getDimensions()[2];
+		if (nLayers != attributes.getDimensions()[2]) {
+			throw new IllegalArgumentException("Number of downscaled layers does not match full-scale layers: "
+													   + nLayers + " vs. " + attributes.getDimensions()[2] + ". Is the z-dimension downsampled?");
 		}
 
-		// Apply transformations to full scale input and save to output dataset
+		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeLayerIntensityN5");
+		try (final JavaSparkContext sparkContext = new JavaSparkContext(conf)) {
+			final List<AffineModel1D> transformations = computeTransformations(sparkContext, downscaledAttributes);
+			applyAndWrite(sparkContext, transformations);
+		}
+	}
+
+	/**
+	 * Apply transformations to the full-scale input, write the output dataset,
+	 * optionally downsample, and transfer base attributes.
+	 */
+	private void applyAndWrite(final JavaSparkContext sparkContext, final List<AffineModel1D> transformations) throws IOException {
+		// Create output dataset
 		try (final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path)) {
 			n5Writer.createDataset(fullScaleOutputDataset, attributes);
 		}
 
 		final List<long[][]> grid = Grid.create(attributes.getDimensions(), attributes.getBlockSize());
-		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeLayerIntensityN5");
 
-		try (final JavaSparkContext sparkContext = new JavaSparkContext(conf)) {
+		final JavaRDD<long[][]> parallelizedGrid = sparkContext.parallelize(grid);
+		final Broadcast<List<? extends AbstractAffineModel1D<?>>> transformationsBroadcast = sparkContext.broadcast(transformations);
+		parallelizedGrid.foreach(gridBlock -> saveFullScaleBlock(transformationsBroadcast.value(), gridBlock));
 
-			final JavaRDD<long[][]> parallelizedGrid = sparkContext.parallelize(grid);
-			final Broadcast<List<? extends AbstractAffineModel1D<?>>> transformationsBroadcast = sparkContext.broadcast(transformations);
-			parallelizedGrid.foreach(gridBlock -> saveFullScaleBlock(transformationsBroadcast.value(), gridBlock));
-
-			final int[] downsampleFactors = parseCSIntArray(options.factors);
-			if (downsampleFactors != null) {
-				downsampleScalePyramid(sparkContext,
-									   new N5PathSupplier(options.n5Path),
-									   fullScaleOutputDataset,
-									   options.n5DatasetOutput,
-									   downsampleFactors);
-			}
+		final int[] downsampleFactors = parseCSIntArray(options.factors);
+		if (downsampleFactors != null) {
+			downsampleScalePyramid(sparkContext,
+								   new N5PathSupplier(options.n5Path),
+								   fullScaleOutputDataset,
+								   options.n5DatasetOutput,
+								   downsampleFactors);
 		}
 
 		// Copy attributes and rebuild 'scales' attribute
@@ -193,13 +200,16 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 
 	/**
-	 * Compute the intensity transformations for each layer.
+	 * Compute the intensity transformations for each layer using Spark for parallelization.
 	 * Subclasses implement different strategies for computing these transformations.
 	 *
-	 * @param rai the downsampled input image
+	 * @param sparkContext the Spark context for parallelization
+	 * @param downscaledAttributes attributes of the downscaled input dataset
 	 * @return list of affine models, one per layer
 	 */
-	protected abstract List<AffineModel1D> computeTransformations(final RandomAccessibleInterval<T> rai);
+	protected abstract List<AffineModel1D> computeTransformations(
+			final JavaSparkContext sparkContext,
+			final DatasetAttributes downscaledAttributes);
 
 	private RandomAccessibleInterval<T> applyTransformations(
 			final RandomAccessibleInterval<T> sourceRaw,
@@ -262,7 +272,7 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 * rank and accumulated statistics on demand, applying a cutoff to discard outliers.
 	 * Can be merged with other instances for parallel computation.
 	 */
-	protected static class LayerHistogram {
+	protected static class LayerHistogram implements Serializable {
 		private final long[] counts;
 		private final int offset;  // value v is stored at index v + offset
 		private final long totalCount;
@@ -273,6 +283,10 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			this.offset = offset;
 			this.totalCount = totalCount;
 			this.cutoff = cutoff;
+		}
+
+		public long totalCount() {
+			return totalCount;
 		}
 
 		/**
@@ -300,7 +314,7 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			return new LayerHistogram(counts, offset, values.size(), cutoff);
 		}
 
-		public LayerHistogram merge(final LayerHistogram other) {
+		public LayerHistogram absorb(final LayerHistogram other) {
 			if (totalCount == 0) return other;
 			if (other.totalCount == 0) return this;
 

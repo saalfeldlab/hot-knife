@@ -3,20 +3,27 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import mpicbg.models.AffineModel1D;
 
+import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import net.imglib2.Cursor;
+import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.view.IntervalView;
+import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
 
@@ -25,6 +32,10 @@ import net.imglib2.view.Views;
  * Computes intensity shifts between adjacent layers, using only pixels where both layers
  * have valid tissue (within threshold). This naturally handles non-flat substrate boundaries
  * by excluding pixel pairs where one is substrate.
+ * <p>
+ * Histogram computation is parallelized via Spark: the downsampled volume is split into
+ * 3D chunks, each chunk produces per-layer-pair histograms, which are merged across
+ * partitions and then on the driver.
  * <p>
  * Only supports 8-bit data and shift transformations (no scaling).
  */
@@ -101,9 +112,112 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 	}
 
 	@Override
-	protected List<AffineModel1D> computeTransformations(final RandomAccessibleInterval<UnsignedByteType> rai) {
-		final List<IntervalView<UnsignedByteType>> stack = asZStack(rai);
-		final List<AffineModel1D> models = new ArrayList<>(stack.size());
+	protected List<AffineModel1D> computeTransformations(
+			final JavaSparkContext sparkContext,
+			final DatasetAttributes downscaledAttributes) {
+
+		final int nLayers = (int) downscaledAttributes.getDimensions()[2];
+		final int nLayerPairs = nLayers - 1;
+
+		final LayerHistogram[] globalHistograms = computeHistograms(
+				sparkContext, downscaledAttributes, nLayerPairs);
+
+		return histogramsToTransformations(globalHistograms);
+	}
+
+	private LayerHistogram[] computeHistograms(
+			final JavaSparkContext sparkContext,
+			final DatasetAttributes downscaledAttributes,
+			final int nLayerPairs) {
+
+		final List<long[][]> grid = Grid.create(
+				downscaledAttributes.getDimensions(), downscaledAttributes.getBlockSize());
+
+		final String n5Path = options.n5Path;
+		final String dsInputDataset = downScaledInputDataset;
+		final int lowerThreshold = multiSemOptions.lowerThreshold();
+		final int upperThreshold = multiSemOptions.upperThreshold();
+		final double cutoff = multiSemOptions.cutoff();
+
+		final List<LayerHistogram[]> partitionResults = sparkContext.parallelize(grid)
+				.mapPartitions(blocks -> {
+					final N5Reader n5 = N5Util.createN5Reader(n5Path);
+					final RandomAccessibleInterval<UnsignedByteType> img = N5Utils.open(n5, dsInputDataset);
+
+					final LayerHistogram[] merged = new LayerHistogram[nLayerPairs];
+
+					while (blocks.hasNext()) {
+						processShiftBlock(img, blocks.next(), merged, lowerThreshold, upperThreshold, cutoff);
+					}
+
+					return Collections.singletonList(merged).iterator();
+				})
+				.collect();
+
+		// Merge partition results on driver
+		final LayerHistogram[] globalHistograms = new LayerHistogram[nLayerPairs];
+		for (final LayerHistogram[] partResult : partitionResults) {
+			for (int i = 0; i < nLayerPairs; i++) {
+				if (partResult[i] != null) {
+					if (globalHistograms[i] == null) {
+						globalHistograms[i] = partResult[i];
+					} else {
+						globalHistograms[i].absorb(partResult[i]);
+					}
+				}
+			}
+		}
+
+		return globalHistograms;
+	}
+
+	private static void processShiftBlock(
+			final RandomAccessibleInterval<UnsignedByteType> img,
+			final long[][] gridBlock,
+			final LayerHistogram[] merged,
+			final int lowerThreshold,
+			final int upperThreshold,
+			final double cutoff) {
+
+		final int zStart = (int) gridBlock[0][2];
+		final int zSize = (int) gridBlock[1][2];
+
+		final FinalInterval interval = Intervals.createMinSize(
+				gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
+				gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
+		final RandomAccessibleInterval<UnsignedByteType> chunk = Views.interval(img, interval);
+
+		for (int z = 0; z < zSize - 1; z++) {
+			final int globalZ = zStart + z;
+
+			final Cursor<UnsignedByteType> currentLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, z)).cursor();
+			final Cursor<UnsignedByteType> nextLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, z + 1)).cursor();
+
+			final List<Double> shifts = new ArrayList<>();
+
+			while (currentLayer.hasNext()) {
+				final int valCurrent = currentLayer.next().getInteger();
+				final int valNext = nextLayer.next().getInteger();
+
+				if (valCurrent >= lowerThreshold && valCurrent <= upperThreshold
+						&& valNext >= lowerThreshold && valNext <= upperThreshold) {
+					shifts.add((double) (valNext - valCurrent));
+				}
+			}
+
+			if (!shifts.isEmpty()) {
+				final LayerHistogram blockHistogram = LayerHistogram.from(shifts, cutoff);
+				if (merged[globalZ] == null) {
+					merged[globalZ] = blockHistogram;
+				} else {
+					merged[globalZ].absorb(blockHistogram);
+				}
+			}
+		}
+	}
+
+	private List<AffineModel1D> histogramsToTransformations(final LayerHistogram[] histograms) {
+		final List<AffineModel1D> models = new ArrayList<>(histograms.length + 1);
 
 		// First layer has identity transform (reference)
 		final AffineModel1D identity = new AffineModel1D();
@@ -117,51 +231,29 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 		System.out.println("layer\tnValid\tmedian\tmean\tstd\tmin\tmax\tlayerShift\tcumulativeShift");
 		System.out.printf("%d\t-\t-\t-\t-\t-\t-\t%.2f\t%.2f%n", 0, 0.0, 0.0);
 
-		// Compute shifts between adjacent layers
-		for (int z = 0; z < stack.size() - 1; z++) {
-			final IntervalView<UnsignedByteType> currentLayer = stack.get(z);
-			final IntervalView<UnsignedByteType> nextLayer = stack.get(z + 1);
-
-			// Collect valid shifts between adjacent layers
-			final List<Double> shifts = new ArrayList<>();
-			final Cursor<UnsignedByteType> cursorCurrent = Views.flatIterable(currentLayer).cursor();
-			final Cursor<UnsignedByteType> cursorNext = Views.flatIterable(nextLayer).cursor();
-
-			while (cursorCurrent.hasNext()) {
-				final int valCurrent = cursorCurrent.next().getInteger();
-				final int valNext = cursorNext.next().getInteger();
-
-				// Only record shift if BOTH pixels are within threshold (valid tissue)
-				if (isWithinThreshold(valCurrent) && isWithinThreshold(valNext)) {
-					shifts.add((double) (valNext - valCurrent));
-				}
-			}
-
-			// Compute layer shift using LayerHistogram for robust aggregation
+		for (int z = 0; z < histograms.length; z++) {
 			double layerShift = 0.0;
-			if (!shifts.isEmpty()) {
-				final LayerHistogram histogram = LayerHistogram.from(shifts, multiSemOptions.cutoff());
-				layerShift = (multiSemOptions.aggregation() == AggregationType.MEDIAN) ? histogram.median() : histogram.mean();
+			final LayerHistogram histogram = histograms[z];
+
+			if (histogram != null) {
+				layerShift = (multiSemOptions.aggregation() == AggregationType.MEDIAN)
+						? histogram.median() : histogram.mean();
 				cumulativeShift += layerShift;
 
 				System.out.printf("%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f%n",
-						z + 1, shifts.size(), histogram.median(), histogram.mean(), histogram.std(), histogram.min(), histogram.max(),
-						layerShift, cumulativeShift);
+								  z + 1, histogram.totalCount(), histogram.median(), histogram.mean(),
+								  histogram.std(), histogram.min(), histogram.max(),
+								  layerShift, cumulativeShift);
 			} else {
 				System.out.printf("%d\t0\t-\t-\t-\t-\t-\t%.2f\t%.2f%n",
-						z + 1, layerShift, cumulativeShift);
+								  z + 1, layerShift, cumulativeShift);
 			}
 
-			// Create model: new_val = old_val - cumulativeShift (to normalize to layer 0)
 			final AffineModel1D model = new AffineModel1D();
 			model.set(1.0, -cumulativeShift);
 			models.add(model);
 		}
 
 		return models;
-	}
-
-	private boolean isWithinThreshold(final int value) {
-		return value >= multiSemOptions.lowerThreshold() && value <= multiSemOptions.upperThreshold();
 	}
 }
