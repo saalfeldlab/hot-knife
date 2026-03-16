@@ -130,8 +130,11 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 			final DatasetAttributes downscaledAttributes,
 			final int nLayerPairs) {
 
-		final List<long[][]> grid = Grid.create(
-				downscaledAttributes.getDimensions(), downscaledAttributes.getBlockSize());
+		// Use full z-extent as block size so each grid element is an XY column spanning all layers
+		final long[] dims = downscaledAttributes.getDimensions();
+		final int[] blockSize = downscaledAttributes.getBlockSize();
+		final int[] columnBlockSize = new int[]{blockSize[0], blockSize[1], (int) dims[2]};
+		final List<long[][]> grid = Grid.create(dims, columnBlockSize);
 
 		final String n5Path = options.n5Path;
 		final String dsInputDataset = downScaledInputDataset;
@@ -147,7 +150,7 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 					final LayerHistogram[] merged = new LayerHistogram[nLayerPairs];
 
 					while (blocks.hasNext()) {
-						processShiftBlock(img, blocks.next(), merged, lowerThreshold, upperThreshold, cutoff);
+						processShiftColumn(img, blocks.next(), merged, lowerThreshold, upperThreshold, cutoff);
 					}
 
 					return Collections.singletonList(merged).iterator();
@@ -171,7 +174,7 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 		return globalHistograms;
 	}
 
-	private static void processShiftBlock(
+	private static void processShiftColumn(
 			final RandomAccessibleInterval<UnsignedByteType> img,
 			final long[][] gridBlock,
 			final LayerHistogram[] merged,
@@ -179,24 +182,16 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 			final int upperThreshold,
 			final double cutoff) {
 
-		final int zStart = (int) gridBlock[0][2];
-		final int zSize = (int) gridBlock[1][2];
-
-		// Extend one layer before to capture the cross-block boundary pair
-		final int extendedZStart = Math.max(0, zStart - 1);
-		final int extendedZSize = zSize + (zStart - extendedZStart);
-
 		final FinalInterval interval = Intervals.createMinSize(
-				gridBlock[0][0], gridBlock[0][1], extendedZStart,
-				gridBlock[1][0], gridBlock[1][1], extendedZSize);
-		final RandomAccessibleInterval<UnsignedByteType> chunk = Views.interval(img, interval);
-		final long zMin = chunk.min(2);
+				gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
+				gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
+		final RandomAccessibleInterval<UnsignedByteType> column = Views.interval(img, interval);
+		final long zMin = column.min(2);
+		final int nLayers = (int) column.dimension(2);
 
-		for (int z = 0; z < extendedZSize - 1; z++) {
-			final int globalZ = extendedZStart + z;
-
-			final Cursor<UnsignedByteType> currentLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, zMin + z)).cursor();
-			final Cursor<UnsignedByteType> nextLayer = Views.flatIterable(Views.hyperSlice(chunk, 2, zMin + z + 1)).cursor();
+		for (int z = 0; z < nLayers - 1; z++) {
+			final Cursor<UnsignedByteType> currentLayer = Views.flatIterable(Views.hyperSlice(column, 2, zMin + z)).cursor();
+			final Cursor<UnsignedByteType> nextLayer = Views.flatIterable(Views.hyperSlice(column, 2, zMin + z + 1)).cursor();
 
 			final List<Double> shifts = new ArrayList<>();
 
@@ -212,10 +207,10 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 
 			if (!shifts.isEmpty()) {
 				final LayerHistogram blockHistogram = LayerHistogram.from(shifts, cutoff);
-				if (merged[globalZ] == null) {
-					merged[globalZ] = blockHistogram;
+				if (merged[z] == null) {
+					merged[z] = blockHistogram;
 				} else {
-					merged[globalZ].absorb(blockHistogram);
+					merged[z].absorb(blockHistogram);
 				}
 			}
 		}
