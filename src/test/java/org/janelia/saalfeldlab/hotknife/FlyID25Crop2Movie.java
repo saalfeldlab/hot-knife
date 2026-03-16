@@ -67,7 +67,7 @@ import picocli.CommandLine.Command;
 @Command
 public class FlyID25Crop2Movie implements Callable<Void> {
 
-	/* set to true to navigate interactively and capture keyframe transforms with P */
+	/* set to true to navigate interactively and capture keyframe transforms with T */
 	private final boolean interactive = true;
 
 	/* some parameters */
@@ -222,9 +222,20 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 		behaviors.install(bdv.getBdvHandle().getTriggerbindings(), "print-transform");
 		behaviors.behaviour((ClickBehaviour) (x, y) -> {
 			final AffineTransform3D transform = new AffineTransform3D();
-			bdv.getBdvHandle().getViewerPanel().state().getViewerTransform(transform);
+			final bdv.viewer.ViewerPanel vp = bdv.getBdvHandle().getViewerPanel();
+			vp.state().getViewerTransform(transform);
+			// Correct for HiDPI: BDV captures transforms in physical pixel coordinates,
+			// but the movie renderer uses logical pixel coordinates.
+			// corrX/Y = logical_movie_center - physical_panel_center
+			final double dpr = vp.getGraphicsConfiguration().getDefaultTransform().getScaleX();
+			final double corrX = screenWidth  / 2.0 - vp.getWidth()  * dpr / 2.0;
+			final double corrY = screenHeight / 2.0 - vp.getHeight() * dpr / 2.0;
+			transform.set(transform.get(0, 3) + corrX, 0, 3);
+			transform.set(transform.get(1, 3) + corrY, 1, 3);
+			System.out.println(String.format("HiDPI correction: tx%+.1f ty%+.1f (dpr=%.1f, panel=%dx%d)",
+					corrX, corrY, dpr, vp.getWidth(), vp.getHeight()));
 			System.out.println(String.format("Current transform: [%s]", transform.toString().replace("AffineTransform3D: (", "").replace(")", "")));
-		}, "print-transform", "P");
+		}, "print-transform", "T");
 
 		if ( interactive ) {
 			// Navigate to each keyframe position and press P to print the transform.
@@ -247,7 +258,8 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 
 		transforms[0] = new AffineTransform3D();
 //		transforms[0].set(0.05168960392840988,0.0,0.0,-26.474155198035874,0.0,0.05168960392840988,0.0,-4.363410221618949,0.0,0.0,0.05168960392840988,-7934.018448990874);
-        transforms[0].set(0.06461200491051237, 0.0, 0.0, -0.5926939975447567 - 500, 0.0, 0.06461200491051237, 0.0, -28.954262777023985 - 340, 0.0, 0.0, 0.06461200491051237, -1557.9323706144676);
+        transforms[0].set(0.06461200491051237, 0.0, 0.0, -500.59269399754476, 0.0, 0.06461200491051237, 0.0, -327.954262777024, 0.0, 0.0, 0.06461200491051237, -1087.0323706144602);
+//        transforms[0].set(0.06461200491051237, 0.0, 0.0, -0.5926939975447567 - 500, 0.0, 0.06461200491051237, 0.0, -28.954262777023985 - 340, 0.0, 0.0, 0.06461200491051237, -1557.9323706144676);
         frames[0] = 0;
 		accel[0] = 0;
 
