@@ -102,7 +102,6 @@ public class LICONNMouseMovie implements Callable<Void> {
 				32,
 				null,
 				false,
-				viewer.getOptionValues().getAccumulateProjectorFactory(),
 				new CacheControl.Dummy());
 
 		/* count i up to firstFrame */

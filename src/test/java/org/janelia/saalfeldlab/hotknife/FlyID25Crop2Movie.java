@@ -40,6 +40,7 @@ import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.viewer.Interpolation;
+import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.ViewerState;
 import bdv.viewer.animate.SimilarityTransformAnimator;
@@ -65,6 +66,9 @@ import picocli.CommandLine.Command;
  */
 @Command
 public class FlyID25Crop2Movie implements Callable<Void> {
+
+	/* set to true to navigate interactively and capture keyframe transforms with P */
+	private final boolean interactive = true;
 
 	/* some parameters */
 	private final int screenWidth = 1000; // 1280;
@@ -119,7 +123,6 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 				32,
 				null,
 				false,
-				viewer.getOptionValues().getAccumulateProjectorFactory(),
 				new CacheControl.Dummy());
 
 		/* count i up to firstFrame */
@@ -199,7 +202,13 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 		// scalePrefix "" means scale levels are named 0, 1, 2, ... (OME-Zarr convention)
 		final RandomAccessibleIntervalMipmapSource<?> mipmapSource0 = VNCMovie.createMipmapSource( n5Path, n5GroupCh0, Normalization.CLAHE, false, false, 100, 2000, vx, computeScales, "" );
 
-		final BdvStackSource<?> bdv = BdvFunctions.show(mipmapSource0, BdvOptions.options().numRenderingThreads(Runtime.getRuntime().availableProcessors() - 1));
+		final BdvStackSource<?> bdv;
+		if ( interactive ) {
+			final SharedQueue queue = new SharedQueue(Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+			bdv = BdvFunctions.show((Source)mipmapSource0.asVolatile(queue), BdvOptions.options().numRenderingThreads(Runtime.getRuntime().availableProcessors() - 1));
+		} else {
+			bdv = BdvFunctions.show(mipmapSource0, BdvOptions.options().numRenderingThreads(Runtime.getRuntime().availableProcessors() - 1));
+		}
 		bdv.setColor( color0 );
 
 		bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
@@ -217,12 +226,16 @@ public class FlyID25Crop2Movie implements Callable<Void> {
 			System.out.println(String.format("Current transform: [%s]", transform.toString().replace("AffineTransform3D: (", "").replace(")", "")));
 		}, "print-transform", "P");
 
-        // uncomment to use interactive
-//        SimpleMultiThreading.threadHaltUnClean();
+		if ( interactive ) {
+			// Navigate to each keyframe position and press P to print the transform.
+			// Paste the printed values into the transforms[] array below, then set interactive = false.
+			SimpleMultiThreading.threadHaltUnClean();
+		}
+
 		Thread.sleep(3000);
 
 		/* animate */
-		final AffineTransform3D[] transforms = new AffineTransform3D[10];
+		final AffineTransform3D[] transforms = new AffineTransform3D[9];
 		final int[] frames = new int[transforms.length];
 		final int[] accel  = new int[transforms.length];
 

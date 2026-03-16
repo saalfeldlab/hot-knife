@@ -101,7 +101,6 @@ public class LiuYinMovie implements Callable<Void> {
 				12,
 				null,
 				false,
-				viewer.getOptionValues().getAccumulateProjectorFactory(),
 				new CacheControl.Dummy());
 
 		/* count i up to firstFrame */

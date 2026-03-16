@@ -17,6 +17,13 @@
 
 		<n5-jpeg.version>0.0.1-beta1</n5-jpeg.version>
 
+		<!-- BDV upgraded to 10.6.5 (compiled against imglib2 7.1.5) to fix volatile rendering:
+		     BDV 10.4.14 (managed by pom-scijava 38.0.1) was compiled against imglib2 6.x where
+		     Views.flatIterable(RAI) returned IterableInterval, but imglib2 7+ changed the return
+		     type to RandomAccessibleInterval, causing NoSuchMethodError in VolatileHierarchyProjector -->
+		<bigdataviewer-core.version>10.6.5</bigdataviewer-core.version>
+		<bigdataviewer-vistools.version>1.0.0-beta-36</bigdataviewer-vistools.version>
+
 		<!-- N5 alpha versions for Zarr v3 shard support -->
 		<!-- See: https://imglib.github.io/imglib2-blog/posts/2025-12-22-n5-shard-dev/ -->
 		<!-- note: when upgrading to newer n5 versions, please also update render's n5 version to keep in sync -->
