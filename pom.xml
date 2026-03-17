@@ -25,7 +25,7 @@
 		<dependency>
 			<groupId>org.apache.spark</groupId>
 			<artifactId>spark-core_2.13</artifactId>
-			<version>3.4.1</version> <!-- released on June 23, 2023, see https://spark.apache.org/releases/spark-release-3-4-1.html -->
+			<version>3.5.7</version> <!-- released on June 23, 2023, see https://spark.apache.org/releases/spark-release-3-4-1.html -->
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
