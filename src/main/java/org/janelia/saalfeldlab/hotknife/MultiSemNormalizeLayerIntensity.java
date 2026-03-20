@@ -119,6 +119,8 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 		final int nLayers = (int) downscaledAttributes.getDimensions()[2];
 		final int nLayerPairs = nLayers - 1;
 
+		logMessage("computeTransformations: entry, nLayerPairs="  + nLayerPairs);
+
 		final LayerHistogram[] globalHistograms = computeHistograms(
 				sparkContext, downscaledAttributes, nLayerPairs);
 
@@ -129,6 +131,8 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 			final JavaSparkContext sparkContext,
 			final DatasetAttributes downscaledAttributes,
 			final int nLayerPairs) {
+
+		logMessage("computeHistograms: entry, nLayerPairs="  + nLayerPairs);
 
 		// Use full z-extent as block size so each grid element is an XY column spanning all layers
 		final long[] dims = downscaledAttributes.getDimensions();
@@ -170,6 +174,8 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 				}
 			}
 		}
+
+		logMessage("computeHistograms: exit, returning "  + globalHistograms.length + " histograms");
 
 		return globalHistograms;
 	}
@@ -217,6 +223,9 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 	}
 
 	private List<AffineModel1D> histogramsToTransformations(final LayerHistogram[] histograms) {
+
+		logMessage("histogramsToTransformations: entry");
+
 		final List<AffineModel1D> models = new ArrayList<>(histograms.length + 1);
 
 		// First layer has identity transform (reference)
@@ -254,6 +263,12 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 			models.add(model);
 		}
 
+		logMessage("histogramsToTransformations: exit, returning " + models.size() + " models");
+
 		return models;
+	}
+
+	private static void logMessage(final String message) {
+		org.janelia.saalfeldlab.hotknife.util.Util.logMessage(MultiSemNormalizeLayerIntensity.class.getName(), message);
 	}
 }

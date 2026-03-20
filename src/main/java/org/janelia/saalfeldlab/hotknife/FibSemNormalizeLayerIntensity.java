@@ -106,6 +106,8 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 
 		final int nLayers = (int) downscaledAttributes.getDimensions()[2];
 
+		logMessage("computeTransformations: entry, nLayers="  + nLayers);
+
 		final LayerHistogram[] layerHistograms = computeHistograms(sparkContext, downscaledAttributes, nLayers);
 
 		return histogramsToTransformations(layerHistograms);
@@ -115,6 +117,9 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 			final JavaSparkContext sparkContext,
 			final DatasetAttributes downscaledAttributes,
 			final int nLayers) {
+
+
+		logMessage("computeHistograms: entry, nLayers="  + nLayers);
 
 		final List<long[][]> grid = Grid.create(
 				downscaledAttributes.getDimensions(), downscaledAttributes.getBlockSize());
@@ -151,6 +156,8 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 				}
 			}
 		}
+
+		logMessage("computeHistograms: exit, returning "  + globalHistograms.length + " histograms");
 
 		return globalHistograms;
 	}
@@ -197,6 +204,9 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 	}
 
 	private List<AffineModel1D> histogramsToTransformations(final LayerHistogram[] layerHistograms) {
+
+		logMessage("histogramsToTransformations: entry");
+
 		// Print diagnostic output
 		System.out.println("Computing layer statistics...");
 		System.out.println("layer\tmedian\tmean\tstd\tmin\tmax");
@@ -240,6 +250,12 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 			models.add(model);
 		}
 
+		logMessage("histogramsToTransformations: exit, returning " + models.size() + " models");
+
 		return models;
+	}
+
+	private static void logMessage(final String message) {
+		org.janelia.saalfeldlab.hotknife.util.Util.logMessage(FibSemNormalizeLayerIntensity.class.getName(), message);
 	}
 }

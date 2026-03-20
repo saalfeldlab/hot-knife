@@ -148,6 +148,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	}
 
 	protected void run() throws IOException {
+
+		logMessage("run: entry");
+
 		// Read downscaled dataset attributes for grid creation and z-dimension validation
 		final DatasetAttributes downscaledAttributes;
 		try (final N5Reader n5reader = N5Util.createN5Reader(options.n5Path)) {
@@ -165,6 +168,8 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			final List<AffineModel1D> transformations = computeTransformations(sparkContext, downscaledAttributes);
 			applyAndWrite(sparkContext, transformations);
 		}
+
+		logMessage("run: exit");
 	}
 
 	/**
@@ -172,6 +177,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 * optionally downsample, and transfer base attributes.
 	 */
 	private void applyAndWrite(final JavaSparkContext sparkContext, final List<AffineModel1D> transformations) throws IOException {
+
+		logMessage("applyAndWrite: entry, with " + transformations.size() + " transformations");
+
 		// Create output dataset
 		try (final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path)) {
 			n5Writer.createDataset(fullScaleOutputDataset, attributes);
@@ -185,6 +193,7 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 		final int[] downsampleFactors = parseCSIntArray(options.factors);
 		if (downsampleFactors != null) {
+			logMessage("applyAndWrite: call downsampleScalePyramid");
 			downsampleScalePyramid(sparkContext,
 								   new N5PathSupplier(options.n5Path),
 								   fullScaleOutputDataset,
@@ -196,6 +205,8 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		try (final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path)) {
 			transferBaseAttributes(n5Writer);
 		}
+
+		logMessage("applyAndWrite: exit");
 	}
 
 
@@ -215,6 +226,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			final RandomAccessibleInterval<T> sourceRaw,
 			final List<? extends AbstractAffineModel1D<?>> transformations
 	) {
+
+		logMessage("applyTransformations: entry, with " + transformations.size() + " transformations");
+
 		final List<IntervalView<T>> sourceStack = asZStack(sourceRaw);
 		final List<RandomAccessibleInterval<T>> convertedLayers = new ArrayList<>(sourceStack.size());
 		final double[] pixel = new double[1];
@@ -236,6 +250,8 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 			convertedLayers.add(convertedLayer);
 		}
+
+		logMessage("applyTransformations: exit, returning " + convertedLayers.size() + " converted layers");
 
 		return Views.stack(convertedLayers);
 	}
@@ -535,5 +551,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			zScale *= factors[2];
 		}
 		n5Writer.setAttribute(options.n5DatasetOutput, "scales", scales);
+	}
+
+	private static void logMessage(final String message) {
+		org.janelia.saalfeldlab.hotknife.util.Util.logMessage(SparkNormalizeLayerIntensityN5.class.getName(), message);
 	}
 }
