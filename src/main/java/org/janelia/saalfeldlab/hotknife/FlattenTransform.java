@@ -32,6 +32,13 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 	private final double min;
 	private final double norm;
 
+	// Cache for height field lookups: when consecutive calls share the same (x,y),
+	// skip the expensive bilinear interpolation of the height fields.
+	private double cachedX = Double.NaN;
+	private double cachedY = Double.NaN;
+	private double cachedMinHeight;
+	private double cachedMaxHeight;
+
 
 	public FlattenTransform(
 			final RealRandomAccessible<T> min,
@@ -98,6 +105,20 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 
 
 
+	private void updateHeightCache(final double x, final double y) {
+
+		if (x != cachedX || y != cachedY) {
+			minAccess.setPosition(x, 0);
+			minAccess.setPosition(y, 1);
+			maxAccess.setPosition(x, 0);
+			maxAccess.setPosition(y, 1);
+			cachedMinHeight = minAccess.get().getRealDouble();
+			cachedMaxHeight = maxAccess.get().getRealDouble();
+			cachedX = x;
+			cachedY = y;
+		}
+	}
+
 	@Override
 	public int numSourceDimensions() {
 
@@ -110,20 +131,18 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 		return n + 1;
 	}
 
+	@SuppressWarnings("ManualArrayCopy")
 	@Override
 	public void apply(final double[] source, final double[] target) {
 
 		assert source.length <= target.length : "Target vector is too small.";
 
-		System.arraycopy(source, 0, target, 0, source.length);
+		updateHeightCache(source[0], source[1]);
+		final double scale = cachedMaxHeight - cachedMinHeight;
 
-		minAccess.setPosition(source);
-		maxAccess.setPosition(source);
-		final double minPosition = minAccess.get().getRealDouble();
-		final double maxPosition = maxAccess.get().getRealDouble();
-		final double scale = maxPosition - minPosition;
-
-		target[n] = (source[n] - minPosition) / scale * norm + min;
+		for (int d = 0; d < n; d++)
+			target[d] = source[d];
+		target[n] = (source[n] - cachedMinHeight) / scale * norm + min;
 	}
 
 	@Override
@@ -131,30 +150,26 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 
 		assert source.numDimensions() <= target.numDimensions() : "Target vector is too small.";
 
-		target.setPosition(source);
-		minAccess.setPosition(source);
-		maxAccess.setPosition(source);
-		final double minPosition = minAccess.get().getRealDouble();
-		final double maxPosition = maxAccess.get().getRealDouble();
-		final double scale = maxPosition - minPosition;
+		updateHeightCache(source.getDoublePosition(0), source.getDoublePosition(1));
+		final double scale = cachedMaxHeight - cachedMinHeight;
 
-		target.setPosition((source.getDoublePosition(n) - minPosition) / scale * norm + min, n);
+		for (int d = 0; d < n; d++)
+			target.setPosition(source.getDoublePosition(d), d);
+		target.setPosition((source.getDoublePosition(n) - cachedMinHeight) / scale * norm + min, n);
 	}
 
+	@SuppressWarnings("ManualArrayCopy")
 	@Override
 	public void applyInverse(final double[] source, final double[] target) {
 
 		assert source.length <= target.length : "Target vector is too small.";
 
-		System.arraycopy(target, 0, source, 0, target.length);
+		updateHeightCache(target[0], target[1]);
+		final double scale = cachedMaxHeight - cachedMinHeight;
 
-		minAccess.setPosition(target);
-		maxAccess.setPosition(target);
-		final double minPosition = minAccess.get().getRealDouble();
-		final double maxPosition = maxAccess.get().getRealDouble();
-		final double scale = maxPosition - minPosition;
-
-		source[n] = (target[n] - min) / norm * scale + minPosition;
+		for (int d = 0; d < n; d++)
+			source[d] = target[d];
+		source[n] = (target[n] - min) / norm * scale + cachedMinHeight;
 	}
 
 	@Override
@@ -162,15 +177,12 @@ public class FlattenTransform<T extends RealType<T>> implements InvertibleRealTr
 
 		assert source.numDimensions() <= target.numDimensions() : "Target vector is too small.";
 
-		source.setPosition(target);
+		updateHeightCache(target.getDoublePosition(0), target.getDoublePosition(1));
+		final double scale = cachedMaxHeight - cachedMinHeight;
 
-		minAccess.setPosition(target);
-		maxAccess.setPosition(target);
-		final double minPosition = minAccess.get().getRealDouble();
-		final double maxPosition = maxAccess.get().getRealDouble();
-		final double scale = maxPosition - minPosition;
-
-		source.setPosition((target.getDoublePosition(n) - min) / norm * scale + minPosition, n);
+		for (int d = 0; d < n; d++)
+			source.setPosition(target.getDoublePosition(d), d);
+		source.setPosition((target.getDoublePosition(n) - min) / norm * scale + cachedMinHeight, n);
 	}
 
 	@Override
