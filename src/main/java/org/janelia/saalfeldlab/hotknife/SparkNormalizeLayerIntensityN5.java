@@ -97,10 +97,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		 * Checks that output doesn't exist and input has valid attributes.
 		 *
 		 * @return the dataset attributes for the full scale input
-		 * @throws IOException if N5 access fails
 		 * @throws IllegalArgumentException if output exists or input has no attributes
 		 */
-		public DatasetAttributes readDatasetAttributes() throws IOException {
+		public DatasetAttributes readDatasetAttributes() {
 			try (final N5Reader n5reader = N5Util.createN5Reader(n5Path)) {
 				if (n5reader.exists(n5DatasetOutput)) {
 					throw new IllegalArgumentException("Normalized data set already exists: " + n5DatasetOutput);
@@ -126,8 +125,17 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		public Integer downsampleLevel() {
 			return downsampleLevel;
 		}
-	}
 
+		@Override
+		public String toString() {
+			return "n5Path='" + n5Path + '\'' +
+				   ", n5DatasetInput='" + n5DatasetInput + '\'' +
+				   ", n5DatasetOutput='" + n5DatasetOutput + '\'' +
+				   ", downsampleLevel=" + downsampleLevel +
+				   ", factors='" + factors + '\'' +
+				   ", cutoff=" + cutoff;
+		}
+	}
 
 
 	protected final String fullScaleInputDataset;
@@ -147,9 +155,18 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		this.typeHelper = typeHelper;
 	}
 
+	@Override
+	public String toString() {
+		return "fullScaleInputDataset='" + fullScaleInputDataset + '\'' +
+			   ", downScaledInputDataset='" + downScaledInputDataset + '\'' +
+			   ", fullScaleOutputDataset='" + fullScaleOutputDataset + '\'' +
+			   ", options=" + options +
+			   ", attributes=" + attributes.asMap();
+	}
+
 	protected void run() throws IOException {
 
-		logMessage("run: entry");
+		logMessage("run: entry, " + this);
 
 		// Read downscaled dataset attributes for grid creation and z-dimension validation
 		final DatasetAttributes downscaledAttributes;
@@ -441,8 +458,8 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 */
 	protected enum ShiftType {
 		NONE(h -> 0.0),
-		MEDIAN(h -> h.median()),
-		MEAN(h -> h.mean());
+		MEDIAN(LayerHistogram::median),
+		MEAN(LayerHistogram::mean);
 
 		private final Function<LayerHistogram, Double> function;
 

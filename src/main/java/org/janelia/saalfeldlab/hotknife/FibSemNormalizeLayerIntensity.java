@@ -72,6 +72,15 @@ public class FibSemNormalizeLayerIntensity<T extends NativeType<T> & IntegerType
 		protected ScaleType scale() {
 			return scale;
 		}
+
+		@Override
+		public String toString() {
+			return "FibSemNormalizeLayerIntensity.Options { " +
+				   super.toString() +
+				   ", shift=" + shift +
+				   ", scale=" + scale +
+				   " }";
+		}
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {

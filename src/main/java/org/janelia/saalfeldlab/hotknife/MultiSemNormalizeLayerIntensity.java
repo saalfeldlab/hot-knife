@@ -86,6 +86,16 @@ public class MultiSemNormalizeLayerIntensity extends SparkNormalizeLayerIntensit
 		public int upperThreshold() {
 			return upperThreshold;
 		}
+
+		@Override
+		public String toString() {
+			return "MultiSemNormalizeLayerIntensity.Options { " +
+				   super.toString() +
+				   ", aggregation=" + aggregation +
+				   ", lowerThreshold=" + lowerThreshold +
+				   ", upperThreshold=" + upperThreshold +
+				   " }";
+		}
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
