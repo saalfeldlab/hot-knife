@@ -29,24 +29,23 @@ import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
+import org.janelia.saalfeldlab.n5.universe.N5Factory;
+import org.janelia.saalfeldlab.n5.universe.N5Factory.StorageFormat;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import bdv.TransformEventHandler3D;
 import bdv.tools.transformation.TransformedSource;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
-import mpicbg.spim.data.sequence.FinalVoxelDimensions;
-import mpicbg.spim.data.sequence.VoxelDimensions;
-
 import bdv.viewer.SynchronizedViewerState;
 import bdv.viewer.ViewerPanel;
+import mpicbg.spim.data.sequence.FinalVoxelDimensions;
+import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
@@ -98,10 +97,16 @@ public class ViewAlignedSlabSeries {
 		-b -21
 		*/
 
-		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
-		private String n5Path = null;
+		//@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
+		//private String n5Path = null;
 
-		@Option(name = "-i", aliases = {"--n5Dataset"}, required = true, usage = "N5 datasets, e.g. /nrs/flyem/data/tmp/Z0115-22.n5/slab-22/raw")
+		@Option(name = "--n5PathTransforms", required = true, usage = "N5 base path for the transforms, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
+		private String n5PathTransforms = null;
+
+		@Option(name = "--n5PathFlatVolumes", required = true, usage = "N5 base path for the flattened volumes, e.g. gs://janelia-spark-test/hess_wafers_60_61_export/")
+		private String n5PathFlatVolumes = null;
+
+		@Option(name = "-i", aliases = {"--n5FlatVolumeDataset"}, required = true, usage = "N5 datasets of flattened volumes, e.g. /nrs/flyem/data/tmp/Z0115-22.n5/slab-22/raw")
 		private List<String> datasets = new ArrayList<>();
 
 		@Option(name = "-t", aliases = {"--top"}, required = true, usage = "top slab face offset")
@@ -110,7 +115,7 @@ public class ViewAlignedSlabSeries {
 		@Option(name = "-b", aliases = {"--bot"}, required = true, usage = "bottom slab face offset")
 		private List<Long> botOffsets = new ArrayList<>();
 
-		@Option(name = "-j", aliases = {"--n5Group"}, required = true, usage = "N5 group containing alignments, e.g. /nrs/flyem/data/tmp/Z0115-22.n5/align-6")
+		@Option(name = "-j", aliases = {"--n5TransformGroup"}, required = true, usage = "N5 group containing alignments, e.g. /nrs/flyem/data/tmp/Z0115-22.n5/align-6")
 		private String n5GroupAlign;
 
 		@Option(name = "-n", aliases = {"--normalizeContrast"}, required = false, usage = "optionally normalize contrast")
@@ -137,13 +142,8 @@ public class ViewAlignedSlabSeries {
 			}
 		}
 
-		/**
-		 * @return the n5Path
-		 */
-		public String getN5Path() {
-
-			return n5Path;
-		}
+		public String getN5PathTransforms() { return n5PathTransforms; }
+		public String getN5PathFlatVolumes() { return n5PathFlatVolumes; }
 
 		/**
 		 * @return the datasets
@@ -172,7 +172,7 @@ public class ViewAlignedSlabSeries {
 		/**
 		 * @return the group
 		 */
-		public String getGroup() {
+		public String getGroupAlign() {
 
 			return n5GroupAlign;
 		}
@@ -204,8 +204,9 @@ public class ViewAlignedSlabSeries {
 			return;
 
 		run(
-				options.getN5Path(),
-				options.getGroup(),
+				options.getN5PathTransforms(),
+				options.getGroupAlign(),
+				options.getN5PathFlatVolumes(),
 				options.getDatasets(),
 				options.getTopOffsets(),
 				options.getBotOffsets(),
@@ -218,8 +219,9 @@ public class ViewAlignedSlabSeries {
 	}
 
 	public static BdvStackSource<?> run(
-			final String n5Path,
-			final String group,
+			final String n5PathTransforms,
+			final String groupAlign,
+			final String n5PathFlatVolumes,
 			final List<String> datasetNames,
 			final List<Long> topOffsets,
 			final List<Long> botOffsets,
@@ -230,21 +232,23 @@ public class ViewAlignedSlabSeries {
 			final int zoom,
 			final boolean useVolatile) throws IOException {
 
-		final N5Reader n5 = new N5FSReader(n5Path);
+		final N5Reader n5transforms = new N5Factory().openReader( StorageFormat.N5, n5PathTransforms );
+		final N5Reader n5flat = new N5Factory().openReader( StorageFormat.N5, n5PathFlatVolumes );
+		//final N5Reader n5 = new N5FSReader(n5Path);
 
-		final String[] transformDatasetNames = n5.getAttribute(group, "transforms", String[].class);
+		final String[] transformDatasetNames = n5transforms.getAttribute(groupAlign, "transforms", String[].class);
 
 		final int expectedNumberOfTransforms = datasetNames.size() * 2;
 		if (transformDatasetNames.length != expectedNumberOfTransforms) {
-			throw new IOException("Read " + transformDatasetNames.length + " transforms from " + n5Path + group +
+			throw new IOException("Read " + transformDatasetNames.length + " transforms from " + n5PathTransforms + groupAlign +
 								  "/attributes.json, but expected to find " + expectedNumberOfTransforms +
 								  " transforms because " + datasetNames.size() + " datasets were specified.  " +
 								  "Dataset names are: " + datasetNames + ".  " +
 								  "Transform names are: " + Arrays.toString(transformDatasetNames));
 		}
 
-		final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
-		final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
+		final double[] boundsMin = n5transforms.getAttribute(groupAlign, "boundsMin", double[].class);
+		final double[] boundsMax = n5transforms.getAttribute(groupAlign, "boundsMax", double[].class);
 
 		final long[] fMin = Grid.floorScaled(boundsMin, 1);
 		final long[] fMax = Grid.ceilScaled(boundsMax, 1);
@@ -257,13 +261,13 @@ public class ViewAlignedSlabSeries {
 		for (int i = 0; i < datasetNames.size(); ++i) {
 
 			final String datasetName = datasetNames.get(i);
-			final long[] dimensions = n5.getAttribute(datasetName + "/s0", "dimensions", long[].class);
+			final long[] dimensions = n5flat.getAttribute(datasetName + "/s0", "dimensions", long[].class);
 			long botOffset = botOffsets.get(i);
 			if (botOffset < 0) botOffset = dimensions[2] + botOffset - 1;
 
 
-			final RealTransform top = Transform.loadScaledTransform(n5, group + "/" + transformDatasetNames[i * 2]);
-			final RealTransform bot = Transform.loadScaledTransform(n5, group + "/" + transformDatasetNames[i * 2 + 1]);
+			final RealTransform top = Transform.loadScaledTransform(n5transforms, groupAlign + "/" + transformDatasetNames[i * 2]);
+			final RealTransform bot = Transform.loadScaledTransform(n5transforms, groupAlign + "/" + transformDatasetNames[i * 2 + 1]);
 			final RealTransform transition =
 					new ClippedTransitionRealTransform(
 							top,
@@ -279,7 +283,7 @@ public class ViewAlignedSlabSeries {
 			System.out.println( "Dimensions: " + Util.printCoordinates( dimensions ) );
 			System.out.println( "Interval: " + Util.printInterval( cropInterval ) );
 
-			final int numScales = n5.list(datasetName).length;
+			final int numScales = n5flat.list(datasetName).length;
 
 			@SuppressWarnings("unchecked")
 			final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = (RandomAccessibleInterval<UnsignedByteType>[])new RandomAccessibleInterval[numScales];
@@ -293,7 +297,7 @@ public class ViewAlignedSlabSeries {
 				final double inverseScale = 1.0 / scale;
 				final double inverseScaleZ = 1.0 / scaleZ;
 
-				RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5, datasetName + "/s" + s);
+				RandomAccessibleInterval<UnsignedByteType> sourceRaw = N5Utils.open(n5flat, datasetName + "/s" + s);
 				final RandomAccessibleInterval<UnsignedByteType> source;
 
 				if ( invert )
