@@ -218,6 +218,10 @@ public class ImportSOFIMA implements Callable<Void>
 			//adjust scale of the hot-knife field, *2 until it's bigger, update transformScaleIndexPass accordingly
 
 			/*
+			Our pass00: gs://janelia-spark-test/hess_wafers_60_61_export/surface-align/run_20260303_130000/pass00/
+			dim: "dimensions":[1466,1486,2]
+
+			Michal's surfaces
 			/nrs/hess/data/hess_wafers_60_61/export/zarr_datasets/surface-align/run_20260303_130000/pass00-scale1/260310_assembled_inv_highprec_ext.npy.zarr/
 			2342x2374x91x2
 
