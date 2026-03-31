@@ -30,6 +30,7 @@ import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale;
 import net.imglib2.type.numeric.real.DoubleType;
+import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 import picocli.CommandLine;
@@ -45,8 +46,11 @@ import picocli.CommandLine.Option;
  */
 public class ImportSOFIMA implements Callable<Void>
 {
-	@Option(names = "--n5Path", required = true, description = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
-	private String n5Path = null;
+	@Option(names = "--n5PathIn", required = true, description = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
+	private String n5PathIn = null;
+
+	@Option(names = "--n5PathOut", required = true, description = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
+	private String n5PathOut = null;
 
 	@Option(names = {"-i", "--n5GroupIn"}, required = true, description = "N5 group to load, e.g. /pass01")
 	private String groupIn = "/";
@@ -57,7 +61,7 @@ public class ImportSOFIMA implements Callable<Void>
 	@Option(names = {"--overwrite"}, required = false, description = "Overwrite an existing N5 group, specified with --n5GroupOut, default: false")
 	private boolean overwrite = false;
 
-	@Option(names = {"-s", "--sofimaField"}, required = true, description = "The SOFIMA transformation field, e.g. /nrs/flyem/data/sofima/3.invmap.zarr")
+	@Option(names = {"-s", "--sofimaField"}, required = true, description = "The SOFIMA transformation field, e.g. /nrs/flyem/data/sofima/3.invmap.zarr or gs://jane")
 	private String sofimaField;
 
 	@Option(names = "--scaleIndexSOFIMAinput", required = true, description = "The scale index at which the deformed images were fed to SOFIMA, needed for vector size adjustment (the same as --scaleIndex that was used in SparkViewAlignment)")
@@ -72,11 +76,13 @@ public class ImportSOFIMA implements Callable<Void>
 	@Override
 	public final Void call()// throws IOException, InterruptedException, ExecutionException
 	{
-		System.out.println( "hot-knife in: " + n5Path + Path.SEPARATOR + groupIn );
+		for ( int z = 0; z < 179; ++z)
+		{
+		System.out.println( "hot-knife in: " + n5PathIn + Path.SEPARATOR + groupIn );
 		System.out.println( "sofima: " + sofimaField );
-		System.out.println( "hot-knife out: " + n5Path + Path.SEPARATOR + groupOut );
+		System.out.println( "hot-knife out: " + n5PathOut + Path.SEPARATOR + groupOut );
 
-		final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, n5Path );
+		final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, n5PathIn );
 
 		//
 		// load metadata
@@ -100,8 +106,9 @@ public class ImportSOFIMA implements Callable<Void>
 		System.out.println( " N5 transform datasetName: " + datasetName );
 
 		final double amount = ( zSplit == null ) ? 1.0 : 0.5;
+		final double direction = 1.0;
 
-		process( sofimaField, scaleIndexSOFIMAinput, n5Path, groupOut, datasetName, z, transformScaleDataset, blockSize, dataType, transformScaleIndexPass, datasetNames, transformDatasetNames, boundsMin, boundsMax, amount, -1.0, overwrite );
+		process( sofimaField, scaleIndexSOFIMAinput, n5PathIn, n5PathOut, groupOut, datasetName, z, transformScaleDataset, blockSize, dataType, transformScaleIndexPass, datasetNames, transformDatasetNames, boundsMin, boundsMax, amount, direction, overwrite );
 
 		System.out.println( "z (split): " + (zSplit == null ? "not active" : zSplit ) );
 
@@ -116,18 +123,19 @@ public class ImportSOFIMA implements Callable<Void>
 			System.out.println( " transformDatasetName zSplit: " + transformDatasetNames[ zSplit ] );
 			System.out.println( " N5 transform datasetName zSplit: " + datasetName_ZSplit );
 
-			process( sofimaField, scaleIndexSOFIMAinput, n5Path, groupOut, datasetName_ZSplit, zSplit, transformScaleDataset_ZSplit, blockSize_ZSplit, dataType_ZSplit, transformScaleIndexPass, datasetNames, transformDatasetNames, boundsMin, boundsMax, amount, 1.0, overwrite );
+			process( sofimaField, scaleIndexSOFIMAinput, n5PathIn, n5PathOut, groupOut, datasetName_ZSplit, zSplit, transformScaleDataset_ZSplit, blockSize_ZSplit, dataType_ZSplit, transformScaleIndexPass, datasetNames, transformDatasetNames, boundsMin, boundsMax, amount, -direction, overwrite );
 		}
 
 		n5.close();
-
+		}
 		return null;
 	}
 
 	public static void process(
 			final String sofimaField,
 			final int scaleIndexSOFIMAinput,
-			final String n5Path,
+			final String n5PathIn,
+			final String n5PathOut,
 			final String groupOut,
 			final String datasetName,
 			final int z,
@@ -143,8 +151,9 @@ public class ImportSOFIMA implements Callable<Void>
 			final double direction, // for splitting
 			final boolean overwrite )
 	{
-		final N5Writer n5 = new N5Factory().openWriter( StorageFormat.N5, n5Path );
-		final N5Reader zarr = new N5Factory().openReader( StorageFormat.ZARR, sofimaField );
+		final N5Reader n5in = new N5Factory().openWriter( StorageFormat.N5, n5PathIn );
+		final N5Writer n5out = new N5Factory().openWriter( StorageFormat.N5, n5PathOut );
+		final N5Reader sofimaContainer = new N5Factory().openReader( StorageFormat.N5, sofimaField );
 
 		//
 		// load the hot-knife position field
@@ -153,7 +162,7 @@ public class ImportSOFIMA implements Callable<Void>
 		// we cannot use the convenience method because we need the translation[]
 		//final RealTransform transform = Transform.loadScaledTransform( n5, datasetName );
 
-		final RandomAccessibleInterval<DoubleType> positionFieldHotKnife = N5Utils.open(n5, datasetName);
+		final RandomAccessibleInterval<DoubleType> positionFieldHotKnife = N5Utils.open(n5in, datasetName);
 		final int n = positionFieldHotKnife.numDimensions() - 1;
 		final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMin, transformScaleDataset), n + 1);
 		final PositionFieldTransform<DoubleType> positionFieldHotKnifeTransform = Transform.createPositionFieldTransform(
@@ -174,24 +183,25 @@ public class ImportSOFIMA implements Callable<Void>
 
 		// XY axes are flipped compared to python (N5 solves that already)
 		// still, first slice are X vectors, 2nd slice are Y vectors
-		final RandomAccessibleInterval< DoubleType > sofimaRaw = N5Utils.open( zarr, "/" );
+		final RandomAccessibleInterval< DoubleType > sofimaRaw = N5Utils.open( sofimaContainer, "/" );
 
 		System.out.println( Util.printInterval( sofimaRaw ));
 		//System.exit( 0 );
 
 		// Note: the SOFIMA field can contain NaN's
 		final RandomAccessibleInterval< DoubleType > sofima;
-		if ( sofimaRaw.numDimensions() == 4 )
+		if ( sofimaRaw.numDimensions() == 4 && sofimaRaw.dimension( 2 ) == 0 )
 			sofima = Converters.convertRAI(
 					Views.hyperSlice(sofimaRaw, 2, 0),
 					(i, o) -> o.set(Double.isNaN(i.get()) ? 0 : i.get()),
 					new DoubleType());
 		else
 			sofima = Converters.convertRAI(
-					sofimaRaw,
-					(i,o) -> o.set( Double.isNaN( i.get() ) ? 0 : i.get() ),
+					(RandomAccessibleInterval< FloatType >)(RandomAccessibleInterval)sofimaRaw, // michal's field is actually float
+					(i,o) -> o.set( Double.isNaN( i.getRealDouble() ) ? 0 : i.getRealDouble() ),
 					new DoubleType() );
 
+		// Michal's field is 4D, [2342, 2374, 2, 91]; the ZARR to N5 conversion mixed up Z and C, now [X,Y,C,Z]
 		System.out.println( "dimensions of SOFIMA deformation field: " + Arrays.toString( sofima.dimensionsAsLongArray() ) );
 
 		//
@@ -212,24 +222,23 @@ public class ImportSOFIMA implements Callable<Void>
 
 		final RandomAccessibleInterval< DoubleType > sofimaScaled;
 
+		/*
 		if ( scalingFactorSofima[ 0 ] < 1 || scalingFactorSofima[ 1 ] < 1 )
 		{
 			System.out.println( "WARNING: SOFIMA field is higher resolved than hot-knife field (e.g. SOFIMA used pass00 rendered at s2 as input), increasing scale of hot-knife field."  );
 			//adjust scale of the hot-knife field, *2 until it's bigger, update transformScaleIndexPass accordingly
 
-			/*
-			Our pass00: gs://janelia-spark-test/hess_wafers_60_61_export/surface-align/run_20260303_130000/pass00/
-			dim: "dimensions":[1466,1486,2]
-
-			Michal's surfaces
-			/nrs/hess/data/hess_wafers_60_61/export/zarr_datasets/surface-align/run_20260303_130000/pass00-scale1/260310_assembled_inv_highprec_ext.npy.zarr/
-			2342x2374x91x2
-
-			This map is computed at 40x reduced XY resolution and 2x reduced Z resolution, but the displacement vectors are expressed in the units of the original volume (16 nm/px I think?). 
-			I accidentally flipped the XY axes when importing your images, and the map reflects that. The axis order is [c, z, y, x], where the 2 'c' channels represent the x (0) and y (1) components of the vector. 
-			For your original coordinates system, you will therefore want something like: np.transpose(map[::-1, ...], (0, 1, 3, 2)). 
-			The map is in the 'pull' format, so to render a pixel at (x, y, z) of your target volume, you read the map as: x_off, y_off = map[:, z/2, y/40, x/40] and pull data from (x + x_off, y + y_off, z) in the original images.
-			*/
+//			Our pass00: gs://janelia-spark-test/hess_wafers_60_61_export/surface-align/run_20260303_130000/pass00/
+//			dim: "dimensions":[1466,1486,2]
+//
+//			Michal's surfaces
+//			/nrs/hess/data/hess_wafers_60_61/export/zarr_datasets/surface-align/run_20260303_130000/pass00-scale1/260310_assembled_inv_highprec_ext.npy.zarr/
+//			2342x2374x91x2
+//
+//			This map is computed at 40x reduced XY resolution and 2x reduced Z resolution, but the displacement vectors are expressed in the units of the original volume (16 nm/px I think?). 
+//			I accidentally flipped the XY axes when importing your images, and the map reflects that. The axis order is [c, z, y, x], where the 2 'c' channels represent the x (0) and y (1) components of the vector. 
+//			For your original coordinates system, you will therefore want something like: np.transpose(map[::-1, ...], (0, 1, 3, 2)). 
+//			The map is in the 'pull' format, so to render a pixel at (x, y, z) of your target volume, you read the map as: x_off, y_off = map[:, z/2, y/40, x/40] and pull data from (x + x_off, y + y_off, z) in the original images.
 
 			// now the size of the sofima field is <= size hot-knife field
 			System.out.println( "new transformScaleIndexPass: " + transformScaleDataset  );
@@ -238,32 +247,55 @@ public class ImportSOFIMA implements Callable<Void>
 
 			// scale positionFieldHotKnife
 		}
+		*/
 
+		// TODO: hack, for now we downsample the sofima field, it's just for a video; see above what we would need to do
 		//if ( scalingFactorSofima[ 0 ] > 1 )
 		{
-			// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
-			final AffineRandomAccessible<DoubleType, AffineGet> transformedX = RealViews.affine(
-					Views.interpolate(
-							Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 0 ) ),
-							new NLinearInterpolatorFactory<>()),
-					new Scale( scalingFactorSofima ) );
+			final AffineRandomAccessible<DoubleType, AffineGet> transformedX, transformedY;
 
-			// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
-			final AffineRandomAccessible<DoubleType, AffineGet> transformedY = RealViews.affine(
-					Views.interpolate(
-							Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 1 ) ),
-							new NLinearInterpolatorFactory<>()),
-					new Scale( scalingFactorSofima ) );
+			if ( sofima.numDimensions() == 3 )
+			{
+				// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
+				transformedX = RealViews.affine(
+						Views.interpolate(
+								Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 0 ) ),
+								new NLinearInterpolatorFactory<>()),
+						new Scale( scalingFactorSofima ) );
 
-			RandomAccessibleInterval< DoubleType > sofimaScaledX = Views.interval( Views.raster( transformedX ), positionField2dInterval );
-			RandomAccessibleInterval< DoubleType > sofimaScaledY = Views.interval( Views.raster( transformedY ), positionField2dInterval );
+				// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
+				transformedY = RealViews.affine(
+						Views.interpolate(
+								Views.extendMirrorDouble( Views.hyperSlice( sofima, 2, 1 ) ),
+								new NLinearInterpolatorFactory<>()),
+						new Scale( scalingFactorSofima ) );
+			}
+			else if ( sofima.numDimensions() == 4 ) // Michal's 4D stack
+			{
+				// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
+				transformedX = RealViews.affine(
+						Views.interpolate(
+								Views.extendMirrorDouble( Views.hyperSlice( Views.hyperSlice( sofima, 3, z/2), 2, 0 ) ),
+								new NLinearInterpolatorFactory<>()),
+						new Scale( scalingFactorSofima ) );
+
+				// TODO: this is a rough approximation, need to handle this properly (right now x and y factor is slightly different)
+				transformedY = RealViews.affine(
+						Views.interpolate(
+								Views.extendMirrorDouble( Views.hyperSlice( Views.hyperSlice( sofima, 3, z/2), 2, 1 ) ),
+								new NLinearInterpolatorFactory<>()),
+						new Scale( scalingFactorSofima ) );
+			}
+			else
+			{
+				throw new IllegalArgumentException( "SOFIMA field of dim=" + sofima.numDimensions() + " not known." );
+			}
+
+			final RandomAccessibleInterval< DoubleType > sofimaScaledX = Views.interval( Views.raster( transformedX ), positionField2dInterval );
+			final RandomAccessibleInterval< DoubleType > sofimaScaledY = Views.interval( Views.raster( transformedY ), positionField2dInterval );
 
 			sofimaScaled = Views.stack( sofimaScaledX, sofimaScaledY );
 		}
-		//else
-		//{
-		//	throw new RuntimeException( "this is a bug, this cannot happen ." );
-		//}
 
 		//
 		// create a new positionfield for the ZARR SOFIMA import
@@ -320,31 +352,31 @@ public class ImportSOFIMA implements Callable<Void>
 
 		try
 		{
-			if ( !n5.exists( groupOut ) )
+			if ( !n5out.exists( groupOut ) )
 			{
 				System.out.println( "Creating output group: " + groupOut );
 
-				n5.createGroup(groupOut);
-				n5.setAttribute(groupOut, "datasets", datasetNames);
-				n5.setAttribute(groupOut, "transforms", transformDatasetNames);
-				n5.setAttribute(groupOut, "scaleIndex", transformScaleIndexPass ); // TODO: is that still true, and does it matter?
-				n5.setAttribute(groupOut, "boundsMin", boundsMin);
-				n5.setAttribute(groupOut, "boundsMax", boundsMax);
+				n5out.createGroup(groupOut);
+				n5out.setAttribute(groupOut, "datasets", datasetNames);
+				n5out.setAttribute(groupOut, "transforms", transformDatasetNames);
+				n5out.setAttribute(groupOut, "scaleIndex", transformScaleIndexPass ); // TODO: is that still true, and does it matter?
+				n5out.setAttribute(groupOut, "boundsMin", boundsMin);
+				n5out.setAttribute(groupOut, "boundsMax", boundsMax);
 			}
 
-			if ( n5.exists( datasetNameOut ) && overwrite )
+			if ( n5out.exists( datasetNameOut ) && overwrite )
 			{
 				System.out.println( "Deleting existing output group: " + datasetNameOut );
-				n5.remove( datasetNameOut );
+				n5out.remove( datasetNameOut );
 			}
 
-			if ( n5.exists( datasetNameOut ) )
+			if ( n5out.exists( datasetNameOut ) )
 			{
 				System.out.println( "Output group dataset " + datasetNameOut + " exists. Stopping.");
 				return;
 			}
 
-			Transform.saveScaledTransform( n5, datasetNameOut, transformSequence, transformScaleDataset, boundsMin, boundsMax );
+			Transform.saveScaledTransform( n5out, datasetNameOut, transformSequence, transformScaleDataset, boundsMin, boundsMax );
 
 		} catch (IOException e)
 		{
@@ -352,8 +384,9 @@ public class ImportSOFIMA implements Callable<Void>
 			e.printStackTrace();
 		}
 
-		n5.close();
-		zarr.close();
+		n5in.close();
+		n5out.close();
+		sofimaContainer.close();
 
 		System.out.println( "Done.");
 
