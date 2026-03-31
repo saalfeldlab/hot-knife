@@ -31,6 +31,8 @@ import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
+import org.janelia.saalfeldlab.n5.universe.N5Factory;
+import org.janelia.saalfeldlab.n5.universe.N5Factory.StorageFormat;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
@@ -67,8 +69,11 @@ public class ViewAlignment {
 	@SuppressWarnings("serial")
 	public static class Options extends AbstractOptions implements Serializable {
 
-		@Option(name = "--n5Path", required = true, usage = "N5 path, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
-		private String n5Path = null;
+		@Option(name = "--n5PathTransforms", required = true, usage = "N5 base path for the transforms, e.g. /nrs/flyem/data/tmp/Z0115-22.n5")
+		private String n5PathTransforms = null;
+
+		@Option(name = "--n5PathSurfaces", required = true, usage = "N5 base path for the surfaces, e.g. gs://janelia-spark-test/hess_wafers_60_61_export/")
+		private String n5PathSurfaces = null;
 
 		@Option(name = "-i", aliases = {"--n5Group"}, required = false, usage = "N5 group, e.g. /align-0")
 		private List<String> groups = new ArrayList<>();
@@ -96,13 +101,8 @@ public class ViewAlignment {
 			}
 		}
 
-		/**
-		 * @return the n5Path
-		 */
-		public String getN5Path() {
-
-			return n5Path;
-		}
+		public String getN5PathTransforms() { return n5PathTransforms; }
+		public String getN5PathSurfaces() { return n5PathSurfaces; }
 
 		/**
 		 * @return the scaleIndex
@@ -129,8 +129,9 @@ public class ViewAlignment {
 			return;
 
 //		new ImageJ();
-
-		final N5Reader n5 = new N5FSReader(options.getN5Path());
+//		/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5
+		//final N5Reader n5 = new N5FSReader(options.getN5PathTransforms());
+		final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, options.getN5PathTransforms() );
 
 		final int showScaleIndex = options.getScaleIndex();
 		final double showScale = 1.0 / (1 << showScaleIndex);
@@ -154,7 +155,7 @@ public class ViewAlignment {
 			final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
 			final int zFrom = 0;//1; // 0 is everything
-			final int zTo = datasetNames.length;//3; //datasetNames.length is everything
+			final int zTo = 3;//datasetNames.length;//3; //datasetNames.length is everything
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = zFrom; i < zTo /*datasetNames.length*/; ++i) {
@@ -180,7 +181,7 @@ public class ViewAlignment {
 			}
 
 			RandomAccessibleInterval<UnsignedByteType> stack = Transform.createTransformedStackUnsignedByteType(
-					options.getN5Path(),
+					options.getN5PathSurfaces(),
 					Arrays.asList(datasetNamesCrop),
 					showScaleIndex,
 					Arrays.asList(realTransformsCrop),
