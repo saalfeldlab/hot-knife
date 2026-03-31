@@ -217,6 +217,16 @@ public class ImportSOFIMA implements Callable<Void>
 			System.out.println( "WARNING: SOFIMA field is higher resolved than hot-knife field (e.g. SOFIMA used pass00 rendered at s2 as input), increasing scale of hot-knife field."  );
 			//adjust scale of the hot-knife field, *2 until it's bigger, update transformScaleIndexPass accordingly
 
+			/*
+			/nrs/hess/data/hess_wafers_60_61/export/zarr_datasets/surface-align/run_20260303_130000/pass00-scale1/260310_assembled_inv_highprec_ext.npy.zarr/
+			2342x2374x91x2
+
+			This map is computed at 40x reduced XY resolution and 2x reduced Z resolution, but the displacement vectors are expressed in the units of the original volume (16 nm/px I think?). 
+			I accidentally flipped the XY axes when importing your images, and the map reflects that. The axis order is [c, z, y, x], where the 2 'c' channels represent the x (0) and y (1) components of the vector. 
+			For your original coordinates system, you will therefore want something like: np.transpose(map[::-1, ...], (0, 1, 3, 2)). 
+			The map is in the 'pull' format, so to render a pixel at (x, y, z) of your target volume, you read the map as: x_off, y_off = map[:, z/2, y/40, x/40] and pull data from (x + x_off, y + y_off, z) in the original images.
+			*/
+
 			// now the size of the sofima field is <= size hot-knife field
 			System.out.println( "new transformScaleIndexPass: " + transformScaleDataset  );
 			System.out.println( "updated scalingFactor (SOFIMA relative to hot-knife): " + Arrays.toString( scalingFactorSofima ) );
