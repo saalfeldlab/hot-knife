@@ -130,6 +130,12 @@ public class ViewAlignedSlabSeries {
 		@Option(name = "--multiSem", usage = "MultiSem datasets have a different scaling in z than xy")
 		private boolean multiSem = false;
 
+		@Option(name = "--slabFrom", usage = "slab index to start with, inclusive (default: 0)")
+		private Integer slabFrom = null;
+
+		@Option(name = "--slabTo", usage = "slab index to end with, exclusive (default: datasetNames.size() as defined in the N5)")
+		private Integer slabTo = null;
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -144,6 +150,9 @@ public class ViewAlignedSlabSeries {
 
 		public String getN5PathTransforms() { return n5PathTransforms; }
 		public String getN5PathFlatVolumes() { return n5PathFlatVolumes; }
+
+		public Integer slabFrom() { return slabFrom; }
+		public Integer slabTo() { return slabTo; }
 
 		/**
 		 * @return the datasets
@@ -210,6 +219,8 @@ public class ViewAlignedSlabSeries {
 				options.getDatasets(),
 				options.getTopOffsets(),
 				options.getBotOffsets(),
+				options.slabFrom(),
+				options.slabTo(),
 				new FinalVoxelDimensions("px", new double[]{1, 1, 1}),
 				options.normalizeContrast(),
 				options.invert(),
@@ -225,6 +236,8 @@ public class ViewAlignedSlabSeries {
 			final List<String> datasetNames,
 			final List<Long> topOffsets,
 			final List<Long> botOffsets,
+			final Integer slabFrom,
+			final Integer slabTo,
 			final VoxelDimensions voxelDimensions,
 			final boolean normalizeContrast,
 			final boolean invert,
@@ -238,7 +251,13 @@ public class ViewAlignedSlabSeries {
 
 		final String[] transformDatasetNames = n5transforms.getAttribute(groupAlign, "transforms", String[].class);
 
-		final int expectedNumberOfTransforms = datasetNames.size() * 2;
+		final int startSlab, endSlab;
+
+		if (slabFrom == null) startSlab = 0; else startSlab = slabFrom;
+		if (slabTo == null) endSlab = datasetNames.size(); else endSlab = slabTo;
+
+		/*
+		final int expectedNumberOfTransforms = (endSlab - startSlab) * 2;
 		if (transformDatasetNames.length != expectedNumberOfTransforms) {
 			throw new IOException("Read " + transformDatasetNames.length + " transforms from " + n5PathTransforms + groupAlign +
 								  "/attributes.json, but expected to find " + expectedNumberOfTransforms +
@@ -246,6 +265,7 @@ public class ViewAlignedSlabSeries {
 								  "Dataset names are: " + datasetNames + ".  " +
 								  "Transform names are: " + Arrays.toString(transformDatasetNames));
 		}
+		*/
 
 		final double[] boundsMin = n5transforms.getAttribute(groupAlign, "boundsMin", double[].class);
 		final double[] boundsMax = n5transforms.getAttribute(groupAlign, "boundsMax", double[].class);
@@ -258,7 +278,8 @@ public class ViewAlignedSlabSeries {
 
 		long zOffset = 0;
 
-		for (int i = 0; i < datasetNames.size(); ++i) {
+		//for (int i = 0; i < datasetNames.size(); ++i) {
+		for (int i = startSlab; i < endSlab; ++i) {
 
 			final String datasetName = datasetNames.get(i);
 			final long[] dimensions = n5flat.getAttribute(datasetName + "/s0", "dimensions", long[].class);
@@ -292,7 +313,7 @@ public class ViewAlignedSlabSeries {
 			for (int s = 0; s < numScales; ++s) {
 
 				final int scale = 1 << s;
-				final int scaleZ = multiSem ? 1 : scale;
+				final int scaleZ = multiSem ? 1 : scale; // TODO: we should read the downsampling rather than assuming
 
 				final double inverseScale = 1.0 / scale;
 				final double inverseScaleZ = 1.0 / scaleZ;
