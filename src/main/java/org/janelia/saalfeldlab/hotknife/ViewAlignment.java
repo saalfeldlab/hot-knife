@@ -84,6 +84,12 @@ public class ViewAlignment {
 		@Option(name = "--noVirtual", required = false, usage = "makes a physical copy of each transformed slab surface during startup (instead of virtual rendering)")
 		private boolean noVirtual = false;
 
+		@Option(name = "--zFrom", usage = "surface slice index to start with, inclusive (default: 0)")
+		private Integer zFrom = null;
+
+		@Option(name = "--zTo", usage = "surface slice index to end with, exclusive (default: datasetNames.size() as defined in the N5)")
+		private Integer zTo = null;
+
 		@Option(name = "--ignoreTransforms", required = false, usage = "do not load transforms, instead use identity transforms")
 		private boolean ignoreTransforms = false;
 
@@ -103,22 +109,10 @@ public class ViewAlignment {
 
 		public String getN5PathTransforms() { return n5PathTransforms; }
 		public String getN5PathSurfaces() { return n5PathSurfaces; }
-
-		/**
-		 * @return the scaleIndex
-		 */
-		public int getScaleIndex() {
-
-			return transformScaleIndex;
-		}
-
-		/**
-		 * @return the groups
-		 */
-		public List<String> getGroups() {
-
-			return groups;
-		}
+		public Integer zFrom() { return zFrom; }
+		public Integer zTo() { return zTo; }
+		public int getScaleIndex() { return transformScaleIndex; }
+		public List<String> getGroups() { return groups; }
 	}
 
 	public static final void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -129,8 +123,6 @@ public class ViewAlignment {
 			return;
 
 //		new ImageJ();
-//		/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5
-		//final N5Reader n5 = new N5FSReader(options.getN5PathTransforms());
 		final N5Reader n5 = new N5Factory().openReader( StorageFormat.N5, options.getN5PathTransforms() );
 
 		final int showScaleIndex = options.getScaleIndex();
@@ -154,8 +146,13 @@ public class ViewAlignment {
 			final double[] boundsMin = n5.getAttribute(group, "boundsMin", double[].class);
 			final double[] boundsMax = n5.getAttribute(group, "boundsMax", double[].class);
 
-			final int zFrom = 0;//1; // 0 is everything
-			final int zTo = 3;//datasetNames.length;//3; //datasetNames.length is everything
+			//final int zFrom = 0;//1; // 0 is everything
+			//final int zTo = 3;//datasetNames.length;//3; //datasetNames.length is everything
+
+			final int zFrom, zTo;
+
+			if (options.zFrom() == null) zFrom = 0; else zFrom = options.zFrom();
+			if (options.zTo() == null) zTo = datasetNames.length; else zTo = options.zTo();
 
 			final RealTransform[] realTransforms = new RealTransform[datasetNames.length];
 			for (int i = zFrom; i < zTo /*datasetNames.length*/; ++i) {
