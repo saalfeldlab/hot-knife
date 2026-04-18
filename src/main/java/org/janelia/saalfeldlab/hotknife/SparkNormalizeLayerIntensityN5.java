@@ -306,9 +306,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 * Can be merged with other instances for parallel computation.
 	 */
 	protected static class LayerHistogram implements Serializable {
-		private final long[] counts;
-		private final int offset;  // value v is stored at index v + offset
-		private final long totalCount;
+		private long[] counts;
+		private int offset;  // value v is stored at index v + offset
+		private long totalCount;
 		private final double cutoff;
 
 		private LayerHistogram(final long[] counts, final int offset, final long totalCount, final double cutoff) {
@@ -370,9 +370,20 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		}
 
 		public LayerHistogram absorb(final LayerHistogram other) {
-			if (totalCount == 0) return other;
-			if (other.totalCount == 0) return this;
+			// No others to absorb
+			if (other.totalCount == 0) {
+				return this;
+			}
 
+			// This is empty, clone the other
+			if (totalCount == 0) {
+				this.counts = other.counts.clone();
+				this.offset = other.offset;
+				this.totalCount = other.totalCount;
+				return this;
+			}
+
+			// Compute new min/max/offset values for the combined histogram
 			final int thisMin = -offset;
 			final int thisMax = counts.length - 1 - offset;
 			final int otherMin = -other.offset;
@@ -381,16 +392,28 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			final int newMin = Math.min(thisMin, otherMin);
 			final int newMax = Math.max(thisMax, otherMax);
 			final int newOffset = -newMin;
-			final long[] newCounts = new long[newMax - newMin + 1];
+			final int newLen = newMax - newMin + 1;
 
-			for (int i = 0; i < counts.length; i++) {
-				newCounts[i - offset + newOffset] += counts[i];
+			// Allocate enough space for the combined histogram and copy this's values
+			final long[] newCounts;
+			if (newLen == counts.length && newOffset == offset) {
+				newCounts = counts;
+			} else {
+				newCounts = new long[newLen];
+				for (int i = 0; i < counts.length; i++) {
+					newCounts[i - offset + newOffset] += counts[i];
+				}
 			}
+
+			// Update the combined histogram with the other's values
 			for (int i = 0; i < other.counts.length; i++) {
 				newCounts[i - other.offset + newOffset] += other.counts[i];
 			}
 
-			return new LayerHistogram(newCounts, newOffset, totalCount + other.totalCount, cutoff);
+			this.counts = newCounts;
+			this.offset = newOffset;
+			this.totalCount = totalCount + other.totalCount;
+			return this;
 		}
 
 		public double median() {
