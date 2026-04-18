@@ -23,14 +23,12 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import net.imglib2.Cursor;
-import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 
 /**
@@ -165,12 +163,14 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			}
 			System.out.println("Computed per-section LUTs against reference z=" + options.refIndex());
 
-			// Pass 2: 3D block grid, apply LUT[z] to every pixel. Layers with no in-tissue
-			// pixels have an identity LUT from buildLut so they pass through unchanged.
+			// Pass 2: 3D block grid, apply LUT[z] inside the tissue mask; out-of-tissue
+			// pixels pass through unchanged. Layers with no in-tissue pixels still carry
+			// an identity LUT from buildLut, so their behaviour is always a no-op.
 			final Broadcast<int[][]> lutsBc = sc.broadcast(luts);
 			final List<long[][]> grid = Grid.create(dims, blockSize);
 			sc.parallelize(grid).foreach(block ->
-					processBlock(n5Path, inDataset, outDataset, block, lutsBc.value()));
+					processBlock(n5Path, inDataset, outDataset, hfDataset, block,
+							lutsBc.value(), factorsBc.value()));
 		}
 
 		System.out.println("wrote " + options.n5Path() + "/" + options.n5DatasetOutput());
@@ -310,29 +310,48 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			final String n5Path,
 			final String inDataset,
 			final String outDataset,
+			final String hfDataset,
 			final long[][] gridBlock,
-			final int[][] luts) {
+			final int[][] luts,
+			final double[] factors) {
 
 		final N5Writer n5 = N5Util.createN5Writer(n5Path);
 		final RandomAccessibleInterval<UnsignedByteType> volume = N5Utils.open(n5, inDataset);
+		final RandomAccessibleInterval<FloatType> hfRai = N5Utils.open(n5, hfDataset);
 
+		final long x0 = gridBlock[0][0];
+		final long y0 = gridBlock[0][1];
 		final long z0 = gridBlock[0][2];
+		final long x1 = x0 + gridBlock[1][0] - 1;
+		final long y1 = y0 + gridBlock[1][1] - 1;
 
-		final FinalInterval blockInterval = Intervals.createMinSize(
-				gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
-				gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
+		final RandomAccessibleInterval<DoubleType> hfAtRawScale = Views.interval(
+				Views.raster(Transform.scaleAndShiftHeightFieldAndValues(hfRai, factors)),
+				new long[]{x0, y0},
+				new long[]{x1, y1});
 
 		final long[] blockDims = new long[]{gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]};
 		final Img<UnsignedByteType> out = ArrayImgs.unsignedBytes(blockDims);
 
-		final Cursor<UnsignedByteType> srcCur = Views.flatIterable(Views.interval(volume, blockInterval)).cursor();
-		final Cursor<UnsignedByteType> dstCur = Views.flatIterable(out).localizingCursor();
+		for (long zOff = 0; zOff < blockDims[2]; zOff++) {
+			final long z = zOff + z0;
+			final int[] lutZ = luts[(int) z];
 
-		while (dstCur.hasNext()) {
-			final UnsignedByteType dst = dstCur.next();
-			final int v = srcCur.next().get();
-			final long z = dstCur.getLongPosition(2) + z0;
-			dst.set(luts[(int) z][v]);
+			final RandomAccessibleInterval<UnsignedByteType> srcSlice = Views.interval(
+					Views.hyperSlice(volume, 2, z),
+					new long[]{x0, y0},
+					new long[]{x1, y1});
+			final RandomAccessibleInterval<UnsignedByteType> dstSlice = Views.hyperSlice(out, 2, zOff);
+
+			final Cursor<UnsignedByteType> srcCur = Views.flatIterable(srcSlice).cursor();
+			final Cursor<UnsignedByteType> dstCur = Views.flatIterable(dstSlice).cursor();
+			final Cursor<DoubleType> hfCur = Views.flatIterable(hfAtRawScale).cursor();
+
+			while (dstCur.hasNext()) {
+				final int v = srcCur.next().get();
+				final double hfVal = hfCur.next().get();
+				dstCur.next().set(z > hfVal ? v : lutZ[v]);   // Note: height-check is less conservative than in histogram computation
+			}
 		}
 
 		N5Utils.saveNonEmptyBlock(out, n5, outDataset, gridBlock[2], new UnsignedByteType());
