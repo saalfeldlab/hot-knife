@@ -323,6 +323,28 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		}
 
 		/**
+		 * Build a histogram from a pre-computed count array. Value {@code v} is read from
+		 * {@code counts[v + offset]}. The array is retained by reference; do not mutate
+		 * after handing it over.
+		 */
+		public static LayerHistogram fromCounts(final long[] counts, final int offset, final double cutoff) {
+			long total = 0;
+			for (final long c : counts) {
+				total += c;
+			}
+			return new LayerHistogram(counts, offset, total, cutoff);
+		}
+
+		/** Internal bin counts. Aligned so value {@code v} is at {@code counts()[v + offset()]}. Do not mutate. */
+		public long[] counts() {
+			return counts;
+		}
+
+		public int offset() {
+			return offset;
+		}
+
+		/**
 		 * Build a histogram from a list of integer-valued doubles.
 		 */
 		public static LayerHistogram from(final List<Double> values, final double cutoff) {
