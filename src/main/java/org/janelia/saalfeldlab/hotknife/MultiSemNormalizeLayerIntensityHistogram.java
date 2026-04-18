@@ -59,12 +59,10 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--heightfieldDataset", required = true,
-				usage = "2D height field dataset (FloatType), e.g. w61_s082/heightfield_1/s1/max")
+				usage = "2D height field dataset (FloatType), e.g. w61_s082/heightfield_1/s1/max. " +
+						"Resolution relative to the raw is read from the 'downsamplingFactors' " +
+						"attribute on the parent group (as written by SparkSurfaceFit).")
 		private String heightfieldDataset = null;
-
-		@Option(name = "--hfDownsample",
-				usage = "XY downsample factor of the heightfield relative to the raw (default: 2)")
-		private int hfDownsample = 2;
 
 		@Option(name = "--refIndex",
 				usage = "Z index of the reference section (default: 5)")
@@ -85,7 +83,6 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 		public String n5DatasetInput() { return n5DatasetInput; }
 		public String n5DatasetOutput() { return n5DatasetOutput; }
 		public String heightfieldDataset() { return heightfieldDataset; }
-		public int hfDownsample() { return hfDownsample; }
 		public int refIndex() { return refIndex; }
 	}
 
@@ -103,6 +100,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 		final int[] blockSize;
 		final float[] hf;
 		final long[] hfShape;
+		final double[] factors;
 
 		try (final N5Reader n5 = N5Util.createN5Reader(options.n5Path())) {
 
@@ -131,6 +129,10 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			while (c.hasNext()) {
 				hf[i++] = c.next().get();
 			}
+
+			factors = readHeightfieldFactors(n5, options.heightfieldDataset());
+			System.out.println("Heightfield downsamplingFactors = [" +
+					factors[0] + ", " + factors[1] + ", " + factors[2] + "]");
 		}
 
 		try (final N5Writer w = N5Util.createN5Writer(options.n5Path())) {
@@ -142,7 +144,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 		try (final JavaSparkContext sc = new JavaSparkContext(conf)) {
 
 			final Broadcast<float[]> hfBc = sc.broadcast(hf);
-			final int hfDs = options.hfDownsample();
+			final Broadcast<double[]> factorsBc = sc.broadcast(factors);
 			final String n5Path = options.n5Path();
 			final String inDataset = options.n5DatasetInput();
 			final String outDataset = options.n5DatasetOutput();
@@ -155,7 +157,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 					new int[]{blockSize[0], blockSize[1]});
 
 			final List<LayerHistogram> sectionHists = sc.parallelize(xyGrid)
-					.map(block -> columnHistograms(n5Path, inDataset, block, numZ, hfBc.value(), hfShape, hfDs))
+					.map(block -> columnHistograms(n5Path, inDataset, block, numZ, hfBc.value(), hfShape, factorsBc.value()))
 					.reduce(MultiSemNormalizeLayerIntensityHistogram::mergeSectionHists);
 
 			final double[] refCdf = cdf256(sectionHists.get(options.refIndex()));
@@ -170,7 +172,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			final List<long[][]> grid = Grid.create(dims, blockSize);
 			sc.parallelize(grid).foreach(block ->
 					processBlock(n5Path, inDataset, outDataset, block,
-								 lutsBc.value(), hfBc.value(), hfShape, hfDs));
+								 lutsBc.value(), hfBc.value(), hfShape, factorsBc.value()));
 		}
 
 		System.out.println("wrote " + options.n5Path() + "/" + options.n5DatasetOutput());
@@ -188,7 +190,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			final int numZ,
 			final float[] hf,
 			final long[] hfShape,
-			final int hfDownsample) {
+			final double[] factors) {
 
 		final N5Reader n5 = N5Util.createN5Reader(n5Path);
 		final RandomAccessibleInterval<UnsignedByteType> volume = N5Utils.open(n5, inDataset);
@@ -210,7 +212,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 				final int v = c.next().get();
 				final long x = c.getLongPosition(0);
 				final long y = c.getLongPosition(1);
-				if (inTissue(z, x, y, hf, hfShape, hfDownsample)) {
+				if (inTissue(z, x, y, hf, hfShape, factors)) {
 					counts[v]++;
 				}
 			}
@@ -230,10 +232,35 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 
 	private static boolean inTissue(
 			final long z, final long x, final long y,
-			final float[] hf, final long[] hfShape, final int hfDownsample) {
-		final long hx = Math.min(x / hfDownsample, hfShape[0] - 1);
-		final long hy = Math.min(y / hfDownsample, hfShape[1] - 1);
-		return z < hf[(int)(hy * hfShape[0] + hx)];
+			final float[] hf, final long[] hfShape, final double[] factors) {
+		final long hx = Math.min((long)(x / factors[0]), hfShape[0] - 1);
+		final long hy = Math.min((long)(y / factors[1]), hfShape[1] - 1);
+		final double val = hf[(int)(hy * hfShape[0] + hx)] * factors[2];
+		return z < val;
+	}
+
+	/**
+	 * Read the heightfield's downsampling factors relative to the raw volume. Looks on the
+	 * parent group first (where {@link SparkSurfaceFit} writes the attribute), falling back
+	 * to the dataset itself. Returns a 3-element [xF, yF, zF] array.
+	 */
+	private static double[] readHeightfieldFactors(final N5Reader n5, final String heightfieldDataset) {
+		final int slash = heightfieldDataset.lastIndexOf('/');
+		final String[] candidates = (slash > 0)
+				? new String[]{heightfieldDataset.substring(0, slash), heightfieldDataset}
+				: new String[]{heightfieldDataset};
+		for (final String path : candidates) {
+			final double[] f = n5.getAttribute(path, "downsamplingFactors", double[].class);
+			if (f != null) {
+				if (f.length < 3) {
+					throw new IllegalArgumentException(
+							"downsamplingFactors on " + path + " must have 3 elements, got " + f.length);
+				}
+				return f;
+			}
+		}
+		throw new IllegalArgumentException(
+				"no 'downsamplingFactors' attribute found on " + heightfieldDataset + " or its parent group");
 	}
 
 	/**
@@ -284,7 +311,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			final int[][] luts,
 			final float[] hf,
 			final long[] hfShape,
-			final int hfDownsample) {
+			final double[] factors) {
 
 		final N5Writer n5 = N5Util.createN5Writer(n5Path);
 		final RandomAccessibleInterval<UnsignedByteType> volume = N5Utils.open(n5, inDataset);
@@ -307,7 +334,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			final long y = dstCur.getLongPosition(1) + gridBlock[0][1];
 			final long z = dstCur.getLongPosition(2) + gridBlock[0][2];
 
-			dst.set(inTissue(z, x, y, hf, hfShape, hfDownsample) ? luts[(int) z][v] : v);
+			dst.set(inTissue(z, x, y, hf, hfShape, factors) ? luts[(int) z][v] : v);
 		}
 
 		N5Utils.saveNonEmptyBlock(out, n5, outDataset, gridBlock[2], new UnsignedByteType());
