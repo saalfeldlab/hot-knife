@@ -39,9 +39,13 @@ import net.imglib2.view.Views;
  * <p>
  * Only supports 8-bit data. Pass 1 (histogram collection) is parallelized over XY grid
  * blocks and reduced via {@link LayerHistogram#absorb}. Pass 2 applies the per-section
- * LUTs in a standard 3D block-grid Spark stage.
+ * LUTs in a standard 3D block-grid Spark stage. The heightfield is opened lazily in
+ * each executor task (never materialized on the driver) so very large fields (tens of
+ * thousands of pixels per side) don't cost driver memory.
  */
 public class MultiSemNormalizeLayerIntensityHistogram {
+
+	public static final int N_BINS = 256;
 
 	@SuppressWarnings({"FieldMayBeFinal", "unused", "FieldCanBeLocal"})
 	public static class Options extends AbstractOptions implements Serializable {
@@ -98,7 +102,6 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 
 		final long[] dims;
 		final int[] blockSize;
-		final float[] hf;
 		final long[] hfShape;
 		final double[] factors;
 
@@ -118,36 +121,35 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			dims = attrs.getDimensions();
 			blockSize = attrs.getBlockSize();
 
-			final RandomAccessibleInterval<FloatType> hfRai = N5Utils.open(n5, options.heightfieldDataset());
-			if (hfRai.numDimensions() != 2) {
-				throw new IllegalArgumentException("heightfield must be 2D, got " + hfRai.numDimensions() + "D");
+			final DatasetAttributes hfAttrs = n5.getDatasetAttributes(options.heightfieldDataset());
+			if (hfAttrs == null) {
+				throw new IllegalArgumentException("no attributes on " + options.heightfieldDataset());
 			}
-			hfShape = new long[]{hfRai.dimension(0), hfRai.dimension(1)};
-			hf = new float[(int)(hfShape[0] * hfShape[1])];
-			final Cursor<FloatType> c = Views.flatIterable(Views.zeroMin(hfRai)).cursor();
-			int i = 0;
-			while (c.hasNext()) {
-				hf[i++] = c.next().get();
+			final long[] hfDims = hfAttrs.getDimensions();
+			if (hfDims.length != 2) {
+				throw new IllegalArgumentException("heightfield must be 2D, got " + hfDims.length + "D");
 			}
+			hfShape = hfDims;
 
 			factors = readHeightfieldFactors(n5, options.heightfieldDataset());
-			System.out.println("Heightfield downsamplingFactors = [" +
-					factors[0] + ", " + factors[1] + ", " + factors[2] + "]");
+			System.out.println("Heightfield shape = [" + hfShape[0] + ", " + hfShape[1] + "]" +
+					", downsamplingFactors = [" + factors[0] + ", " + factors[1] + ", " + factors[2] + "]");
 		}
 
-		try (final N5Writer w = N5Util.createN5Writer(options.n5Path())) {
-			w.createDataset(options.n5DatasetOutput(), dims, blockSize, DataType.UINT8, new GzipCompression());
+		try (final N5Writer writer = N5Util.createN5Writer(options.n5Path())) {
+			writer.createDataset(options.n5DatasetOutput(), dims, blockSize, DataType.UINT8, new GzipCompression());
 		}
 
 		final int numZ = (int) dims[2];
 		final SparkConf conf = new SparkConf().setAppName("MultiSemNormalizeLayerIntensityHistogram");
 		try (final JavaSparkContext sc = new JavaSparkContext(conf)) {
 
-			final Broadcast<float[]> hfBc = sc.broadcast(hf);
 			final Broadcast<double[]> factorsBc = sc.broadcast(factors);
+			final Broadcast<long[]> hfShapeBc = sc.broadcast(hfShape);
 			final String n5Path = options.n5Path();
 			final String inDataset = options.n5DatasetInput();
 			final String outDataset = options.n5DatasetOutput();
+			final String hfDataset = options.heightfieldDataset();
 
 			// Pass 1: split XY into blocks, each task sweeps all z within its column
 			// and returns a per-section LayerHistogram of masked pixels in the block.
@@ -157,25 +159,84 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 					new int[]{blockSize[0], blockSize[1]});
 
 			final List<LayerHistogram> sectionHists = sc.parallelize(xyGrid)
-					.map(block -> columnHistograms(n5Path, inDataset, block, numZ, hfBc.value(), hfShape, factorsBc.value()))
+					.map(block -> columnHistograms(n5Path, inDataset, hfDataset, block, numZ,
+							hfShapeBc.value(), factorsBc.value()))
 					.reduce(MultiSemNormalizeLayerIntensityHistogram::mergeSectionHists);
 
-			final double[] refCdf = cdf256(sectionHists.get(options.refIndex()));
+			final double[] refCdf = extractCdf(sectionHists.get(options.refIndex()));
 			final int[][] luts = new int[numZ][];
 			for (int z = 0; z < numZ; z++) {
 				luts[z] = buildLut(sectionHists.get(z), refCdf);
 			}
 			System.out.println("Computed per-section LUTs against reference z=" + options.refIndex());
 
-			// Pass 2: 3D block grid, apply LUT[z] inside mask.
+			// Pass 2: 3D block grid, apply LUT[z] to every pixel. Layers with no in-tissue
+			// pixels have an identity LUT from buildLut so they pass through unchanged.
 			final Broadcast<int[][]> lutsBc = sc.broadcast(luts);
 			final List<long[][]> grid = Grid.create(dims, blockSize);
 			sc.parallelize(grid).foreach(block ->
-					processBlock(n5Path, inDataset, outDataset, block,
-								 lutsBc.value(), hfBc.value(), hfShape, factorsBc.value()));
+					processBlock(n5Path, inDataset, outDataset, block, lutsBc.value()));
 		}
 
 		System.out.println("wrote " + options.n5Path() + "/" + options.n5DatasetOutput());
+	}
+
+	/**
+	 * A small in-memory tile of the heightfield covering the XY extent of a single task,
+	 * built inside the executor by a lazy N5 read. Only the relevant N5 chunks are fetched.
+	 */
+	private static final class HfTile {
+		final float[] data;
+		final long hx0;
+		final long hy0;
+		final long width;
+
+		HfTile(final float[] data, final long hx0, final long hy0, final long width) {
+			this.data = data;
+			this.hx0 = hx0;
+			this.hy0 = hy0;
+			this.width = width;
+		}
+
+		boolean inTissue(final long z, final long x, final long y,
+						 final long[] hfShape, final double[] factors) {
+			final long hx = Math.min((long)(x / factors[0]), hfShape[0] - 1);
+			final long hy = Math.min((long)(y / factors[1]), hfShape[1] - 1);
+			final long lx = hx - hx0;
+			final long ly = hy - hy0;
+			final double val = data[(int)(ly * width + lx)] * factors[2];
+			return z < val;
+		}
+	}
+
+	private static HfTile loadHfTile(
+			final N5Reader n5,
+			final String hfDataset,
+			final long rawX0, final long rawY0,
+			final long rawX1, final long rawY1,
+			final long[] hfShape,
+			final double[] factors) {
+
+		final long hx0 = Math.min((long)(rawX0 / factors[0]), hfShape[0] - 1);
+		final long hy0 = Math.min((long)(rawY0 / factors[1]), hfShape[1] - 1);
+		final long hx1 = Math.min((long)(rawX1 / factors[0]), hfShape[0] - 1);
+		final long hy1 = Math.min((long)(rawY1 / factors[1]), hfShape[1] - 1);
+
+		final RandomAccessibleInterval<FloatType> hfRai = N5Utils.open(n5, hfDataset);
+		final RandomAccessibleInterval<FloatType> tile = Views.interval(
+				hfRai,
+				new long[]{hx0, hy0},
+				new long[]{hx1, hy1});
+
+		final long width = hx1 - hx0 + 1;
+		final long height = hy1 - hy0 + 1;
+		final float[] data = new float[(int)(width * height)];
+		final Cursor<FloatType> c = Views.flatIterable(Views.zeroMin(tile)).cursor();
+		int i = 0;
+		while (c.hasNext()) {
+			data[i++] = c.next().get();
+		}
+		return new HfTile(data, hx0, hy0, width);
 	}
 
 	/**
@@ -186,9 +247,9 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 	private static List<LayerHistogram> columnHistograms(
 			final String n5Path,
 			final String inDataset,
+			final String hfDataset,
 			final long[][] xyBlock,
 			final int numZ,
-			final float[] hf,
 			final long[] hfShape,
 			final double[] factors) {
 
@@ -200,9 +261,11 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 		final long x1 = x0 + xyBlock[1][0] - 1;
 		final long y1 = y0 + xyBlock[1][1] - 1;
 
+		final HfTile hfTile = loadHfTile(n5, hfDataset, x0, y0, x1, y1, hfShape, factors);
+
 		final List<LayerHistogram> result = new ArrayList<>(numZ);
 		for (int z = 0; z < numZ; z++) {
-			final long[] counts = new long[256];
+			final long[] counts = new long[N_BINS];
 			final RandomAccessibleInterval<UnsignedByteType> slice = Views.interval(
 					volume,
 					new long[]{x0, y0, z},
@@ -212,7 +275,7 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 				final int v = c.next().get();
 				final long x = c.getLongPosition(0);
 				final long y = c.getLongPosition(1);
-				if (inTissue(z, x, y, hf, hfShape, factors)) {
+				if (hfTile.inTissue(z, x, y, hfShape, factors)) {
 					counts[v]++;
 				}
 			}
@@ -228,15 +291,6 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			out.add(a.get(i).absorb(b.get(i)));
 		}
 		return out;
-	}
-
-	private static boolean inTissue(
-			final long z, final long x, final long y,
-			final float[] hf, final long[] hfShape, final double[] factors) {
-		final long hx = Math.min((long)(x / factors[0]), hfShape[0] - 1);
-		final long hy = Math.min((long)(y / factors[1]), hfShape[1] - 1);
-		final double val = hf[(int)(hy * hfShape[0] + hx)] * factors[2];
-		return z < val;
 	}
 
 	/**
@@ -268,17 +322,17 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 	 * the result is always aligned to integer intensity values 0..255. Returns a
 	 * uniform CDF if the histogram is empty.
 	 */
-	private static double[] cdf256(final LayerHistogram hist) {
-		final double[] cdf = new double[256];
+	private static double[] extractCdf(final LayerHistogram hist) {
+		final double[] cdf = new double[N_BINS];
 		final long total = hist.totalCount();
 		if (total == 0) {
-			for (int i = 0; i < 256; i++) cdf[i] = (i + 1) / 256.0;
+			for (int i = 0; i < N_BINS; i++) cdf[i] = (i + 1) / (double) N_BINS;
 			return cdf;
 		}
 		final long[] counts = hist.counts();
 		final int offset = hist.offset();
 		long acc = 0;
-		for (int v = 0; v < 256; v++) {
+		for (int v = 0; v < N_BINS; v++) {
 			final int idx = v + offset;
 			if (idx >= 0 && idx < counts.length) {
 				acc += counts[idx];
@@ -289,15 +343,15 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 	}
 
 	private static int[] buildLut(final LayerHistogram hist, final double[] refCdf) {
-		final int[] lut = new int[256];
+		final int[] lut = new int[N_BINS];
 		if (hist.totalCount() == 0) {
-			for (int i = 0; i < 256; i++) lut[i] = i;
+			for (int i = 0; i < N_BINS; i++) lut[i] = i;
 			return lut;
 		}
-		final double[] srcCdf = cdf256(hist);
+		final double[] srcCdf = extractCdf(hist);
 		int j = 0;
-		for (int i = 0; i < 256; i++) {
-			while (j < 255 && refCdf[j] < srcCdf[i]) j++;
+		for (int i = 0; i < N_BINS; i++) {
+			while (j < (N_BINS - 1) && refCdf[j] < srcCdf[i]) j++;
 			lut[i] = j;
 		}
 		return lut;
@@ -308,13 +362,12 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 			final String inDataset,
 			final String outDataset,
 			final long[][] gridBlock,
-			final int[][] luts,
-			final float[] hf,
-			final long[] hfShape,
-			final double[] factors) {
+			final int[][] luts) {
 
 		final N5Writer n5 = N5Util.createN5Writer(n5Path);
 		final RandomAccessibleInterval<UnsignedByteType> volume = N5Utils.open(n5, inDataset);
+
+		final long z0 = gridBlock[0][2];
 
 		final FinalInterval blockInterval = Intervals.createMinSize(
 				gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
@@ -329,12 +382,8 @@ public class MultiSemNormalizeLayerIntensityHistogram {
 		while (dstCur.hasNext()) {
 			final UnsignedByteType dst = dstCur.next();
 			final int v = srcCur.next().get();
-
-			final long x = dstCur.getLongPosition(0) + gridBlock[0][0];
-			final long y = dstCur.getLongPosition(1) + gridBlock[0][1];
-			final long z = dstCur.getLongPosition(2) + gridBlock[0][2];
-
-			dst.set(inTissue(z, x, y, hf, hfShape, factors) ? luts[(int) z][v] : v);
+			final long z = dstCur.getLongPosition(2) + z0;
+			dst.set(luts[(int) z][v]);
 		}
 
 		N5Utils.saveNonEmptyBlock(out, n5, outDataset, gridBlock[2], new UnsignedByteType());
