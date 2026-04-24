@@ -3,7 +3,6 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -27,8 +26,6 @@ import org.kohsuke.args4j.Option;
 import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.converter.Converters;
-import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
@@ -100,10 +97,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		 * Checks that output doesn't exist and input has valid attributes.
 		 *
 		 * @return the dataset attributes for the full scale input
-		 * @throws IOException if N5 access fails
 		 * @throws IllegalArgumentException if output exists or input has no attributes
 		 */
-		public DatasetAttributes readDatasetAttributes() throws IOException {
+		public DatasetAttributes readDatasetAttributes() {
 			try (final N5Reader n5reader = N5Util.createN5Reader(n5Path)) {
 				if (n5reader.exists(n5DatasetOutput)) {
 					throw new IllegalArgumentException("Normalized data set already exists: " + n5DatasetOutput);
@@ -129,8 +125,17 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		public Integer downsampleLevel() {
 			return downsampleLevel;
 		}
-	}
 
+		@Override
+		public String toString() {
+			return "n5Path='" + n5Path + '\'' +
+				   ", n5DatasetInput='" + n5DatasetInput + '\'' +
+				   ", n5DatasetOutput='" + n5DatasetOutput + '\'' +
+				   ", downsampleLevel=" + downsampleLevel +
+				   ", factors='" + factors + '\'' +
+				   ", cutoff=" + cutoff;
+		}
+	}
 
 
 	protected final String fullScaleInputDataset;
@@ -150,63 +155,97 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		this.typeHelper = typeHelper;
 	}
 
+	@Override
+	public String toString() {
+		return "fullScaleInputDataset='" + fullScaleInputDataset + '\'' +
+			   ", downScaledInputDataset='" + downScaledInputDataset + '\'' +
+			   ", fullScaleOutputDataset='" + fullScaleOutputDataset + '\'' +
+			   ", options=" + options +
+			   ", attributes=" + attributes.asMap();
+	}
+
 	protected void run() throws IOException {
-		// Compute transformations based on downsampled input
-		final List<AffineModel1D> transformations;
+
+		logMessage("run: entry, " + this);
+
+		// Read downscaled dataset attributes for grid creation and z-dimension validation
+		final DatasetAttributes downscaledAttributes;
 		try (final N5Reader n5reader = N5Util.createN5Reader(options.n5Path)) {
-			final Img<T> downScaledImg = N5Utils.open(n5reader, downScaledInputDataset);
-			transformations = computeTransformations(downScaledImg);
+			downscaledAttributes = n5reader.getDatasetAttributes(downScaledInputDataset);
 		}
 
-		if (transformations.size() != attributes.getDimensions()[2]) {
-			throw new IllegalArgumentException("Number of transformations does not match number of layers: " + transformations.size()
-					+ " vs. " + attributes.getDimensions()[2] + ". Is the z-dimension downsampled?");
+		final int nLayers = (int) downscaledAttributes.getDimensions()[2];
+		if (nLayers != attributes.getDimensions()[2]) {
+			throw new IllegalArgumentException("Number of downscaled layers does not match full-scale layers: "
+													   + nLayers + " vs. " + attributes.getDimensions()[2] + ". Is the z-dimension downsampled?");
 		}
 
-		// Apply transformations to full scale input and save to output dataset
+		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeLayerIntensityN5");
+		try (final JavaSparkContext sparkContext = new JavaSparkContext(conf)) {
+			final List<AffineModel1D> transformations = computeTransformations(sparkContext, downscaledAttributes);
+			applyAndWrite(sparkContext, transformations);
+		}
+
+		logMessage("run: exit");
+	}
+
+	/**
+	 * Apply transformations to the full-scale input, write the output dataset,
+	 * optionally downsample, and transfer base attributes.
+	 */
+	private void applyAndWrite(final JavaSparkContext sparkContext, final List<AffineModel1D> transformations) throws IOException {
+
+		logMessage("applyAndWrite: entry, with " + transformations.size() + " transformations");
+
+		// Create output dataset
 		try (final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path)) {
 			n5Writer.createDataset(fullScaleOutputDataset, attributes);
 		}
 
 		final List<long[][]> grid = Grid.create(attributes.getDimensions(), attributes.getBlockSize());
-		final SparkConf conf = new SparkConf().setAppName("SparkNormalizeLayerIntensityN5");
 
-		try (final JavaSparkContext sparkContext = new JavaSparkContext(conf)) {
+		final JavaRDD<long[][]> parallelizedGrid = sparkContext.parallelize(grid);
+		final Broadcast<List<? extends AbstractAffineModel1D<?>>> transformationsBroadcast = sparkContext.broadcast(transformations);
+		parallelizedGrid.foreach(gridBlock -> saveFullScaleBlock(transformationsBroadcast.value(), gridBlock));
 
-			final JavaRDD<long[][]> parallelizedGrid = sparkContext.parallelize(grid);
-			final Broadcast<List<? extends AbstractAffineModel1D<?>>> transformationsBroadcast = sparkContext.broadcast(transformations);
-			parallelizedGrid.foreach(gridBlock -> saveFullScaleBlock(transformationsBroadcast.value(), gridBlock));
-
-			final int[] downsampleFactors = parseCSIntArray(options.factors);
-			if (downsampleFactors != null) {
-				downsampleScalePyramid(sparkContext,
-									   new N5PathSupplier(options.n5Path),
-									   fullScaleOutputDataset,
-									   options.n5DatasetOutput,
-									   downsampleFactors);
-			}
+		final int[] downsampleFactors = parseCSIntArray(options.factors);
+		if (downsampleFactors != null) {
+			logMessage("applyAndWrite: call downsampleScalePyramid");
+			downsampleScalePyramid(sparkContext,
+								   new N5PathSupplier(options.n5Path),
+								   fullScaleOutputDataset,
+								   options.n5DatasetOutput,
+								   downsampleFactors);
 		}
 
 		// Copy attributes and rebuild 'scales' attribute
 		try (final N5Writer n5Writer = N5Util.createN5Writer(options.n5Path)) {
 			transferBaseAttributes(n5Writer);
 		}
+
+		logMessage("applyAndWrite: exit");
 	}
 
 
 	/**
-	 * Compute the intensity transformations for each layer.
+	 * Compute the intensity transformations for each layer using Spark for parallelization.
 	 * Subclasses implement different strategies for computing these transformations.
 	 *
-	 * @param rai the downsampled input image
+	 * @param sparkContext the Spark context for parallelization
+	 * @param downscaledAttributes attributes of the downscaled input dataset
 	 * @return list of affine models, one per layer
 	 */
-	protected abstract List<AffineModel1D> computeTransformations(final RandomAccessibleInterval<T> rai);
+	protected abstract List<AffineModel1D> computeTransformations(
+			final JavaSparkContext sparkContext,
+			final DatasetAttributes downscaledAttributes);
 
 	private RandomAccessibleInterval<T> applyTransformations(
 			final RandomAccessibleInterval<T> sourceRaw,
 			final List<? extends AbstractAffineModel1D<?>> transformations
 	) {
+
+		logMessage("applyTransformations: entry, with " + transformations.size() + " transformations");
+
 		final List<IntervalView<T>> sourceStack = asZStack(sourceRaw);
 		final List<RandomAccessibleInterval<T>> convertedLayers = new ArrayList<>(sourceStack.size());
 		final double[] pixel = new double[1];
@@ -228,6 +267,8 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 			convertedLayers.add(convertedLayer);
 		}
+
+		logMessage("applyTransformations: exit, returning " + convertedLayers.size() + " converted layers");
 
 		return Views.stack(convertedLayers);
 	}
@@ -260,48 +301,200 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 
 	/**
-	 * Helper class to hold the median, mean, min and max (discarding some cutoff pixels on either side) of a layer.
+	 * Histogram-based statistics for a layer. Holds an integer histogram and computes
+	 * rank and accumulated statistics on demand, applying a cutoff to discard outliers.
+	 * Can be merged with other instances for parallel computation.
 	 */
-	protected static class LayerStats {
-		public final double median;
-		public final double mean;
-		public final double std;
-		public final double min;
-		public final double max;
+	protected static class LayerHistogram implements Serializable {
+		private long[] counts;
+		private int offset;  // value v is stored at index v + offset
+		private long totalCount;
+		private final double cutoff;
 
-		private LayerStats(
-				final double median,
-				final double mean,
-				final double std,
-				final double min,
-				final double max
-		) {
-			this.median = median;
-			this.mean = mean;
-			this.std = std;
-			this.min = min;
-			this.max = max;
+		private LayerHistogram(final long[] counts, final int offset, final long totalCount, final double cutoff) {
+			this.counts = counts;
+			this.offset = offset;
+			this.totalCount = totalCount;
+			this.cutoff = cutoff;
 		}
 
-		public static LayerStats from(final List<Double> pixelList, final double cutoff) {
-			// Convert to sorted array for rank statistics
-			final double[] pixels = pixelList.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+		public long totalCount() {
+			return totalCount;
+		}
 
-			// Compute histogram clipping bounds
-			final int start = (int) Math.round(pixels.length * cutoff);
-			final int end = pixels.length - start;
+		/**
+		 * Build a histogram from a pre-computed count array. Value {@code v} is read from
+		 * {@code counts[v + offset]}. The array is retained by reference; do not mutate
+		 * after handing it over.
+		 */
+		public static LayerHistogram fromCounts(final long[] counts, final int offset, final double cutoff) {
+			long total = 0;
+			for (final long c : counts) {
+				total += c;
+			}
+			return new LayerHistogram(counts, offset, total, cutoff);
+		}
 
-			final double median = pixels[pixels.length / 2];
-			final double min = pixels[start];
-			final double max = pixels[end - 1];
+		/** Internal bin counts. Aligned so value {@code v} is at {@code counts()[v + offset()]}. Do not mutate. */
+		public long[] counts() {
+			return counts;
+		}
 
-			// Compute accumulated statistics over clipped pixels
-			final double mean = Arrays.stream(pixels, start, end).average().orElse(0.0);
-			final double std = Math.sqrt(Arrays.stream(pixels, start, end)
-					.map(v -> (v - mean) * (v - mean))
-					.average().orElse(0.0));
+		public int offset() {
+			return offset;
+		}
 
-			return new LayerStats(median, mean, std, min, max);
+		/**
+		 * Build a histogram from a list of integer-valued doubles.
+		 */
+		public static LayerHistogram from(final List<Double> values, final double cutoff) {
+			if (values.isEmpty()) {
+				return new LayerHistogram(new long[0], 0, 0, cutoff);
+			}
+
+			int minVal = Integer.MAX_VALUE;
+			int maxVal = Integer.MIN_VALUE;
+			for (final double v : values) {
+				final int iv = (int) v;
+				if (iv < minVal) minVal = iv;
+				if (iv > maxVal) maxVal = iv;
+			}
+
+			final int offset = -minVal;
+			final long[] counts = new long[maxVal - minVal + 1];
+			for (final double v : values) {
+				counts[(int) v + offset]++;
+			}
+
+			return new LayerHistogram(counts, offset, values.size(), cutoff);
+		}
+
+		public LayerHistogram absorb(final LayerHistogram other) {
+			// No others to absorb
+			if (other.totalCount == 0) {
+				return this;
+			}
+
+			// This is empty, clone the other
+			if (totalCount == 0) {
+				this.counts = other.counts.clone();
+				this.offset = other.offset;
+				this.totalCount = other.totalCount;
+				return this;
+			}
+
+			// Compute new min/max/offset values for the combined histogram
+			final int thisMin = -offset;
+			final int thisMax = counts.length - 1 - offset;
+			final int otherMin = -other.offset;
+			final int otherMax = other.counts.length - 1 - other.offset;
+
+			final int newMin = Math.min(thisMin, otherMin);
+			final int newMax = Math.max(thisMax, otherMax);
+			final int newOffset = -newMin;
+			final int newLen = newMax - newMin + 1;
+
+			// Allocate enough space for the combined histogram and copy this's values
+			final long[] newCounts;
+			if (newLen == counts.length && newOffset == offset) {
+				newCounts = counts;
+			} else {
+				newCounts = new long[newLen];
+				for (int i = 0; i < counts.length; i++) {
+					newCounts[i - offset + newOffset] += counts[i];
+				}
+			}
+
+			// Update the combined histogram with the other's values
+			for (int i = 0; i < other.counts.length; i++) {
+				newCounts[i - other.offset + newOffset] += other.counts[i];
+			}
+
+			this.counts = newCounts;
+			this.offset = newOffset;
+			this.totalCount = totalCount + other.totalCount;
+			return this;
+		}
+
+		public double median() {
+			return valueAtRank(totalCount / 2);
+		}
+
+		public double min() {
+			final long start = Math.round(totalCount * cutoff);
+			return valueAtRank(start);
+		}
+
+		public double max() {
+			final long start = Math.round(totalCount * cutoff);
+			final long end = totalCount - start;
+			return valueAtRank(end - 1);
+		}
+
+		public double mean() {
+			final long start = Math.round(totalCount * cutoff);
+			final long end = totalCount - start;
+
+			double sum = 0;
+			long cumulative = 0;
+			long clippedCount = 0;
+
+			for (int i = 0; i < counts.length; i++) {
+				if (counts[i] == 0) continue;
+				final long prevCumulative = cumulative;
+				cumulative += counts[i];
+				final double value = i - offset;
+
+				// How many of this bin's entries fall within [start, end)?
+				final long binStart = Math.max(start, prevCumulative);
+				final long binEnd = Math.min(end, cumulative);
+				if (binEnd > binStart) {
+					final long n = binEnd - binStart;
+					sum += value * n;
+					clippedCount += n;
+				}
+			}
+
+			return clippedCount > 0 ? sum / clippedCount : 0.0;
+		}
+
+		public double std() {
+			final double m = mean();
+			final long start = Math.round(totalCount * cutoff);
+			final long end = totalCount - start;
+
+			double sumSqDiff = 0;
+			long cumulative = 0;
+			long clippedCount = 0;
+
+			for (int i = 0; i < counts.length; i++) {
+				if (counts[i] == 0) continue;
+				final long prevCumulative = cumulative;
+				cumulative += counts[i];
+				final double value = i - offset;
+
+				final long binStart = Math.max(start, prevCumulative);
+				final long binEnd = Math.min(end, cumulative);
+				if (binEnd > binStart) {
+					final long n = binEnd - binStart;
+					sumSqDiff += (value - m) * (value - m) * n;
+					clippedCount += n;
+				}
+			}
+
+			return clippedCount > 0 ? Math.sqrt(sumSqDiff / clippedCount) : 0.0;
+		}
+
+		private double valueAtRank(final long rank) {
+			long cumulative = 0;
+			for (int i = 0; i < counts.length; i++) {
+				cumulative += counts[i];
+				if (cumulative > rank) {
+					return i - offset;
+				}
+			}
+			// Return the last non-empty bin
+			return counts.length - 1 - offset;
 		}
 	}
 
@@ -309,18 +502,18 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 * Small helper enum to represent the type of mean used for normalization.
 	 */
 	protected enum ShiftType {
-		NONE(stats -> 0.0),
-		MEDIAN(stats -> stats.median),
-		MEAN(stats -> stats.mean);
+		NONE(h -> 0.0),
+		MEDIAN(LayerHistogram::median),
+		MEAN(LayerHistogram::mean);
 
-		private final Function<LayerStats, Double> function;
+		private final Function<LayerHistogram, Double> function;
 
-		ShiftType(final Function<LayerStats, Double> function) {
+		ShiftType(final Function<LayerHistogram, Double> function) {
 			this.function = function;
 		}
 
-		public double from(final LayerStats stats) {
-			return function.apply(stats);
+		public double from(final LayerHistogram histogram) {
+			return function.apply(histogram);
 		}
 	}
 
@@ -330,18 +523,18 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 * 'GAUSS' scaling is what is used to normalize 8bit FIB-SEM data.
 	 */
 	protected enum ScaleType {
-		NONE(stats -> 1.0),
-		FULL_RANGE(stats -> stats.max - stats.min),
-		GAUSS(stats -> 4 * stats.std);
+		NONE(h -> 1.0),
+		FULL_RANGE(h -> h.max() - h.min()),
+		GAUSS(h -> 4 * h.std());
 
-		private final Function<LayerStats, Double> function;
+		private final Function<LayerHistogram, Double> function;
 
-		ScaleType(final Function<LayerStats, Double> function) {
+		ScaleType(final Function<LayerHistogram, Double> function) {
 			this.function = function;
 		}
 
-		public double get(final LayerStats stats) {
-			return function.apply(stats);
+		public double get(final LayerHistogram histogram) {
+			return function.apply(histogram);
 		}
 	}
 
@@ -354,9 +547,8 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 	 */
 	protected interface TypeHelper<T extends NativeType<T> & IntegerType<T>> extends Serializable {
 		T getType();
-		Img<T> createImg(final long[] dimensions);
+
 		int clip(final int value);
-		boolean isOutsideThreshold(final int value);
 	}
 
 	protected static class ByteHelper implements TypeHelper<UnsignedByteType> {
@@ -366,19 +558,10 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		}
 
 		@Override
-		public Img<UnsignedByteType> createImg(final long[] dimensions) {
-			return ArrayImgs.unsignedBytes(dimensions);
-		}
-
-		@Override
 		public int clip(final int value) {
 			return UnsignedByteType.getCodedSignedByteChecked(value);
 		}
 
-		@Override
-		public boolean isOutsideThreshold(final int value) {
-			return (value < 20 || value > 200);
-		}
 	}
 
 	protected static class ShortHelper implements TypeHelper<UnsignedShortType> {
@@ -388,19 +571,10 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 		}
 
 		@Override
-		public Img<UnsignedShortType> createImg(final long[] dimensions) {
-			return ArrayImgs.unsignedShorts(dimensions);
-		}
-
-		@Override
 		public int clip(final int value) {
 			return UnsignedShortType.getCodedSignedShortChecked(value);
 		}
 
-		@Override
-		public boolean isOutsideThreshold(final int value) {
-			return (value < 5000 || value > 60000);
-		}
 	}
 
 	/**
@@ -439,5 +613,9 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			zScale *= factors[2];
 		}
 		n5Writer.setAttribute(options.n5DatasetOutput, "scales", scales);
+	}
+
+	private static void logMessage(final String message) {
+		org.janelia.saalfeldlab.hotknife.util.Util.logMessage(SparkNormalizeLayerIntensityN5.class.getName(), message);
 	}
 }
