@@ -13,7 +13,7 @@ public class RawStack
     public static final Pattern RAW_STACK_PATTERN = Pattern.compile("^w(\\d+)_s(\\d+)_r(\\d+)$");
 
     public static String DEFAULT_IC2D_SUFFIX = "_gc_par_crc_align_ic2d";
-    public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer-v2-mb";
+    public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer";
     public static String DEFAULT_CLAHE_SUFFIX = DEFAULT_NORM_LAYER_SUFFIX + "_clahe";
     public static String DEFAULT_COST_VERSION = "b250";
     public static String DEFAULT_HEIGHTFIELDS_VERSION = DEFAULT_COST_VERSION + "_smd_p1_p1";

@@ -28,7 +28,7 @@ RAW_STACK="${3}"
 CLASS="org.janelia.saalfeldlab.hotknife.MultiSemNormalizeLayerIntensity"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-IC2D_DATASET_PREFIX="/render/${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d"
+IC2D_DATASET_PREFIX="/render/${RENDER_PROJECT}/${RAW_STACK}_gc_par_crc_align_ic2d"
 SOURCE_DATASET="${IC2D_DATASET_PREFIX}___pixel"
 
 SOURCE_PATH="${N5_PATH}${SOURCE_DATASET}"
@@ -37,7 +37,7 @@ if ! gcloud storage ls "${SOURCE_PATH}" 2>/dev/null | grep -q .; then
   exit 1
 fi
 
-NORMALIZED_DATASET="${IC2D_DATASET_PREFIX}___norm-layer-v2"
+NORMALIZED_DATASET="${IC2D_DATASET_PREFIX}___norm-layer"
 NORMALIZED_DATASET_PATH="${N5_PATH}${NORMALIZED_DATASET}"
 if gcloud storage ls "${NORMALIZED_DATASET_PATH}" 2>/dev/null | grep -q .; then
   echo "ERROR: normalized dataset path ${NORMALIZED_DATASET_PATH} already exists"
