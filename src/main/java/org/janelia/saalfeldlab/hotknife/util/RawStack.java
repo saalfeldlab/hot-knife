@@ -101,9 +101,9 @@ public class RawStack
         return "/heightfields_" + heightfieldsVersion + "/" + project + "/" + getNormLayerStack();
     }
 
-    /** @return the flat dataset (e.g. /flat_v2_mb/w61_serial_070_to_079/w61_s076_r00) */
+    /** @return the flat dataset (e.g. /flat_v3/w61_serial_070_to_079/w61_s076_r00) */
     public String getFlatDataset() {
-        return "/flat_v2_mb/" + project + "/" + rawStack;
+        return "/flat_v3/" + project + "/" + rawStack;
     }
 
     /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw) */

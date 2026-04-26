@@ -62,7 +62,7 @@ for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
   RENDER_PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${RAW_STACK}")
 
   # /flat_v2_mb/w61_serial_070_to_079/w61_s079_r00
-  FLAT_DATASET="/flat_v2_mb/${RENDER_PROJECT}/${RAW_STACK}"
+  FLAT_DATASET="/flat_v3/${RENDER_PROJECT}/${RAW_STACK}"
 
   ARGV="${ARGV} -d ${FLAT_DATASET}/top/face -d ${FLAT_DATASET}/bot/face"
 
