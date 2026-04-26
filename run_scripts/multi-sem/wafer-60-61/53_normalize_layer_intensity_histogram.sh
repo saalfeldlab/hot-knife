@@ -55,9 +55,9 @@ fi
 
 ARGV="\
 --n5Path=${N5_PATH} \
---n5DatasetInput=${SOURCE_DATASET} \
---n5DatasetOutput=${HISTOGRAM_DATASET} \
---heightfieldDataset=${HF_DATASET} \
+--n5DatasetInput=${SOURCE_DATASET}/s0 \
+--n5DatasetOutput=${HISTOGRAM_DATASET}/s0 \
+--heightfieldDataset=${HF_DATASET}/s1/max \
 --refIndex 5"
 
 SPARK_EXEC_CORES=4
@@ -85,7 +85,7 @@ SPARK_VERSION="1.1"
 
 GS_JAR_URL="gs://janelia-spark-test/library/hot-knife-0.0.7-SNAPSHOT.jar"
 # HOT_KNIFE_JAR="/groups/hess/hesslab/render/lib/hot-knife-0.0.7-SNAPSHOT.jar"
-BATCH_NAME=$(echo "norm-layer-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
+BATCH_NAME=$(echo "norm-hist-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
 
 echo "
 Running gcloud dataproc batches submit spark with:
