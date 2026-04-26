@@ -57,48 +57,72 @@ import picocli.CommandLine.Option;
  *
  * @author Stephan Saalfeld &lt;saalfelds@janelia.hhmi.org&gt;
  */
-@SuppressWarnings("FieldMayBeFinal")
 public class SparkExportFlattenedVolume implements Callable<Void>, Serializable {
 
     public enum DebugMode {
         OFF, INTERACTIVE, BATCH
     }
 
-	@Option(names = {"--n5RawPath"}, required = true, description = "N5 raw input path, e.g. /nrs/flyem/tmp/VNC.n5")
-	private String n5RawInputPath = null;
+    @Option(names = {"--n5RawPath"},
+            required = true,
+            description = "N5 raw input path, " +
+                          "e.g. gs://janelia-spark-test/hess_wafers_60_61_export")
+    private String n5RawInputPath = null;
 
-	@Option(names = {"--n5FieldPath"}, required = true, description = "N5 height field input path, e.g. /nrs/flyem/tmp/VNC.n5")
-	private String n5FieldPath = null;
+    @Option(names = {"--n5FieldPath"},
+            required = true,
+            description = "N5 height field input path, " +
+                          "e.g. gs://janelia-spark-test/hess_wafers_60_61_export")
+    private String n5FieldPath = null;
 
-	@Option(names = {"--n5OutputPath"}, required = true, description = "N5 output path, e.g. /nrs/flyem/tmp/VNC.n5")
-	private String n5OutPath = null;
+    @Option(names = {"--n5OutputPath"},
+            required = true,
+            description = "N5 output path, " +
+                          "e.g. gs://janelia-spark-test/hess_wafers_60_61_export")
+    private String n5OutPath = null;
 
-	@Option(names = {"--n5RawDataset"}, required = true, description = "N5 raw input dataset, e.g. /raw/s0")
-	private String rawDataset = null;
+    @Option(names = {"--n5RawDataset"},
+            required = true,
+            description = "N5 raw input dataset, " +
+                          "e.g. /render/w61_serial_070_to_079/w61_s075_r00_gc_par_crc_align_ic2d___norm-layer_hist/s0")
+    private String rawDataset = null;
 
-	@Option(names = {"--n5FieldGroup"}, required = true, description = "N5 fields input group, e.g. /heightfields/slab-01/s1")
-	private String fieldGroup = null;
+    @Option(names = {"--n5FieldGroup"},
+            required = true,
+            description = "N5 fields input group, " +
+                          "e.g. /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s075_r00_gc_par_crc_align_ic2d___norm-layer/s1")
+    private String fieldGroup = null;
 
-	@Option(names = {"--n5OutDataset"}, required = true, description = "N5 output dataset, e.g. /flattened/slab-01")
-	private String outDataset = null;
+    @Option(names = {"--n5OutDataset"},
+            required = true,
+            description = "N5 output dataset, " +
+                          "e.g. /flat_v3/w61_serial_070_to_079/w61_s075_r00/raw/s0")
+    private String outDataset = null;
 
-	@Option(names = {"--padding"}, description = "padding beyond flattening field min and max in px, e.g. 20")
-	private int padding = 0;
+    @Option(names = {"--padding"},
+            description = "padding beyond flattening field min and max in px, e.g. 3")
+    private int padding = 3;
 
-	@Option(names = "--blockSize", split=",", description = "Size of output blocks, e.g. 128,128,128")
-	private int[] blockSize = new int[] {128, 128, 128};
+    @Option(names = "--blockSize",
+            split=",",
+            description = "Size of output blocks, e.g. 1024,1024,100")
+    private int[] blockSize = new int[] {1024, 1024, 100};
 
-	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
-	private boolean multiSem = false;
+    @Option(names = {"--multiSem"},
+            description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
+    private boolean multiSem = false;
 
-	@Option(names = {"--debugMode"}, description = "enable debug mode to process a specific block")
-	private DebugMode debugMode = DebugMode.OFF;
+    @Option(names = {"--debugMode"},
+            description = "enable debug mode to process a specific block")
+    private DebugMode debugMode = DebugMode.OFF;
 
-	@Option(names = {"--debugBlockX"}, description = "X coordinate of block to process in debug mode")
-	private Long debugBlockX = null;
+    @Option(names = {"--debugBlockX"},
+            description = "X coordinate of block to process in debug mode")
+    private Long debugBlockX = null;
 
-	@Option(names = {"--debugBlockY"}, description = "Y coordinate of block to process in debug mode")
-	private Long debugBlockY = null;
+    @Option(names = {"--debugBlockY"},
+            description = "Y coordinate of block to process in debug mode")
+    private Long debugBlockY = null;
 
     public SparkExportFlattenedVolume() {
     }
@@ -132,11 +156,11 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
     public FlatteningInfo buildFlatteningInfo()
             throws IOException {
 
-        final N5PathAndDataset clahePathAndDataset = new N5PathAndDataset(n5RawInputPath, rawDataset);
+        final N5PathAndDataset rawPathAndDataset = new N5PathAndDataset(n5RawInputPath, rawDataset);
         final N5PathAndDataset heightfieldPathAndDataset = new N5PathAndDataset(n5FieldPath, fieldGroup);
         final N5PathAndDataset flatPathAndDataset = new N5PathAndDataset(n5OutPath, outDataset);
 
-        return new FlatteningInfo(clahePathAndDataset,
+        return new FlatteningInfo(rawPathAndDataset,
                                   heightfieldPathAndDataset,
                                   multiSem,
                                   padding,
