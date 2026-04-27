@@ -38,6 +38,7 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.array.ArrayImgs;
+import net.imglib2.position.FunctionRealRandomAccessible;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
@@ -65,7 +66,8 @@ public class SparkMaskedCLAHEMultiSEM
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--n5FieldMax",
-				usage = "Input N5 dataset, e.g. /heightfields_v3/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max")
+				usage = "Input N5 dataset, e.g. /heightfields_v3/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max " +
+                        "NOTE: Do not specify if your input dataset is flat since input max z is used by default")
 		private String n5FieldMax = null;
 
 		@Option(name = "--blockFactorXY",
@@ -101,9 +103,8 @@ public class SparkMaskedCLAHEMultiSEM
                        final int blockFactorZ,
                        final boolean overwrite) {
             this.n5PathInput = n5PathInput;
-            this.n5DatasetInput = rawStack.getNormLayerDataset() + "/s0";
-            this.n5DatasetOutput = rawStack.getCLAHEDataset() + "/s0";
-            this.n5FieldMax = rawStack.getHeightfieldsDataset() + "/s1/max";
+            this.n5DatasetInput = rawStack.getFlatRawS0Dataset();
+            this.n5DatasetOutput = rawStack.getFlatRawCLAHES0Dataset();
             this.blockFactorXY = blockFactorXY;
             this.blockFactorZ = blockFactorZ;
             this.overwrite = overwrite;
@@ -114,21 +115,16 @@ public class SparkMaskedCLAHEMultiSEM
                                         final RawStack rawStack)
             throws IOException {
 
-        final String normLayerDatasetS0 = rawStack.getNormLayerDataset() + "/s0";   // /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s0
-        final String claheDatasetS0 = rawStack.getCLAHEDataset() + "/s0";           // /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-clahe/s0
-        final String n5FieldMax = rawStack.getHeightfieldsDataset() + "/s1/max";    // /heightfields_v3/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max
+        final String flatRawDatasetS0 = rawStack.getFlatRawS0Dataset();            // /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0
+        final String flatRawClaheDatasetS0 = rawStack.getFlatRawCLAHES0Dataset();  // /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0
 
-        Util.checkDatasetExistence(n5Input, normLayerDatasetS0, true);
-        Util.checkDatasetExistence(n5Input, claheDatasetS0, false);
-        Util.checkDatasetExistence(n5Input, n5FieldMax, true);
+        Util.checkDatasetExistence(n5Input, flatRawDatasetS0, true);
+        Util.checkDatasetExistence(n5Input, flatRawClaheDatasetS0, false);
 
-        Util.readRequiredAttribute(n5Input, normLayerDatasetS0, "blockSize", int[].class);
-        Util.readRequiredAttribute(n5Input, normLayerDatasetS0, "dimensions", long[].class);
+        Util.readRequiredAttribute(n5Input, flatRawDatasetS0, "blockSize", int[].class);
+        Util.readRequiredAttribute(n5Input, flatRawDatasetS0, "dimensions", long[].class);
 
-        final String n5FieldMaxParent = n5FieldMax.substring(0, n5FieldMax.lastIndexOf('/'));
-        Util.readRequiredAttribute(n5Input, n5FieldMaxParent, FACTORS_KEY, double[].class);
-
-        System.out.println("SparkMaskedCLAHEMultiSEM.validateDatasets: verified datasets and max field factors for " + normLayerDatasetS0);
+        System.out.println("SparkMaskedCLAHEMultiSEM.validateDatasets: verified datasets and max field factors for " + flatRawDatasetS0);
     }
 
     public static void process(final JavaSparkContext sparkContext,
@@ -142,6 +138,7 @@ public class SparkMaskedCLAHEMultiSEM
         System.out.println("loading blockSize and dimensions from " + inputAttrPath);
         final int[] blockSize = Util.readRequiredAttribute(n5Input, options.n5DatasetInput, "blockSize", int[].class);
         final long[] dimensions = Util.readRequiredAttribute(n5Input, options.n5DatasetInput, "dimensions", long[].class);
+        final long maxZ = dimensions[2];
 
         final int[] gridBlockSize = new int[]{
                 blockSize[0] * options.blockFactorXY,
@@ -152,6 +149,7 @@ public class SparkMaskedCLAHEMultiSEM
         final double[] maxFactors;
         if (options.n5FieldMax == null) {
             maxFactors = null;
+            System.out.println("using maxZ " + maxZ + " for maxFieldScaled");
         } else {
             final String n5FieldMaxParent = options.n5FieldMax.substring(0, options.n5FieldMax.lastIndexOf('/'));
             final String fieldMaxParentAttrPath = Util.getAttributesJsonPath(options.n5PathInput, n5FieldMaxParent);
@@ -210,13 +208,10 @@ public class SparkMaskedCLAHEMultiSEM
 
 					if ((options.n5FieldMax == null) || (maxFactors == null))
 					{
-                        throw new UnsupportedOperationException( "please re-compile to use this functionality, it sets an arbitrary z range.");
-                        /*
 						maxFieldScaled = new FunctionRealRandomAccessible<>(
 								2,
-								(i,o) -> o.set( 52 ),
+								(i,o) -> o.set( maxZ ),
                                 DoubleType::new);
-                         */
 					}
 					else
 					{

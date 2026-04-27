@@ -96,16 +96,6 @@ public class RawStack
         return "/render/" + project + "/" + getHistogramStack();
     }
 
-    /** @return the CLAHE stack name (e.g. w61_s076_r00_gc_par_align_ic2d___norm-layer_hist_clahe) */
-    public String getCLAHEStack() {
-        return rawStack + claheSuffix;
-    }
-
-    /** @return the CLAHE dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer_hist_clahe) */
-    public String getCLAHEDataset() {
-        return "/render/" + project + "/" + getCLAHEStack();
-    }
-
     /** @return the cost dataset (e.g. /cost_b250/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer) */
     public String getCostDataset() {
         return "/cost_" + costVersion + "/" + project + "/" + getNormLayerStack();
@@ -126,9 +116,19 @@ public class RawStack
         return getFlatDataset() + "/raw";
     }
 
-    /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0) */
+    /** @return the flat raw s0 dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0) */
     public String getFlatRawS0Dataset() {
         return getFlatRawDataset() + "/s0";
+    }
+
+    /** @return the flat raw CLAHE dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe) */
+    public String getFlatRawCLAHEDataset() {
+        return getFlatRawDataset() + claheSuffix;
+    }
+
+    /** @return the flat raw CLAHE s0 dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0) */
+    public String getFlatRawCLAHES0Dataset() {
+        return getFlatRawCLAHEDataset() + "/s0";
     }
 
     /** @return the flat top or bottom dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/top) */
