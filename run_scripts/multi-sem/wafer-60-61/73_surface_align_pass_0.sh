@@ -2,17 +2,17 @@
 
 set -e
 
-if (( $# != 3 )); then
+if (( $# != 5 )); then
   echo "
-Usage:    $0 <max-executors> <wafer> <region>
+Usage:    $0 <max-executors> <wafer> <region> <first-serial-slab-num> <last-serial-slab-num>
 
           max-executors must be at least 2
 
 Examples:
-  $0  2  w61  r00
+  $0  2  w61  r00  75  84
 
 Notes:
-  - with  2 max-executors and  5 w61 r00 slabs (79 to  83), pass 0 took  4 minutes to complete
+  - with  2 max-executors and  4 w61 r00 slabs (79 to  83), pass 0 took  4 minutes to complete
   - with 10 max-executors and 90 w61 r00 slabs (70 to 159), pass 0 took  7 minutes to complete
 "
   exit 1
@@ -29,9 +29,11 @@ fi
 
 WAFER="${2}"
 REGION="${3}"
+FIRST_SERIAL_NUM="${4}"
+LAST_SERIAL_NUM="${5}"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-N5_SURFACE_ROOT="surface-align/run_20260303_130000"
+N5_SURFACE_ROOT="surface-align/run_20260428_090000"
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 # need scaleIndex=5 for larger wafer 53 slabs
@@ -49,10 +51,6 @@ ARGV="
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 unset BATCH_NAME
 
-# TODO: make serial number range a parameter or argument, note that face dataset order is important
-FIRST_SERIAL_NUM=70
-LAST_SERIAL_NUM=159
-
 for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
 
   SERIAL_NUM_PADDED=$(printf "%03d" "${SERIAL_NUM}")
@@ -61,10 +59,10 @@ for SERIAL_NUM in $(seq "${FIRST_SERIAL_NUM}" "${LAST_SERIAL_NUM}"); do
   # convert w61_s079_r00 to w61_serial_070_to_079
   RENDER_PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${RAW_STACK}")
 
-  # /flat_v2_mb/w61_serial_070_to_079/w61_s079_r00
+  # /flat_v3/w61_serial_070_to_079/w61_s079_r00
   FLAT_DATASET="/flat_v3/${RENDER_PROJECT}/${RAW_STACK}"
 
-  ARGV="${ARGV} -d ${FLAT_DATASET}/top/face -d ${FLAT_DATASET}/bot/face"
+  ARGV="${ARGV} -d ${FLAT_DATASET}/raw_clahe_top/face -d ${FLAT_DATASET}/raw_clahe_bot/face"
 
   if [[ -z "${BATCH_NAME}" ]]; then
     LAST_SERIAL=$(printf "s%03d" "${LAST_SERIAL_NUM}")

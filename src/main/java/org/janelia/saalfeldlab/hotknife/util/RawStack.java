@@ -131,11 +131,11 @@ public class RawStack
         return getFlatRawCLAHEDataset() + "/s0";
     }
 
-    /** @return the flat top or bottom dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/top) */
-    public String getFlatEdgeDataset(final boolean isTop)
+    /** @return the flat raw CLAHE top or bottom dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe_top) */
+    public String getFlatRawClaheEdgeDataset(final boolean isTop)
             throws IllegalArgumentException {
-        final String edge = isTop ? "/top" : "/bot";
-        return getFlatDataset() + edge;
+        final String edgeSuffix = isTop ? "_top" : "_bot";
+        return getFlatRawCLAHEDataset() + edgeSuffix;
     }
 
     public static String buildProjectName(final String rawStackName)
