@@ -309,6 +309,13 @@
                                 <exclude>ClassDiagramInterestPointRegistration.dia</exclude>
                             </excludes>
                         </filter>
+                        <filter>
+                            <!-- artifacts exist in hotknife -->
+                            <artifact>*:n5-spark</artifact>
+                            <excludes>
+                                <exclude>log4j.properties</exclude>
+                            </excludes>
+                        </filter>
 					</filters>
 					<!-- Additional configuration. -->
 					<artifactSet>
