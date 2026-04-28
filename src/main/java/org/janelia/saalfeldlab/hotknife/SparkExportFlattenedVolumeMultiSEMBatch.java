@@ -26,16 +26,14 @@ import java.util.List;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.DownsampleHelper;
 import org.janelia.saalfeldlab.hotknife.util.FlatteningInfo;
 import org.janelia.saalfeldlab.hotknife.util.N5PathAndDataset;
-import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.RawStack;
-import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import static org.janelia.saalfeldlab.hotknife.SparkExportFlattenedVolume.flattenVolume;
-import static org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark.downsample;
 
 @SuppressWarnings("FieldMayBeFinal")
 public class SparkExportFlattenedVolumeMultiSEMBatch {
@@ -168,48 +166,14 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
 
             logMessage("main: building " + flatDataset);
 
-            final int numberOfDownsampleLevels = 9; // s1 ... s9
-            final List<String> downsampleOutputDatasetPaths = new ArrayList<>();
-            if (batchOptions.downsample) {
-                if (flatDataset.endsWith("/s0")) {
-                    final String datasetWithSPrefix = flatDataset.substring(0, flatDataset.length() - 1);
-                    for (int sLevel = 1; sLevel <= numberOfDownsampleLevels; sLevel++) {
-                        downsampleOutputDatasetPaths.add(datasetWithSPrefix + sLevel);
-                    }
-                } else {
-                    logMessage("main: WARNING: will skip downsample for " + flatDataset + " because it does not end with /s0");
-                }
-            }
-
             flattenVolume(sparkContext,
                           info,
                           batchOptions.debugMode,
                           batchOptions.debugBlockX,
                           batchOptions.debugBlockY);
 
-            if (! downsampleOutputDatasetPaths.isEmpty()) {
-
-                logMessage("main: downsampling " + flatDataset);
-
-                final int[] downsampleFactors = new int[] { 2, 2, 1 };
-                final N5WriterSupplier n5Supplier = () -> N5Util.createN5Writer(batchOptions.n5RootPathName);
-
-                downsample(sparkContext,
-                           n5Supplier,
-                           flatDataset,                         // .../s0
-                           downsampleOutputDatasetPaths.get(0), // .../s1
-                           downsampleFactors,
-                           null);
-
-                for (int i = 1; i < numberOfDownsampleLevels; i++) {
-                    downsample(sparkContext,
-                               n5Supplier,
-                               downsampleOutputDatasetPaths.get(i - 1),  // .../s1 -> .../s8
-                               downsampleOutputDatasetPaths.get(i),      // .../s2 -> .../s9
-                               downsampleFactors,
-                               null);
-                }
-
+            if (batchOptions.downsample) {
+                new DownsampleHelper(batchOptions.n5RootPathName, flatDataset).run(sparkContext);
             }
 
             final long end = System.currentTimeMillis();
