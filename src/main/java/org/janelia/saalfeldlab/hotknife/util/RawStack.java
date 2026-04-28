@@ -15,7 +15,7 @@ public class RawStack
     public static String DEFAULT_IC2D_SUFFIX = "_gc_par_crc_align_ic2d";
     public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer";
     public static String DEFAULT_HISTOGRAM_SUFFIX = DEFAULT_NORM_LAYER_SUFFIX + "_hist";
-    public static String DEFAULT_CLAHE_SUFFIX = DEFAULT_HISTOGRAM_SUFFIX + "_clahe";
+    public static String DEFAULT_CLAHE_SUFFIX = "_clahe";
     public static String DEFAULT_COST_VERSION = "b250";
     public static String DEFAULT_HEIGHTFIELDS_VERSION = DEFAULT_COST_VERSION + "_smd_p1_p1";
 
