@@ -57,12 +57,12 @@ public class SparkMaskedCLAHEMultiSEM
 
 		@Option(name = "--n5DatasetInput",
 				required = true,
-				usage = "Input N5 dataset, e.g. /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s0")
+				usage = "Input N5 dataset, e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0")
 		private String n5DatasetInput = null;
 
 		@Option(name = "--n5DatasetOutput",
 				required = true,
-				usage = "Output N5 dataset, e.g. /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer_clahe/s0")
+				usage = "Output N5 dataset, e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0")
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--n5FieldMax",
@@ -109,7 +109,25 @@ public class SparkMaskedCLAHEMultiSEM
             this.blockFactorZ = blockFactorZ;
             this.overwrite = overwrite;
         }
-	}
+
+        public String getN5DatasetOutput() {
+            return n5DatasetOutput;
+        }
+
+        @Override
+        public String toString() {
+            return "Options{" +
+                   "n5PathInput='" + n5PathInput + '\'' +
+                   ", n5DatasetInput='" + n5DatasetInput + '\'' +
+                   ", n5DatasetOutput='" + n5DatasetOutput + '\'' +
+                   ", n5FieldMax='" + n5FieldMax + '\'' +
+                   ", blockFactorXY=" + blockFactorXY +
+                   ", blockFactorZ=" + blockFactorZ +
+                   ", invert=" + invert +
+                   ", overwrite=" + overwrite +
+                   '}';
+        }
+    }
 
     public static void validateDatasets(final N5Reader n5Input,
                                         final RawStack rawStack)
@@ -124,7 +142,8 @@ public class SparkMaskedCLAHEMultiSEM
         Util.readRequiredAttribute(n5Input, flatRawDatasetS0, "blockSize", int[].class);
         Util.readRequiredAttribute(n5Input, flatRawDatasetS0, "dimensions", long[].class);
 
-        System.out.println("SparkMaskedCLAHEMultiSEM.validateDatasets: verified datasets and max field factors for " + flatRawDatasetS0);
+        logMessage("validateDatasets: verified flatRawDatasetS0 " + flatRawDatasetS0 +
+                   " and flatRawClaheDatasetS0 " + flatRawClaheDatasetS0);
     }
 
     public static void process(final JavaSparkContext sparkContext,
@@ -135,7 +154,7 @@ public class SparkMaskedCLAHEMultiSEM
         final String inputAttrPath = Util.getAttributesJsonPath(options.n5PathInput,
                                                                 options.n5DatasetInput);
 
-        System.out.println("loading blockSize and dimensions from " + inputAttrPath);
+        logMessage("process: loading blockSize and dimensions from " + inputAttrPath);
         final int[] blockSize = Util.readRequiredAttribute(n5Input, options.n5DatasetInput, "blockSize", int[].class);
         final long[] dimensions = Util.readRequiredAttribute(n5Input, options.n5DatasetInput, "dimensions", long[].class);
         final long maxZ = dimensions[2];
@@ -149,12 +168,12 @@ public class SparkMaskedCLAHEMultiSEM
         final double[] maxFactors;
         if (options.n5FieldMax == null) {
             maxFactors = null;
-            System.out.println("using maxZ " + maxZ + " for maxFieldScaled");
+            logMessage("process: using maxZ " + maxZ + " for maxFieldScaled");
         } else {
             final String n5FieldMaxParent = options.n5FieldMax.substring(0, options.n5FieldMax.lastIndexOf('/'));
             final String fieldMaxParentAttrPath = Util.getAttributesJsonPath(options.n5PathInput, n5FieldMaxParent);
             maxFactors = Util.readRequiredAttribute(n5Input, n5FieldMaxParent, FACTORS_KEY, double[].class);
-            System.out.println("loaded " + FACTORS_KEY + " " + Arrays.toString(maxFactors) + " from " + fieldMaxParentAttrPath);
+            logMessage("process: loaded " + FACTORS_KEY + " " + Arrays.toString(maxFactors) + " from " + fieldMaxParentAttrPath);
         }
 
         final List<long[][]> grid = Grid.create(dimensions, gridBlockSize, blockSize);
@@ -200,7 +219,7 @@ public class SparkMaskedCLAHEMultiSEM
 									gridBlock[0][0], gridBlock[0][1], gridBlock[0][2],
 									gridBlock[1][0], gridBlock[1][1], gridBlock[1][2]);
 
-					System.out.println( net.imglib2.util.Util.printInterval( gridBlockInterval ) );
+					logMessage("process pGrid.foreach: " + net.imglib2.util.Util.printInterval( gridBlockInterval ));
 
 					final N5Reader n5 = N5Util.createN5Reader(options.n5PathInput);
 					
@@ -371,5 +390,10 @@ public class SparkMaskedCLAHEMultiSEM
 	}
 
     public static final String FACTORS_KEY = "downsamplingFactors";
+
+    private static void logMessage(final String message) {
+        org.janelia.saalfeldlab.hotknife.util.Util.logMessage(SparkMaskedCLAHEMultiSEM.class.getName(),
+                                                              message);
+    }
 
 }
