@@ -39,7 +39,8 @@ N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 ARGV="\
 --n5PathInput=${N5_PATH} \
 --blockFactorXY 4 \
---blockFactorZ 1"
+--blockFactorZ 1 \
+--downsample"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 unset BATCH_NAME
