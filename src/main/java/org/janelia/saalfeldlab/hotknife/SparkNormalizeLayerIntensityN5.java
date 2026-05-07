@@ -17,6 +17,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
+import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
@@ -161,7 +162,7 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 			   ", downScaledInputDataset='" + downScaledInputDataset + '\'' +
 			   ", fullScaleOutputDataset='" + fullScaleOutputDataset + '\'' +
 			   ", options=" + options +
-			   ", attributes=" + attributes.asMap();
+			   ", attributes=" + Util.convertAttributesToString(attributes);
 	}
 
 	protected void run() throws IOException {

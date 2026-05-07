@@ -28,6 +28,9 @@ import java.util.Collections;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
+import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
 
 import net.imglib2.Cursor;
@@ -52,7 +55,7 @@ public class Util {
 
 	private Util() {}
 
-	public static final <T extends Type<T>> void copy(
+	public static <T extends Type<T>> void copy(
 			final RandomAccessible<? extends T> source,
 			final RandomAccessibleInterval<T> target) {
 
@@ -60,7 +63,7 @@ public class Util {
 				pair -> pair.getB().set(pair.getA()));
 	}
 
-	public static final <T extends Type<T>> void copy(
+	public static <T extends Type<T>> void copy(
 			final RandomAccessible<? extends T> source,
 			final RandomAccessibleInterval<T> target,
 			final ExecutorService service,
@@ -75,30 +78,25 @@ public class Util {
 		if ( shuffle )
 			Collections.shuffle( portions );
 
-		final ArrayList< Callable< Void > > tasks = new ArrayList< Callable< Void > >();
+		final ArrayList< Callable< Void > > tasks = new ArrayList<>();
 
 		final IterableInterval< ? extends T > sourceIterable = Views.flatIterable( Views.interval( source, target ) );
 		final IterableInterval< T > targetIterable = Views.flatIterable( target );
 
 		for ( final Pair<Long,Long> portion : portions )
 		{
-			tasks.add( new Callable< Void >()
-			{
-				@Override
-				public Void call() throws Exception
-				{
-					final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
-					final Cursor< T > cursorTarget = targetIterable.cursor();
+			tasks.add(() -> {
+                final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
+                final Cursor< T > cursorTarget = targetIterable.cursor();
 
-					cursorSource.jumpFwd( portion.getA() );
-					cursorTarget.jumpFwd( portion.getA() );
+                cursorSource.jumpFwd( portion.getA() );
+                cursorTarget.jumpFwd( portion.getA() );
 
-					for ( long l = 0; l < portion.getB(); ++l )
-						cursorTarget.next().set( cursorSource.next() );
+                for ( long l = 0; l < portion.getB(); ++l )
+                    cursorTarget.next().set( cursorSource.next() );
 
-					return null;
-				}
-			});
+                return null;
+            });
 		}
 
 		try
@@ -110,11 +108,10 @@ public class Util {
 		{
 			IOFunctions.println( "Failed to copy: " + e );
 			e.printStackTrace();
-			return;
 		}
 	}
 
-	public static final FloatProcessor materialize(final RandomAccessibleInterval<FloatType> source) {
+	public static FloatProcessor materialize(final RandomAccessibleInterval<FloatType> source) {
 		final FloatProcessor target = new FloatProcessor((int) source.dimension(0), (int) source.dimension(1));
 		Util.copy(
 				Views.zeroMin(source),
@@ -134,12 +131,12 @@ public class Util {
 				i -> array[i] * scale);
 	}
 
-	public static final ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize )
+	public static ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize )
 	{
-		return divideIntoPortions(imageSize, 64l*64l*64l );
+		return divideIntoPortions(imageSize, 64L*64L*64L );
 	}
 
-	public static final ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize, final long defaultChunkLength )
+	public static ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize, final long defaultChunkLength )
 	{
 		int numPortions;
 
@@ -183,13 +180,7 @@ public class Util {
 
 	/**
 	 * Flatten a group name.
-	 *
 	 * Removes optional leading <code>separator</code> and replaces all others by <code>replacement</code>.
-	 *
-	 * @param groupName
-	 * @param separator
-	 * @param replacement
-	 * @return
 	 */
 	public static String flattenGroupName(final String groupName, final String separator, final String replacement) {
 
@@ -249,4 +240,22 @@ public class Util {
     }
 
     public static final ZoneId EASTERN_TIME_ZONE = ZoneId.of("America/New_York");
+
+    public static String convertAttributesToString(final DatasetAttributes attributes) {
+
+        final int[] blockSize = attributes.getBlockSize();
+        final String blockSizeString = blockSize == null ? "null" : Arrays.toString(blockSize);
+
+        final Compression compression = attributes.getCompression();
+        final String compressionString = compression == null ? "null" : compression.getClass().getSimpleName();
+
+        final DataType dataType = attributes.getDataType();
+        final String dataTypeString = dataType == null ? "null" : dataType.getClass().getSimpleName();
+
+        final long[] dimensions = attributes.getDimensions();
+        final String dimensionsString = dimensions == null ? "null" : Arrays.toString(dimensions);
+
+        return "{ blockSize=" + blockSizeString + ", compression=" + compressionString +
+               ", dataType=" + dataTypeString + ", dimensions=" + dimensionsString + " }";
+    }
 }
