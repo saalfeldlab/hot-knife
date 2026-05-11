@@ -29,11 +29,11 @@
 		<!-- note: when upgrading to newer n5 versions, please also update render's n5 version to keep in sync -->
 		<imglib2.version>8.0.0</imglib2.version>
 		<imglib2-cache.version>1.0.0-beta-20</imglib2-cache.version>
-		<n5.version>4.0.0-alpha-10</n5.version>
-		<n5-zarr.version>2.0.0-alpha-7</n5-zarr.version>
-		<n5-imglib2.version>7.1.0-alpha-7</n5-imglib2.version>
-		<n5-universe.version>2.4.0-alpha-7</n5-universe.version>
-		<n5-hdf5.version>2.3.0-alpha-6</n5-hdf5.version>
+		<n5.version>4.0.0-alpha-12</n5.version>
+		<n5-zarr.version>2.0.0-alpha-8</n5-zarr.version>
+		<n5-imglib2.version>7.1.0-alpha-8</n5-imglib2.version>
+		<n5-universe.version>2.4.0-alpha-9</n5-universe.version>
+		<n5-hdf5.version>2.3.0-alpha-7</n5-hdf5.version>
 		<n5-blosc.version>2.0.0-alpha-4</n5-blosc.version>
 		<n5-zstandard.version>2.0.0-alpha-4</n5-zstandard.version>
 		<!-- <guava.version>33.1.0-jre</guava.version> -->

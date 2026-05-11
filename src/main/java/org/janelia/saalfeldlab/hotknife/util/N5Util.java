@@ -6,16 +6,15 @@ import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.universe.N5Factory;
-import org.janelia.saalfeldlab.n5.universe.StorageFormat;
 
 public class N5Util {
 
     public static N5Reader createN5Reader(final String n5Path) {
-        return new N5Factory().openReader(StorageFormat.N5, n5Path);
+        return new N5Factory().openReader(n5Path);
     }
 
     public static N5Writer createN5Writer(final String n5Path) {
-        return new N5Factory().openWriter(StorageFormat.N5, n5Path);
+        return new N5Factory().openWriter(n5Path);
     }
 
     public static void verifyDatasetAndAttributesExist(final N5Reader n5Reader,
