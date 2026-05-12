@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.util.DownsampleHelper;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.RawStack;
 import org.janelia.saalfeldlab.hotknife.util.Util;
@@ -36,6 +37,10 @@ public class SparkMaskedCLAHEMultiSEMBatch
         @Option(name = "--blockFactorZ",
                 usage = "how much bigger the compute blocks in Z are than the blocks saved on disc")
         private int blockFactorZ = 1;
+
+        @Option(name = "--downsample",
+                usage = "Downsample output volume by 2 in XY and 1 in Z")
+        private boolean downsample = false;
 
         @Option(name = "--overwrite",
                 usage = "Overwrite existing n5 datasets without asking")
@@ -89,6 +94,11 @@ public class SparkMaskedCLAHEMultiSEMBatch
 
             final long elapsedMillis = System.currentTimeMillis() - start;
             logMessage("main: processed " + rawStack.getRawStack() + " in " + (elapsedMillis / 60000) + " minutes");
+
+            if (batchOptions.downsample) {
+                new DownsampleHelper(batchOptions.n5PathInput, claheOptions.getN5DatasetOutput()).run(sparkContext);
+            }
+
         }
 
         sparkContext.close();

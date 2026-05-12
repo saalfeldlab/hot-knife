@@ -11,6 +11,7 @@ Examples:
   $0  40 w61 r00 y 79
   $0  10 w61 r00 y 80 81 82 83 84 85 86 87 88 89
 
+With 80 executors, w61_s097_r00 took         32 minutes.
 With 40 executors, w61_s079_r00 took 1 hour   1 minute.
 With 20 executors, w61_s124_r00 took 1 hour  45 minutes.
 With 15 executors, w61_s134_r00 took 2 hours  4 minutes.

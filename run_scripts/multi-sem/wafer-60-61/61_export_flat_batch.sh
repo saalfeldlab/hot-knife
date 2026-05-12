@@ -13,9 +13,7 @@ Examples:
   $0  40  w61  r00  81 82
 
 Notes:
-  - with 20 max-executors, w61 r00 83    took 15 hours  5 minutes to complete
-  - with 40 max-executors, w61 r00 79    took 10 hours 50 minutes to complete
-  - with 50 max-executors, w61 r00 79    took  9 hours 44 minutes to complete (80 max-executors took similar time)
+  - with 40 max-executors, w61 r00 79    took 1 hour 38 minutes to complete
 "
   exit 1
 fi
@@ -48,8 +46,7 @@ N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
 ARGV="\
 --n5RootPath=${N5_PATH} \
 --padding=3 \
---blockSize=1024,1024,100 \
---downsample"
+--blockSize=1024,1024,100"
 
 RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 unset BATCH_NAME

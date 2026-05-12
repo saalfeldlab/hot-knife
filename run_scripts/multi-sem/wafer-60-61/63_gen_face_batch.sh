@@ -13,7 +13,7 @@ Examples:
   $0  20  w61  r00  top   81 82
 
 Notes:
-  - with 20 max-executors, w61  r00  both  79  took 9 hours 18 minutes to complete
+  - with 40 max-executors, w61 r00 both 76 took 2 hours 9 minutes to complete
       (top or bottom in isolation should take half of that time)
 "
   exit 1

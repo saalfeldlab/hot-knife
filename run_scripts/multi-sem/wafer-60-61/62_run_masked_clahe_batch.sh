@@ -2,17 +2,20 @@
 
 set -e
 
-if (( $# != 2 )); then
+if (( $# < 4 )); then
   echo "
-Usage:    $0 <max-executors> <raw-stack>
+Usage:    $0 <max-executors> <wafer> <region> <serial-num> [serial-num] ...
 
           max-executors must be at least 2
 
 Examples:
-  $0  100  w61_s079_r00
+  $0  40  w61  r00  80
+  $0  40  w61  r00  81 82
 
 Notes:
-  - with 100 max-executors w61_s079_r00 took 73 minutes to complete
+  - with 40 max-executors, w61 r00 80    took 2 hours 47 minutes to complete
+  - with 80 max-executors, w61 r00 81 82 took 4 hours  1 minutes to complete
+    (additional executors only partially helped with run time, and total DCU time was greater)
 "
   exit 1
 fi
@@ -26,45 +29,32 @@ elif (( MAX_EXECUTORS > 500 )); then
   exit 1
 fi
 
-RAW_STACK="${2}"
-
-# convert w61_s079_r00 to w61_serial_070_to_079
-RENDER_PROJECT=$(awk -F'[_s]' '{w=$1; s=$3+0; lo=int(s/10)*10; hi=lo+9; printf "%s_serial_%03d_to_%03d", w, lo, hi}' <<<"${RAW_STACK}")
+WAFER="${2}"
+REGION="${3}"
+shift 3 # all remaining args should be serial numbers
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-
-COST_VERSION="b250"      # see 61_gen_cost_and_heightfields_n5.sh for details on how cost version is setup
-HF_VERSION="smd_p1_p1"   # see 61_gen_cost_and_heightfields_n5.sh for details on how HF version is setup
-BASE_HF="/heightfields_${COST_VERSION}_${HF_VERSION}"
-
-PROJECT_AND_NORM_LAYER_STACK="${RENDER_PROJECT}/${RAW_STACK}_gc_par_align_ic2d___norm-layer-v2-mb"
-
-N5_DATASET="/render/${PROJECT_AND_NORM_LAYER_STACK}/s0"           #                      /render/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-mb/s0
-N5_FIELD_MAX="${BASE_HF}/${PROJECT_AND_NORM_LAYER_STACK}/s1/max"  # /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer-v2-mb/s1/max
-
-for DATASET in "${N5_DATASET}" "${N5_FIELD_MAX}"; do
-  GS_PATH="${N5_PATH}${DATASET}"
-  if ! gcloud storage ls "${GS_PATH}" 2>/dev/null | grep -q .; then
-    echo "ERROR: ${GS_PATH} does not exist"
-    exit 1
-  fi
-done
-
-CLAHE_DATASET="/render/${PROJECT_AND_NORM_LAYER_STACK}_clahe/s0"
-
-if gcloud storage ls "${N5_PATH}${CLAHE_DATASET}" 2>/dev/null | grep -q .; then
-  echo "ERROR: ${N5_PATH}${CLAHE_DATASET} already exists"
-  exit 1
-fi
 
 # using blockFactorXY 4 instead of default 8 to avoid OOM with larger 1024,1024,maxZ blocks
 ARGV="\
 --n5PathInput=${N5_PATH} \
---n5DatasetInput=${N5_DATASET} \
---n5DatasetOutput=${CLAHE_DATASET} \
---n5FieldMax=${N5_FIELD_MAX} \
 --blockFactorXY 4 \
---blockFactorZ 1"
+--blockFactorZ 1 \
+--downsample"
+
+RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+unset BATCH_NAME
+for SERIAL_NUM in "$@"; do
+  SERIAL_NUM_PADDED=$(printf "%03d" "${SERIAL_NUM}")
+  RAW_STACK="${WAFER}_s${SERIAL_NUM_PADDED}_${REGION}"
+  ARGV="${ARGV} --raw ${RAW_STACK}"
+  if [[ -z "${BATCH_NAME}" ]]; then
+    NUMBER_OF_STACK_MINUS_ONE=$(( $# - 1 ))
+    BATCH_NAME=$(echo "clahe-${RUN_TIMESTAMP}-${RAW_STACK}-with-${NUMBER_OF_STACK_MINUS_ONE}" | sed "s/_/-/g")
+  fi
+done
+
+# Note: no need to check dataset existence here since SparkMaskedCLAHEMultiSEMBatch does that up front
 
 SPARK_EXEC_CORES=4
 
@@ -85,15 +75,12 @@ SPARK_PROPS="${SPARK_PROPS},spark.executor.cores=${SPARK_EXEC_CORES},spark.execu
 SPARK_PROPS="${SPARK_PROPS},${DYNAMIC_ALLOCATION}"
 #SPARK_PROPS="${SPARK_PROPS},spark.log.level.org.janelia.alignment.match=WARN"
 
-RUN_TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-
 # see https://cloud.google.com/dataproc-serverless/docs/concepts/versions/spark-runtime-1.1
 # see https://cloud.google.com/dataproc-serverless/docs/concepts/versions/dataproc-serverless-versions
 SPARK_VERSION="1.1"
 
-CLASS="org.janelia.saalfeldlab.hotknife.SparkMaskedCLAHEMultiSEM"
+CLASS="org.janelia.saalfeldlab.hotknife.SparkMaskedCLAHEMultiSEMBatch"
 GS_JAR_URL="gs://janelia-spark-test/library/hot-knife-0.0.7-SNAPSHOT.jar"
-BATCH_NAME=$(echo "clahe-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
 
 echo "
 Running gcloud dataproc batches submit spark with:

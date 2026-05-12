@@ -96,12 +96,12 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
                                                                         final RawStack rawStack,
                                                                         final boolean isTopFace) {
 
-        final String flatEdgeDataset = rawStack.getFlatEdgeDataset(isTopFace);
+        final String flatEdgeDataset = rawStack.getFlatRawClaheEdgeDataset(isTopFace);
         final int minZ = isTopFace ? batchOptions.padding : -batchOptions.padding - 1; // 3 or -4
         final int sizeZ = isTopFace ? batchOptions.faceSize : -batchOptions.faceSize;
 
         final List<String> optionValues = new ArrayList<>(commonOptions);
-        optionValues.add("--n5DatasetInput=" + rawStack.getFlatRawS0Dataset());
+        optionValues.add("--n5DatasetInput=" + rawStack.getFlatRawCLAHES0Dataset());
         optionValues.add("--n5GroupOutput=" + flatEdgeDataset);
         optionValues.add("--min=0,0," + minZ);
         optionValues.add("--size=0,0," + sizeZ);
@@ -140,12 +140,12 @@ public class SparkGenerateFaceScaleSpaceMultiSEMBatch {
                 Util.checkDatasetExistence(n5Reader, flatRawS0Dataset, true);
 
                 if (FaceEdge.TOP.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
-                    final String flatTopDataset = rawStack.getFlatEdgeDataset(true);
+                    final String flatTopDataset = rawStack.getFlatRawClaheEdgeDataset(true);
                     Util.checkDatasetExistence(n5Reader, flatTopDataset, false);
                 }
 
                 if (FaceEdge.BOTTOM.equals(batchOptions.faceEdge) || FaceEdge.BOTH.equals(batchOptions.faceEdge)) {
-                    final String flatBottomDataset = rawStack.getFlatEdgeDataset(false);
+                    final String flatBottomDataset = rawStack.getFlatRawClaheEdgeDataset(false);
                     Util.checkDatasetExistence(n5Reader, flatBottomDataset, false);
                 }
 

@@ -25,11 +25,12 @@ RENDER_PROJECT="${2}"
 RAW_STACK="${3}"
 
 #-----------------------------------------------------------
-CLASS="org.janelia.saalfeldlab.hotknife.MultiSemNormalizeLayerIntensity"
+CLASS="org.janelia.saalfeldlab.hotknife.MultiSemNormalizeLayerIntensityHistogram"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-IC2D_DATASET_PREFIX="/render/${RENDER_PROJECT}/${RAW_STACK}_gc_par_crc_align_ic2d"
-SOURCE_DATASET="${IC2D_DATASET_PREFIX}___pixel"
+IC2D_STACK="${RAW_STACK}_gc_par_crc_align_ic2d"
+IC2D_DATASET_PREFIX="/render/${RENDER_PROJECT}/${IC2D_STACK}"
+SOURCE_DATASET="${IC2D_DATASET_PREFIX}___norm-layer"
 
 SOURCE_PATH="${N5_PATH}${SOURCE_DATASET}"
 if ! gcloud storage ls "${SOURCE_PATH}" 2>/dev/null | grep -q .; then
@@ -37,23 +38,27 @@ if ! gcloud storage ls "${SOURCE_PATH}" 2>/dev/null | grep -q .; then
   exit 1
 fi
 
-NORMALIZED_DATASET="${IC2D_DATASET_PREFIX}___norm-layer"
-NORMALIZED_DATASET_PATH="${N5_PATH}${NORMALIZED_DATASET}"
-if gcloud storage ls "${NORMALIZED_DATASET_PATH}" 2>/dev/null | grep -q .; then
-  echo "ERROR: normalized dataset path ${NORMALIZED_DATASET_PATH} already exists"
+# /heightfields_b250_smd_p1_p1/w61_serial_080_to_089/w61_s081_r00_gc_par_crc_align_ic2d___norm-layer
+HF_DATASET="/heightfields_b250_smd_p1_p1/${RENDER_PROJECT}/${IC2D_STACK}___norm-layer"
+HF_PATH="${N5_PATH}${HF_DATASET}"
+if ! gcloud storage ls "${HF_PATH}" 2>/dev/null | grep -q .; then
+  echo "ERROR: heightfield path ${HF_PATH} not found"
+  exit 1
+fi
+
+HISTOGRAM_DATASET="${SOURCE_DATASET}_hist"
+HISTOGRAM_DATASET_PATH="${N5_PATH}${HISTOGRAM_DATASET}"
+if gcloud storage ls "${HISTOGRAM_DATASET_PATH}" 2>/dev/null | grep -q .; then
+  echo "ERROR: histogram dataset path ${HISTOGRAM_DATASET_PATH} already exists"
   exit 1
 fi
 
 ARGV="\
 --n5Path=${N5_PATH} \
---n5DatasetInput=${SOURCE_DATASET} \
---n5DatasetOutput=${NORMALIZED_DATASET} \
---downsampleLevel 4 \
---aggregation MEDIAN \
---lowerThreshold 90 \
---upperThreshold 200 \
---factors 2,2,1"
-# --invert"
+--n5DatasetInput=${SOURCE_DATASET}/s0 \
+--n5DatasetOutput=${HISTOGRAM_DATASET}/s0 \
+--heightfieldDataset=${HF_DATASET}/s1/max \
+--refIndex 5"
 
 SPARK_EXEC_CORES=4
 
@@ -80,7 +85,7 @@ SPARK_VERSION="1.1"
 
 GS_JAR_URL="gs://janelia-spark-test/library/hot-knife-0.0.7-SNAPSHOT.jar"
 # HOT_KNIFE_JAR="/groups/hess/hesslab/render/lib/hot-knife-0.0.7-SNAPSHOT.jar"
-BATCH_NAME=$(echo "norm-layer-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
+BATCH_NAME=$(echo "norm-hist-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
 
 echo "
 Running gcloud dataproc batches submit spark with:
