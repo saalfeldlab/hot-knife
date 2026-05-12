@@ -296,9 +296,9 @@ public class PaintHeightField implements Callable<Void>{
 		//		t.set( 0 );
 		//heightField = fix07mBRSec28HeightField( heightField );
 
-		System.out.print("SMOOTHING heightfield.");
-		Gauss3.gauss( 2.0, Views.extendBorder( heightField ), heightField );
-		System.out.println("done.");
+		//System.out.print("SMOOTHING heightfield.");
+		//Gauss3.gauss( 2.0, Views.extendBorder( heightField ), heightField );
+		//System.out.println("done.");
 
 		//System.out.print("MEDIAN-FILTERING heightfield.");
 		//final FloatProcessor fp = new FloatProcessor( (int)heightField.dimension( 0 ), (int)heightField.dimension( 1 ), ((FloatArray)heightField.update( null )).getCurrentStorageArray() );
@@ -343,10 +343,19 @@ public class PaintHeightField implements Callable<Void>{
 		final RandomAccessibleInterval<FloatType> gradient = Lazy.process( new FinalInterval( heightField ), blockSize, new FloatType(), AccessFlags.setOf(), gradientOp);
 		final Cache< ?, ? > gradientCache = ((CachedCellImg< ?, ? >)gradient).getCache();
 
-		System.out.println("Copying gradients ... ");
-		final ArrayImg<FloatType, ?> gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
-		Util.copy(gradient, gradientCopy, service, true);
-		service.shutdown();
+		final RandomAccessibleInterval<FloatType> gradientCopy;
+		if ( useArrayImg )
+		{
+			System.out.println("Copying gradients ... ");
+			gradientCopy = new ArrayImgFactory<>(new FloatType()).create(gradient);
+			Util.copy(gradient, gradientCopy, service, true);
+			service.shutdown();
+		}
+		else
+		{
+			// TODO: copy to cellimg
+			gradientCopy = gradient;
+		}
 
 		/*
 		new ImageJ();

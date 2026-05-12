@@ -25,8 +25,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.janelia.saalfeldlab.n5.N5Reader;
 
@@ -40,7 +44,6 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
-import net.preibisch.legacy.io.IOFunctions;
 import net.preibisch.mvrecon.Threads;
 
 /**
@@ -51,6 +54,15 @@ import net.preibisch.mvrecon.Threads;
 public class Util {
 
 	private Util() {}
+
+	private static final int COPY_MAX_ATTEMPTS = 5;
+	private static final long COPY_RETRY_BASE_MS = 1_000L;
+	private static final long COPY_RETRY_MAX_MS = 60_000L;
+
+	private static long backoffMs(final int attempt) {
+		final long capped = Math.min(COPY_RETRY_BASE_MS << attempt, COPY_RETRY_MAX_MS);
+		return capped / 2 + ThreadLocalRandom.current().nextLong(capped / 2 + 1);
+	}
 
 	public static final <T extends Type<T>> void copy(
 			final RandomAccessible<? extends T> source,
@@ -87,30 +99,62 @@ public class Util {
 				@Override
 				public Void call() throws Exception
 				{
-					final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
-					final Cursor< T > cursorTarget = targetIterable.cursor();
+					Exception lastFailure = null;
+					for ( int attempt = 0; attempt < COPY_MAX_ATTEMPTS; ++attempt )
+					{
+						try
+						{
+							final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
+							final Cursor< T > cursorTarget = targetIterable.cursor();
 
-					cursorSource.jumpFwd( portion.getA() );
-					cursorTarget.jumpFwd( portion.getA() );
+							cursorSource.jumpFwd( portion.getA() );
+							cursorTarget.jumpFwd( portion.getA() );
 
-					for ( long l = 0; l < portion.getB(); ++l )
-						cursorTarget.next().set( cursorSource.next() );
+							for ( long l = 0; l < portion.getB(); ++l )
+								cursorTarget.next().set( cursorSource.next() );
 
-					return null;
+							return null;
+						}
+						catch ( final Exception e )
+						{
+							lastFailure = e;
+							if ( attempt < COPY_MAX_ATTEMPTS - 1 )
+							{
+								final long delayMs = backoffMs( attempt );
+								System.err.println( "Util.copy portion start=" + portion.getA()
+										+ " attempt " + ( attempt + 1 ) + "/" + COPY_MAX_ATTEMPTS
+										+ " failed: " + e + " — retrying in " + delayMs + " ms" );
+								try
+								{
+									Thread.sleep( delayMs );
+								}
+								catch ( final InterruptedException ie )
+								{
+									Thread.currentThread().interrupt();
+									throw ie;
+								}
+							}
+						}
+					}
+					throw lastFailure;
 				}
 			});
 		}
 
 		try
 		{
-			// invokeAll() returns when all tasks are complete
-			service.invokeAll( tasks );
+			final List< Future< Void > > futures = service.invokeAll( tasks );
+			for ( final Future< Void > f : futures )
+				f.get();
 		}
 		catch ( final InterruptedException e )
 		{
-			IOFunctions.println( "Failed to copy: " + e );
-			e.printStackTrace();
-			return;
+			Thread.currentThread().interrupt();
+			throw new RuntimeException( "Util.copy interrupted", e );
+		}
+		catch ( final ExecutionException e )
+		{
+			throw new RuntimeException( "Util.copy task failed after retries", e.getCause() );
 		}
 	}
 
