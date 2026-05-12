@@ -32,6 +32,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.janelia.saalfeldlab.n5.Compression;
+import org.janelia.saalfeldlab.n5.DataType;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Reader;
 
 import net.imglib2.Cursor;
@@ -293,4 +296,22 @@ public class Util {
     }
 
     public static final ZoneId EASTERN_TIME_ZONE = ZoneId.of("America/New_York");
+    
+    public static String convertAttributesToString(final DatasetAttributes attributes) {
+
+        final int[] blockSize = attributes.getBlockSize();
+        final String blockSizeString = blockSize == null ? "null" : Arrays.toString(blockSize);
+
+        final Compression compression = attributes.getCompression();
+        final String compressionString = compression == null ? "null" : compression.getClass().getSimpleName();
+
+        final DataType dataType = attributes.getDataType();
+        final String dataTypeString = dataType == null ? "null" : dataType.getClass().getSimpleName();
+
+        final long[] dimensions = attributes.getDimensions();
+        final String dimensionsString = dimensions == null ? "null" : Arrays.toString(dimensions);
+
+        return "{ blockSize=" + blockSizeString + ", compression=" + compressionString +
+               ", dataType=" + dataTypeString + ", dimensions=" + dimensionsString + " }";
+    }
 }
