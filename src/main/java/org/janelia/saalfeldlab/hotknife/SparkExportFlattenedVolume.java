@@ -88,6 +88,9 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
 	private boolean multiSem = false;
 
+	@Option(names = {"--permuteZX"}, description = "Swap axes 0 and 2 of raw input data before flattening (for zarr3/OME-ZARR data stored as [z,y,x])")
+	private boolean permuteZX = false;
+
 	@Option(names = {"--debugMode"}, description = "enable debug mode to process a specific block")
 	private DebugMode debugMode = DebugMode.OFF;
 
@@ -167,7 +170,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         final JavaSparkContext sc = new JavaSparkContext(conf);
         sc.setLogLevel("ERROR");
 
-        flattenVolume(sc, buildFlatteningInfo(), debugMode, debugBlockX, debugBlockY);
+        flattenVolume(sc, buildFlatteningInfo(), debugMode, debugBlockX, debugBlockY, permuteZX);
 
         sc.close();
 
@@ -178,7 +181,8 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                                      final FlatteningInfo flatInfo,
                                      final DebugMode debugMode,
                                      final Long debugBlockX,
-                                     final Long debugBlockY) {
+                                     final Long debugBlockY,
+                                     final boolean permuteZX) {
 
         System.out.println("SparkExportFlattenedVolume: entry, flatInfo=" + flatInfo +
                            ", debugMode=" + debugMode + ", debugBlockX=" + debugBlockX + ", debugBlockY=" + debugBlockY);
@@ -266,10 +270,18 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                     final N5Reader n5RawReader = rawPathAndDataset.openReader();
                     final N5Reader n5FieldReader = fieldPath.openReader();
 
-                    /* raw */
-                    final CachedCellImg<UnsignedByteType, ?> rawCellImg = N5Utils.open(n5RawReader, rawPathAndDataset.getDataset());
-                    final RandomAccessibleInterval<UnsignedByteType> rawVolume =
-                            flatInfo.isMultiSEMData() ? rawCellImg : Views.permute(rawCellImg, 1, 2);
+                    /* raw — use raw types to support any pixel type (uint8, uint16, etc.) */
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    final RandomAccessibleInterval rawCellImg = N5Utils.open(n5RawReader, rawPathAndDataset.getDataset());
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    final RandomAccessibleInterval rawVolume;
+                    if (permuteZX) {
+                        // zarr3/OME-ZARR [z,y,x] → swap 0↔2 → [x,y,z] (Multi-SEM convention)
+                        rawVolume = Views.permute(rawCellImg, 0, 2);
+                    } else {
+                        // Multi-SEM: no additional permutation; FIB-SEM: swap dims 1↔2
+                        rawVolume = flatInfo.isMultiSEMData() ? rawCellImg : Views.permute(rawCellImg, 1, 2);
+                    }
 
                     System.out.println("Debug mode: rawVolume dimensions: " + net.imglib2.util.Util.printInterval(rawVolume));
 
@@ -290,19 +302,18 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                     System.out.println("Debug mode: Creating flattened transform with min=" + flatInfo.getMin() + ", max=" + flatInfo.getMax());
                     System.out.println("Debug mode: Padding: minWithPadding=" + flatInfo.getMinWithPadding() + ", maxWithPadding=" + flatInfo.getMaxWithPadding());
 
-                    final RandomAccessibleInterval<UnsignedByteType> flattened =
-                            Views.zeroMin(
-                                    Transform.createTransformedInterval(
-                                            rawVolume,
-                                            new FinalInterval(
-                                                    new long[] {rawVolume.min(0), rawVolume.min(1), flatInfo.getMinWithPadding()},
-                                                    new long[] {rawVolume.max(0), rawVolume.max(1), flatInfo.getMaxWithPadding()}),
-                                            flattenTransform.inverse(),
-                                            new UnsignedByteType()));
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    final RandomAccessibleInterval flattened =
+                            createFlattened(
+                                    (RandomAccessibleInterval) rawVolume,
+                                    flatInfo.getMinWithPadding(),
+                                    flatInfo.getMaxWithPadding(),
+                                    flattenTransform.inverse());
 
                     System.out.println("Debug mode: flattened dimensions: " + net.imglib2.util.Util.printInterval(flattened));
 
-                    final RandomAccessibleInterval<UnsignedByteType> sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    final RandomAccessibleInterval sourceGridBlock = Views.offsetInterval(flattened, gridBlock[0], gridBlock[1]);
 
                     System.out.println("Debug mode: sourceGridBlock dimensions: " + net.imglib2.util.Util.printInterval(sourceGridBlock));
 
@@ -329,6 +340,21 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                     final N5Writer n5Writer = flatPathAndDataset.openWriter();
                     N5Utils.saveBlock(sourceGridBlock, n5Writer, flatPathAndDataset.getDataset(), gridBlock[2]);
                 });
+    }
+
+    private static <T extends net.imglib2.type.numeric.NumericType<T>> RandomAccessibleInterval<T> createFlattened(
+            final RandomAccessibleInterval<T> rawVolume,
+            final long minWithPadding,
+            final long maxWithPadding,
+            final net.imglib2.realtransform.RealTransform inverseTransform) {
+        return Views.zeroMin(
+                Transform.createTransformedInterval(
+                        rawVolume,
+                        new FinalInterval(
+                                new long[]{rawVolume.min(0), rawVolume.min(1), minWithPadding},
+                                new long[]{rawVolume.max(0), rawVolume.max(1), maxWithPadding}),
+                        inverseTransform,
+                        net.imglib2.util.Util.getTypeFromInterval(rawVolume)));
     }
 
     public static void main(final String... args) {

@@ -169,6 +169,7 @@ public class SparkComputeCostMultiSem {
 		@Option(name = "--debugBlockY", usage = "Y coordinate of block to process in debug mode (e.g., 34)")
 		private Long debugBlockY = null;
 
+
 		public Options(final String[] args) {
 
 			final CmdLineParser parser = new CmdLineParser(this);
@@ -259,14 +260,10 @@ public class SparkComputeCostMultiSem {
 		System.exit( 0 );
 		*/
 
-		int[] zcorrBlockSize = n5.getAttribute(zcorrDataset, "blockSize", int[].class);
-		long[] zcorrSize = n5.getAttribute(zcorrDataset, "dimensions", long[].class);
+		final org.janelia.saalfeldlab.n5.DatasetAttributes zcorrAttrs = n5.getDatasetAttributes(zcorrDataset);
+		int[] zcorrBlockSize = zcorrAttrs.getBlockSize();
+		long[] zcorrSize = zcorrAttrs.getDimensions();
 
-//		int[] costBlockSize = new int[]{
-//				zcorrBlockSize[0] / costSteps[0],
-//				zcorrBlockSize[1] / costSteps[1],
-//				zcorrBlockSize[2] / costSteps[2]
-//		};
 
 		int[] costBlockSize = new int[]{
 				zcorrBlockSize[0],
@@ -351,6 +348,7 @@ public class SparkComputeCostMultiSem {
 		final boolean gauss = options.smoothCost;
 		final boolean debugMode = options.debugMode;
 
+
 		final int topLayerCost = options.topLayerCost;
 		final int  bottomLayerCost = options.bottomLayerCost;
 
@@ -427,8 +425,22 @@ public class SparkComputeCostMultiSem {
         logMessage("computeSurfaceFit: exit");
     }
 
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	private static RandomAccessibleInterval<UnsignedByteType> openAsUint8(final N5Reader n5, final String dataset) {
+		final RandomAccessibleInterval raw = N5Utils.open(n5, dataset);
+		final Object pixelType = Util.getTypeFromInterval(raw);
+		if (pixelType instanceof UnsignedByteType) {
+			return (RandomAccessibleInterval<UnsignedByteType>) raw;
+		}
+		final double maxVal = ((RealType<?>) pixelType).getMaxValue();
+		return Converters.convertRAI(
+				(RandomAccessibleInterval<RealType<?>>) raw,
+				(i, o) -> o.set((int) (i.getRealDouble() * 255.0 / maxVal)),
+				new UnsignedByteType());
+	}
+
 	private static IterableInterval<UnsignedByteType> getLastLayer(final N5Reader n5Reader, final String dataset) {
-		final Img<UnsignedByteType> data = N5Utils.open(n5Reader, dataset);
+		final RandomAccessibleInterval<UnsignedByteType> data = openAsUint8(n5Reader, dataset);
 		final long lastLayerIndex = data.dimension(2) - 1;
 		return Views.iterable(Views.hyperSlice(data, 2, lastLayerIndex));
 	}
@@ -561,11 +573,12 @@ public class SparkComputeCostMultiSem {
 		final RandomAccessibleInterval<UnsignedByteType> maskRaw;
 		final RandomAccessible<UnsignedByteType> maskExtended;
 
-        zcorrRaw = N5Utils.open(N5Util.createN5Reader(n5Path), zcorrDataset);
+        zcorrRaw = openAsUint8(N5Util.createN5Reader(n5Path), zcorrDataset);
 
         if ( maskDataset != null )
         {
-            maskRaw = N5Utils.open(N5Util.createN5Reader(n5Path), maskDataset);
+            RandomAccessibleInterval<UnsignedByteType> maskRawTmp = openAsUint8(N5Util.createN5Reader(n5Path), maskDataset);
+            maskRaw = maskRawTmp;
 
             if ( !Intervals.equals(zcorrRaw, maskRaw) )
                 throw new RuntimeException( "zCorrRaw interval [" + Util.printInterval(zcorrRaw) + "] and mask interval [" + Util.printInterval(maskRaw) + "] are not the same, quitting." );

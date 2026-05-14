@@ -29,7 +29,7 @@
 		<!-- note: when upgrading to newer n5 versions, please also update render's n5 version to keep in sync -->
 		<imglib2.version>8.0.0</imglib2.version>
 		<imglib2-cache.version>1.0.0-beta-20</imglib2-cache.version>
-		<n5.version>4.0.0-alpha-12</n5.version>
+		<n5.version>4.0.0-alpha-12-SNAPSHOT</n5.version>
 		<n5-zarr.version>2.0.0-alpha-8</n5-zarr.version>
 		<n5-imglib2.version>7.1.0-alpha-8</n5-imglib2.version>
 		<n5-universe.version>2.4.0-alpha-9</n5-universe.version>
@@ -263,6 +263,11 @@
 							implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
 							<resource>
 								META-INF/json/org.janelia.saalfeldlab.n5.Compression$CompressionType</resource>
+						</transformer>
+						<transformer
+							implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+							<resource>
+								META-INF/json/org.janelia.saalfeldlab.n5.serialization.NameConfig$Name</resource>
 						</transformer>
 					</transformers>
 					<!--<minimizeJar>true</minimizeJar> -->

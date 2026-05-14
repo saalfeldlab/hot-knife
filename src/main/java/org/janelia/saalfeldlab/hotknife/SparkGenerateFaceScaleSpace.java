@@ -115,6 +115,8 @@ public class SparkGenerateFaceScaleSpace {
 
 				final N5Reader n5 = N5Util.createN5Reader(n5Path);
 				final DatasetAttributes attributes = n5.getDatasetAttributes(inDatasetName);
+				if (attributes == null)
+					throw new CmdLineException(parser, "Dataset '" + inDatasetName + "' not found in '" + n5Path + "'", null);
 				final long[] sourceSize = attributes.getDimensions();
 
 				if (sizeString == null) {

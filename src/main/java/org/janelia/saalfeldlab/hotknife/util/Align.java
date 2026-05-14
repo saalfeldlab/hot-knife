@@ -77,10 +77,13 @@ public class Align {
 	}
 
 	public static FloatProcessor addNoise(final ByteProcessor ip) {
-
+		// Cap block radius to 1/4 of the smaller image dimension so NormalizeLocalContrast
+		// stays local on small images (e.g. coarse pyramid levels) rather than acting as
+		// a global normalization that suppresses the texture SIFT needs.
+		final int blockRadius = Math.min(256, Math.min(ip.getWidth(), ip.getHeight()) / 4);
 		final ValueToNoise filter1 = new ValueToNoise(0, 0, 255);
 		final ValueToNoise filter2 = new ValueToNoise(255, 0, 255);
-		final NormalizeLocalContrast filter3 = new NormalizeLocalContrast(256, 256, 3, true, true);
+		final NormalizeLocalContrast filter3 = new NormalizeLocalContrast(blockRadius, blockRadius, 3, true, true);
 
 		FloatProcessor fp = filter1.process(ip).convertToFloatProcessor();
 		fp = filter2.process(fp).convertToFloatProcessor();

@@ -16,11 +16,15 @@
  */
 package org.janelia.saalfeldlab.hotknife;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -115,6 +119,9 @@ public class SparkAlignAffineGlobal {
 
 		@Option(name = "--initialDelayMs", required = false, usage = "Maximum random delay in milliseconds before first attempt (default: 60_000)")
 		private long initialDelayMs = 60_000;
+
+		@Option(name = "--saveMatchesJson", required = false, usage = "If set, save candidate and inlier match coordinates to this JSON file for debugging")
+		private String saveMatchesJson = null;
 
 		public Options(final String[] args) {
 
@@ -227,6 +234,10 @@ public class SparkAlignAffineGlobal {
 		 */
 		public long getInitialDelayMs() {
 			return initialDelayMs;
+		}
+
+		public String getSaveMatchesJson() {
+			return saveMatchesJson;
 		}
 
 		public enum OutlierFilter {
@@ -438,6 +449,55 @@ public class SparkAlignAffineGlobal {
 	}
 
 
+	static void saveMatchesJson(
+			final String path,
+			final int scaleIndex,
+			final List<Tuple2<String[], ArrayList<PointMatch>>> candidates,
+			final List<Tuple2<String[], ArrayList<PointMatch>>> inliers) throws IOException {
+
+		// Build a lookup from pair key -> inlier list
+		final Map<String, ArrayList<PointMatch>> inlierMap = new LinkedHashMap<>();
+		for (final Tuple2<String[], ArrayList<PointMatch>> entry : inliers)
+			inlierMap.put(entry._1()[0] + "->" + entry._1()[1], entry._2());
+
+		final List<Map<String, Object>> pairs = new ArrayList<>();
+		for (final Tuple2<String[], ArrayList<PointMatch>> entry : candidates) {
+			final String key = entry._1()[0] + "->" + entry._1()[1];
+			final ArrayList<PointMatch> candidateList = entry._2();
+			final ArrayList<PointMatch> inlierList = inlierMap.getOrDefault(key, new ArrayList<>());
+
+			final double scale = 1 << scaleIndex;
+			final List<double[]> candidateCoords = new ArrayList<>();
+			for (final PointMatch m : candidateList)
+				candidateCoords.add(new double[]{
+						m.getP1().getW()[0] / scale, m.getP1().getW()[1] / scale,
+						m.getP2().getW()[0] / scale, m.getP2().getW()[1] / scale});
+
+			final List<double[]> inlierCoords = new ArrayList<>();
+			for (final PointMatch m : inlierList)
+				inlierCoords.add(new double[]{
+						m.getP1().getW()[0] / scale, m.getP1().getW()[1] / scale,
+						m.getP2().getW()[0] / scale, m.getP2().getW()[1] / scale});
+
+			final Map<String, Object> pair = new LinkedHashMap<>();
+			pair.put("dataset1", entry._1()[0]);
+			pair.put("dataset2", entry._1()[1]);
+			pair.put("candidates", candidateCoords);
+			pair.put("inliers", inlierCoords);
+			pairs.add(pair);
+		}
+
+		final Map<String, Object> root = new LinkedHashMap<>();
+		root.put("scaleIndex", scaleIndex);
+		root.put("pairs", pairs);
+
+		final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		try (final FileWriter writer = new FileWriter(path)) {
+			gson.toJson(root, writer);
+		}
+		System.out.println("Saved matches to " + path);
+	}
+
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
 
 		final Options options = new Options(args);
@@ -508,6 +568,13 @@ public class SparkAlignAffineGlobal {
 				MIN_NUM_INLIERS,
 				options.filter);
 
+
+		if (options.getSaveMatchesJson() != null)
+			saveMatchesJson(
+					options.getSaveMatchesJson(),
+					options.getScaleIndex(),
+					scaledMatches.collect(),
+					filteredMatches.collect());
 
 		/* remember fixed tiles if requested */
 		final List< Tile<?> > fixedTiles = new ArrayList<>();
