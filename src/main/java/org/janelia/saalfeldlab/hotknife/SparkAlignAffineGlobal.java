@@ -407,6 +407,8 @@ public class SparkAlignAffineGlobal {
 			final long startupJitterMs) throws IOException {
 
 		final double scale = 1.0 / (1 << scaleIndex);
+		final N5RetryUtil.RetryParameters retryParameters =
+				new N5RetryUtil.RetryParameters(maxRetries, retryDelayMs, retryBackoff, startupJitterMs);
 
 		// Parallel write with retry logic for all storage types
 		transforms.foreach(
@@ -426,10 +428,7 @@ public class SparkAlignAffineGlobal {
 											max);
 								}
 							},
-							maxRetries,
-							retryDelayMs,
-							retryBackoff,
-							startupJitterMs,
+							retryParameters,
 							"save affine " + tuple._1());
 					} catch (Exception e) {
 						throw new RuntimeException(e);

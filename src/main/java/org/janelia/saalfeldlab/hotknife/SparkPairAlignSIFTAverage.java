@@ -30,6 +30,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5RetryUtil.RetryResultAndStats;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.RetryStats;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
@@ -295,7 +296,7 @@ public class SparkPairAlignSIFTAverage {
 
         logMessage("alignPairSIFTAverage: saveAccumulatedAffineGridCellsA ..." );
 
-		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStatsA = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
+		final JavaRDD<RetryResultAndStats<long[]>> gridCellsWithStatsA = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesA,
 				n5Path,
 				inGroupName + "/" + transformDatasetNameA,
@@ -311,7 +312,7 @@ public class SparkPairAlignSIFTAverage {
 
         logMessage("alignPairSIFTAverage: saveAccumulatedAffineGridCellsB ..." );
 
-		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStatsB = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
+		final JavaRDD<RetryResultAndStats<long[]>> gridCellsWithStatsB = SparkPairAlignSIFT.saveAccumulatedAffineGridCells(
 				affinesB,
 				n5Path,
 				inGroupName + "/" + transformDatasetNameB,
@@ -329,16 +330,16 @@ public class SparkPairAlignSIFTAverage {
 		gridCellsWithStatsB.cache();
 
 		// Extract grid cells for downstream processing
-		final JavaRDD<long[]> gridCellsA = gridCellsWithStatsA.map(tuple -> tuple._1());
-		final JavaRDD<long[]> gridCellsB = gridCellsWithStatsB.map(tuple -> tuple._1());
+		final JavaRDD<long[]> gridCellsA = gridCellsWithStatsA.map(RetryResultAndStats::getResult);
+		final JavaRDD<long[]> gridCellsB = gridCellsWithStatsB.map(RetryResultAndStats::getResult);
 
 		long countA = gridCellsA.count();
 		long countB = gridCellsB.count();
 
 		// Collect and report retry statistics
         logMessage("alignPairSIFTAverage: collecting retry statistics ..." );
-		List<RetryStats> statsA = gridCellsWithStatsA.map(tuple -> tuple._2()).collect();
-		List<RetryStats> statsB = gridCellsWithStatsB.map(tuple -> tuple._2()).collect();
+		List<RetryStats> statsA = gridCellsWithStatsA.map(RetryResultAndStats::getStats).collect();
+		List<RetryStats> statsB = gridCellsWithStatsB.map(RetryResultAndStats::getStats).collect();
 
         logMessage("alignPairSIFTAverage:\n=== Retry Statistics for Dataset A (" + transformDatasetNameA + ") ===");
 		RetryStats.reportRetryStatisticsWithDynamicBuckets(statsA);

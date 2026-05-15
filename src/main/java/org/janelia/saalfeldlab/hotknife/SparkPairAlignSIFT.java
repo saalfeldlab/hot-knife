@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
@@ -32,7 +31,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Align;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.N5RetryUtil;
-import org.janelia.saalfeldlab.hotknife.util.RetryStats;
+import org.janelia.saalfeldlab.hotknife.util.N5RetryUtil.RetryResultAndStats;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -62,7 +61,6 @@ import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
-import scala.Tuple2;
 
 /**
  *
@@ -323,7 +321,7 @@ public class SparkPairAlignSIFT {
 		return affines;
 	}
 
-	public static JavaRDD<Tuple2<long[], RetryStats>> saveAccumulatedAffineGridCells(
+	public static JavaRDD<RetryResultAndStats<long[]>> saveAccumulatedAffineGridCells(
 			final JavaPairRDD<long[], double[]> affines,
 			final String n5Path,
 			final String priorTransformDatasetName,
@@ -337,8 +335,11 @@ public class SparkPairAlignSIFT {
 			final double retryBackoff,
 			final long startupJitterMs) {
 
+		final N5RetryUtil.RetryParameters retryParameters =
+				new N5RetryUtil.RetryParameters(maxRetries, retryDelayMs, retryBackoff, startupJitterMs);
+
 		// Parallel write with retry logic for all storage types
-		final JavaRDD<Tuple2<long[], RetryStats>> gridCells = affines.map(
+		final JavaRDD<RetryResultAndStats<long[]>> gridCells = affines.map(
 				t -> {
 					try {
 						return N5RetryUtil.executeWithRetry(
@@ -375,10 +376,7 @@ public class SparkPairAlignSIFT {
 									throw new RuntimeException(e);
 								}
 							},
-							maxRetries,
-							retryDelayMs,
-							retryBackoff,
-							startupJitterMs,
+							retryParameters,
 							"saveAccumulatedAffineGridCell");
 					} catch (Exception e) {
 						throw new RuntimeException(e);
@@ -532,6 +530,9 @@ public class SparkPairAlignSIFT {
 		for (int i = 0; i < inDatasetNames.size(); ++i)
 			datasetNames.add(new Tuple2<String, String>(inDatasetNames.get(i), outDatasetNames.get(i)));
 
+		final N5RetryUtil.RetryParameters retryParameters =
+				new N5RetryUtil.RetryParameters(maxRetries, retryDelayMs, retryBackoff, startupJitterMs);
+
 		// Parallel write with retry logic for all storage types
 		final JavaPairRDD<String, String> rddDatasetNames = sc.parallelizePairs(datasetNames);
 		rddDatasetNames.foreach(
@@ -553,10 +554,7 @@ public class SparkPairAlignSIFT {
 											boundsMax);
 								}
 							},
-							maxRetries,
-							retryDelayMs,
-							retryBackoff,
-							startupJitterMs,
+							retryParameters,
 							"reSaveTransform " + tuple._1() + " -> " + tuple._2());
 					} catch (Exception e) {
 						throw new RuntimeException(e);
@@ -637,7 +635,7 @@ public class SparkPairAlignSIFT {
 		affines.cache();
 		affines.count();
 
-		final JavaRDD<Tuple2<long[], RetryStats>> gridCellsWithStats = saveAccumulatedAffineGridCells(
+		final JavaRDD<RetryResultAndStats<long[]>> gridCellsWithStats = saveAccumulatedAffineGridCells(
 				affines,
 				n5Path,
 				inGroupName + "/" + transformDatasetNameB,
@@ -655,7 +653,7 @@ public class SparkPairAlignSIFT {
 		gridCellsWithStats.count();
 
 		// Extract just the grid cells for downstream processing (statistics ignored in this class)
-		final JavaRDD<long[]> gridCells = gridCellsWithStats.map(tuple -> tuple._1());
+		final JavaRDD<long[]> gridCells = gridCellsWithStats.map(RetryResultAndStats::getResult);
 
 		final JavaRDD<long[]> composedGridCells = composeOverlappingTransformGridCells(
 				gridCells,

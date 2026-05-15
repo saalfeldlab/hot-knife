@@ -1,15 +1,79 @@
 package org.janelia.saalfeldlab.hotknife.util;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.Supplier;
 
-import scala.Tuple2;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.N5Writer;
+import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
+import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 
 /**
  * Utility class for retry logic with exponential backoff and jitter.
  * Specifically designed for handling GCS rate limits and other transient failures.
  */
 public class N5RetryUtil {
+
+    public static class RetryParameters {
+
+        /** Maximum number of retry attempts (beyond initial attempt). */
+        private final int maxRetries;
+
+        /** Initial delay in milliseconds before first retry. */
+        private final long delayMs;
+
+        /** Exponential backoff multiplier for delays. */
+        private final double backoff;
+
+        /** Maximum random delay in milliseconds before first attempt. */
+        private final long startupJitterMs;
+
+        public RetryParameters() {
+            this(3, 2000, 2.0, 10_000);
+        }
+
+        public RetryParameters(final int maxRetries,
+                               final long delayMs,
+                               final double backoff,
+                               final long startupJitterMs) {
+
+            this.maxRetries = maxRetries;
+            this.delayMs = delayMs;
+            this.backoff = backoff;
+            this.startupJitterMs = startupJitterMs;
+        }
+
+        @Override
+        public String toString() {
+            return "{maxRetries=" + maxRetries + ", delayMs=" + delayMs + ", backoff=" + backoff + ", startupJitterMs=" + startupJitterMs + '}';
+        }
+    }
+
+    public static class RetryResultAndStats<T> {
+
+        private final T result;
+        private final RetryStats stats;
+
+        public RetryResultAndStats(final T result,
+                                   final RetryStats stats) {
+            this.result = result;
+            this.stats = stats;
+        }
+
+        public T getResult() {
+            return result;
+        }
+
+        public RetryStats getStats() {
+            return stats;
+        }
+    }
 
 	/**
 	 * Functional interface for operations that can throw exceptions.
@@ -25,21 +89,15 @@ public class N5RetryUtil {
 	 * Execute an operation with exponential backoff retry logic.
 	 * Specifically handles GCS rate limit errors with delays, and retries other errors without delay.
 	 *
-	 * @param operation The operation to execute
-	 * @param maxRetries Maximum number of retry attempts (beyond initial attempt)
-	 * @param retryDelayMs Initial delay in milliseconds before first retry
-	 * @param backoffMultiplier Exponential backoff multiplier for delays
-	 * @param startupJitterMs Maximum random delay in milliseconds before first attempt
-	 * @param operationDescription Description of operation for logging
-	 * @return Tuple2 containing the result and retry statistics
+	 * @param  operation             the operation to execute.
+	 * @param  parameters            retry parameters.
+	 * @param  operationDescription  description of operation for logging.
+	 * @return the result and retry statistics
 	 * @throws Exception if all retries are exhausted
 	 */
-	public static <T> Tuple2<T, RetryStats> executeWithRetry(
+	public static <T> RetryResultAndStats<T> executeWithRetry(
 			final Supplier<T> operation,
-			final int maxRetries,
-			final long retryDelayMs,
-			final double backoffMultiplier,
-			final long startupJitterMs,
+			final RetryParameters parameters,
 			final String operationDescription) throws Exception {
 
 		// Track statistics
@@ -47,27 +105,26 @@ public class N5RetryUtil {
 		long totalWaitTimeMs = 0;
 
 		// Add initial random delay to space out task execution (0 to startupJitterMs)
-		if (startupJitterMs > 0)
+		if (parameters.startupJitterMs > 0)
 		{
-			initialJitterMs = (long)(Math.random() * startupJitterMs);
-			System.out.println(String.format(
-				"Initial jitter for %s: delaying first attempt by %dms (max: %dms)",
-				operationDescription, initialJitterMs, startupJitterMs));
+			initialJitterMs = (long)(Math.random() * parameters.startupJitterMs);
+			logMessage("executeWithRetry: Initial jitter for " + operationDescription +
+					   ", delaying first attempt by " + initialJitterMs +
+                       "ms (max: " + parameters.startupJitterMs + "ms)");
 			Thread.sleep(initialJitterMs);
 			totalWaitTimeMs += initialJitterMs;
 		}
 		else
 		{
-			System.out.println(String.format(
-					"NO initial jitter for %s: delaying first attempt",
-					operationDescription ));
+			logMessage("executeWithRetry: NO initial jitter for " + operationDescription);
 		}
 
 		Exception lastException = null;
-		long delayMs = retryDelayMs;
+		long delayMs = parameters.delayMs;
 		int actualRetries = 0;
 
-		for (int attempt = 0; attempt <= maxRetries; attempt++) {
+		for (int attempt = 0; attempt <= parameters.maxRetries; attempt++) {
+			final String context = operationDescription + " (attempt " + (attempt+1) + "/" + (parameters.maxRetries+1) + ")";
 			try {
 				final T result = operation.get();
 				final RetryStats stats = new RetryStats(
@@ -75,7 +132,7 @@ public class N5RetryUtil {
 					actualRetries,
 					totalWaitTimeMs,
 					initialJitterMs);
-				return new Tuple2<>(result, stats);
+				return new RetryResultAndStats<>(result, stats);
 			} catch (final Exception e) {
 				lastException = e;
 
@@ -85,22 +142,19 @@ public class N5RetryUtil {
 					 e.getMessage().contains("rate limit") ||
 					 e.getMessage().contains("StorageException"));
 
-				if (isRateLimitError && attempt < maxRetries) {
+				if (isRateLimitError && attempt < parameters.maxRetries) {
 					// Add jitter: randomize delay between 50% and 150% of calculated value
 					// This prevents thundering herd where all workers retry at similar intervals
 					long jitteredDelay = (long)(delayMs * (0.5 + Math.random()));
-					System.out.println(String.format(
-						"GCS rate limit hit for %s (attempt %d/%d), retrying in %dms (jittered from %dms)",
-						operationDescription, attempt + 1, maxRetries + 1, jitteredDelay, delayMs));
+					logMessage("executeWithRetry: GCS rate limit hit for " + context +
+							   ", retrying in " + jitteredDelay + "ms (jittered from " + delayMs + "ms)");
 					Thread.sleep(jitteredDelay);
 					totalWaitTimeMs += jitteredDelay;
-					delayMs = (long)(delayMs * backoffMultiplier);
+					delayMs = (long)(delayMs * parameters.backoff);
 					actualRetries++;
-				} else if (attempt < maxRetries) {
+				} else if (attempt < parameters.maxRetries) {
 					// For non-rate-limit errors, retry without delay
-					System.out.println(String.format(
-						"Error in %s (attempt %d/%d): %s",
-						operationDescription, attempt + 1, maxRetries + 1, e.getMessage()));
+					logMessage("executeWithRetry: Error in  " + context + ", exception: " + e.getMessage());
 					actualRetries++;
 				}
 			}
@@ -108,7 +162,7 @@ public class N5RetryUtil {
 
 		// All retries exhausted - fail fast
 		throw new RuntimeException(
-			String.format("Failed %s after %d attempts", operationDescription, maxRetries + 1),
+			"Failed " + operationDescription + "after " + (parameters.maxRetries+1) + " attempts",
 			lastException);
 	}
 
@@ -116,30 +170,115 @@ public class N5RetryUtil {
 	/**
 	 * Execute a void operation with exponential backoff retry logic.
 	 *
-	 * @param operation The operation to execute
-	 * @param maxRetries Maximum number of retry attempts
-	 * @param retryDelayMs Initial delay in milliseconds
-	 * @param backoffMultiplier Exponential backoff multiplier
-	 * @param startupJitterMs Maximum random delay in milliseconds before first attempt
-	 * @param operationDescription Description of operation for logging
+	 * @param  operation   The operation to execute.
+	 * @param  parameters  retry parameters.
 	 * @throws Exception if all retries are exhausted
 	 */
 	public static RetryStats executeWithRetryVoid(
 			final RunnableWithException operation,
-			final int maxRetries,
-			final long retryDelayMs,
-			final double backoffMultiplier,
-			final long startupJitterMs,
+			final RetryParameters parameters,
 			final String operationDescription) throws Exception {
 
-		Tuple2<Void, RetryStats> result = executeWithRetry(() -> {
-			try {
-				operation.run();
-				return null;
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-		}, maxRetries, retryDelayMs, backoffMultiplier, startupJitterMs, operationDescription);
-		return result._2();
+		final RetryResultAndStats<Void> result = executeWithRetry(
+				() -> {
+					try {
+						operation.run();
+						return null;
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				},
+				parameters,
+				operationDescription);
+
+		return result.stats;
 	}
+
+    public static List<String> downsampleWithRetry(final JavaSparkContext sparkContext,
+                                                   final N5WriterSupplier n5Supplier,
+                                                   final String datasetPath,
+                                                   final int[] outputBlockSize,
+                                                   final String outputGroupPath,
+                                                   final int[] downsamplingStepFactors)
+            throws IOException {
+
+        return downsampleWithRetry(sparkContext,
+                                   n5Supplier,
+                                   datasetPath,
+                                   outputBlockSize,
+                                   outputGroupPath,
+                                   downsamplingStepFactors,
+                                   new RetryParameters());
+    }
+
+    public static List<String> downsampleWithRetry(final JavaSparkContext sparkContext,
+                                                   final N5WriterSupplier n5Supplier,
+                                                   final String datasetPath,
+                                                   final int[] outputBlockSize,
+                                                   final String outputGroupPath,
+                                                   final int[] downsamplingStepFactors,
+                                                   final RetryParameters retryParameters)
+            throws IOException {
+
+        logMessage("downsampleWithRetry: entry, datasetPath=" + datasetPath +
+                   ", outputBlockSize=" + Arrays.toString(outputBlockSize) + ", outputGroupPath=" + outputGroupPath +
+                   ", downsamplingStepFactors=" + Arrays.toString(downsamplingStepFactors) +
+                   ", retryParameters=" + retryParameters);
+
+        final N5Writer n5 = n5Supplier.get();
+        final DatasetAttributes fullScaleAttributes = n5.getDatasetAttributes(datasetPath);
+        final long[] dimensions = fullScaleAttributes.getDimensions();
+        final int dim = dimensions.length;
+
+        final List<String> downsampledDatasets = new ArrayList<>();
+
+        long downsampledBlockCount = 2;
+        for (int scale = 1; downsampledBlockCount > 1; scale++) {
+            final int[] scaleFactors = new int[dim];
+            for (int d = 0; d < dim; d++) {
+                scaleFactors[d] = (int) Math.round(Math.pow(downsamplingStepFactors[d], scale));
+            }
+
+            long blockCount = 1;
+            final long[] downsampledDimensions = new long[dim];
+            for (int d = 0; d < dim; d++) {
+                downsampledDimensions[d] = dimensions[d] / scaleFactors[d];
+                final long blocksInDim = (downsampledDimensions[d] + outputBlockSize[d] - 1) / outputBlockSize[d];
+                blockCount *= blocksInDim;
+            }
+            downsampledBlockCount = blockCount;
+
+            final String inputDatasetPath = scale == 1 ? datasetPath : Paths.get(outputGroupPath, "s" + (scale - 1 ) ).toString();
+            final String outputDatasetPath = Paths.get( outputGroupPath, "s" + scale ).toString();
+
+            final String operationDescription = "downsample s" + (scale-1) + " to s" + scale;
+            try {
+                final RetryStats retryStats = executeWithRetryVoid(
+                        () -> N5DownsamplerSpark.downsample(sparkContext,
+                                                            n5Supplier,
+                                                            inputDatasetPath,
+                                                            outputDatasetPath,
+                                                            downsamplingStepFactors),
+                        retryParameters,
+                        operationDescription);
+
+                logMessage("downsampleWithRetry: created s" + scale + " with " + downsampledBlockCount + " block(s) and " + retryStats);
+
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+
+            downsampledDatasets.add( outputDatasetPath );
+        }
+
+        logMessage("downsampleWithRetry: exit, created " + downsampledDatasets.size() + " downsampled datasets");
+
+        return downsampledDatasets;
+    }
+
+    private static void logMessage(final String message) {
+        org.janelia.saalfeldlab.hotknife.util.Util.logMessage(N5RetryUtil.class.getName(),
+                                                              message);
+    }
+
 }

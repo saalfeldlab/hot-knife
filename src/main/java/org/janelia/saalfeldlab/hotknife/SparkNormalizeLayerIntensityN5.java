@@ -36,7 +36,7 @@ import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
-import static org.janelia.saalfeldlab.n5.spark.downsample.scalepyramid.N5ScalePyramidSpark.downsampleScalePyramid;
+import static org.janelia.saalfeldlab.hotknife.util.N5RetryUtil.downsampleWithRetry;
 
 
 /**
@@ -211,12 +211,13 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 		final int[] downsampleFactors = parseCSIntArray(options.factors);
 		if (downsampleFactors != null) {
-			logMessage("applyAndWrite: call downsampleScalePyramid");
-			downsampleScalePyramid(sparkContext,
-								   new N5PathSupplier(options.n5Path),
-								   fullScaleOutputDataset,
-								   options.n5DatasetOutput,
-								   downsampleFactors);
+			logMessage("applyAndWrite: call downsampleWithRetry");
+			downsampleWithRetry(sparkContext,
+								new N5PathSupplier(options.n5Path),
+								fullScaleOutputDataset,
+								attributes.getBlockSize(),
+								options.n5DatasetOutput,
+								downsampleFactors);
 		}
 
 		// Copy attributes and rebuild 'scales' attribute
