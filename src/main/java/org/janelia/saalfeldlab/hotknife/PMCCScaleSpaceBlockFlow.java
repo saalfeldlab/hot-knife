@@ -236,33 +236,19 @@ public class PMCCScaleSpaceBlockFlow
 		}
 	}
 
-	private static final DeformationFieldTransform< FloatType > createDeformationFieldTransform(
-			final FloatProcessor shiftX,
-			final FloatProcessor shiftY,
-			final InterpolatorFactory< FloatType, RandomAccessible< FloatType > > interpolatorFactory )
-	{
-		final ArrayImg<FloatType, FloatArray> imgX = ArrayImgs.floats((float[])shiftX.getPixels(), shiftX.getWidth(), shiftX.getHeight());
-		final ArrayImg<FloatType, FloatArray> imgY = ArrayImgs.floats((float[])shiftY.getPixels(), shiftY.getWidth(), shiftY.getHeight());
-
-		return new DeformationFieldTransform<>(
-				Views.interpolate(
-						Views.extendBorder(imgX),
-						interpolatorFactory),
-				Views.interpolate(
-						Views.extendBorder(imgY),
-						interpolatorFactory));
-	}
-
-
-	public static final DeformationFieldTransform< FloatType > createDeformationFieldTransform(
+	public static final DeformationFieldTransform createDeformationFieldTransform(
 			final FloatProcessor shiftX,
 			final FloatProcessor shiftY )
 	{
-		return createDeformationFieldTransform( shiftX, shiftY, new NLinearInterpolatorFactory<>() );
+		// imglib2-realtransform 4.x takes a single RAI whose last dim is the components;
+		// it handles interpolation (NLinear) internally.
+		final ArrayImg<FloatType, FloatArray> imgX = ArrayImgs.floats((float[])shiftX.getPixels(), shiftX.getWidth(), shiftX.getHeight());
+		final ArrayImg<FloatType, FloatArray> imgY = ArrayImgs.floats((float[])shiftY.getPixels(), shiftY.getWidth(), shiftY.getHeight());
+		return new DeformationFieldTransform(Views.stack(imgX, imgY));
 	}
 
 
-	public static final Pair< PositionFieldTransform< DoubleType >, FloatProcessor > scaleSpaceOpticFlow(
+	public static final Pair< PositionFieldTransform, FloatProcessor > scaleSpaceOpticFlow(
 			final FloatProcessor ip1,
 			final FloatProcessor ip2,
 			final short radius,
@@ -295,15 +281,16 @@ public class PMCCScaleSpaceBlockFlow
 		/* repeat numIteration times for each scale */
 		for ( int j = 0; j < numIterations ; ++j )
 		{
+			final FinalInterval positionInterval = new FinalInterval( ip2.getWidth(), ip2.getHeight() );
 			@SuppressWarnings( "unchecked" )
 			FloatProcessor ip2Transformed = Util.materialize(
 					createTransformedInterval(
 							ip2,
-							new FinalInterval( ip2.getWidth(), ip2.getHeight() ),
-							new PositionFieldTransform<>(
-									new RealRandomAccessible[]{
-										xPositions,
-										yPositions } ) ) );
+							positionInterval,
+							new PositionFieldTransform(
+									Views.stack(
+											Views.interval( Views.raster( xPositions ), positionInterval ),
+											Views.interval( Views.raster( yPositions ), positionInterval ) ) ) ) );
 
 			ip2Transformed = filter1.process( ip2Transformed ).convertToFloatProcessor();
 			ip2Transformed = filter2.process( ip2Transformed ).convertToFloatProcessor();
@@ -356,7 +343,7 @@ public class PMCCScaleSpaceBlockFlow
 			shiftYFloat.copyBits( divisionWeights, 0, 0, Blitter.DIVIDE );
 
 			/* append deformation field to existing transformation */
-			final DeformationFieldTransform< FloatType > deformationField = createDeformationFieldTransform(
+			final DeformationFieldTransform deformationField = createDeformationFieldTransform(
 					shiftXFloat,
 					shiftYFloat );
 
@@ -368,12 +355,12 @@ public class PMCCScaleSpaceBlockFlow
 					deformationField );
 		}
 
-		@SuppressWarnings( "unchecked" )
-		final PositionFieldTransform< DoubleType > transform = new PositionFieldTransform<>(
-				new RealRandomAccessible[]{
-						xPositions,
-						yPositions } );
+		final FinalInterval finalPositionInterval = new FinalInterval( ip1.getWidth(), ip1.getHeight() );
+		final PositionFieldTransform transform = new PositionFieldTransform(
+				Views.stack(
+						Views.interval( Views.raster( xPositions ), finalPositionInterval ),
+						Views.interval( Views.raster( yPositions ), finalPositionInterval ) ) );
 
-		return new ValuePair< PositionFieldTransform< DoubleType >, FloatProcessor >( transform, weights );
+		return new ValuePair< PositionFieldTransform, FloatProcessor >( transform, weights );
 	}
 }

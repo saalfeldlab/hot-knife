@@ -70,7 +70,7 @@ public class PMCCScaleSpaceBlockFlowTest {
 //						Intervals.createMinSize(0, 0, imp0.getWidth(), imp0.getHeight()), iterations * radius),
 //				);
 
-		final Pair<PositionFieldTransform<DoubleType>, FloatProcessor> result = PMCCScaleSpaceBlockFlow.scaleSpaceOpticFlow(
+		final Pair<PositionFieldTransform, FloatProcessor> result = PMCCScaleSpaceBlockFlow.scaleSpaceOpticFlow(
 				imp0.getProcessor().convertToFloatProcessor(),
 				imp1.getProcessor().convertToFloatProcessor(),
 				radius,

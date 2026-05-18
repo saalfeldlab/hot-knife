@@ -19,17 +19,15 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import net.imglib2.IterableInterval;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
-import org.janelia.saalfeldlab.hotknife.cost.PreFilter;
+import org.janelia.saalfeldlab.hotknife.ops.SimpleGaussRA;
+import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.N5Path;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
@@ -43,7 +41,6 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
-import ij.process.ByteProcessor;
 import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
@@ -53,19 +50,16 @@ import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
-import net.imglib2.img.array.ArrayImg;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.array.ByteArray;
+import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
-import net.imglib2.type.numeric.IntegerType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
-import net.imglib2.view.SubsampleIntervalView;
 import net.imglib2.view.Views;
 
 /**
@@ -119,6 +113,28 @@ public class SparkComputeCostMultiSem {
 
 		@Option(name = "--bottomLayerCost", usage = "value to use for bottom cost layer (default: 250)")
 		private Integer bottomLayerCost = 250;
+
+		@Option(name = "--preSmoothXY",
+				usage = "Gaussian sigma (in input pixels) for XY pre-smoothing of intensities before cost " +
+						"computation; 0 disables (default: 0.0). Use 2-3 for noisy lightsheet/confocal data.")
+		private double preSmoothXY = 0.0;
+
+		@Option(name = "--textureCost",
+				usage = "Gaussian sigma (in input pixels) for texture-based cost. When > 0, replaces the " +
+						"intensity-derivative cost with the z-derivative of a local-texture proxy " +
+						"(smoothed |I - Gauss(I)|), suitable for data where surfaces are defined by " +
+						"texture changes rather than intensity steps. Amplification reuses --zIntensityScale " +
+						"(defaults to 1.0 if unset). Disables --preSmoothXY (the texture pipeline does its " +
+						"own XY blur). Default: 0 (use intensity-based cost).")
+		private double textureCost = 0.0;
+
+		@Option(name = "--zIntensityScale",
+				usage = "scale factor for an abs z-intensity-derivative cost: " +
+						"cost = 255 - clamp(|I(z+1) - I(z-1)| * scale, 0, 255). " +
+						"0 keeps the signed bright-to-dark cost; > 0 switches to the abs cost " +
+						"(captures both fade-in and fade-out boundaries, also skips the global image " +
+						"inversion). Default: 0.0.")
+		private double zIntensityScale = 0.0;
 
 		@Option(name = "--median", usage = "uses median (r=3 in z) before cost computation")
 		private boolean median = false;
@@ -351,6 +367,9 @@ public class SparkComputeCostMultiSem {
 
 		final int topLayerCost = options.topLayerCost;
 		final int  bottomLayerCost = options.bottomLayerCost;
+		final double preSmoothXY = options.preSmoothXY;
+		final double textureCost = options.textureCost;
+		final double zIntensityScale = options.zIntensityScale;
 
 		// Initialize ImageJ if in debug mode
 		if (options.debugMode) {
@@ -367,7 +386,7 @@ public class SparkComputeCostMultiSem {
 
 			gridCoordPartition.forEachRemaining( gridCoord ->
 				processColumn(
-						n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, debugMode, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, executorService));
+						n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, debugMode, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, preSmoothXY, textureCost, zIntensityScale, executorService));
 
 			executorService.shutdown();
 
@@ -426,46 +445,25 @@ public class SparkComputeCostMultiSem {
     }
 
 	@SuppressWarnings({"unchecked", "rawtypes"})
-	private static RandomAccessibleInterval<UnsignedByteType> openAsUint8(final N5Reader n5, final String dataset) {
+	private static RandomAccessibleInterval<UnsignedByteType> openAsUint8(final N5Reader n5, final String dataset, final boolean clampCast) {
 		final RandomAccessibleInterval raw = N5Utils.open(n5, dataset);
 		final Object pixelType = Util.getTypeFromInterval(raw);
 		if (pixelType instanceof UnsignedByteType) {
 			return (RandomAccessibleInterval<UnsignedByteType>) raw;
+		}
+		if (clampCast) {
+			// Clamp-cast: assumes values already in [0, 255] (e.g. uint16 storing 8-bit confocal,
+			// or FloatType where the maxVal-based scaling below is nonsensical).
+			return Converters.convertRAI(
+					(RandomAccessibleInterval<RealType<?>>) raw,
+					(i, o) -> o.set((int) Math.round(Math.max(0.0, Math.min(255.0, i.getRealDouble())))),
+					new UnsignedByteType());
 		}
 		final double maxVal = ((RealType<?>) pixelType).getMaxValue();
 		return Converters.convertRAI(
 				(RandomAccessibleInterval<RealType<?>>) raw,
 				(i, o) -> o.set((int) (i.getRealDouble() * 255.0 / maxVal)),
 				new UnsignedByteType());
-	}
-
-	private static IterableInterval<UnsignedByteType> getLastLayer(final N5Reader n5Reader, final String dataset) {
-		final RandomAccessibleInterval<UnsignedByteType> data = openAsUint8(n5Reader, dataset);
-		final long lastLayerIndex = data.dimension(2) - 1;
-		return Views.iterable(Views.hyperSlice(data, 2, lastLayerIndex));
-	}
-
-	public static int median(final IterableInterval<UnsignedByteType> pixels2D) {
-		int[] intensities = new int[(int) pixels2D.dimension(0) * (int) pixels2D.dimension(1)];
-		int count = 0;
-		for (final UnsignedByteType pixel : pixels2D) {
-			final int value = pixel.get();
-			if (value > 0) {
-				// threshold to avoid background pixels
-				intensities[count++] = value;
-			}
-		}
-
-		intensities = Arrays.copyOf(intensities, count);
-		Arrays.sort(intensities);
-		final int median;
-		if (count % 2 == 1) {
-			median = intensities[count / 2];
-		} else {
-			median = (intensities[count / 2] + intensities[count / 2 - 1]) / 2;
-		}
-
-		return median;
 	}
 
 	public static void processColumn(
@@ -485,12 +483,15 @@ public class SparkComputeCostMultiSem {
 			//int outOfBoundsValue,
 			int topLayerCost,
 			int bottomLayerCost,
+			final double preSmoothXY,
+			final double textureCost,
+			final double zIntensityScale,
 			ExecutorService executorService )
 	{
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, executorService);
+				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, preSmoothXY, textureCost, zIntensityScale, executorService);
 
 		if (debugMode) {
 			ImageJFunctions.show( cost, "Cost Block [" + gridCoord[0] + "," + gridCoord[1] + "]" );
@@ -534,25 +535,6 @@ public class SparkComputeCostMultiSem {
         //SimpleMultiThreading.threadHaltUnClean();
 	}
 
-	private static RandomAccessibleInterval<UnsignedByteType> mergeCosts(RandomAccessibleInterval<UnsignedByteType> topCost, RandomAccessibleInterval<UnsignedByteType> botCost) {
-
-        Img<UnsignedByteType> outCost = ArrayImgs.unsignedBytes(topCost.dimension(0), topCost.dimension(1));
-
-        RandomAccess<UnsignedByteType> topAccess = topCost.randomAccess();
-        RandomAccess<UnsignedByteType> botAccess = botCost.randomAccess();
-
-        Cursor<UnsignedByteType> outCur = outCost.localizingCursor();
-        while (outCur.hasNext()) {
-            outCur.fwd();
-            topAccess.setPosition(outCur);
-            botAccess.setPosition(outCur);
-
-            outCur.get().set(Math.min(topAccess.get().get(), botAccess.get().get()));
-        }
-
-        return outCost;
-	}
-
 	public static RandomAccessibleInterval<UnsignedByteType> processColumnAlongAxis(
 			String n5Path,
 			String zcorrDataset,
@@ -567,17 +549,20 @@ public class SparkComputeCostMultiSem {
 			//int outOfBoundsValue,
 			int topLayerCost,
 			int bottomLayerCost,
+			final double preSmoothXY,
+			final double textureCost,
+			final double zIntensityScale,
 			ExecutorService executorService ) {
 
 		RandomAccessibleInterval<UnsignedByteType> zcorrRaw;
 		final RandomAccessibleInterval<UnsignedByteType> maskRaw;
 		final RandomAccessible<UnsignedByteType> maskExtended;
 
-        zcorrRaw = openAsUint8(N5Util.createN5Reader(n5Path), zcorrDataset);
+        zcorrRaw = openAsUint8(N5Util.createN5Reader(n5Path), zcorrDataset, zIntensityScale > 0);
 
         if ( maskDataset != null )
         {
-            RandomAccessibleInterval<UnsignedByteType> maskRawTmp = openAsUint8(N5Util.createN5Reader(n5Path), maskDataset);
+            RandomAccessibleInterval<UnsignedByteType> maskRawTmp = openAsUint8(N5Util.createN5Reader(n5Path), maskDataset, zIntensityScale > 0);
             maskRaw = maskRawTmp;
 
             if ( !Intervals.equals(zcorrRaw, maskRaw) )
@@ -594,10 +579,74 @@ public class SparkComputeCostMultiSem {
         // The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
 		// zcorr = Views.permute(zcorr, costAxis, 2);
 
-        zcorrRaw = Converters.convertRAI( zcorrRaw, (i,o) -> {o.set( 255-i.get());}, new UnsignedByteType() );
-        
-		final RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendBorder( zcorrRaw );//Views.extendValue(zcorrRaw, outOfBoundsValue);
+        // The signed Multi-SEM cost (255 - max(0, I(z+1) - I(z))) needs the image inverted so that
+        // resin->tissue shows up as a bright->dark transition. The abs cost is direction-independent
+        // and operates on the original intensities. Texture cost also operates on original intensities.
+        if ( zIntensityScale <= 0 && textureCost <= 0 ) {
+            zcorrRaw = Converters.convertRAI( zcorrRaw, (i,o) -> {o.set( 255-i.get());}, new UnsignedByteType() );
+        }
+
 		final Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
+		final RandomAccessible<UnsignedByteType> zcorrExtended;
+		if ( textureCost > 0 ) {
+			// Texture-based cost: compute a per-voxel "texture energy" = local mean of |I - Gauss(I)|.
+			// Surfaces appear at z-locations where this energy changes sharply (the cost loop's
+			// zIntensityScale > 0 branch takes the z-derivative downstream). All intermediates are
+			// materialized eagerly for the working interval.
+			final long[] dims = zcorrInterval.dimensionsAsLongArray();
+			final long[] origin = zcorrInterval.minAsLongArray();
+			final double[] xySigmas = new double[] { textureCost, textureCost, 0.0 };
+
+			// 1) Blur I in XZ → blurred.
+			final Img<UnsignedByteType> blurred = ArrayImgs.unsignedBytes( dims );
+			final RandomAccessibleInterval<UnsignedByteType> blurredTr = Views.translate( blurred, origin );
+			Gauss3.gauss( xySigmas, Views.extendBorder( zcorrRaw ), blurredTr );
+
+			// 2) Local-neighborhood max of |I - blurred| over an XY window of radius ceil(textureCost),
+			// computed as two separable 1D max-filter passes (monotonic deque, O(1) amortized per voxel).
+			// Captures peak texture energy in the neighborhood; tissue's sparse bright deviations
+			// drive the window value high while uniform OOF regions stay low.
+			final int rRadius = (int) Math.ceil( textureCost );
+			final Img<UnsignedByteType> perPixel = ArrayImgs.unsignedBytes( dims );
+			final RandomAccessibleInterval<UnsignedByteType> perPixelTr = Views.translate( perPixel, origin );
+			final Cursor<UnsignedByteType> rc = Views.iterable( perPixelTr ).localizingCursor();
+			final RandomAccess<UnsignedByteType> rawAccess = zcorrRaw.randomAccess();
+			final RandomAccess<UnsignedByteType> blurredAccess = blurredTr.randomAccess();
+			while ( rc.hasNext() ) {
+				final UnsignedByteType v = rc.next();
+				rawAccess.setPosition( rc );
+				blurredAccess.setPosition( rc );
+				v.set( Math.abs( rawAccess.get().get() - blurredAccess.get().get() ) );
+			}
+			final Img<UnsignedByteType> maxX = ArrayImgs.unsignedBytes( dims );
+			final RandomAccessibleInterval<UnsignedByteType> maxXTr = Views.translate( maxX, origin );
+			maxFilter1D( perPixelTr, maxXTr, 0, rRadius );
+			final Img<UnsignedByteType> residual = ArrayImgs.unsignedBytes( dims );
+			final RandomAccessibleInterval<UnsignedByteType> residualTr = Views.translate( residual, origin );
+			maxFilter1D( maxXTr, residualTr, 1, rRadius );
+
+			// 3) Smooth |residual| in XY → texture proxy.
+			final Img<UnsignedByteType> texture = ArrayImgs.unsignedBytes( dims );
+			final RandomAccessibleInterval<UnsignedByteType> textureTr = Views.translate( texture, origin );
+			Gauss3.gauss( xySigmas, Views.extendBorder( residualTr ), textureTr );
+
+			zcorrExtended = Views.extendBorder( textureTr );
+		} else if ( preSmoothXY > 0 ) {
+			// Denoise in XY (per-z-plane) before cost computation. Lazy block-cached so we never
+			// materialize the full column volume.
+			final SimpleGaussRA<UnsignedByteType> xyGauss =
+					new SimpleGaussRA<>( new double[] { preSmoothXY, preSmoothXY, 0.0 } );
+			final RandomAccessibleInterval<UnsignedByteType> smoothed = Lazy.process(
+					Views.extendBorder( zcorrRaw ),
+					zcorrInterval,
+					new int[] { 256, 256, 64 },
+					new UnsignedByteType(),
+					AccessFlags.setOf(),
+					xyGauss );
+			zcorrExtended = Views.extendBorder( smoothed );
+		} else {
+			zcorrExtended = Views.extendBorder( zcorrRaw );//Views.extendValue(zcorrRaw, outOfBoundsValue);
+		}
 
 		if (debugMode) {
 			System.out.println("Debug mode: Displaying input data...");
@@ -698,6 +747,23 @@ public class SparkComputeCostMultiSem {
 				{
 					// the second surface on top we just fake for now (outsideValue all)
 					v.set( bottomLayerCost );//v.set(255 - outOfBoundsValue); // TODO: variable (average gradient from resin to sample)
+				}
+				else if ( zIntensityScale > 0 || textureCost > 0 )
+				{
+					// Abs z-derivative of (pre-smoothed) intensity OR the texture proxy. Captures a
+					// boundary as a fade in either direction. When in texture mode and the user did
+					// not set --zIntensityScale, default the amplification to 1.0.
+					final double scale = zIntensityScale > 0 ? zIntensityScale : 1.0;
+					final long zCur = pos[ 2 ];
+					final int k = 1;
+
+					pos[ 2 ] = zCur - k; in.setPosition( pos );
+					final double iLow  = filter ? medianZ3( in, medianTmp ) : in.get().get();
+					pos[ 2 ] = zCur + k; in.setPosition( pos );
+					final double iHigh = filter ? medianZ3( in, medianTmp ) : in.get().get();
+					pos[ 2 ] = zCur;
+
+					v.set( 255 - (int)Math.min( 255, Math.round( Math.abs( iHigh - iLow ) * scale ) ) );
 				}
 				else if ( filter )
 				{
@@ -813,190 +879,6 @@ public class SparkComputeCostMultiSem {
 		return Util.median( medianTmp );
 	}
 
-	protected static < T extends IntegerType<T>> boolean isAnyXYNeighboringPixelBlack( final RandomAccess<T> in )
-	{
-		// is it outside image boundaries??
-		for ( int e = 0; e <=1; ++e )
-		{
-			in.bck( e );
-			if ( in.get().getInteger() == 0 )
-				return true;
-			in.fwd( e );
-			in.fwd( e );
-			if ( in.get().getInteger() == 0 )
-				return true;
-			in.bck( e );
-		}
-		return false;
-	}
-
-	public static RandomAccessibleInterval<UnsignedByteType> processColumnAlongAxis(
-			final RandomAccessibleInterval<UnsignedByteType> zcorr,
-			final Interval zcorrInterval,
-			final boolean filter,
-			final boolean gauss,
-			long[] zcorrSize,
-			int[] costSteps,
-			int costAxis,
-			Long[] gridCoord,
-			ExecutorService executorService,
-			int bandSize,
-			int minGradient,
-			int slopeCorrXRange,
-			float slopeCorrBandFactor,
-			float maxSlope,
-			float minSlope,
-			int startThresh,
-			int kernelSize) throws Exception {
-
-		/*
-		final N5Reader n5 = new N5FSReader(n5Path);
-
-		RandomAccessibleInterval<UnsignedByteType> zcorr = N5Utils.open(n5, zcorrDataset);
-
-		// The cost function is implemented to be processed along dimension = 2, costAxis should be 0 or 2 with the current image data
-		zcorr = Views.permute(zcorr, costAxis, 2);
-
-		RandomAccessible<UnsignedByteType> zcorrExtended = Views.extendZero(zcorr);
-
-		Interval zcorrInterval = getZcorrInterval(gridCoord[0], gridCoord[1], zcorrSize, zcorrBlockSize, costSteps);
-
-		zcorr = Views.interval( zcorrExtended, zcorrInterval );
-		*/
-
-		Img<UnsignedByteType> cost = ArrayImgs.unsignedBytes(
-								     (long) Math.ceil((float)zcorrInterval.dimension(0) / (float)costSteps[0]),
-								     (long) Math.ceil((float)zcorrInterval.dimension(1) / (float)costSteps[1]),
-								     (long) Math.ceil((float)zcorrInterval.dimension(2) / (float)costSteps[2]));
-		RandomAccess<UnsignedByteType> costAccess = cost.randomAccess();
-
-		//System.out.println("Zcorr block size: " + Arrays.toString( zcorrBlockSize ) );
-		System.out.println("Zcorr interval: " + Util.printInterval( zcorrInterval ) );
-		System.out.println("Cost dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(cost)) );
-
-		//new ij.ImageJ();
-		//ImageJFunctions.show( zcorr );
-		//SimpleMultiThreading.threadHaltUnClean();
-
-		// Loop over slices and populate cost
-		int maxZ = (int) Math.min(zcorrInterval.dimension(2), (zcorrSize[2] - gridCoord[1] * zcorrInterval.dimension(2)));// handle remaining boundary
-		for( int zIdx = 0; zIdx < maxZ; zIdx += costSteps[2] ) {
-		    RandomAccessibleInterval<UnsignedByteType> slice = Views.zeroMin(Views.hyperSlice(zcorr, 2, zIdx + zcorrInterval.min(2)));
-
-			RandomAccess<UnsignedByteType> sliceAccess = slice.randomAccess();
-			ArrayImg<UnsignedByteType, ByteArray> sliceCopy = ArrayImgs.unsignedBytes(slice.dimension(0), slice.dimension(1));
-
-			System.out.println( zIdx + " " + zcorr.max(2) + " Slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(slice)));
-			System.out.println("Slice copy dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(sliceCopy)));
-
-			Cursor<UnsignedByteType> cc = Views.zeroMin(sliceCopy).localizingCursor();
-			try {
-			while( cc.hasNext() ) {
-				cc.fwd();
-				sliceAccess.setPosition(cc);
-				cc.get().set(sliceAccess.get());// FIXME: currently getting an index error here from the set() call
-			}
-			} catch (Exception e) {
-				System.out.println("Exception: " + zIdx + ":" + gridCoord[0] + ", " + gridCoord[1] + " :: " + cc.getDoublePosition(0) + ", " + cc.getDoublePosition(1));
-				e.printStackTrace();
-			}
-
-			//ImageJFunctions.show( sliceCopy ).setTitle( "sliceCopy");
-
-			System.out.println("Compute resin.");
-
-			DagmarCost costFn = new DagmarCost();
-
-			costFn.setBandSize(bandSize);
-			costFn.setMinGradient(minGradient);
-			costFn.setSlopeCorrXRange(slopeCorrXRange);
-			costFn.setSlopeCorrBandFactor(slopeCorrBandFactor);
-			costFn.setMaxSlope(maxSlope);
-			costFn.setMinSlope(minSlope);
-			costFn.setStartThresh(startThresh);
-			costFn.setKernelSize(kernelSize);
-
-			// Compute cost on subsampled
-			//Img<FloatType> costSlice = DagmarCost.computeResin(sliceCopy, costSteps[0], executorService);
-
-			//ImagePlus imp = new ImagePlus("/Users/spreibi/Documents/Janelia/Projects/Male CNS+VNC Alignment/07m/BR-Sec37/raw.tif");
-			//sliceCopy = ArrayImgs.unsignedBytes( (byte[])imp.getProcessor().getPixels(), new long[] { imp.getWidth(), imp.getHeight() } );
-			//ImageJFunctions.show( sliceCopy );
-
-			final Interval originalInterval = new FinalInterval( new long[] { 0, 0}, new long[] { slice.dimension(0) - 1, slice.dimension(1) - 1 } );
-			final Interval interval =
-					PreFilter.filter(
-							new ByteProcessor( (int)slice.dimension(0), (int)slice.dimension(1), sliceCopy.update( null ).getCurrentStorageArray() ),
-							filter );
-
-			final RandomAccessibleInterval< FloatType > costSliceFullRes;
-
-			if ( interval != null )
-			{
-				// not completely empty (otherwise just stays black)
-
-				// run on the cut out area where there are actual images (influences cost function!)
-				RandomAccessibleInterval<FloatType> costSliceFullResRaw = costFn.computeResin( Views.interval( sliceCopy, interval ), true, false, executorService);
-
-				if ( gauss )
-				{
-					double s = costSteps[0];
-					System.out.println( Math.sqrt( s*s - 0.5*0.5 ) );
-					Gauss3.gauss( new double[] { Math.sqrt( s*s - 0.5*0.5 ), 0 }, Views.extendBorder( costSliceFullResRaw ), costSliceFullResRaw );
-				}
-
-				costSliceFullResRaw = Views.interval( Views.extendZero( Views.translate( costSliceFullResRaw, interval.min( 0 ), interval.min( 1 ) ) ), originalInterval );
-
-				// TODO? if an entire column is full of zeros, cost should be uniformly 255
-				// right now: wherever the intensity is 0 the cost is 255
-				costSliceFullRes =
-						Converters.convertRAI(
-								sliceCopy,
-								costSliceFullResRaw,
-								(i0, i1, o) -> { if ( i0.get() == 0 ) o.set( 255 ); else o.set( i1.get() ); },
-								new FloatType() );
-			}
-			else
-			{
-				costSliceFullRes = 
-						Converters.convertRAI(
-								sliceCopy,
-								(i0, o) -> o.set(255),
-								new FloatType() );
-			}
-
-			//ImageJFunctions.show( costSliceFullRes ).setDisplayRange(0, 255);;
-			//SimpleMultiThreading.threadHaltUnClean();
-
-			SubsampleIntervalView<FloatType> costSlice =
-					Views.subsample(
-							costSliceFullRes,
-							costSteps[0],
-							1);
-
-			//ImageJFunctions.show( costSlice );
-			//SimpleMultiThreading.threadHaltUnClean();
-
-			//System.out.println("Cost slice dimensions: " + Arrays.toString(Intervals.dimensionsAsIntArray(costSlice)));
-
-			costAccess = Views.hyperSlice( cost, 2, zIdx / costSteps[2] ).randomAccess();
-
-			Cursor<FloatType> csCur = Views.iterable(costSlice).localizingCursor();
-			while( csCur.hasNext() ) {
-				csCur.fwd();
-				costAccess.setPosition(csCur);
-
-				costAccess.get().set((int) csCur.get().get());
-			}
-
-
-			//ImageJFunctions.show( cost );
-			//SimpleMultiThreading.threadHaltUnClean();
-		}
-
-		return cost;//CostUtils.floatAsUnsignedByte(CostUtils.initializeCost(cost));
-	}
-
 	protected static Interval getZcorrInterval(Long gridX, Long gridY, long[] zcorrSize, int[] zcorrBlockSize, int[] costSteps) {
 		long startX = ( gridX * costSteps[0] ) * zcorrBlockSize[0];
 		long startZ = 0;
@@ -1004,9 +886,68 @@ public class SparkComputeCostMultiSem {
 		long stopX = ( ( gridX + 1 ) * costSteps[0] ) * zcorrBlockSize[0] - 1;
 		long stopZ = zcorrSize[2] - 1;
 		long stopY = ( ( gridY + 1 ) * costSteps[1] ) * zcorrBlockSize[1] - 1;
+		// Clip to the actual input volume; without this, columns at the right/bottom edge
+		// extend far past zcorrSize and produce huge intervals filled by Views.extendBorder.
+		stopX = Math.min( stopX, zcorrSize[0] - 1 );
+		stopY = Math.min( stopY, zcorrSize[1] - 1 );
 		return new FinalInterval(
 				new long[]{startX, startY, startZ},
 				new long[]{stopX, stopY, stopZ});
+	}
+
+	/**
+	 * 1D max filter along {@code axis} with a {@code (2 * radius + 1)} window, using a
+	 * monotonic deque (O(1) amortized per voxel). Border handling = clamp to nearest
+	 * in-bounds value (equivalent to Views.extendBorder along the axis).
+	 */
+	private static void maxFilter1D(
+			final RandomAccessibleInterval<UnsignedByteType> src,
+			final RandomAccessibleInterval<UnsignedByteType> dst,
+			final int axis,
+			final int radius )
+	{
+		final int n = src.numDimensions();
+		final long[] mins = src.minAsLongArray();
+		final long[] dims = src.dimensionsAsLongArray();
+		final long axisLen = dims[ axis ];
+		final int w2 = 2 * radius;
+		final int[] dqIdx = new int[ (int) axisLen ];
+		final int[] dqVal = new int[ (int) axisLen ];
+		final RandomAccess<UnsignedByteType> sa = src.randomAccess();
+		final RandomAccess<UnsignedByteType> da = dst.randomAccess();
+		final long[] pos = new long[ n ];
+		System.arraycopy( mins, 0, pos, 0, n );
+
+		while ( true ) {
+			int head = 0, tail = 0;
+			for ( long j = 0; j < axisLen + radius; ++j ) {
+				final long jc = Math.min( j, axisLen - 1 );
+				pos[ axis ] = mins[ axis ] + jc;
+				sa.setPosition( pos );
+				final int val = sa.get().get();
+				while ( tail > head && dqVal[ tail - 1 ] <= val ) tail--;
+				dqIdx[ tail ] = (int) jc;
+				dqVal[ tail ] = val;
+				tail++;
+				while ( head < tail && dqIdx[ head ] < j - w2 ) head++;
+				if ( j >= radius ) {
+					pos[ axis ] = mins[ axis ] + ( j - radius );
+					da.setPosition( pos );
+					da.get().set( dqVal[ head ] );
+				}
+			}
+			// advance to next line (over all non-axis dims)
+			int d = 0;
+			while ( d < n ) {
+				if ( d == axis ) { d++; continue; }
+				pos[ d ]++;
+				if ( pos[ d ] < mins[ d ] + dims[ d ] ) break;
+				pos[ d ] = mins[ d ];
+				d++;
+				if ( d == axis ) d++;
+			}
+			if ( d >= n ) break;
+		}
 	}
 
 	public static void main(final String... args) throws IOException, InterruptedException, ExecutionException {
@@ -1052,7 +993,7 @@ public class SparkComputeCostMultiSem {
 					logMessage("computeCostAndSurfaceFit: outputN5Path " + options.outputN5Path +
 							   " surfaceN5Output " + options.surfaceN5Output + " already exists, skipping surface fitting");
 				} else {
-					final long[] inputDimensions = n5.getAttribute(options.inputDatasetName, "dimensions", long[].class);
+					final long[] inputDimensions = n5.getDatasetAttributes(options.inputDatasetName).getDimensions();
 					final double maxDeltaZ = options.getSurfaceMaxDeltaZ(inputDimensions);
 					computeSurfaceFit(sc, options, maxDeltaZ);
 				}

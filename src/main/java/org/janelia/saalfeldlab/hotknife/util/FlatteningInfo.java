@@ -43,12 +43,15 @@ public class FlatteningInfo
         final String rawDataset = rawPathAndDataset.getDataset();
 
         final N5Reader rawPathReader = rawPathAndDataset.openReader();
-        this.rawBlockSize = Util.readRequiredAttribute(rawPathReader, rawDataset, DatasetAttributes.BLOCK_SIZE_KEY, int[].class);
-
-        // read compression to make sure it exists, but don't store it because it is not Serializable
-        Util.readRequiredAttribute(rawPathReader, rawDataset, DatasetAttributes.COMPRESSION_KEY, Compression.class);
-
-        this.rawDataType = Util.readRequiredAttribute(rawPathReader, rawDataset, DatasetAttributes.DATA_TYPE_KEY, DataType.class);
+        // Use getDatasetAttributes() so this works for both N5 and Zarr v2/v3.
+        // (Zarr v3 stores block size as chunk_grid.configuration.chunk_shape in zarr.json,
+        // not as a top-level "blockSize" attribute, so getAttribute("blockSize", ...) returns null.)
+        final DatasetAttributes rawAttrs = rawPathReader.getDatasetAttributes(rawDataset);
+        if (rawAttrs == null) {
+            throw new IOException("dataset attributes are missing for " + rawDataset + " in " + rawPathReader.getURI());
+        }
+        this.rawBlockSize = rawAttrs.getBlockSize();
+        this.rawDataType = rawAttrs.getDataType();
 
         this.fieldPath = fieldPathAndDataset.getN5Path();
         final String fieldDataset = fieldPathAndDataset.getDataset();
@@ -75,7 +78,7 @@ public class FlatteningInfo
                     " read from " + Util.getAttributesJsonPath(fieldPath.getPath(), maxFieldDataset));
         }
 
-        final long[] rawDimensions = Util.readRequiredAttribute(rawPathReader, rawDataset, "dimensions", long[].class);
+        final long[] rawDimensions = rawAttrs.getDimensions();
         if (isMultiSEMData) {
             this.dimensions = new long[]{
                     rawDimensions[0],
@@ -115,10 +118,11 @@ public class FlatteningInfo
             throws IOException {
         final N5Reader rawPathReader = rawPathAndDataset.openReader();
         final String rawDataset = rawPathAndDataset.getDataset();
-        return Util.readRequiredAttribute(rawPathReader,
-                                          rawDataset,
-                                          DatasetAttributes.COMPRESSION_KEY,
-                                          Compression.class);
+        final DatasetAttributes attrs = rawPathReader.getDatasetAttributes(rawDataset);
+        if (attrs == null) {
+            throw new IOException("dataset attributes are missing for " + rawDataset + " in " + rawPathReader.getURI());
+        }
+        return attrs.getCompression();
     }
 
     public DataType getRawDataType() {

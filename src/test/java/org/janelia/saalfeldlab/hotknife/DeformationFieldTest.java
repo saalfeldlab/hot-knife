@@ -34,10 +34,10 @@ public class DeformationFieldTest {
 
 	private DeformationFieldTransform2<DoubleType> realSaalfeldTransform2;
 	private DeformationFieldTransform<DoubleType> saalfeldTransform2;
-	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> imglib2Transform2;
+	private net.imglib2.realtransform.DeformationFieldTransform imglib2Transform2;
 	private DeformationFieldTransform2<DoubleType> realSaalfeldTransform3;
 	private DeformationFieldTransform<DoubleType> saalfeldTransform3;
-	private net.imglib2.realtransform.DeformationFieldTransform<DoubleType> imglib2Transform3;
+	private net.imglib2.realtransform.DeformationFieldTransform imglib2Transform3;
 
 	{
 		Arrays.setAll(xField, i -> rnd.nextGaussian());
@@ -51,11 +51,12 @@ public class DeformationFieldTest {
 		final ArrayImg<DoubleType, DoubleArray> yFieldImg3 = ArrayImgs.doubles(yField, width, height, depth);
 		final ArrayImg<DoubleType, DoubleArray> zFieldImg3 = ArrayImgs.doubles(zField, width, height, depth);
 
+		// imglib2-realtransform 4.x takes a single RAI with the components as the last dim.
 		imglib2Transform2 =
-				new net.imglib2.realtransform.DeformationFieldTransform<>(xFieldImg2, yFieldImg2);
+				new net.imglib2.realtransform.DeformationFieldTransform(Views.stack(xFieldImg2, yFieldImg2));
 
 		imglib2Transform3 =
-				new net.imglib2.realtransform.DeformationFieldTransform<>(xFieldImg3, yFieldImg3, zFieldImg3);
+				new net.imglib2.realtransform.DeformationFieldTransform(Views.stack(xFieldImg3, yFieldImg3, zFieldImg3));
 
 		final RealRandomAccessible<DoubleType> xFieldReal2 = Views.interpolate(
 				Views.extendBorder(xFieldImg2),

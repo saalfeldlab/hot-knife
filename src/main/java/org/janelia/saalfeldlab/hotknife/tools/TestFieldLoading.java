@@ -60,7 +60,7 @@ public class TestFieldLoading
 
 		final int n = positionField.numDimensions() - 1;
 		final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMin, transformScale), n + 1);
-		final PositionFieldTransform<DoubleType> pfTransform =
+		final PositionFieldTransform pfTransform =
 				Transform.createPositionFieldTransform(
 						Views.translate(positionField, translation));
 		final RealTransform transform = Transform.createScaledRealTransform(pfTransform, transformScale);

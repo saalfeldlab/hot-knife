@@ -88,9 +88,6 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
 	@Option(names = {"--multiSem"}, description = "FIB-SEM datasets needed to be permuted, Multi-Sem once not, plus some more parameters are different")
 	private boolean multiSem = false;
 
-	@Option(names = {"--permuteZX"}, description = "Swap axes 0 and 2 of raw input data before flattening (for zarr3/OME-ZARR data stored as [z,y,x])")
-	private boolean permuteZX = false;
-
 	@Option(names = {"--debugMode"}, description = "enable debug mode to process a specific block")
 	private DebugMode debugMode = DebugMode.OFF;
 
@@ -170,7 +167,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
         final JavaSparkContext sc = new JavaSparkContext(conf);
         sc.setLogLevel("ERROR");
 
-        flattenVolume(sc, buildFlatteningInfo(), debugMode, debugBlockX, debugBlockY, permuteZX);
+        flattenVolume(sc, buildFlatteningInfo(), debugMode, debugBlockX, debugBlockY);
 
         sc.close();
 
@@ -181,8 +178,7 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                                      final FlatteningInfo flatInfo,
                                      final DebugMode debugMode,
                                      final Long debugBlockX,
-                                     final Long debugBlockY,
-                                     final boolean permuteZX) {
+                                     final Long debugBlockY) {
 
         System.out.println("SparkExportFlattenedVolume: entry, flatInfo=" + flatInfo +
                            ", debugMode=" + debugMode + ", debugBlockX=" + debugBlockX + ", debugBlockY=" + debugBlockY);
@@ -273,15 +269,10 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
                     /* raw — use raw types to support any pixel type (uint8, uint16, etc.) */
                     @SuppressWarnings({"unchecked", "rawtypes"})
                     final RandomAccessibleInterval rawCellImg = N5Utils.open(n5RawReader, rawPathAndDataset.getDataset());
+                    // Multi-SEM: no additional permutation; FIB-SEM: swap dims 1↔2
                     @SuppressWarnings({"unchecked", "rawtypes"})
-                    final RandomAccessibleInterval rawVolume;
-                    if (permuteZX) {
-                        // zarr3/OME-ZARR [z,y,x] → swap 0↔2 → [x,y,z] (Multi-SEM convention)
-                        rawVolume = Views.permute(rawCellImg, 0, 2);
-                    } else {
-                        // Multi-SEM: no additional permutation; FIB-SEM: swap dims 1↔2
-                        rawVolume = flatInfo.isMultiSEMData() ? rawCellImg : Views.permute(rawCellImg, 1, 2);
-                    }
+                    final RandomAccessibleInterval rawVolume =
+                            flatInfo.isMultiSEMData() ? rawCellImg : Views.permute(rawCellImg, 1, 2);
 
                     System.out.println("Debug mode: rawVolume dimensions: " + net.imglib2.util.Util.printInterval(rawVolume));
 

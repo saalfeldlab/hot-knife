@@ -460,20 +460,10 @@ public class Transform {
 	 * @param positionField
 	 * @return
 	 */
-	public static <T extends RealType<T>> PositionFieldTransform<T> createPositionFieldTransform(final RandomAccessibleInterval<T> positionField) {
-
-		final int n = positionField.numDimensions() - 1;
-
-		@SuppressWarnings("unchecked")
-		final RealRandomAccess<T>[] positionAccesses = new RealRandomAccess[(int)positionField.dimension(n)];
-		Arrays.setAll(
-				positionAccesses,
-				d -> Views.interpolate(
-						Views.extendBorder(
-								Views.hyperSlice(positionField, n, d)),
-						new NLinearInterpolatorFactory<>()).realRandomAccess());
-
-		return new PositionFieldTransform<>(positionAccesses);
+	public static <T extends RealType<T>> PositionFieldTransform createPositionFieldTransform(final RandomAccessibleInterval<T> positionField) {
+		// imglib2-realtransform 4.x: the RAI constructor handles per-component slicing and
+		// NLinear interpolation internally (see PositionFieldTransform.convertToComposite).
+		return new PositionFieldTransform(positionField);
 	}
 
 	/**
@@ -562,7 +552,7 @@ public class Transform {
 		final RandomAccessibleInterval<DoubleType> positionField = N5Utils.open(n5, datasetName);
 		final int n = positionField.numDimensions() - 1;
 		final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMin, transformScale), n + 1);
-		final PositionFieldTransform<DoubleType> transform = Transform.createPositionFieldTransform(
+		final PositionFieldTransform transform = Transform.createPositionFieldTransform(
 				Views.translate(positionField, translation));
 		return createScaledRealTransform(transform, transformScale);
 	}

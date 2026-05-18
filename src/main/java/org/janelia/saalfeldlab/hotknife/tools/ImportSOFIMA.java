@@ -156,7 +156,7 @@ public class ImportSOFIMA implements Callable<Void>
 		final RandomAccessibleInterval<DoubleType> positionFieldHotKnife = N5Utils.open(n5, datasetName);
 		final int n = positionFieldHotKnife.numDimensions() - 1;
 		final long[] translation = Arrays.copyOf(Grid.floorScaled(boundsMin, transformScaleDataset), n + 1);
-		final PositionFieldTransform<DoubleType> positionFieldHotKnifeTransform = Transform.createPositionFieldTransform(
+		final PositionFieldTransform positionFieldHotKnifeTransform = Transform.createPositionFieldTransform(
 				Views.translate(positionFieldHotKnife, translation));
 		final RealTransform transformHotKnife = Transform.createScaledRealTransform(positionFieldHotKnifeTransform, transformScaleDataset);
 
@@ -282,7 +282,7 @@ public class ImportSOFIMA implements Callable<Void>
 			o.get().set( identity + ( direction * ( ( i.next().get() / sofimaBaseScale ) * transformScaleDataset ) ) * amount );
 		}
 
-		final PositionFieldTransform<DoubleType> positionFieldSofimaTransform = Transform.createPositionFieldTransform( positionFieldSofima );
+		final PositionFieldTransform positionFieldSofimaTransform = Transform.createPositionFieldTransform( positionFieldSofima );
 		final RealTransform transformSofima = Transform.createScaledRealTransform( positionFieldSofimaTransform, transformScaleDataset );
 
 		final RealTransformSequence transformSequence = new RealTransformSequence();

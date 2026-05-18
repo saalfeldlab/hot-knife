@@ -389,7 +389,7 @@ public class Align {
 			final double sigma,
 			final int numIterations) {
 
-		final Pair<PositionFieldTransform<DoubleType>, FloatProcessor> transformAndWeights = PMCCScaleSpaceBlockFlow.scaleSpaceOpticFlow(
+		final Pair<PositionFieldTransform, FloatProcessor> transformAndWeights = PMCCScaleSpaceBlockFlow.scaleSpaceOpticFlow(
 				Util.materialize(b),
 				Util.materialize(a),
 				radius,

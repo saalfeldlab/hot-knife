@@ -185,8 +185,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
                           info,
                           batchOptions.debugMode,
                           batchOptions.debugBlockX,
-                          batchOptions.debugBlockY,
-                          false);
+                          batchOptions.debugBlockY);
 
             if (! downsampleOutputDatasetPaths.isEmpty()) {
 

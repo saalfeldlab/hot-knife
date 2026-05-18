@@ -1516,7 +1516,7 @@ public class ModifyAlignment
 			positionFieldBounds.add( new ValuePair<>( boundsMinSurface, boundsMaxSurface ) );
 			transformScales[ i ] = transformScale;
 
-			final PositionFieldTransform<DoubleType> transform =
+			final PositionFieldTransform transform =
 					Transform.createPositionFieldTransform( positionFieldModified );
 			realTransforms[i] = Transform.createScaledRealTransform(transform, transformScale);
 		}
