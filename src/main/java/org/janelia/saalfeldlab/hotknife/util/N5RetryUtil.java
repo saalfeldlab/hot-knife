@@ -208,15 +208,39 @@ public class N5RetryUtil {
                                    outputBlockSize,
                                    outputGroupPath,
                                    downsamplingStepFactors,
+                                   9,
                                    new RetryParameters());
     }
 
+    /**
+     * Downsamples an N5 dataset iteratively until only a single block remains, writing each
+     * scale level to the output group as s1, s2, s3, etc. Downsampling will continue beyond
+     * a single block if necessary to ensure that the specified required downsample level is
+     * produced. Each downsample operation is executed with retry logic.
+     *
+     * @param  sparkContext             the Spark context used for distributed processing
+     * @param  n5Supplier               supplier for the N5 writer used to read and write datasets
+     * @param  datasetPath              path to the full-resolution input dataset
+     * @param  outputBlockSize          block size for the downsampled output datasets
+     * @param  outputGroupPath          path to the output group where scale levels will be written
+     * @param  downsamplingStepFactors  per-dimension factors applied at each downsampling step
+     * @param  requiredDownsampleLevel  the minimum s-level that must be produced;
+     *                                  downsampling will continue past a single block
+     *                                  if this level has not yet been reached
+     * @param  retryParameters          parameters controlling retry behavior on failure
+     *
+     * @return list of paths to all downsampled datasets created, in order from s1 outward
+     *
+     * @throws IOException
+     *   if an N5 read or write operation fails
+     */
     public static List<String> downsampleWithRetry(final JavaSparkContext sparkContext,
                                                    final N5WriterSupplier n5Supplier,
                                                    final String datasetPath,
                                                    final int[] outputBlockSize,
                                                    final String outputGroupPath,
                                                    final int[] downsamplingStepFactors,
+                                                   final int requiredDownsampleLevel,
                                                    final RetryParameters retryParameters)
             throws IOException {
 
@@ -233,7 +257,7 @@ public class N5RetryUtil {
         final List<String> downsampledDatasets = new ArrayList<>();
 
         long downsampledBlockCount = 2;
-        for (int scale = 1; downsampledBlockCount > 1; scale++) {
+        for (int scale = 1; downsampledBlockCount > 1 || scale <= requiredDownsampleLevel; scale++) {
             final int[] scaleFactors = new int[dim];
             for (int d = 0; d < dim; d++) {
                 scaleFactors[d] = (int) Math.round(Math.pow(downsamplingStepFactors[d], scale));
