@@ -52,11 +52,16 @@ public class DownsampleHelper
      * @param  basePathOrStorageUrl  base path or storage URL
      *                                 e.g. gs://janelia-spark-test/hess_wafers_60_61_export or
      *                                      /nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5
+     *
      * @param  sZeroDatasetPath      full-resolution dataset path
      *                                 e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0
+     *
      * @param  downsampleFactors     per-dimension factors applied at each downsampling step (e.g. 2,2,1).
+     *
      * @param  requiredSLevel        the minimum s-level that must be produced (e.g. 9).
-     * @param  retryParameters       parameters controlling retry behavior on failure.
+     *
+     * @param  retryParameters       parameters controlling retry behavior on failure
+     *                               (specify as null if you do not want retries performed).
      *
      * @throws IOException
      *   if the sZeroDatasetPath does not end with '/s0'.
