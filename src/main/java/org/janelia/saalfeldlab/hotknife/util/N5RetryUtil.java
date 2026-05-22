@@ -9,7 +9,7 @@ import java.util.function.Supplier;
  */
 public class N5RetryUtil {
 
-    public static class RetryParameters {
+    public static class RetryParameters implements Serializable {
 
         /** Maximum number of retry attempts (beyond initial attempt). */
         private final int maxRetries;
@@ -144,6 +144,7 @@ public class N5RetryUtil {
 				} else if (attempt < parameters.maxRetries) {
 					// For non-rate-limit errors, retry without delay
 					logMessage("executeWithRetry: Error in  " + context + ", exception: " + e.getMessage());
+                    e.printStackTrace();
 					actualRetries++;
 				}
 			}
@@ -151,7 +152,7 @@ public class N5RetryUtil {
 
 		// All retries exhausted - fail fast
 		throw new RuntimeException(
-			"Failed " + operationDescription + "after " + (parameters.maxRetries+1) + " attempts",
+			"Failed " + operationDescription + " after " + (parameters.maxRetries+1) + " attempts",
 			lastException);
 	}
 
