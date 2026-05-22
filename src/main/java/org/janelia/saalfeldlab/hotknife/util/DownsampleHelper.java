@@ -5,11 +5,16 @@ import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.janelia.saalfeldlab.hotknife.AbstractOptions;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
 import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 
 /**
  * Helper for downsampling a dataset.
@@ -189,6 +194,50 @@ public class DownsampleHelper
         ng.write(n5Supplier.get(), Paths.get(sZeroDatasetPath));
 
         logMessage("run: exit, generated " + numberOfDownsampledDatasets + " downsampled datasets for " + outputGroupPath);
+    }
+
+    public static class Options extends AbstractOptions
+            implements Serializable {
+
+        @Option(name = "--basePathOrStorageUrl",
+                required = true,
+                usage = "Base path or storage URL, e.g. gs://janelia-spark-test/hess_wafers_60_61_export or " +
+                        "/nrs/hess/data/hess_wafers_60_61/export/hess_wafers_60_61.n5")
+        private String basePathOrStorageUrl = null;
+
+        @Option(name = "--fullResolutionDataset",
+                required = true,
+                usage = "Full-resolution dataset path, e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0")
+        private String fullResolutionDataset = null;
+
+        @Option(name = "--factors",
+                usage = "Scale pyramid with given factors, e.g. 2,2,1")
+        private String factors;
+
+        public Options(final String[] args)
+                throws CmdLineException {
+            final CmdLineParser parser = new CmdLineParser(this);
+            parser.parseArgument(args);
+        }
+
+        public int[] getDownsampleFactors() {
+            return parseCSIntArray(factors);
+        }
+    }
+
+    public static void main(final String[] args) throws Exception {
+
+        logMessage("main: entry, args=" + Arrays.toString(args));
+
+        final Options options = new Options(args);
+        final SparkConf conf = new SparkConf().setAppName("DownsampleHelper");
+        final JavaSparkContext sparkContext = new JavaSparkContext(conf);
+
+        final DownsampleHelper helper = new DownsampleHelper(options.basePathOrStorageUrl,
+                                                             options.fullResolutionDataset,
+                                                             options.getDownsampleFactors());
+        helper.run(sparkContext);
+        sparkContext.close();
     }
 
     private static void logMessage(final String message) {
