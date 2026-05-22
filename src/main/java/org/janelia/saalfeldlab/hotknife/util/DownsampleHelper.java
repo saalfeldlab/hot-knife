@@ -103,7 +103,7 @@ public class DownsampleHelper
         final N5Writer n5 = n5Supplier.get();
         final DatasetAttributes fullScaleAttributes = n5.getDatasetAttributes(sZeroDatasetPath);
         final long[] dimensions = fullScaleAttributes.getDimensions();
-        final int dim = dimensions.length;
+        final int numberOfDimensions = dimensions.length;
         final int[] outputBlockSize = fullScaleAttributes.getBlockSize();
         final String outputGroupPath = sZeroDatasetPath.substring(0, sZeroDatasetPath.lastIndexOf('/'));
 
@@ -111,22 +111,41 @@ public class DownsampleHelper
         long downsampledBlockCount = 2;
         for (int scale = 1; (downsampledBlockCount > 1) || scale <= requiredSLevel; scale++) {
 
-            final int[] scaleFactors = new int[dim];
-            for (int d = 0; d < dim; d++) {
+            final String fromDataset = scale == 1 ? sZeroDatasetPath : outputGroupPath + "/s" + (scale - 1);
+            final String toDataset = outputGroupPath + "/s" + scale;
+
+            final int[] scaleFactors = new int[numberOfDimensions];
+            for (int d = 0; d < numberOfDimensions; d++) {
                 scaleFactors[d] = (int) Math.round(Math.pow(downsampleFactors[d], scale));
             }
 
             long blockCount = 1;
-            final long[] downsampledDimensions = new long[dim];
-            for (int d = 0; d < dim; d++) {
+            final long[] downsampledDimensions = new long[numberOfDimensions];
+            for (int d = 0; d < numberOfDimensions; d++) {
                 downsampledDimensions[d] = dimensions[d] / scaleFactors[d];
                 final long blocksInDim = (downsampledDimensions[d] + outputBlockSize[d] - 1) / outputBlockSize[d];
                 blockCount *= blocksInDim;
             }
             downsampledBlockCount = blockCount;
 
-            final String fromDataset = scale == 1 ? sZeroDatasetPath : outputGroupPath + "/s" + (scale - 1);
-            final String toDataset = outputGroupPath + "/s" + scale;
+            if (n5.datasetExists(toDataset)) {
+
+                final DatasetAttributes toDatasetAttributes = n5.getDatasetAttributes(toDataset);
+                final long[] toDatasetDimensions = toDatasetAttributes.getDimensions();
+                for (int d = 0; d < numberOfDimensions; d++) {
+                    if (toDatasetDimensions[d] != downsampledDimensions[d]) {
+                        throw new IOException(
+                                "existing dataset " + toDataset + " has " + toDatasetDimensions[d] +
+                                " pixels in axis " + d + " instead of " + downsampledDimensions[d] +
+                                " pixels (based on downsampleFactor " + downsampleFactors[d] + ")");
+                    }
+                }
+
+                logMessage("run: skipping s" + scale + " because " + toDataset + " already exists");
+                numberOfDownsampledDatasets++;
+
+                continue;
+            }
 
             final String operationDescription = "downsample " + fromDataset + " to " + toDataset;
             logMessage("run: " + operationDescription + " with " + downsampledBlockCount + " downsampled block(s)");
@@ -163,6 +182,8 @@ public class DownsampleHelper
 
         final NeuroglancerAttributes ng = new NeuroglancerAttributes(numberOfDownsampledDatasets, downsampleFactors);
         ng.write(n5Supplier.get(), Paths.get(sZeroDatasetPath));
+
+        logMessage("run: exit, generated " + numberOfDownsampledDatasets + " downsampled datasets for " + outputGroupPath);
     }
 
     private static void logMessage(final String message) {
