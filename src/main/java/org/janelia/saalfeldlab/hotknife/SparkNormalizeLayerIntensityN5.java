@@ -14,8 +14,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.janelia.saalfeldlab.hotknife.util.DownsampleHelper;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
-import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Util;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -36,7 +36,6 @@ import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 import static org.janelia.saalfeldlab.hotknife.AbstractOptions.parseCSIntArray;
-import static org.janelia.saalfeldlab.hotknife.util.N5RetryUtil.downsampleWithRetry;
 
 
 /**
@@ -211,13 +210,10 @@ public abstract class SparkNormalizeLayerIntensityN5<T extends NativeType<T> & I
 
 		final int[] downsampleFactors = parseCSIntArray(options.factors);
 		if (downsampleFactors != null) {
-			logMessage("applyAndWrite: call downsampleWithRetry");
-			downsampleWithRetry(sparkContext,
-								new N5PathSupplier(options.n5Path),
-								fullScaleOutputDataset,
-								attributes.getBlockSize(),
-								options.n5DatasetOutput,
-								downsampleFactors);
+			final DownsampleHelper downsampleHelper = new DownsampleHelper(options.n5Path,
+																		   fullScaleInputDataset,
+																		   downsampleFactors);
+			downsampleHelper.run(sparkContext);
 		}
 
 		// Copy attributes and rebuild 'scales' attribute

@@ -1,18 +1,7 @@
 package org.janelia.saalfeldlab.hotknife.util;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.function.Supplier;
-
-import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.n5.DatasetAttributes;
-import org.janelia.saalfeldlab.n5.N5Writer;
-import org.janelia.saalfeldlab.n5.spark.downsample.N5DownsamplerSpark;
-import org.janelia.saalfeldlab.n5.spark.supplier.N5WriterSupplier;
 
 /**
  * Utility class for retry logic with exponential backoff and jitter.
@@ -193,112 +182,6 @@ public class N5RetryUtil {
 
 		return result.stats;
 	}
-
-    public static List<String> downsampleWithRetry(final JavaSparkContext sparkContext,
-                                                   final N5WriterSupplier n5Supplier,
-                                                   final String datasetPath,
-                                                   final int[] outputBlockSize,
-                                                   final String outputGroupPath,
-                                                   final int[] downsamplingStepFactors)
-            throws IOException {
-
-        return downsampleWithRetry(sparkContext,
-                                   n5Supplier,
-                                   datasetPath,
-                                   outputBlockSize,
-                                   outputGroupPath,
-                                   downsamplingStepFactors,
-                                   9,
-                                   new RetryParameters());
-    }
-
-    /**
-     * Downsamples an N5 dataset iteratively until only a single block remains, writing each
-     * scale level to the output group as s1, s2, s3, etc. Downsampling will continue beyond
-     * a single block if necessary to ensure that the specified required downsample level is
-     * produced. Each downsample operation is executed with retry logic.
-     *
-     * @param  sparkContext             the Spark context used for distributed processing
-     * @param  n5Supplier               supplier for the N5 writer used to read and write datasets
-     * @param  datasetPath              path to the full-resolution input dataset
-     * @param  outputBlockSize          block size for the downsampled output datasets
-     * @param  outputGroupPath          path to the output group where scale levels will be written
-     * @param  downsamplingStepFactors  per-dimension factors applied at each downsampling step
-     * @param  requiredDownsampleLevel  the minimum s-level that must be produced;
-     *                                  downsampling will continue past a single block
-     *                                  if this level has not yet been reached
-     * @param  retryParameters          parameters controlling retry behavior on failure
-     *
-     * @return list of paths to all downsampled datasets created, in order from s1 outward
-     *
-     * @throws IOException
-     *   if an N5 read or write operation fails
-     */
-    public static List<String> downsampleWithRetry(final JavaSparkContext sparkContext,
-                                                   final N5WriterSupplier n5Supplier,
-                                                   final String datasetPath,
-                                                   final int[] outputBlockSize,
-                                                   final String outputGroupPath,
-                                                   final int[] downsamplingStepFactors,
-                                                   final int requiredDownsampleLevel,
-                                                   final RetryParameters retryParameters)
-            throws IOException {
-
-        logMessage("downsampleWithRetry: entry, datasetPath=" + datasetPath +
-                   ", outputBlockSize=" + Arrays.toString(outputBlockSize) + ", outputGroupPath=" + outputGroupPath +
-                   ", downsamplingStepFactors=" + Arrays.toString(downsamplingStepFactors) +
-                   ", retryParameters=" + retryParameters);
-
-        final N5Writer n5 = n5Supplier.get();
-        final DatasetAttributes fullScaleAttributes = n5.getDatasetAttributes(datasetPath);
-        final long[] dimensions = fullScaleAttributes.getDimensions();
-        final int dim = dimensions.length;
-
-        final List<String> downsampledDatasets = new ArrayList<>();
-
-        long downsampledBlockCount = 2;
-        for (int scale = 1; downsampledBlockCount > 1 || scale <= requiredDownsampleLevel; scale++) {
-            final int[] scaleFactors = new int[dim];
-            for (int d = 0; d < dim; d++) {
-                scaleFactors[d] = (int) Math.round(Math.pow(downsamplingStepFactors[d], scale));
-            }
-
-            long blockCount = 1;
-            final long[] downsampledDimensions = new long[dim];
-            for (int d = 0; d < dim; d++) {
-                downsampledDimensions[d] = dimensions[d] / scaleFactors[d];
-                final long blocksInDim = (downsampledDimensions[d] + outputBlockSize[d] - 1) / outputBlockSize[d];
-                blockCount *= blocksInDim;
-            }
-            downsampledBlockCount = blockCount;
-
-            final String inputDatasetPath = scale == 1 ? datasetPath : Paths.get(outputGroupPath, "s" + (scale - 1 ) ).toString();
-            final String outputDatasetPath = Paths.get( outputGroupPath, "s" + scale ).toString();
-
-            final String operationDescription = "downsample s" + (scale-1) + " to s" + scale;
-            try {
-                final RetryStats retryStats = executeWithRetryVoid(
-                        () -> N5DownsamplerSpark.downsample(sparkContext,
-                                                            n5Supplier,
-                                                            inputDatasetPath,
-                                                            outputDatasetPath,
-                                                            downsamplingStepFactors),
-                        retryParameters,
-                        operationDescription);
-
-                logMessage("downsampleWithRetry: created s" + scale + " with " + downsampledBlockCount + " block(s) and " + retryStats);
-
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-
-            downsampledDatasets.add( outputDatasetPath );
-        }
-
-        logMessage("downsampleWithRetry: exit, created " + downsampledDatasets.size() + " downsampled datasets");
-
-        return downsampledDatasets;
-    }
 
     private static void logMessage(final String message) {
         org.janelia.saalfeldlab.hotknife.util.Util.logMessage(N5RetryUtil.class.getName(),
