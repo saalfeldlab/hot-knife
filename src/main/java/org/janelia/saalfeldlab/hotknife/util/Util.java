@@ -25,8 +25,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.janelia.saalfeldlab.n5.Compression;
 import org.janelia.saalfeldlab.n5.DataType;
@@ -43,7 +47,6 @@ import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.Views;
-import net.preibisch.legacy.io.IOFunctions;
 import net.preibisch.mvrecon.Threads;
 
 /**
@@ -55,7 +58,16 @@ public class Util {
 
 	private Util() {}
 
-	public static <T extends Type<T>> void copy(
+	private static final int COPY_MAX_ATTEMPTS = 5;
+	private static final long COPY_RETRY_BASE_MS = 1_000L;
+	private static final long COPY_RETRY_MAX_MS = 60_000L;
+
+	private static long backoffMs(final int attempt) {
+		final long capped = Math.min(COPY_RETRY_BASE_MS << attempt, COPY_RETRY_MAX_MS);
+		return capped / 2 + ThreadLocalRandom.current().nextLong(capped / 2 + 1);
+	}
+
+	public static final <T extends Type<T>> void copy(
 			final RandomAccessible<? extends T> source,
 			final RandomAccessibleInterval<T> target) {
 
@@ -63,7 +75,7 @@ public class Util {
 				pair -> pair.getB().set(pair.getA()));
 	}
 
-	public static <T extends Type<T>> void copy(
+	public static final <T extends Type<T>> void copy(
 			final RandomAccessible<? extends T> source,
 			final RandomAccessibleInterval<T> target,
 			final ExecutorService service,
@@ -78,40 +90,78 @@ public class Util {
 		if ( shuffle )
 			Collections.shuffle( portions );
 
-		final ArrayList< Callable< Void > > tasks = new ArrayList<>();
+		final ArrayList< Callable< Void > > tasks = new ArrayList< Callable< Void > >();
 
 		final IterableInterval< ? extends T > sourceIterable = Views.flatIterable( Views.interval( source, target ) );
 		final IterableInterval< T > targetIterable = Views.flatIterable( target );
 
 		for ( final Pair<Long,Long> portion : portions )
 		{
-			tasks.add(() -> {
-                final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
-                final Cursor< T > cursorTarget = targetIterable.cursor();
+			tasks.add( new Callable< Void >()
+			{
+				@Override
+				public Void call() throws Exception
+				{
+					Exception lastFailure = null;
+					for ( int attempt = 0; attempt < COPY_MAX_ATTEMPTS; ++attempt )
+					{
+						try
+						{
+							final Cursor< ? extends T > cursorSource = sourceIterable.cursor();
+							final Cursor< T > cursorTarget = targetIterable.cursor();
 
-                cursorSource.jumpFwd( portion.getA() );
-                cursorTarget.jumpFwd( portion.getA() );
+							cursorSource.jumpFwd( portion.getA() );
+							cursorTarget.jumpFwd( portion.getA() );
 
-                for ( long l = 0; l < portion.getB(); ++l )
-                    cursorTarget.next().set( cursorSource.next() );
+							for ( long l = 0; l < portion.getB(); ++l )
+								cursorTarget.next().set( cursorSource.next() );
 
-                return null;
-            });
+							return null;
+						}
+						catch ( final Exception e )
+						{
+							lastFailure = e;
+							if ( attempt < COPY_MAX_ATTEMPTS - 1 )
+							{
+								final long delayMs = backoffMs( attempt );
+								System.err.println( "Util.copy portion start=" + portion.getA()
+										+ " attempt " + ( attempt + 1 ) + "/" + COPY_MAX_ATTEMPTS
+										+ " failed: " + e + " — retrying in " + delayMs + " ms" );
+								try
+								{
+									Thread.sleep( delayMs );
+								}
+								catch ( final InterruptedException ie )
+								{
+									Thread.currentThread().interrupt();
+									throw ie;
+								}
+							}
+						}
+					}
+					throw lastFailure;
+				}
+			});
 		}
 
 		try
 		{
-			// invokeAll() returns when all tasks are complete
-			service.invokeAll( tasks );
+			final List< Future< Void > > futures = service.invokeAll( tasks );
+			for ( final Future< Void > f : futures )
+				f.get();
 		}
 		catch ( final InterruptedException e )
 		{
-			IOFunctions.println( "Failed to copy: " + e );
-			e.printStackTrace();
+			Thread.currentThread().interrupt();
+			throw new RuntimeException( "Util.copy interrupted", e );
+		}
+		catch ( final ExecutionException e )
+		{
+			throw new RuntimeException( "Util.copy task failed after retries", e.getCause() );
 		}
 	}
 
-	public static FloatProcessor materialize(final RandomAccessibleInterval<FloatType> source) {
+	public static final FloatProcessor materialize(final RandomAccessibleInterval<FloatType> source) {
 		final FloatProcessor target = new FloatProcessor((int) source.dimension(0), (int) source.dimension(1));
 		Util.copy(
 				Views.zeroMin(source),
@@ -131,12 +181,12 @@ public class Util {
 				i -> array[i] * scale);
 	}
 
-	public static ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize )
+	public static final ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize )
 	{
-		return divideIntoPortions(imageSize, 64L*64L*64L );
+		return divideIntoPortions(imageSize, 64l*64l*64l );
 	}
 
-	public static ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize, final long defaultChunkLength )
+	public static final ArrayList<Pair<Long,Long>> divideIntoPortions( final long imageSize, final long defaultChunkLength )
 	{
 		int numPortions;
 
@@ -180,7 +230,13 @@ public class Util {
 
 	/**
 	 * Flatten a group name.
+	 *
 	 * Removes optional leading <code>separator</code> and replaces all others by <code>replacement</code>.
+	 *
+	 * @param groupName
+	 * @param separator
+	 * @param replacement
+	 * @return
 	 */
 	public static String flattenGroupName(final String groupName, final String separator, final String replacement) {
 
@@ -240,7 +296,7 @@ public class Util {
     }
 
     public static final ZoneId EASTERN_TIME_ZONE = ZoneId.of("America/New_York");
-
+    
     public static String convertAttributesToString(final DatasetAttributes attributes) {
 
         final int[] blockSize = attributes.getBlockSize();
