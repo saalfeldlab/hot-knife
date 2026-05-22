@@ -9,7 +9,7 @@ if (( $# != 2 )); then
 USAGE: $0 <number of executors> <full resolution dataset>
 
 Examples:
-  $0  40  /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0
+  $0  2  /render/w61_serial_130_to_139/w61_s131_r00_gc_par_crc_align_ic2d___norm-layer/s0
 
 """
   exit 1
@@ -46,7 +46,9 @@ SPARK_EXEC_CORES=4
 # Note that if not set, spark.executor.memoryOverhead defaults to 0.10 of spark.executor.memory.
 SINGLE_CORE_MB=6700 # leave room for spark.executor.memoryOverhead, 6700 + 670 = 7370 < 7424
 COMPUTE_TIER="standard"
-DYNAMIC_ALLOCATION="spark.dynamicAllocation.enabled=false"
+DYNAMIC_ALLOCATION="spark.dynamicAllocation.enabled=true,spark.dynamicAllocation.maxExecutors=${MAX_EXECUTORS}"
+DYNAMIC_ALLOCATION="${DYNAMIC_ALLOCATION},spark.dynamicAllocation.executorIdleTimeout=120"       # default is 60
+DYNAMIC_ALLOCATION="${DYNAMIC_ALLOCATION},spark.dynamicAllocation.cachedExecutorIdleTimeout=240" # default is ?
 
 SPARK_EXEC_MEMORY_MB=$(( SPARK_EXEC_CORES * SINGLE_CORE_MB ))
 
@@ -64,7 +66,7 @@ SPARK_VERSION="1.1"
 
 GS_JAR_URL="gs://janelia-spark-test/library/hot-knife-0.0.7-SNAPSHOT.jar"
 # HOT_KNIFE_JAR="/groups/hess/hesslab/render/lib/hot-knife-0.0.7-SNAPSHOT.jar"
-BATCH_NAME=$(echo "norm-layer-${RUN_TIMESTAMP}-${RAW_STACK}" | sed "s/_/-/g")
+BATCH_NAME=$(echo "downsample-${RUN_TIMESTAMP}" | sed "s/_/-/g")
 
 echo "
 Running gcloud dataproc batches submit spark with:
