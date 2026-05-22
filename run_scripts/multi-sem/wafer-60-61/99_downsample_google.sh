@@ -6,7 +6,7 @@ umask 0002
 
 if (( $# != 2 )); then
   echo """
-USAGE: $0 <number of executors> <full resolution dataset>
+USAGE: $0 <max executors> <full resolution dataset>
 
 Examples:
   $0  2  /render/w61_serial_130_to_139/w61_s131_r00_gc_par_crc_align_ic2d___norm-layer/s0
@@ -15,9 +15,9 @@ Examples:
   exit 1
 fi
 
-EXECUTORS="${1}"
-if ! [[ ${EXECUTORS} =~ ^[0-9]+$ ]] || (( EXECUTORS < 2 || EXECUTORS > 500 )); then
-  echo "ERROR: executors argument must be an integer between 2 and 500"
+MAX_EXECUTORS="${1}"
+if ! [[ ${MAX_EXECUTORS} =~ ^[0-9]+$ ]] || (( MAX_EXECUTORS < 2 || MAX_EXECUTORS > 500 )); then
+  echo "ERROR: max executors argument must be an integer between 2 and 500"
   exit 1
 fi
 
@@ -53,7 +53,7 @@ DYNAMIC_ALLOCATION="${DYNAMIC_ALLOCATION},spark.dynamicAllocation.cachedExecutor
 SPARK_EXEC_MEMORY_MB=$(( SPARK_EXEC_CORES * SINGLE_CORE_MB ))
 
 SPARK_PROPS="spark.dataproc.driver.compute.tier=${COMPUTE_TIER},spark.dataproc.executor.compute.tier=${COMPUTE_TIER}"
-SPARK_PROPS="${SPARK_PROPS},spark.default.parallelism=240,spark.executor.instances=${EXECUTORS}"
+SPARK_PROPS="${SPARK_PROPS},spark.default.parallelism=240,spark.executor.instances=${MAX_EXECUTORS}"
 SPARK_PROPS="${SPARK_PROPS},spark.executor.cores=${SPARK_EXEC_CORES},spark.executor.memory=${SPARK_EXEC_MEMORY_MB}mb"
 SPARK_PROPS="${SPARK_PROPS},${DYNAMIC_ALLOCATION}"
 #SPARK_PROPS="${SPARK_PROPS},spark.log.level.org.janelia.alignment.match=WARN"
