@@ -22,9 +22,9 @@ import org.kohsuke.args4j.Option;
 public class DownsampleHelper
         implements Serializable {
 
-    public static int[] DEFAULT_DOWNSAMPLE_FACTORS = {2, 2, 1};
-    public static int DEFAULT_REQUIRED_S_LEVEL = 9;
-    public static N5RetryUtil.RetryParameters DEFAULT_RETRY_PARAMETERS = new N5RetryUtil.RetryParameters();
+    public static final int[] DEFAULT_DOWNSAMPLE_FACTORS = {2, 2, 1};
+    public static final int DEFAULT_REQUIRED_S_LEVEL = 9;
+    public static final N5RetryUtil.RetryParameters DEFAULT_RETRY_PARAMETERS = new N5RetryUtil.RetryParameters();
 
     private final String basePathOrStorageUrl;
     private final String sZeroDatasetPath;
