@@ -20,9 +20,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,6 +60,7 @@ import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
+import net.imglib2.parallel.Parallelization;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
@@ -668,18 +672,6 @@ public class SparkComputeCostMultiSem {
 			final int H = (int) dims[ 1 ];
 			final int Z = (int) dims[ 2 ];
 
-			// Pre-blur the input in XY with a small Gauss before building the SAT. This kills
-			// pixel-scale grain so OOF std drops to near zero while tissue (whose features sit
-			// above the grain scale) keeps its std. Without this, OOF noise variance steals
-			// contrast from the tissue/non-tissue gap.
-			final double preSigma = Math.min( 3.0, Math.max( 1.0, textureCost / 8.0 ) );
-			final byte[] srcBuf = new byte[ W * H * Z ];
-			{
-				final Img<UnsignedByteType> denoise = ArrayImgs.unsignedBytes( srcBuf, dims );
-				final RandomAccessibleInterval<UnsignedByteType> denoiseTr = Views.translate( denoise, origin );
-				Gauss3.gauss( new double[] { preSigma, preSigma, 0.0 },
-						Views.extendBorder( zcorrRaw ), denoiseTr );
-			}
 			// Saturation factor: amplifies std before clamping to [0,255] so tissue (std typically
 			// 30-80 in input units) saturates at 255 — giving a uniform-bright tissue interior and
 			// a much sharper tissue/OOF gap. 4× pushes tissue solidly into the saturated range
@@ -689,12 +681,31 @@ public class SparkComputeCostMultiSem {
 			final Img<UnsignedByteType> proxy = ArrayImgs.unsignedBytes( proxyBuf, dims );
 			final RandomAccessibleInterval<UnsignedByteType> proxyTr = Views.translate( proxy, origin );
 
-			// SAT buffers are (W+1) × (H+1) with a zero leading row/column for border-free indexing.
-			// Reused across z-planes to avoid per-slice reallocation.
-			final long[] sat  = new long[ ( W + 1 ) * ( H + 1 ) ];
-			final long[] sat2 = new long[ ( W + 1 ) * ( H + 1 ) ];
+			// Per-z-slice SAT build + query, dispatched across the ambient
+			// Parallelization.getTaskExecutor() — same TaskExecutor / ForkJoinPool that Gauss3
+			// uses elsewhere, so no new thread pool and no new oversubscription class.
+			// Each worker materializes only its own slice of zcorrRaw into a local W*H byte
+			// buffer (avoids holding the whole W*H*Z volume) and allocates its own SAT buffers.
+			final long ox = origin[ 0 ];
+			final long oy = origin[ 1 ];
+			final long oz = origin[ 2 ];
+			final RandomAccessibleInterval<UnsignedByteType> srcRA = zcorrRaw;
+			final List<Integer> zRange = IntStream.range( 0, Z ).boxed().collect( Collectors.toList() );
+			Parallelization.getTaskExecutor().forEach( zRange, zi -> {
+				// Materialize this slice into a flat byte[] for fast row-major SAT reads.
+				final byte[] sliceBuf = new byte[ W * H ];
+				{
+					final FinalInterval slice = new FinalInterval(
+							new long[] { ox, oy, oz + zi },
+							new long[] { ox + W - 1, oy + H - 1, oz + zi } );
+					final Cursor<UnsignedByteType> inC = Views.flatIterable( Views.interval( srcRA, slice ) ).cursor();
+					for ( int i = 0; i < W * H; ++i ) {
+						sliceBuf[ i ] = (byte) inC.next().get();
+					}
+				}
 
-			for ( int zi = 0; zi < Z; ++zi ) {
+				final long[] sat  = new long[ ( W + 1 ) * ( H + 1 ) ];
+				final long[] sat2 = new long[ ( W + 1 ) * ( H + 1 ) ];
 				final int zOff = zi * W * H;
 
 				// Build summed-area tables for this slice using running per-row sums.
@@ -704,7 +715,7 @@ public class SparkComputeCostMultiSem {
 					long rowSum  = 0;
 					long rowSum2 = 0;
 					for ( int xi = 0; xi < W; ++xi ) {
-						final int v = srcBuf[ zOff + yi * W + xi ] & 0xFF;
+						final int v = sliceBuf[ yi * W + xi ] & 0xFF;
 						rowSum  += v;
 						rowSum2 += (long) v * v;
 						sat [ satRow + xi + 1 ] = sat [ satPrev + xi + 1 ] + rowSum;
@@ -731,7 +742,7 @@ public class SparkComputeCostMultiSem {
 						proxyBuf[ zOff + yi * W + xi ] = (byte) Math.min( 255, amp );
 					}
 				}
-			}
+			} );
 
 			// Optional XY post-smooth: merges isolated tissue patches and suppresses outlier
 			// spikes before the z-derivative runs. Eagerly materialized into a flat byte buffer.
