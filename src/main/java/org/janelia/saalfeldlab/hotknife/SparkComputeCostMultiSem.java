@@ -19,19 +19,14 @@ package org.janelia.saalfeldlab.hotknife;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.janelia.saalfeldlab.hotknife.ops.SimpleGaussRA;
-import org.janelia.saalfeldlab.hotknife.util.Lazy;
 import org.janelia.saalfeldlab.hotknife.util.N5Path;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
@@ -52,19 +47,15 @@ import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessible;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.algorithm.gauss3.Gauss3;
-import net.imglib2.algorithm.morphology.Opening;
-import net.imglib2.algorithm.neighborhood.RectangleShape;
 import net.imglib2.converter.Converters;
 import net.imglib2.img.Img;
 import net.imglib2.img.array.ArrayImgs;
-import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.multithreading.SimpleMultiThreading;
 import net.imglib2.parallel.Parallelization;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
@@ -143,24 +134,24 @@ public class SparkComputeCostMultiSem {
 						"Runtime is independent of window radius (O(W*H) per slice). The input is " +
 						"pre-blurred with a small Gauss to suppress pixel-scale grain so OOF doesn't " +
 						"score as tissue, and the std is amplified before clamping so tissue saturates " +
-						"to a uniform-bright proxy interior. Pairs with --preSmoothXY (post-smooth) and " +
-						"--textureActivation (post-smooth threshold). Amplification reuses " +
+						"to a uniform-bright proxy interior. Pairs with --smoothProxy (post-smooth) and " +
+						"--proxyThreshold (post-smooth threshold). Amplification reuses " +
 						"--zIntensityScale (defaults to 1.0 if unset). Default: 0 (use intensity-based cost).")
 		private double textureCost = 0.0;
 
-		@Option(name = "--preSmoothXY",
+		@Option(name = "--smoothProxy",
 				usage = "Gaussian sigma (in input pixels) for post-smoothing the --textureCost proxy. " +
 						"Merges isolated tissue patches and suppresses outlier spikes before the z-derivative " +
 						"(use 10-30 to fill gaps between mFOV tiles). Only active when --textureCost > 0. " +
 						"Default: 0.0 (no post-smooth).")
-		private double preSmoothXY = 0.0;
+		private double smoothProxy = 0.0;
 
-		@Option(name = "--textureActivation",
+		@Option(name = "--proxyThreshold",
 				usage = "Threshold (0-255) applied to the --textureCost proxy after post-smoothing. " +
 						"Proxy values strictly below this are set to 0, zeroing out regions with low " +
 						"texture energy (OOF background, substrate) while preserving tissue signal. " +
 						"Only active when --textureCost > 0.  Default: 0 (no suppression).")
-		private double textureActivation = 0.0;
+		private double proxyThreshold = 0.0;
 
 		@Option(name = "--zIntensityScale",
 				usage = "scale factor for an abs z-intensity-derivative cost: " +
@@ -417,9 +408,9 @@ public class SparkComputeCostMultiSem {
 
 		final int topLayerCost = options.topLayerCost;
 		final int  bottomLayerCost = options.bottomLayerCost;
-		final double preSmoothXY = options.preSmoothXY;
+		final double smoothProxy = options.smoothProxy;
 		final double textureCost = options.textureCost;
-		final double textureActivation = options.textureActivation;
+		final double proxyThreshold = options.proxyThreshold;
 		final double zIntensityScale = options.zIntensityScale;
 		final double[] intensityRange = options.getIntensityRange();
 
@@ -429,20 +420,10 @@ public class SparkComputeCostMultiSem {
 			new ij.ImageJ();
 		}
 
-		rddSlices.foreachPartition( gridCoordPartition -> {
-			//gridCoords.forEach(gridCoord -> {
-
-			//ExecutorService executorService =  Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 2);
-			ExecutorService executorService =  Executors.newFixedThreadPool(1 );
-			//ExecutorService executorService =  Executors.newCachedThreadPool();
-
+		rddSlices.foreachPartition( gridCoordPartition ->
 			gridCoordPartition.forEachRemaining( gridCoord ->
 				processColumn(
-						n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, debugMode, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, preSmoothXY, textureCost, textureActivation, zIntensityScale, intensityRange, executorService));
-
-			executorService.shutdown();
-
-		    });
+						n5Path, costN5Path, zcorrDataset, costDataset, maskDataset, filter, gauss, debugMode, costBlockSize, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, smoothProxy, textureCost, proxyThreshold, zIntensityScale, intensityRange)));
 
 		// done with cost
 
@@ -541,17 +522,16 @@ public class SparkComputeCostMultiSem {
 			//int outOfBoundsValue,
 			int topLayerCost,
 			int bottomLayerCost,
-			final double preSmoothXY,
+			final double smoothProxy,
 			final double textureCost,
-			final double textureActivation,
+			final double proxyThreshold,
 			final double zIntensityScale,
-			final double[] intensityRange,
-			ExecutorService executorService )
+			final double[] intensityRange )
 	{
 		System.out.println("Processing grid coord: " + gridCoord[0] + " " + gridCoord[1] );
 
 		RandomAccessibleInterval<UnsignedByteType> cost =
-				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, preSmoothXY, textureCost, textureActivation, zIntensityScale, intensityRange, executorService);
+				processColumnAlongAxis(n5Path, zcorrDataset, maskDataset, filter, gauss, debugMode, zcorrBlockSize, zcorrSize, costSteps, gridCoord, topLayerCost, bottomLayerCost, smoothProxy, textureCost, proxyThreshold, zIntensityScale, intensityRange);
 
 		if (debugMode) {
 			ImageJFunctions.show( cost, "Cost Block [" + gridCoord[0] + "," + gridCoord[1] + "]" );
@@ -609,12 +589,11 @@ public class SparkComputeCostMultiSem {
 			//int outOfBoundsValue,
 			int topLayerCost,
 			int bottomLayerCost,
-			final double preSmoothXY,
+			final double smoothProxy,
 			final double textureCost,
-			final double textureActivation,
+			final double proxyThreshold,
 			final double zIntensityScale,
-			final double[] intensityRange,
-			ExecutorService executorService ) {
+			final double[] intensityRange ) {
 
 		RandomAccessibleInterval<UnsignedByteType> zcorrRaw;
 		final RandomAccessibleInterval<UnsignedByteType> maskRaw;
@@ -624,7 +603,10 @@ public class SparkComputeCostMultiSem {
 
         if ( maskDataset != null )
         {
-            RandomAccessibleInterval<UnsignedByteType> maskRawTmp = openAsUint8(N5Util.createN5Reader(n5Path), maskDataset, intensityRange);
+            // The mask is a label image (0 = no data), not intensity, so it must NOT be
+            // rescaled by --intensityRange — doing so would clamp its values to 0 and make
+            // the whole column read as "no data". Always open it with the default conversion.
+            RandomAccessibleInterval<UnsignedByteType> maskRawTmp = openAsUint8(N5Util.createN5Reader(n5Path), maskDataset, null);
             maskRaw = maskRawTmp;
 
             if ( !Intervals.equals(zcorrRaw, maskRaw) )
@@ -664,7 +646,7 @@ public class SparkComputeCostMultiSem {
 			// Border handling: the query window is clipped to image bounds and n is
 			// recomputed from the actual area — equivalent to extendBorder + crop.
 			// Runtime O(W·H) per slice — independent of window radius.
-			// Honors --preSmoothXY (post-smooth) and --textureActivation (post-smooth threshold).
+			// Honors --smoothProxy (post-smooth) and --proxyThreshold (post-smooth threshold).
 			final int radius = (int) Math.max( 1, Math.round( textureCost ) );
 			final long[] dims = zcorrInterval.dimensionsAsLongArray();
 			final long[] origin = zcorrInterval.minAsLongArray();
@@ -677,7 +659,16 @@ public class SparkComputeCostMultiSem {
 			// a much sharper tissue/OOF gap. 4× pushes tissue solidly into the saturated range
 			// while leaving OOF (std ~5-15) distinct at 20-60.
 			final double stdSaturation = 4.0;
-			final byte[] proxyBuf = new byte[ W * H * Z ];
+			// Compute the element count in long so the int multiplication W*H*Z can't silently
+			// overflow to a negative/small size. A single ArrayImg byte[] is capped at
+			// Integer.MAX_VALUE elements regardless, so fail loudly if a column exceeds that.
+			final long numElements = (long) W * H * Z;
+			if ( numElements > Integer.MAX_VALUE )
+				throw new IllegalArgumentException(
+						"Texture-cost column too large for a single buffer: W*H*Z = " + numElements +
+						" (" + W + "x" + H + "x" + Z + ") exceeds Integer.MAX_VALUE. " +
+						"Reduce the XY block size or increase costSteps." );
+			final byte[] proxyBuf = new byte[ (int) numElements ];
 			final Img<UnsignedByteType> proxy = ArrayImgs.unsignedBytes( proxyBuf, dims );
 			final RandomAccessibleInterval<UnsignedByteType> proxyTr = Views.translate( proxy, origin );
 
@@ -747,10 +738,10 @@ public class SparkComputeCostMultiSem {
 			// Optional XY post-smooth: merges isolated tissue patches and suppresses outlier
 			// spikes before the z-derivative runs. Eagerly materialized into a flat byte buffer.
 			final RandomAccessibleInterval<UnsignedByteType> smoothedProxy;
-			if ( preSmoothXY > 0 ) {
-				final Img<UnsignedByteType> smoothProxy = ArrayImgs.unsignedBytes( dims );
-				final RandomAccessibleInterval<UnsignedByteType> smoothProxyTr = Views.translate( smoothProxy, origin );
-				Gauss3.gauss( new double[] { preSmoothXY, preSmoothXY, 0.0 },
+			if ( smoothProxy > 0 ) {
+				final Img<UnsignedByteType> smoothProxyImg = ArrayImgs.unsignedBytes( dims );
+				final RandomAccessibleInterval<UnsignedByteType> smoothProxyTr = Views.translate( smoothProxyImg, origin );
+				Gauss3.gauss( new double[] { smoothProxy, smoothProxy, 0.0 },
 						Views.extendBorder( proxyTr ), smoothProxyTr );
 				smoothedProxy = smoothProxyTr;
 			} else {
@@ -758,8 +749,8 @@ public class SparkComputeCostMultiSem {
 			}
 
 			// Post-smooth activation threshold (zeros background regions).
-			if ( textureActivation > 0 ) {
-				final int activationThresh = (int) Math.ceil( textureActivation );
+			if ( proxyThreshold > 0 ) {
+				final int activationThresh = (int) Math.ceil( proxyThreshold );
 				int smoothMin = 255, smoothMax = 0;
 				long zeroed = 0, total = 0;
 				for ( final UnsignedByteType pix : Views.iterable( smoothedProxy ) ) {
@@ -769,7 +760,7 @@ public class SparkComputeCostMultiSem {
 					total++;
 					if ( v < activationThresh ) { pix.set( 0 ); zeroed++; }
 				}
-				System.out.println( "textureActivation (post-smooth): std proxy range [" + smoothMin + ", " + smoothMax
+				System.out.println( "proxyThreshold (post-smooth): std proxy range [" + smoothMin + ", " + smoothMax
 						+ "], zeroed " + zeroed + "/" + total + " pixels (thresh=" + activationThresh + ")" );
 			}
 
