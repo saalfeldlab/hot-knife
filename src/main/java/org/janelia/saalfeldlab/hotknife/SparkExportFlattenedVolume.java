@@ -84,19 +84,19 @@ public class SparkExportFlattenedVolume implements Callable<Void>, Serializable 
     @Option(names = {"--n5RawDataset"},
             required = true,
             description = "N5 raw input dataset, " +
-                          "e.g. /render/w61_serial_070_to_079/w61_s075_r00_gc_par_crc_align_ic2d___norm-layer_hist/s0")
+                          "e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i___pixel/s0")
     private String rawDataset = null;
 
     @Option(names = {"--n5FieldGroup"},
             required = true,
             description = "N5 fields input group, " +
-                          "e.g. /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s075_r00_gc_par_crc_align_ic2d___norm-layer/s1")
+                          "e.g. /heightfields_v4/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i/s1")
     private String fieldGroup = null;
 
     @Option(names = {"--n5OutDataset"},
             required = true,
             description = "N5 output dataset, " +
-                          "e.g. /flat_v3/w61_serial_070_to_079/w61_s075_r00/raw/s0")
+                          "e.g. /flat_v4/w61_serial_070_to_079/w61_s075_r00/raw/s0")
     private String outDataset = null;
 
     @Option(names = {"--padding"},
