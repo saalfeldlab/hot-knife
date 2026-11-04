@@ -95,10 +95,10 @@ public class SparkComputeCostMultiSemBatch
 
             for (final RawStack rawStack : rawStackList) {
 
-                final String normLayerDatasetS0 = rawStack.getNormLayerDataset() + "/s0";
-                Util.checkDatasetExistence(n5Input, normLayerDatasetS0, true);
+                final String pixelDatasetS0 = rawStack.getIC3DPixelDatasetS0();
+                Util.checkDatasetExistence(n5Input, pixelDatasetS0, true);
 
-                final String maskDatasetS0 = rawStack.getIC2DDataset() + "___mask/s0";
+                final String maskDatasetS0 = rawStack.getIC3DMaskDatasetS0();
                 Util.checkDatasetExistence(n5Input, maskDatasetS0, true);
 
                 // skip check that cost dataset does not exist because this might be a re-run for heightfields
@@ -108,7 +108,7 @@ public class SparkComputeCostMultiSemBatch
 
                 final String[] args = {
                         "--inputN5Path", n5PathInput,
-                        "--inputN5Group", normLayerDatasetS0,
+                        "--inputN5Group", pixelDatasetS0,
                         "--outputN5Path", n5PathInput,
                         "--costN5Group", rawStack.getCostDataset(),
                         "--maskN5Group", maskDatasetS0,

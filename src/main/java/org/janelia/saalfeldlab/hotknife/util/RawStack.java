@@ -12,48 +12,41 @@ public class RawStack
 
     public static final Pattern RAW_STACK_PATTERN = Pattern.compile("^w(\\d+)_s(\\d+)_r(\\d+)$");
 
-    public static String DEFAULT_IC2D_SUFFIX = "_gc_par_crc_align_ic2d";
-    public static String DEFAULT_NORM_LAYER_SUFFIX = DEFAULT_IC2D_SUFFIX + "___norm-layer";
-    public static String DEFAULT_HISTOGRAM_SUFFIX = DEFAULT_NORM_LAYER_SUFFIX + "_hist";
+    public static String DEFAULT_IC3D_SUFFIX = "_gc_bc_par_cc_aso_3d_s3i";
     public static String DEFAULT_CLAHE_SUFFIX = "_clahe";
-    public static String DEFAULT_COST_VERSION = "b250";
-    public static String DEFAULT_HEIGHTFIELDS_VERSION = DEFAULT_COST_VERSION + "_smd_p1_p1";
+    public static String DEFAULT_COST_HEIGHTFIELDS_AND_FLAT_VERSION = "v4";
 
     private final String rawStack;
 
     private final String project;
-    private final String ic2dSuffix;
-    private final String normLayerSuffix;
-    private final String histogramSuffix;
+    private final String ic3dSuffix;
     private final String claheSuffix;
     private final String costVersion;
     private final String heightfieldsVersion;
+    private final String flatVersion;
 
     public RawStack(final String rawStack) {
         this(rawStack,
-             DEFAULT_IC2D_SUFFIX,
-             DEFAULT_NORM_LAYER_SUFFIX,
-             DEFAULT_HISTOGRAM_SUFFIX,
+             DEFAULT_IC3D_SUFFIX,
              DEFAULT_CLAHE_SUFFIX,
-             DEFAULT_COST_VERSION,
-             DEFAULT_HEIGHTFIELDS_VERSION);
+             DEFAULT_COST_HEIGHTFIELDS_AND_FLAT_VERSION,
+             DEFAULT_COST_HEIGHTFIELDS_AND_FLAT_VERSION,
+             DEFAULT_COST_HEIGHTFIELDS_AND_FLAT_VERSION);
     }
 
     public RawStack(final String rawStack,
-                    final String ic2dSuffix,
-                    final String normLayerSuffix,
-                    final String histogramSuffix,
+                    final String ic3dSuffix,
                     final String claheSuffix,
                     final String costVersion,
-                    final String heightfieldsVersion) {
+                    final String heightfieldsVersion,
+                    final String flatVersion) {
         this.rawStack = rawStack;
         this.project = buildProjectName(rawStack);
-        this.ic2dSuffix = ic2dSuffix;
-        this.normLayerSuffix = normLayerSuffix;
-        this.histogramSuffix = histogramSuffix;
+        this.ic3dSuffix = ic3dSuffix;
         this.claheSuffix = claheSuffix;
         this.costVersion = costVersion;
         this.heightfieldsVersion = heightfieldsVersion;
+        this.flatVersion = flatVersion;
     }
 
     public String getRawStack() {
@@ -65,73 +58,57 @@ public class RawStack
         return project;
     }
 
-    /** @return the 2D intensity corrected stack name (e.g. w61_s076_r00_gc_par_align_ic2d) */
-    public String getIC2DStack() {
-        return rawStack + ic2dSuffix;
+    /** @return the 3D intensity corrected stack name (e.g. w61_s076_r00_gc_bc_par_cc_aso_3d_s3i) */
+    public String getIC3DStack() {
+        return rawStack + ic3dSuffix;
     }
 
-    /** @return the 2D intensity corrected dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d) */
-    @SuppressWarnings("unused")
-    public String getIC2DDataset() {
-        return "/render/" + project + "/" + getIC2DStack();
+    /** @return the 3D intensity corrected dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i___pixel/s0) */
+    public String getIC3DPixelDatasetS0() {
+        return "/render/" + project + "/" + getIC3DStack() + "___pixel/s0";
     }
 
-    /** @return the normalized layer stack name (e.g. w61_s076_r00_gc_par_align_ic2d___norm-layer) */
-    public String getNormLayerStack() {
-        return rawStack + normLayerSuffix;
+    /** @return the 3D intensity corrected dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i___mask/s0) */
+    public String getIC3DMaskDatasetS0() {
+        return "/render/" + project + "/" + getIC3DStack() + "___mask/s0";
     }
 
-    /** @return the normalized layer dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer) */
-    public String getNormLayerDataset() {
-        return "/render/" + project + "/" + getNormLayerStack();
-    }
-
-    /** @return the histogram stack name (e.g. w61_s076_r00_gc_par_align_ic2d___norm-layer_hist) */
-    public String getHistogramStack() {
-        return rawStack + histogramSuffix;
-    }
-
-    /** @return the histogram dataset (e.g. /render/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer_hist) */
-    public String getHistogramDataset() {
-        return "/render/" + project + "/" + getHistogramStack();
-    }
-
-    /** @return the cost dataset (e.g. /cost_b250/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer) */
+    /** @return the cost dataset (e.g. /cost_v4/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i) */
     public String getCostDataset() {
-        return "/cost_" + costVersion + "/" + project + "/" + getNormLayerStack();
+        return "/cost_" + costVersion + "/" + project + "/" + getIC3DStack();
     }
 
-    /** @return the heightfields dataset (e.g. /heightfields_b250_smd_p1_p1/w61_serial_070_to_079/w61_s076_r00_gc_par_align_ic2d___norm-layer) */
+    /** @return the heightfields dataset (e.g. /heightfields_v4/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i) */
     public String getHeightfieldsDataset() {
-        return "/heightfields_" + heightfieldsVersion + "/" + project + "/" + getNormLayerStack();
+        return "/heightfields_" + heightfieldsVersion + "/" + project + "/" + getIC3DStack();
     }
 
-    /** @return the flat dataset (e.g. /flat_v3/w61_serial_070_to_079/w61_s076_r00) */
+    /** @return the flat dataset (e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00) */
     public String getFlatDataset() {
-        return "/flat_v3/" + project + "/" + rawStack;
+        return "/flat_" + flatVersion + "/" + project + "/" + rawStack;
     }
 
-    /** @return the flat raw dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw) */
+    /** @return the flat raw dataset (e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00/raw) */
     public String getFlatRawDataset() {
         return getFlatDataset() + "/raw";
     }
 
-    /** @return the flat raw s0 dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0) */
+    /** @return the flat raw s0 dataset (e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00/raw/s0) */
     public String getFlatRawS0Dataset() {
         return getFlatRawDataset() + "/s0";
     }
 
-    /** @return the flat raw CLAHE dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe) */
+    /** @return the flat raw CLAHE dataset (e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00/raw_clahe) */
     public String getFlatRawCLAHEDataset() {
         return getFlatRawDataset() + claheSuffix;
     }
 
-    /** @return the flat raw CLAHE s0 dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0) */
+    /** @return the flat raw CLAHE s0 dataset (e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0) */
     public String getFlatRawCLAHES0Dataset() {
         return getFlatRawCLAHEDataset() + "/s0";
     }
 
-    /** @return the flat raw CLAHE top or bottom dataset (e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe_top) */
+    /** @return the flat raw CLAHE top or bottom dataset (e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00/raw_clahe_top) */
     public String getFlatRawClaheEdgeDataset(final boolean isTop)
             throws IllegalArgumentException {
         final String edgeSuffix = isTop ? "_top" : "_bot";

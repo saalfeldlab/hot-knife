@@ -116,7 +116,7 @@ public class SparkExportFlattenedVolumeMultiSEMBatch {
 
                 final RawStack rawStack = new RawStack(rawStackName);
 
-                final String rawDataset = rawStack.getHistogramDataset() + "/s0";
+                final String rawDataset = rawStack.getIC3DPixelDatasetS0();
                 final String fieldGroup = rawStack.getHeightfieldsDataset() + "/s1";
                 final String outDataset = rawStack.getFlatRawDataset() + debugSuffix + "/s0";
                 final SparkExportFlattenedVolume exporter =
