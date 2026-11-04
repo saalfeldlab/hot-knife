@@ -33,7 +33,7 @@ FIRST_SERIAL_NUM="${4}"
 LAST_SERIAL_NUM="${5}"
 
 N5_PATH="gs://janelia-spark-test/hess_wafers_60_61_export"
-N5_SURFACE_ROOT="surface-align/run_20260428_090000"
+N5_SURFACE_ROOT="surface-align/run_20261109_070000"
 N5_GROUP_OUTPUT="${N5_SURFACE_ROOT}/pass00"
 
 # need scaleIndex=5 for larger wafer 53 slabs
