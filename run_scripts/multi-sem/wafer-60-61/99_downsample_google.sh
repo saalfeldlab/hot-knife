@@ -9,7 +9,7 @@ if (( $# != 2 )); then
 USAGE: $0 <max executors> <full resolution dataset>
 
 Examples:
-  $0  2  /render/w61_serial_130_to_139/w61_s131_r00_gc_par_crc_align_ic2d___norm-layer/s0
+  $0  2  /render/w61_serial_130_to_139/w61_s131_r00_gc_.../s0
 
 """
   exit 1
