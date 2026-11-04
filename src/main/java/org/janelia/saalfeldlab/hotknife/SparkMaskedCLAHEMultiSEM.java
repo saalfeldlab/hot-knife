@@ -57,16 +57,16 @@ public class SparkMaskedCLAHEMultiSEM
 
 		@Option(name = "--n5DatasetInput",
 				required = true,
-				usage = "Input N5 dataset, e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw/s0")
+				usage = "Input N5 dataset, e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00/raw/s0")
 		private String n5DatasetInput = null;
 
 		@Option(name = "--n5DatasetOutput",
 				required = true,
-				usage = "Output N5 dataset, e.g. /flat/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0")
+				usage = "Output N5 dataset, e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00/raw_clahe/s0")
 		private String n5DatasetOutput = null;
 
 		@Option(name = "--n5FieldMax",
-				usage = "Input N5 dataset, e.g. /heightfields_v3/w61_serial_070_to_079/w61_s079_r00_gc_par_align_ic2d___norm-layer/s1/max " +
+				usage = "Input N5 dataset, e.g. /heightfields_v4/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i/s1/max " +
                         "NOTE: Do not specify if your input dataset is flat since input max z is used by default")
 		private String n5FieldMax = null;
 
