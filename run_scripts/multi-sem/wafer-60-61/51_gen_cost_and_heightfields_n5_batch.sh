@@ -73,6 +73,9 @@ SPARK_PROPS="${SPARK_PROPS},spark.default.parallelism=240,spark.executor.instanc
 SPARK_PROPS="${SPARK_PROPS},spark.executor.cores=${SPARK_EXEC_CORES},spark.executor.memory=${SPARK_EXEC_MEMORY_MB}m"
 SPARK_PROPS="${SPARK_PROPS},spark.driver.cores=${SPARK_DRIVER_CORES},spark.driver.memory=${SPARK_DRIVER_MEMORY_MB}m"
 SPARK_PROPS="${SPARK_PROPS},${DYNAMIC_ALLOCATION}"
+
+# set executor disk size to avoid Insufficient DISKS_TOTAL_GB quota errors from Google
+SPARK_PROPS="${SPARK_PROPS},spark.dataproc.executor.disk.size=250g"
 #SPARK_PROPS="${SPARK_PROPS},spark.log.level.org.janelia.alignment.match=WARN"
 
 # see https://cloud.google.com/dataproc-serverless/docs/concepts/versions/spark-runtime-1.1
@@ -82,6 +85,7 @@ SPARK_VERSION="1.1"
 echo "
 Running gcloud dataproc batches submit spark with:
   --region=us-east4
+  --ttl=24h
   --jars=${GS_JAR_URL}
   --class=${CLASS}
   --batch=${BATCH_NAME}
@@ -97,6 +101,7 @@ Running gcloud dataproc batches submit spark with:
 # use --async to return immediately
 gcloud dataproc batches submit spark \
 --region=us-east4 \
+--ttl=24h \
 --jars=${GS_JAR_URL} \
 --class=${CLASS} \
 --batch="${BATCH_NAME}" \

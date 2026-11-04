@@ -105,6 +105,9 @@ SPARK_PROPS="spark.dataproc.driver.compute.tier=${COMPUTE_TIER},spark.dataproc.e
 SPARK_PROPS="${SPARK_PROPS},spark.default.parallelism=240,spark.executor.instances=${MAX_EXECUTORS}"
 SPARK_PROPS="${SPARK_PROPS},spark.executor.cores=${SPARK_EXEC_CORES},spark.executor.memory=${SPARK_EXEC_MEMORY_MB}mb"
 SPARK_PROPS="${SPARK_PROPS},${DYNAMIC_ALLOCATION}"
+
+# set executor disk size to avoid Insufficient DISKS_TOTAL_GB quota errors from Google
+SPARK_PROPS="${SPARK_PROPS},spark.dataproc.executor.disk.size=250g"
 #SPARK_PROPS="${SPARK_PROPS},spark.log.level.org.janelia.alignment.match=WARN"
 
 # see https://cloud.google.com/dataproc-serverless/docs/concepts/versions/spark-runtime-1.1
@@ -116,6 +119,7 @@ GS_JAR_URL="gs://janelia-spark-test/library/hot-knife-0.0.7-SNAPSHOT.jar"
 echo "
 Running gcloud dataproc batches submit spark with:
   --region=us-east4
+  --ttl=24h
   --jars=${GS_JAR_URL}
   --class=${CLASS}
   --batch=${BATCH_NAME}
@@ -131,6 +135,7 @@ Running gcloud dataproc batches submit spark with:
 # shellcheck disable=SC2086
 gcloud dataproc batches submit spark \
   --region=us-east4 \
+  --ttl=24h \
   --jars=${GS_JAR_URL} \
   --class=${CLASS} \
   --batch="${BATCH_NAME}" \
