@@ -82,6 +82,10 @@ SPARK_PROPS="${SPARK_PROPS},spark.dataproc.executor.disk.size=250g"
 # see https://cloud.google.com/dataproc-serverless/docs/concepts/versions/dataproc-serverless-versions
 SPARK_VERSION="1.1"
 
+OUTPUT_DIR="/Users/trautmane/Desktop/2026-11-msem/00-runs"
+STAGE="51_cost_hf"
+RUN_FILE="${OUTPUT_DIR}/run.$(date '+%Y%m%d').${STAGE}.txt"
+
 echo "
 Running gcloud dataproc batches submit spark with:
   --region=us-east4
@@ -95,7 +99,7 @@ Running gcloud dataproc batches submit spark with:
   --
   ${ARGV}
 
-"
+" | tee -a "${RUN_FILE}"
 
 # shellcheck disable=SC2086
 # use --async to return immediately
@@ -109,4 +113,4 @@ gcloud dataproc batches submit spark \
 --properties="${SPARK_PROPS}" \
 --async \
 -- \
-${ARGV}
+${ARGV} | tee -a "${RUN_FILE}"
