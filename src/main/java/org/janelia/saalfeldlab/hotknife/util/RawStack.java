@@ -83,6 +83,18 @@ public class RawStack
         return "/heightfields_" + heightfieldsVersion + "/" + project + "/" + getIC3DStack();
     }
 
+    /**
+     * @param  fieldName  heightfield name (min or max).
+     *
+     * @return the heightfield surface group used for neuroglancer review
+     *         (e.g. /heightfields_v4_surface/w61_serial_070_to_079/w61_s076_r00_gc_bc_par_cc_aso_3d_s3i/max).
+     *         It is kept outside the heightfields group because neuroglancer merges the attributes of
+     *         every parent group into a dataset's attributes.
+     */
+    public String getHeightfieldsSurfaceDataset(final String fieldName) {
+        return "/heightfields_" + heightfieldsVersion + "_surface/" + project + "/" + getIC3DStack() + "/" + fieldName;
+    }
+
     /** @return the flat dataset (e.g. /flat_v4/w61_serial_070_to_079/w61_s076_r00) */
     public String getFlatDataset() {
         return "/flat_" + flatVersion + "/" + project + "/" + rawStack;
