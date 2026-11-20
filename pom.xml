@@ -96,6 +96,15 @@
 		<dependency>
 			<groupId>net.imagej</groupId>
 			<artifactId>imagej</artifactId>
+			<exclusions>
+				<!-- scripting-beanshell needs org.apache-extras.beanshell:bsh:2.1.0, whose jar is no longer
+				     downloadable (maven central only has up to 2.0b6, and maven.scijava.org now only serves
+				     the 2.1.0 pom), so clean builds fail.  hot-knife does not run BeanShell scripts. -->
+				<exclusion>
+					<groupId>org.scijava</groupId>
+					<artifactId>scripting-beanshell</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>net.imglib2</groupId>
