@@ -30,6 +30,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.N5RetryUtil;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.hotknife.util.Show;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
@@ -870,8 +871,10 @@ public class SparkSurfaceFit implements Callable<Void>{
 		System.out.println( "dzScale " + dzScale + ", downsampling of heightfield " + net.imglib2.util.Util.printCoordinates( downsamplingFactors ));
 		System.out.println("max step size " + maxStepSize + ", z-padding with " + padding + "px");
 
-		n5Field.createGroup(heightFieldGroupOutput);
-		n5Field.setAttribute(heightFieldGroupOutput, "downsamplingFactors", downsamplingFactors);
+		N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+			n5Field.createGroup(heightFieldGroupOutput);
+			n5Field.setAttribute(heightFieldGroupOutput, "downsamplingFactors", downsamplingFactors);
+		}, "create " + heightFieldGroupOutput);
 		final DatasetAttributes attributes =
 				new DatasetAttributes(
 						Arrays.copyOf(dimensions, 2),
@@ -880,12 +883,10 @@ public class SparkSurfaceFit implements Callable<Void>{
 						new GzipCompression());
 		final String minDataset = heightFieldGroupOutput + "/min";
 		final String maxDataset = heightFieldGroupOutput + "/max";
-		n5Field.createDataset(
-				minDataset,
-				attributes);
-		n5Field.createDataset(
-				maxDataset,
-				attributes);
+		N5RetryUtil.executeMetadataWriteWithRetry(() -> n5Field.createDataset(minDataset, attributes),
+												  "create " + minDataset);
+		N5RetryUtil.executeMetadataWriteWithRetry(() -> n5Field.createDataset(maxDataset, attributes),
+												  "create " + maxDataset);
 
 		final JavaRDD<long[][]> grid = sc.parallelize(
 				Grid.create(
@@ -918,8 +919,10 @@ public class SparkSurfaceFit implements Callable<Void>{
 			return c;
 		});
 
-		n5Field.setAttribute(minDataset, "avg", sumAvgs[0][0] / sumAvgs[0][1]);
-		n5Field.setAttribute(maxDataset, "avg", sumAvgs[1][0] / sumAvgs[1][1]);
+		N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+			n5Field.setAttribute(minDataset, "avg", sumAvgs[0][0] / sumAvgs[0][1]);
+			n5Field.setAttribute(maxDataset, "avg", sumAvgs[1][0] / sumAvgs[1][1]);
+		}, "set avg for " + heightFieldGroupOutput);
 	}
 
 
@@ -1050,14 +1053,26 @@ public class SparkSurfaceFit implements Callable<Void>{
 			System.out.println(minAvg + ", " + maxAvg);
 
 			final String groupName = outGroup + "/s" + firstScaleIndex;
-			n5Writer.createGroup(groupName);
-			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
+			// final copies for the retry lambdas
+			final double[] groupFactors = downsamplingFactors;
+			final RandomAccessibleInterval<FloatType> minFieldOut = minField;
+			final RandomAccessibleInterval<FloatType> maxFieldOut = maxField;
+			final double minAvgOut = minAvg;
+			final double maxAvgOut = maxAvg;
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				n5Writer.createGroup(groupName);
+				n5Writer.setAttribute(groupName, "downsamplingFactors", groupFactors);
+			}, "create " + groupName);
 			final String minDataset = groupName + "/min";
-			N5Utils.save(minField, n5Writer, minDataset, new int[] {1024, 1024}, new GzipCompression());
-			n5Writer.setAttribute(minDataset, "avg", minAvg);
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				N5Utils.save(minFieldOut, n5Writer, minDataset, new int[] {1024, 1024}, new GzipCompression());
+				n5Writer.setAttribute(minDataset, "avg", minAvgOut);
+			}, "save " + minDataset);
 			final String maxDataset = groupName + "/max";
-			N5Utils.save(maxField, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
-			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				N5Utils.save(maxFieldOut, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
+				n5Writer.setAttribute(maxDataset, "avg", maxAvgOut);
+			}, "save " + maxDataset);
 		}
 
 		//SimpleMultiThreading.threadHaltUnClean();
@@ -1299,14 +1314,26 @@ public class SparkSurfaceFit implements Callable<Void>{
 			}
 
 			final String groupName = outGroup + "/s" + firstScaleIndex;
-			n5Writer.createGroup(groupName);
-			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
+			// final copies for the retry lambdas
+			final double[] groupFactors = downsamplingFactors;
+			final RandomAccessibleInterval<FloatType> minFieldOut = minField;
+			final RandomAccessibleInterval<FloatType> maxFieldOut = maxField;
+			final double minAvgOut = minAvg;
+			final double maxAvgOut = maxAvg;
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				n5Writer.createGroup(groupName);
+				n5Writer.setAttribute(groupName, "downsamplingFactors", groupFactors);
+			}, "create " + groupName);
 			final String minDataset = groupName + "/min";
-			N5Utils.save(minField, n5Writer, minDataset, new int[] {1024, 1024}, new GzipCompression());
-			n5Writer.setAttribute(minDataset, "avg", minAvg);
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				N5Utils.save(minFieldOut, n5Writer, minDataset, new int[] {1024, 1024}, new GzipCompression());
+				n5Writer.setAttribute(minDataset, "avg", minAvgOut);
+			}, "save " + minDataset);
 			final String maxDataset = groupName + "/max";
-			N5Utils.save(maxField, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
-			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				N5Utils.save(maxFieldOut, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
+				n5Writer.setAttribute(maxDataset, "avg", maxAvgOut);
+			}, "save " + maxDataset);
 		}
 
 		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {
@@ -1494,14 +1521,26 @@ public class SparkSurfaceFit implements Callable<Void>{
 			}
 
 			final String groupName = outGroup + "/s" + firstScaleIndex;
-			n5Writer.createGroup(groupName);
-			n5Writer.setAttribute(groupName, "downsamplingFactors", downsamplingFactors);
+			// final copies for the retry lambdas
+			final double[] groupFactors = downsamplingFactors;
+			final RandomAccessibleInterval<FloatType> minFieldOut = minField;
+			final RandomAccessibleInterval<FloatType> maxFieldOut = maxField;
+			final double minAvgOut = minAvg;
+			final double maxAvgOut = maxAvg;
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				n5Writer.createGroup(groupName);
+				n5Writer.setAttribute(groupName, "downsamplingFactors", groupFactors);
+			}, "create " + groupName);
 			final String minDataset = groupName + "/min";
-			N5Utils.save(minField, n5Writer, minDataset, new int[] {1024, 1024}, new GzipCompression());
-			n5Writer.setAttribute(minDataset, "avg", minAvg);
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				N5Utils.save(minFieldOut, n5Writer, minDataset, new int[] {1024, 1024}, new GzipCompression());
+				n5Writer.setAttribute(minDataset, "avg", minAvgOut);
+			}, "save " + minDataset);
 			final String maxDataset = groupName + "/max";
-			N5Utils.save(maxField, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
-			n5Writer.setAttribute(maxDataset, "avg", maxAvg);
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				N5Utils.save(maxFieldOut, n5Writer, maxDataset, new int[] {1024, 1024}, new GzipCompression());
+				n5Writer.setAttribute(maxDataset, "avg", maxAvgOut);
+			}, "save " + maxDataset);
 		}
 
 		for (int s = firstScaleIndex - 1; s >= lastScaleIndex; --s) {

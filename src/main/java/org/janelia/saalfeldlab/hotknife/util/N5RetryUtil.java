@@ -1,5 +1,6 @@
 package org.janelia.saalfeldlab.hotknife.util;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.function.Supplier;
 
@@ -182,6 +183,33 @@ public class N5RetryUtil {
 				operationDescription);
 
 		return result.stats;
+	}
+
+	/**
+	 * Retry parameters for n5 metadata writes on the Spark driver (createGroup, createDataset, setAttribute).
+	 * With n5-google-cloud, every createGroup and createDataset rewrites the folder marker object of each
+	 * parent group.  Concurrent jobs writing under the same parents can hit the GCS limit of one write per
+	 * second to the same object (429 rateLimitExceeded).  The retries wait about 2, 4, 8, 16, 32, and 64
+	 * seconds (each randomized between 50% and 150%) so that a collision costs seconds instead of the job.
+	 */
+	public static final RetryParameters METADATA_RETRY_PARAMETERS = new RetryParameters(6, 2000, 2.0, 0);
+
+	/**
+	 * Run a driver-side n5 metadata write with {@link #METADATA_RETRY_PARAMETERS}.
+	 *
+	 * @param  operation             the write to run.
+	 * @param  operationDescription  description of the write for logging.
+	 * @throws IOException if the write still fails after all retries.
+	 */
+	public static void executeMetadataWriteWithRetry(
+			final RunnableWithException operation,
+			final String operationDescription) throws IOException {
+
+		try {
+			executeWithRetryVoid(operation, METADATA_RETRY_PARAMETERS, operationDescription);
+		} catch (final Exception e) {
+			throw new IOException(e.getMessage(), e);
+		}
 	}
 
     private static void logMessage(final String message) {

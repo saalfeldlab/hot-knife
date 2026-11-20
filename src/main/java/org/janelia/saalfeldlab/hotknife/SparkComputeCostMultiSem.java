@@ -32,6 +32,7 @@ import org.janelia.saalfeldlab.hotknife.cost.DagmarCost;
 import org.janelia.saalfeldlab.hotknife.cost.PreFilter;
 import org.janelia.saalfeldlab.hotknife.util.N5Path;
 import org.janelia.saalfeldlab.hotknife.util.N5PathSupplier;
+import org.janelia.saalfeldlab.hotknife.util.N5RetryUtil;
 import org.janelia.saalfeldlab.hotknife.util.N5Util;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.GzipCompression;
@@ -284,13 +285,15 @@ public class SparkComputeCostMultiSem {
 
 		// Skip dataset creation in debug mode
 		if (!options.debugMode) {
-			n5w.createDataset(
-					costDataset,
-					costSize,
-					costBlockSize,
-					DataType.UINT8,
-					new GzipCompression());
-			n5w.setAttribute(costDataset, "downsamplingFactors", costSteps);
+			N5RetryUtil.executeMetadataWriteWithRetry(() -> {
+				n5w.createDataset(
+						costDataset,
+						costSize,
+						costBlockSize,
+						DataType.UINT8,
+						new GzipCompression());
+				n5w.setAttribute(costDataset, "downsamplingFactors", costSteps);
+			}, "create " + costDataset);
 		}
 		final ArrayList<Long[]> gridCoords = new ArrayList<>();
 
