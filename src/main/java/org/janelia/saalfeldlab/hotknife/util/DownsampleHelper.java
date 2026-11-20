@@ -92,7 +92,9 @@ public class DownsampleHelper
 
     /**
      * Downsamples the N5 dataset iteratively, creating s1, s2, ... and writing neuroglancer attributes.
-     * Downsampling will stop when the sN result contains a single block is greater than or equal to the requiredSLevel.
+     * Downsampling stops once the sN result fits in a single block (or its block count stops shrinking)
+     * and N is at least requiredSLevel.  Existing sN datasets are kept (and checked for the expected size),
+     * and downsampling also stops early if the next level would leave an axis with no pixels.
      *
      * @param  sparkContext  the Spark context used for distributed processing.
      *
@@ -139,6 +141,13 @@ public class DownsampleHelper
                 downsampledBlockCount *= blocksInDim;
             }
 
+            // a volume too small to reach requiredSLevel would otherwise keep going until an axis has no pixels
+            if (Arrays.stream(downsampledDimensions).anyMatch(size -> size < 1)) {
+                logMessage("run: stopping before s" + scale + " because downsampling " + Arrays.toString(dimensions) +
+                           " by " + Arrays.toString(scaleFactors) + " leaves an axis with no pixels");
+                break;
+            }
+
             if (n5.datasetExists(toDataset)) {
 
                 final DatasetAttributes toDatasetAttributes = n5.getDatasetAttributes(toDataset);
@@ -153,46 +162,19 @@ public class DownsampleHelper
                 }
 
                 logMessage("run: skipping s" + scale + " because " + toDataset + " already exists");
-                numberOfDownsampledDatasets++;
 
-                continue;
-            }
-
-            final String operationDescription = "downsample " + fromDataset + " to " + toDataset;
-            logMessage("run: " + operationDescription + " with " + downsampledBlockCount + " downsampled block(s)");
-
-            if (retryParameters == null) {
-                N5DownsamplerSpark.downsample(sparkContext,
-                                              n5Supplier,
-                                              fromDataset,
-                                              toDataset,
-                                              downsampleFactors,
-                                              null);
             } else {
 
-                try {
-                    final RetryStats retryStats = N5RetryUtil.executeWithRetryVoid(
-                            () -> N5DownsamplerSpark.downsample(sparkContext,
-                                                                n5Supplier,
-                                                                fromDataset,
-                                                                toDataset,
-                                                                downsampleFactors),
-                            retryParameters,
-                            operationDescription);
-
-                    logMessage("run: " + retryStats);
-
-                } catch (Exception e) {
-                    throw new IOException(e);
-                }
+                downsample(sparkContext, n5Supplier, fromDataset, toDataset, downsampledBlockCount);
 
             }
 
             numberOfDownsampledDatasets++;
 
+            // stop once the result fits in one block (or stops shrinking), but not before requiredSLevel
             final boolean moreBlocksToDownsample = ((downsampledBlockCount > 1) &&
                                                     (downsampledBlockCount != previousDownsampledBlockCount));
-            if ((! moreBlocksToDownsample) || (scale <= requiredSLevel)) {
+            if ((! moreBlocksToDownsample) && (scale >= requiredSLevel)) {
                 break;
             }
             previousDownsampledBlockCount = downsampledBlockCount;
@@ -202,6 +184,44 @@ public class DownsampleHelper
         ng.write(n5Supplier.get(), Paths.get(sZeroDatasetPath));
 
         logMessage("run: exit, generated " + numberOfDownsampledDatasets + " downsampled datasets for " + outputGroupPath);
+    }
+
+    private void downsample(final JavaSparkContext sparkContext,
+                            final N5WriterSupplier n5Supplier,
+                            final String fromDataset,
+                            final String toDataset,
+                            final long downsampledBlockCount)
+            throws IOException {
+
+        final String operationDescription = "downsample " + fromDataset + " to " + toDataset;
+        logMessage("downsample: " + operationDescription + " with " + downsampledBlockCount + " downsampled block(s)");
+
+        if (retryParameters == null) {
+            N5DownsamplerSpark.downsample(sparkContext,
+                                          n5Supplier,
+                                          fromDataset,
+                                          toDataset,
+                                          downsampleFactors,
+                                          null);
+        } else {
+
+            try {
+                final RetryStats retryStats = N5RetryUtil.executeWithRetryVoid(
+                        () -> N5DownsamplerSpark.downsample(sparkContext,
+                                                            n5Supplier,
+                                                            fromDataset,
+                                                            toDataset,
+                                                            downsampleFactors),
+                        retryParameters,
+                        operationDescription);
+
+                logMessage("downsample: " + retryStats);
+
+            } catch (Exception e) {
+                throw new IOException(e);
+            }
+
+        }
     }
 
     public static class Options extends AbstractOptions
