@@ -123,14 +123,14 @@ public class SparkComputeCostMultiSemBatch
                         "--costSteps", "2,2,1",
                         "--costSteps", "2,2,1",
                         "--topLayerCost", "105",
-                        "--bottomLayerCost", "250",
+                        "--bottomLayerCost", "215", // pushed the max surface to where the tissue meets the edge of the image
                         "--surfaceN5Output", rawStack.getHeightfieldsDataset(),
                         "--surfaceMinDistance", "15",
                         "--surfaceMaxDistance", "0",
                         "--surfaceBlockSize", "1024,1024",
                         "--surfaceFirstScale", "8",
                         "--surfaceLastScale", "1",
-                        "--surfaceInitMaxDeltaZ", "0.1",
+                        "--surfaceInitMaxDeltaZ", "0.05", // prevented the jumps of two pixels
                         "--surfaceMaxDeltaZ", "0.1",
                         "--finalMaxDeltaZ", "0.2",
                         "--median",
