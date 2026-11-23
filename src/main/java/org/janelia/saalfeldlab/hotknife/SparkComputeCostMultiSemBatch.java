@@ -130,9 +130,9 @@ public class SparkComputeCostMultiSemBatch
                         "--surfaceBlockSize", "1024,1024",
                         "--surfaceFirstScale", "8",
                         "--surfaceLastScale", "1",
-                        "--surfaceInitMaxDeltaZ", "0.05", // prevented the jumps of two pixels
-                        "--surfaceMaxDeltaZ", "0.1",
-                        "--finalMaxDeltaZ", "0.2",
+                        "--surfaceInitMaxDeltaZ", "0.05",
+                        "--surfaceMaxDeltaZ", "0.05", // prevented the jumps of two pixels
+                        "--finalMaxDeltaZ", "0.05",
                         "--median",
                         "--smoothCost"
                 };
