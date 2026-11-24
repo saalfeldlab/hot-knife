@@ -29,8 +29,9 @@ import org.kohsuke.args4j.Option;
  * Exports a heightfield as a 3D uint8 "surface" volume that neuroglancer can display, so the surface
  * can be reviewed over the ic3d pixel export in any XZ or YZ view.
  * <br/>
- * For each x, y column, the voxel at the heightfield's z is set to {@link #SURFACE_VALUE} and every other
- * voxel is 0 (blocks without any surface voxels are not written).  The heightfield values are z in s0
+ * For each x, y column, the heightfield's fractional z is drawn anti-aliased: {@link #SURFACE_VALUE} is split
+ * linearly between the two voxels on either side of it (e.g. z 10.25 gives 191 at z 10 and 64 at z 11) and every
+ * other voxel is 0 (blocks without any surface voxels are not written).  The heightfield values are z in s0
  * voxels and are converted the same way {@link org.janelia.saalfeldlab.hotknife.util.FlatteningInfo} does:
  * <pre>
  *   s0 z = (value + 0.5) * z factor - 0.5
@@ -272,16 +273,17 @@ public class SparkExportHeightFieldSurfaceMultiSemBatch
         final int sizeX = (int) Math.min(info.blockSize[0], dimensions[0] - minX);
         final int sizeY = (int) Math.min(info.blockSize[1], dimensions[1] - minY);
 
-        // surface s0 z of each x, y in the column (-1 where there is no surface)
-        final long[] surfaceZ = new long[sizeX * sizeY];
+        // fractional surface s0 z of each x, y in the column (NaN where there is no surface)
+        final double[] surfaceZ = new double[sizeX * sizeY];
         for (int y = 0; y < sizeY; y++) {
             for (int x = 0; x < sizeX; x++) {
                 final float value = fieldReader.getValue(minX + x, minY + y);
-                long z = -1;
+                double z = Double.NaN;
                 if (Float.isFinite(value)) {
-                    z = Math.round((value + 0.5) * info.fieldFactors[2] - 0.5);
-                    if ((z < 0) || (z >= info.depth)) {
-                        z = -1;
+                    z = (value + 0.5) * info.fieldFactors[2] - 0.5;
+                    // keep z values that put some weight inside the volume
+                    if ((z <= -1.0) || (z >= info.depth)) {
+                        z = Double.NaN;
                     }
                 }
                 surfaceZ[x + y * sizeX] = z;
@@ -291,20 +293,42 @@ public class SparkExportHeightFieldSurfaceMultiSemBatch
         for (long minZ = 0; minZ < info.depth; minZ += info.blockSize[2]) {
             final int sizeZ = (int) Math.min(info.blockSize[2], info.depth - minZ);
             final byte[] data = new byte[sizeX * sizeY * sizeZ];
-            boolean isEmpty = true;
+            boolean hasSurface = false;
             for (int i = 0; i < surfaceZ.length; i++) {
-                final long z = surfaceZ[i] - minZ;
-                if ((z >= 0) && (z < sizeZ)) {
-                    // x fastest, then y, then z
-                    data[i + (int) z * sizeX * sizeY] = SURFACE_VALUE;
-                    isEmpty = false;
+                if (Double.isNaN(surfaceZ[i])) {
+                    continue;
                 }
+                // split the surface value between the voxels below and above the fractional z
+                final double floorZ = Math.floor(surfaceZ[i]);
+                final double upperWeight = surfaceZ[i] - floorZ;
+                final long lowerZ = (long) floorZ - minZ;
+                hasSurface |= setWeighted(data, i, lowerZ, sizeZ, 1.0 - upperWeight);
+                hasSurface |= setWeighted(data, i, lowerZ + 1, sizeZ, upperWeight);
             }
-            if (! isEmpty) {
+            if (hasSurface) {
                 final long[] gridPosition = { xyBlock[0], xyBlock[1], minZ / info.blockSize[2] };
                 n5.writeBlock(dataset, attributes, new ByteArrayDataBlock(new int[] { sizeX, sizeY, sizeZ }, gridPosition, data));
             }
         }
+    }
+
+    /**
+     * Sets voxel i of block z to the weighted surface value if z is inside the block and the value is not 0.
+     *
+     * @return true if a voxel was set.
+     */
+    private static boolean setWeighted(final byte[] data,
+                                       final int i,
+                                       final long z,
+                                       final int sizeZ,
+                                       final double weight) {
+        final int value = (int) Math.round(weight * (SURFACE_VALUE & 0xff));
+        if ((z < 0) || (z >= sizeZ) || (value == 0)) {
+            return false;
+        }
+        // x fastest, then y, then z
+        data[i + (int) z * (data.length / sizeZ)] = (byte) value;
+        return true;
     }
 
     /** Reads heightfield values, keeping the blocks it has read (a partition only touches a few of them). */
