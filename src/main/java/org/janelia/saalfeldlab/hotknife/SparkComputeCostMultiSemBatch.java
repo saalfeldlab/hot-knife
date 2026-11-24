@@ -127,7 +127,7 @@ public class SparkComputeCostMultiSemBatch
                         "--surfaceN5Output", rawStack.getHeightfieldsDataset(),
                         "--surfaceMinDistance", "15",
                         "--surfaceMaxDistance", "0",
-                        "--surfaceBlockSize", "1024,1024",
+                        "--surfaceBlockSize", "8192,8192",
                         "--surfaceFirstScale", "8",
                         "--surfaceLastScale", "1",
                         "--surfaceInitMaxDeltaZ", "0.05",
